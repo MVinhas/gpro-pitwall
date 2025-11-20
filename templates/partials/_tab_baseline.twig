@@ -1,0 +1,119 @@
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+    
+    {# LEFT COLUMN: Division Stats #}
+    <div class="lg:col-span-7 flex flex-col gap-6">
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div class="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+                <h3 class="text-lg font-semibold text-slate-800">
+                    {{ active_division }} Baseline 
+                    <span class="ml-2 inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
+                        {{ all_ideal_pilots[active_division].count }} Pilots
+                    </span>
+                </h3>
+                <span class="text-xs font-medium text-slate-500">
+                    {% set cap = config.factors.division_caps[active_division] %}
+                    Cap: {{ cap == 999 ? '∞' : cap }} OA
+                </span>
+            </div>
+
+            <div class="p-6">
+                {% if all_ideal_pilots[active_division].count > 0 %}
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                        {% for key, val in all_ideal_pilots[active_division].stats %}
+                            {% set isOA = (key == 'Overall Ability') %}
+                            <div class="relative flex flex-col rounded-lg border {{ isOA ? 'border-blue-200 bg-blue-50 col-span-2 sm:col-span-3 p-4 items-center' : 'border-slate-100 p-3 bg-slate-50' }}">
+                                <dt class="text-xs font-medium text-slate-500 uppercase tracking-wide">{{ key }}</dt>
+                                <dd class="mt-1 text-xl font-bold {{ isOA ? 'text-blue-700 text-3xl' : 'text-slate-900' }}">
+                                    {{ val }}
+                                </dd>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-12 bg-slate-50 rounded-lg border-2 border-dashed border-slate-200">
+                        <p class="text-slate-500">No data recorded for {{ active_division }} yet.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        {# Division Switcher #}
+        <div class="flex justify-center space-x-2 p-1 bg-slate-200 rounded-lg self-center">
+            {% for div in divisions %}
+                <a href="?main_tab=Division Baseline&division_tab={{ div }}&track={{ active_track }}"
+                   class="px-4 py-2 text-sm font-medium rounded-md transition-all {{ div == active_division ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700' }}">
+                    {{ div }}
+                </a>
+            {% endfor %}
+        </div>
+    </div>
+
+    {# RIGHT COLUMN: Actions #}
+    <div class="lg:col-span-5 flex flex-col gap-6">
+        
+        {# Add Pilot Card #}
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div class="px-6 py-4 border-b border-slate-200 bg-slate-50">
+                <h3 class="text-base font-semibold text-slate-800">Add Pilot Data</h3>
+            </div>
+            <div class="p-6">
+                <form method="POST" action="/" class="space-y-4">
+                    <input type="hidden" name="action" value="add_pilot">
+                    <input type="hidden" name="division" value="{{ active_division }}">
+
+                    <div class="grid grid-cols-2 gap-3">
+                        {# FIX: Updated variable path to config.app.stats_schema #}
+                        {% for display, col in config.app.stats_schema %}
+                            <div>
+                                <label class="block text-xs font-medium text-slate-500 mb-1">{{ display }}</label>
+                                <input type="number" name="{{ col }}" required min="0" max="250"
+                                       class="block w-full rounded-md border-slate-300 py-1.5 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-slate-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6">
+                            </div>
+                        {% endfor %}
+                    </div>
+
+                    <button type="submit" 
+                            class="mt-4 w-full rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 transition-all">
+                        Add to Database
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        {# Season Tracker Card #}
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div class="p-6 flex items-center justify-between">
+                <div>
+                    <h4 class="text-sm font-medium text-slate-900">Season</h4>
+                    <p class="text-xs text-slate-500">Current Data Season</p>
+                </div>
+                <form method="POST" action="/" class="flex gap-2">
+                    <input type="hidden" name="action" value="update_season">
+                    <input type="hidden" name="division" value="{{ active_division }}">
+                    {# FIX: Added px-3 for padding #}
+                    <input type="number" name="season_number" value="{{ division_metadata.season }}" 
+                           class="w-20 rounded-md border-0 py-1.5 px-3 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6">
+                    <button type="submit" class="rounded-md bg-white px-2.5 py-1.5 text-sm font-semibold text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 hover:bg-slate-50">Set</button>
+                </form>
+            </div>
+        </div>
+
+        {# Undo / Clear Buttons #}
+        <div class="flex gap-3">
+             <form method="POST" action="/" class="flex-1">
+                <input type="hidden" name="action" value="undo_last_pilot">
+                <input type="hidden" name="division" value="{{ active_division }}">
+                <button type="submit" class="w-full rounded-md bg-amber-100 px-3 py-2 text-sm font-semibold text-amber-700 shadow-sm hover:bg-amber-200 transition-colors">
+                    Undo Last
+                </button>
+            </form>
+            <form method="POST" action="/" class="flex-1" onsubmit="return confirm('Are you absolutely sure you want to delete ALL data for this division?');">
+                <input type="hidden" name="action" value="clear_stats">
+                <input type="hidden" name="division" value="{{ active_division }}">
+                <button type="submit" class="w-full rounded-md bg-red-100 px-3 py-2 text-sm font-semibold text-red-700 shadow-sm hover:bg-red-200 transition-colors">
+                    Clear All
+                </button>
+            </form>
+        </div>
+    </div>
+</div>

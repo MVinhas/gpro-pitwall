@@ -1,0 +1,124 @@
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+    
+    {# LEFT: Controls #}
+    <div class="lg:col-span-4">
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div class="px-6 py-4 border-b border-slate-200 bg-slate-50">
+                <h3 class="text-lg font-semibold text-slate-800">Race Analysis</h3>
+            </div>
+            
+            <div class="p-6">
+                {% if wear_error %}
+                    <div class="mb-4 p-3 bg-red-50 text-red-700 text-sm rounded border border-red-200">
+                        {{ wear_error }}
+                    </div>
+                {% endif %}
+
+                <form method="POST" action="/" id="wearForm">
+                    <input type="hidden" name="action" value="calculate_wear">
+                    
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Driver Risk</label>
+                        <div class="flex items-center gap-4">
+                            <input type="range" name="risk" min="0" max="100" value="{{ wear_inputs.risk ?? 40 }}" 
+                                   class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"
+                                   oninput="document.getElementById('riskVal').innerText = this.value">
+                            <span id="riskVal" class="text-sm font-bold text-blue-600 w-8">{{ wear_inputs.risk ?? 40 }}</span>
+                        </div>
+                        <p class="text-xs text-slate-400 mt-1">Affects wear significantly.</p>
+                    </div>
+
+                    <button type="submit" id="wearBtn"
+                            class="w-full flex justify-center items-center gap-2 rounded-md bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 focus:outline-none transition-all">
+                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        <span>Analyze Next Race</span>
+                    </button>
+                </form>
+            </div>
+            
+            <div class="bg-slate-50 px-6 py-4 border-t border-slate-200 text-xs text-slate-500">
+                <p>Fetching: Next Track Profile, Car Condition, Driver Stats.</p>
+            </div>
+        </div>
+    </div>
+
+    {# RIGHT: Results #}
+    <div class="lg:col-span-8">
+        {% if wear_results %}
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-800">
+                            {{ wear_results.track_name }} 
+                            <span class="text-slate-500 font-normal text-sm ml-2">
+                                (Season {{ wear_results.season }}, Race {{ wear_results.race }})
+                            </span>
+                        </h3>
+                        <p class="text-xs text-slate-500">{{ wear_results.laps }} Laps</p>
+                    </div>
+                    <span class="inline-flex items-center rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20">
+                        Live Data
+                    </span>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-slate-200">
+                        <thead class="bg-slate-50">
+                            <tr>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Part</th>
+                                <th scope="col" class="px-6 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Level</th>
+                                <th scope="col" class="px-6 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Start</th>
+                                <th scope="col" class="px-6 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Est. Wear</th>
+                                <th scope="col" class="px-6 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">End Wear</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-slate-200">
+                            {% for part, data in wear_results.parts %}
+                                <tr class="hover:bg-slate-50">
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{{ part }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-center text-slate-500">Lvl {{ data.level }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-center text-slate-600">{{ data.start }}%</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-center font-medium text-blue-600">+{{ data.est }}%</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-center">
+                                        {% set endVal = data.end %}
+                                        <span class="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset {{ endVal >= 90 ? 'bg-red-50 text-red-700 ring-red-600/10' : (endVal >= 50 ? 'bg-yellow-50 text-yellow-800 ring-yellow-600/20' : 'bg-green-50 text-green-700 ring-green-600/20') }}">
+                                            {{ endVal }}%
+                                        </span>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        {% else %}
+            <div class="h-full flex flex-col items-center justify-center p-12 bg-slate-50 border border-dashed border-slate-200 rounded-xl text-center">
+                <svg class="h-12 w-12 text-slate-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                </svg>
+                <h3 class="text-sm font-medium text-slate-900">No Analysis Yet</h3>
+                <p class="text-sm text-slate-500 mt-1">Click "Analyze Next Race" to fetch live data and calculate wear.</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+{# Feedback Script #}
+<script>
+    document.getElementById('wearForm').addEventListener('submit', function(e) {
+        const btn = document.getElementById('wearBtn');
+        const originalContent = btn.innerHTML;
+        
+        btn.disabled = true;
+        btn.classList.add('opacity-75', 'cursor-not-allowed');
+        btn.innerHTML = `
+            <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span>Fetching Data...</span>
+        `;
+    });
+</script>

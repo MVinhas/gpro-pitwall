@@ -1,0 +1,31 @@
+<nav class="mb-8">
+    <div class="sm:hidden">
+        {# Mobile Dropdown fallback #}
+        <label for="tabs" class="sr-only">Select a tab</label>
+        <select id="tabs" name="tabs" class="block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500" onchange="window.location.href=this.value">
+            {% for section in main_sections %}
+                <option value="?main_tab={{ section|url_encode }}&division_tab={{ active_division|url_encode }}&track={{ active_track|url_encode }}" {{ section == active_main_tab ? 'selected' : '' }}>
+                    {{ section }}
+                </option>
+            {% endfor %}
+        </select>
+    </div>
+    
+    <div class="hidden sm:block">
+        <div class="border-b border-slate-200">
+            <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+                {% for section in main_sections %}
+                    {% set is_active = (section == active_main_tab) %}
+                    <a href="?main_tab={{ section|url_encode }}&division_tab={{ active_division|url_encode }}&track={{ active_track|url_encode }}"
+                       class="whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors duration-200
+                              {{ is_active 
+                                 ? 'border-blue-600 text-blue-600' 
+                                 : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700' 
+                              }}">
+                        {{ section }}
+                    </a>
+                {% endfor %}
+            </nav>
+        </div>
+    </div>
+</nav>

@@ -1,0 +1,29 @@
+{% extends 'layout.twig' %}
+
+{% block content %}
+    {# Navigation Bar #}
+    {% include 'partials/_nav.twig' %}
+
+    {# Main Content Area #}
+    <div id="main-content-tabs" class="fade-in">
+        {% if active_main_tab == 'Recruitment Analyzer' %}
+            {% include 'partials/_tab_recruitment.twig' %}
+        
+        {% elseif active_main_tab == 'Training Planner' %}
+            {% include 'partials/_tab_training.twig' %}
+
+        {% elseif active_main_tab == 'Division Baseline' %}
+            {% include 'partials/_tab_baseline.twig' %}
+        
+        {% elseif active_main_tab == 'Division Differences' %}
+            {% include 'partials/_tab_differences.twig' %}
+            
+        {% elseif active_main_tab == 'Track Risks' %}
+            {% include 'partials/_tab_track_risks.twig' %}
+
+        {% elseif active_main_tab == 'Car Wear' %}
+            {% include 'partials/_tab_car_wear.twig' %}
+
+        {% endif %}
+    </div>
+{% endblock %}

@@ -1,0 +1,239 @@
+<div class="space-y-6">
+    {# Notification Banner #}
+    <div class="rounded-md bg-blue-50 p-4 border-l-4 border-blue-400 shadow-sm">
+        <div class="flex">
+            <div class="flex-shrink-0">
+                <svg class="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                </svg>
+            </div>
+            <div class="ml-3">
+                <p class="text-sm text-blue-700 font-medium">
+                    Driver decisions happen on Mondays and Thursdays at 18:00 (Europe/Lisbon).
+                </p>
+                <p class="text-sm text-blue-700 font-medium">
+                    Offer rises incrementally starting on Mondays and Thursdays at 10:00 (Europe/Lisbon)
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white shadow-lg rounded-xl overflow-hidden border border-slate-200">
+        {# Header Section #}
+        <div class="bg-slate-50 px-6 py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center">
+            <div>
+                <h2 class="text-lg font-semibold text-slate-800">Recruitment Analyzer</h2>
+                <p class="text-sm text-slate-500">Upload a CSV to find the perfect driver for your budget.</p>
+            </div>
+        </div>
+
+        <div class="p-6">
+            <form method="POST" action="/" enctype="multipart/form-data" class="space-y-6">
+                <input type="hidden" name="action" value="analyze_recruitment">
+                
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
+                    {# File Input #}
+                    <div class="md:col-span-1">
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Driver CSV File</label>
+                        <input type="file" name="driver_csv_file" required accept=".csv" 
+                               class="block w-full text-sm text-slate-500
+                                      file:mr-4 file:py-2 file:px-4
+                                      file:rounded-full file:border-0
+                                      file:text-sm file:font-semibold
+                                      file:bg-blue-50 file:text-blue-700
+                                      hover:file:bg-blue-100 transition cursor-pointer">
+                    </div>
+
+                    {# Separator #}
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">CSV Separator</label>
+                        <select name="separator" class="block w-full rounded-lg border-slate-300 py-2 px-3 text-sm focus:border-blue-500 focus:ring-blue-500 shadow-sm border">
+                            <option value=",">Comma ( , )</option>
+                            <option value=";">Semicolon ( ; )</option>
+                        </select>
+                    </div>
+
+                    {# Target Division #}
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Target Division</label>
+                        <select name="target_division" class="block w-full rounded-lg border-slate-300 py-2 px-3 text-sm focus:border-blue-500 focus:ring-blue-500 shadow-sm border">
+                            {% for div in divisions %}
+                                <option value="{{ div }}" {{ div == active_division ? 'selected' : '' }}>{{ div }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    {# Filters #}
+                    <div class="pb-2">
+                        <label class="inline-flex items-center cursor-pointer">
+                            <input type="checkbox" name="filter_offers" value="1" class="rounded border-slate-300 text-blue-600 shadow-sm focus:ring-blue-500 h-4 w-4">
+                            <span class="ml-2 text-sm text-slate-700">Exclude drivers with offers</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="flex justify-end border-t border-slate-100 pt-4">
+                    <button type="submit" class="inline-flex justify-center rounded-md bg-blue-600 px-6 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 transition-all">
+                        Analyze Candidates
+                    </button>
+                </div>
+            </form>
+
+            {# Results Section #}
+            {% if recruitment_error %}
+                <div class="mt-6 rounded-md bg-red-50 p-4 border border-red-200">
+                    <div class="flex">
+                        <div class="ml-3">
+                            <h3 class="text-sm font-medium text-red-800">Analysis Failed</h3>
+                            <div class="mt-2 text-sm text-red-700">{{ recruitment_error }}</div>
+                        </div>
+                    </div>
+                </div>
+            {% elseif recruitment_results is defined %}
+                <div class="mt-8">
+                    <div class="flex justify-between items-end mb-4">
+                        <h3 class="text-base font-semibold leading-6 text-slate-900">
+                            Candidates (Found: {{ pagination.total_items }})
+                        </h3>
+                        <span class="text-xs text-slate-500">
+                            Page {{ pagination.current }} of {{ pagination.total_pages }}
+                        </span>
+                    </div>
+
+                    {# Helper Macro for Headers #}
+                    {% macro sortLink(label, col, currentSort) %}
+                        {% set newOrder = (currentSort.col == col and currentSort.order == 'desc') ? 'asc' : 'desc' %}
+                        {% set icon = '' %}
+                        {% if currentSort.col == col %}
+                            {% set icon = (currentSort.order == 'desc') ? ' ↓' : ' ↑' %}
+                        {% endif %}
+                        <a href="?main_tab=Recruitment Analyzer&page=1&sort={{ col }}&order={{ newOrder }}" 
+                           class="group inline-flex items-center hover:text-blue-600 transition-colors">
+                            {{ label }}{{ icon }}
+                        </a>
+                    {% endmacro %}
+
+                    <div class="overflow-hidden shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg">
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-slate-300">
+                                <thead class="bg-slate-50">
+                                    <tr>
+                                        <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-slate-900 sm:pl-6 cursor-pointer">
+                                            {{ _self.sortLink('Rtg', 'rating', sort) }}
+                                        </th>
+                                        <th scope="col" class="px-2 py-3.5 text-left text-sm font-semibold text-slate-900 cursor-pointer">
+                                            {{ _self.sortLink('Name', 'NAME', sort) }}
+                                        </th>
+                                        <th scope="col" class="px-2 py-3.5 text-center text-sm font-semibold text-slate-900 cursor-pointer">
+                                            {{ _self.sortLink('OA', 'OA', sort) }}
+                                        </th>
+                                        
+                                        {# Stats #}
+                                        {% set stats = ['CON', 'TAL', 'AGG', 'EXP', 'TEI', 'STA', 'CHA', 'MOT', 'WEI', 'AGE'] %}
+                                        {% for stat in stats %}
+                                            <th scope="col" class="px-1 py-3.5 text-center text-xs font-medium text-slate-500 uppercase cursor-pointer">
+                                                {{ _self.sortLink(stat|capitalize, stat, sort) }}
+                                            </th>
+                                        {% endfor %}
+                                        
+                                        <th scope="col" class="px-3 py-3.5 text-right text-sm font-semibold text-slate-900 cursor-pointer">
+                                            {{ _self.sortLink('Salary', 'SAL', sort) }}
+                                        </th>
+                                        <th scope="col" class="px-3 py-3.5 text-right text-sm font-semibold text-slate-900 cursor-pointer">
+                                            {{ _self.sortLink('Fee', 'FEE', sort) }}
+                                        </th>
+                                        <th scope="col" class="px-3 py-3.5 text-center text-sm font-semibold text-slate-900">Link</th>
+                                    </tr>
+                                </thead>
+                                
+                                <tbody class="divide-y divide-slate-200 bg-white">
+                                    {% for d in recruitment_results %}
+                                        {% set ratingColor = d.rating >= 90 ? 'text-emerald-600' : (d.rating >= 75 ? 'text-blue-600' : 'text-slate-600') %}
+                                        <tr class="hover:bg-slate-50 transition-colors">
+                                            <td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-bold sm:pl-6 {{ ratingColor }}">
+                                                {{ d.rating }}
+                                            </td>
+                                            <td class="whitespace-nowrap px-2 py-4 text-sm font-medium text-slate-900">
+                                                {{ d.NAME }}
+                                                {% if d.OFF > 0 %}
+                                                    <span class="ml-2 inline-flex items-center rounded-full bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-700 ring-1 ring-inset ring-red-600/10">{{ d.OFF }} Off</span>
+                                                {% endif %}
+                                            </td>
+                                            <td class="whitespace-nowrap px-2 py-4 text-center text-sm font-bold text-slate-700">{{ d.OA }}</td>
+                                            
+                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm text-slate-500">{{ d.CON }}</td>
+                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm text-slate-500 font-medium text-slate-700">{{ d.TAL }}</td>
+                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm text-slate-500">{{ d.AGG }}</td>
+                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm text-slate-500">{{ d.EXP }}</td>
+                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm text-slate-500">{{ d.TEI }}</td>
+                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm text-slate-500">{{ d.STA }}</td>
+                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm text-slate-500">{{ d.CHA }}</td>
+                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm text-slate-500">{{ d.MOT }}</td>
+                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm text-slate-500">{{ d.WEI }}</td>
+                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm text-slate-500 font-bold">{{ d.AGE }}</td>
+                                            
+                                            <td class="whitespace-nowrap px-3 py-4 text-right text-sm text-slate-600">${{ d.SAL|number_format }}</td>
+                                            <td class="whitespace-nowrap px-3 py-4 text-right text-sm text-slate-600">${{ d.FEE|number_format }}</td>
+                                            
+                                            <td class="whitespace-nowrap px-3 py-4 text-center text-sm">
+                                                {% if d.ID > 0 %}
+                                                    <a href="https://gpro.net/gb/DriverProfile.asp?ID={{ d.ID }}" target="_blank" class="text-blue-600 hover:text-blue-800 transition-colors text-lg" title="Open GPRO Profile">🔗</a>
+                                                {% else %}
+                                                    <span class="text-slate-300">-</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                    {% else %}
+                                        <tr>
+                                            <td colspan="16" class="px-6 py-10 text-center text-sm text-slate-500 bg-slate-50">
+                                                No candidates found.
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        {# Pagination Controls #}
+                        {% if pagination.total_pages > 1 %}
+                            <div class="bg-white px-4 py-3 flex items-center justify-between border-t border-slate-200 sm:px-6">
+                                {# Pass sort params in pagination links #}
+                                {% set sortParams = '&sort=' ~ sort.col ~ '&order=' ~ sort.order %}
+                                
+                                <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                                    <div>
+                                        <p class="text-sm text-slate-700">
+                                            Showing <span class="font-medium">{{ (pagination.current - 1) * 20 + 1 }}</span> to <span class="font-medium">{{ min(pagination.current * 20, pagination.total_items) }}</span> of <span class="font-medium">{{ pagination.total_items }}</span> results
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                                            {% if pagination.current > 1 %}
+                                                <a href="?main_tab=Recruitment Analyzer&page={{ pagination.current - 1 }}{{ sortParams }}" class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-slate-300 bg-white text-sm font-medium text-slate-500 hover:bg-slate-50">
+                                                    «
+                                                </a>
+                                            {% endif %}
+                                            
+                                            {% for i in 1..pagination.total_pages %}
+                                                <a href="?main_tab=Recruitment Analyzer&page={{ i }}{{ sortParams }}" 
+                                                   class="relative inline-flex items-center px-4 py-2 border text-sm font-medium {{ i == pagination.current ? 'z-10 bg-blue-50 border-blue-500 text-blue-600' : 'bg-white border-slate-300 text-slate-500 hover:bg-slate-50' }}">
+                                                    {{ i }}
+                                                </a>
+                                            {% endfor %}
+
+                                            {% if pagination.current < pagination.total_pages %}
+                                                <a href="?main_tab=Recruitment Analyzer&page={{ pagination.current + 1 }}{{ sortParams }}" class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-slate-300 bg-white text-sm font-medium text-slate-500 hover:bg-slate-50">
+                                                    »
+                                                </a>
+                                            {% endif %}
+                                        </nav>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>

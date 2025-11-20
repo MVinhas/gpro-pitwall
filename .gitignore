@@ -1,0 +1,7 @@
+.env
+/bin
+/data
+/public/.htaccess
+/vendor
+composer.lock
+gpro_pilots.sqlite
