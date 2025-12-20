@@ -1,24 +1,28 @@
 <?php
+
 namespace App\Repository;
 
 use PDO;
 
 class PilotRepository
 {
-    public function __construct(private PDO $db) {}
+    public function __construct(private readonly PDO $db)
+    {
+    }
 
     public function getPilotsByDivision(string $division): array
     {
         $stmt = $this->db->prepare("SELECT * FROM pilots WHERE division = :division");
         $stmt->execute([':division' => $division]);
-        return $stmt->fetchAll();
+        /** @var array<int, array<string, mixed>> */
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
     public function addPilot(array $data): bool
     {
         $columns = implode(', ', array_keys($data));
         $placeholders = ':' . implode(', :', array_keys($data));
-        
+
         $sql = "INSERT INTO pilots ({$columns}) VALUES ({$placeholders})";
         $stmt = $this->db->prepare($sql);
         return $stmt->execute($data);
@@ -28,9 +32,11 @@ class PilotRepository
     {
         $stmt = $this->db->prepare("SELECT id FROM pilots WHERE division = :division ORDER BY id DESC LIMIT 1");
         $stmt->execute([':division' => $division]);
-        $result = $stmt->fetch();
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        if (!$result) return false;
+        if (!$result) {
+            return false;
+        }
 
         $delStmt = $this->db->prepare("DELETE FROM pilots WHERE id = :id");
         return $delStmt->execute([':id' => $result['id']]);

@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 namespace App\Http;
 
 class Request
@@ -6,12 +9,14 @@ class Request
     public function __construct(
         private array $get,
         private array $post,
-        private array $files
-    ) {}
+        private array $files,
+        private array $server
+    ) {
+    }
 
     public static function createFromGlobals(): self
     {
-        return new self($_GET, $_POST, $_FILES);
+        return new self($_GET, $_POST, $_FILES, $_SERVER);
     }
 
     public function get(string $key, mixed $default = null): mixed
@@ -26,11 +31,31 @@ class Request
 
     public function file(string $key): ?array
     {
-        return $this->files[$key] ?? null;
+        $file = $this->files[$key] ?? null;
+        if (is_array($file)) {
+            return $file;
+        }
+
+        return null;
     }
 
     public function getMethod(): string
     {
-        return $_SERVER['REQUEST_METHOD'] ?? 'GET';
+        return (string)($this->server['REQUEST_METHOD'] ?? 'GET');
+    }
+
+    public function getPath(): string
+    {
+        $uri = (string)($this->server['REQUEST_URI'] ?? '/');
+        $path = parse_url($uri, PHP_URL_PATH);
+
+        if ($this->getMethod() === 'POST' && ($path === '/' || $path === '/index.php')) {
+            $action = $this->post('action');
+            if ($action && is_string($action) && preg_match('#^[a-zA-Z0-9/_-]+$#', $action)) {
+                return '/' . ltrim($action, '/');
+            }
+        }
+
+        return (string)$path;
     }
 }

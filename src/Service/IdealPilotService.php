@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Service;
 
 use App\Repository\PilotRepository;
@@ -6,10 +7,11 @@ use App\Repository\PilotRepository;
 class IdealPilotService
 {
     public function __construct(
-        private PilotRepository $pilotRepo,
-        private PilotCalculatorService $calculator,
-        private array $statsSchema
-    ) {}
+        private readonly PilotRepository $pilotRepo,
+        private readonly PilotCalculatorService $calculator,
+        private readonly array $statsSchema
+    ) {
+    }
 
     public function getIdealPilot(string $division): array
     {
@@ -28,6 +30,7 @@ class IdealPilotService
             foreach ($columnNames as $col) {
                 $totalStats[$col] += (int)$pilot[$col];
             }
+
             // Calculate OA for this specific pilot row
             $totalOverall += $this->calculator->calculateOverall($pilot);
         }

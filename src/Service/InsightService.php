@@ -1,60 +1,86 @@
 <?php
+
+declare(strict_types=1);
+
 namespace App\Service;
 
-class InsightService
+final readonly class InsightService
 {
-    public function __construct(private array $divisions) {}
+    private const array COMPARISON_KEYS = [
+        'Concentration',
+        'Talent',
+        'Aggressiveness',
+        'Experience',
+        'Technical Insight',
+        'Stamina',
+        'Charisma',
+        'Motivation',
+    ];
 
+    private const int SIGNIFICANCE_THRESHOLD = 5;
+
+    /**
+     * @param list<string> $divisions
+     */
+    public function __construct(
+        private array $divisions
+    ) {
+    }
+
+    /**
+     * @param array<string, array<string, mixed>> $allIdealPilots
+     */
     public function generateInsights(array $allIdealPilots): array
     {
-        $insightsData = [];
-        $comparisonKeys = ['Concentration', 'Talent', 'Aggressiveness', 'Experience', 'Technical Insight', 'Stamina', 'Charisma', 'Motivation'];
-        $threshold = 5;
+        $result = [];
 
-        for ($i = 0; $i < count($this->divisions) - 1; $i++) {
-            $lowerDiv = $this->divisions[$i];
-            $higherDiv = $this->divisions[$i + 1];
-            $transitionKey = "{$lowerDiv}-{$higherDiv}";
+        $count = count($this->divisions);
+        for ($i = 0; $i < $count - 1; $i++) {
+            $from = $this->divisions[$i];
+            $to = $this->divisions[$i + 1];
 
-            $lowerData = $allIdealPilots[$lowerDiv]['stats'] ?? null;
-            $higherData = $allIdealPilots[$higherDiv]['stats'] ?? null;
-            $lowerCount = $allIdealPilots[$lowerDiv]['count'] ?? 0;
-            $higherCount = $allIdealPilots[$higherDiv]['count'] ?? 0;
+            $lower = $allIdealPilots[$from] ?? [];
+            $higher = $allIdealPilots[$to] ?? [];
+
+            $lowerStats = $lower['stats'] ?? [];
+            $higherStats = $higher['stats'] ?? [];
+
+            $lowerCount = (int) ($lower['count'] ?? 0);
+            $higherCount = (int) ($higher['count'] ?? 0);
 
             $insights = [];
             $maxDiff = 0;
-            $maxDiffKey = '';
+            $maxKey = '';
 
             if ($lowerCount > 0 && $higherCount > 0) {
-                foreach ($comparisonKeys as $key) {
-                    $lowerVal = (int)($lowerData[$key] ?? 0);
-                    $higherVal = (int)($higherData[$key] ?? 0);
-                    $difference = $higherVal - $lowerVal;
+                foreach (self::COMPARISON_KEYS as $key) {
+                    $diff = (int) ($higherStats[$key] ?? 0) - (int) ($lowerStats[$key] ?? 0);
 
                     $insights[$key] = [
-                        'lower' => $lowerVal,
-                        'higher' => $higherVal,
-                        'diff' => $difference,
-                        'is_significant' => $difference > $threshold
+                        'lower' => (int) ($lowerStats[$key] ?? 0),
+                        'higher' => (int) ($higherStats[$key] ?? 0),
+                        'diff' => $diff,
+                        'is_significant' => $diff > self::SIGNIFICANCE_THRESHOLD,
                     ];
 
-                    if ($difference > $maxDiff && ($key !== 'Talent' && $key !== 'Experience')) {
-                        $maxDiff = $difference;
-                        $maxDiffKey = $key;
+                    if ($diff > $maxDiff && !in_array($key, ['Talent', 'Experience'], true)) {
+                        $maxDiff = $diff;
+                        $maxKey = $key;
                     }
                 }
             }
 
-            $insightsData[$transitionKey] = [
-                'from' => $lowerDiv,
-                'to' => $higherDiv,
-                'has_data' => ($lowerCount > 0 && $higherCount > 0),
+            $result["{$from}-{$to}"] = [
+                'from' => $from,
+                'to' => $to,
+                'has_data' => $lowerCount > 0 && $higherCount > 0,
                 'insights' => $insights,
-                'max_diff_key' => ($maxDiff > 0) ? $maxDiffKey : '',
+                'max_diff_key' => $maxDiff > 0 ? $maxKey : '',
                 'count_lower' => $lowerCount,
-                'count_higher' => $higherCount
+                'count_higher' => $higherCount,
             ];
         }
-        return $insightsData;
+
+        return $result;
     }
 }

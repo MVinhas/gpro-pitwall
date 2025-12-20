@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 namespace App\Controller;
 
 use App\Http\Request;
@@ -9,62 +12,94 @@ use App\Service\PilotCalculatorService;
 class BaselineController
 {
     public function __construct(
-        private PilotRepository $pilotRepo,
-        private DivisionMetadataRepository $metaRepo,
-        private PilotCalculatorService $calculator,
-        private array $config
-    ) {}
+        private readonly PilotRepository $pilotRepo,
+        private readonly DivisionMetadataRepository $metaRepo,
+        private readonly PilotCalculatorService $calculator,
+        private readonly array $statsSchema,
+        private readonly bool $isDev
+    ) {
+    }
 
-    public function handle(Request $request): void
+    public function addPilot(Request $request): void
     {
-        $action = $request->post('action');
-        $division = $request->post('division');
-        
-        // Simple security check for dev mode
-        if (!$this->config['settings']['is_dev']) {
-            $this->redirectBack($division);
+        $division = (string)$request->post('division');
+
+        if (!$this->checkDevAccess($division)) {
             return;
         }
 
-        match ($action) {
-            'add_pilot' => $this->addPilot($request, $division),
-            'update_season' => $this->updateSeason($request, $division),
-            'undo_last_pilot' => $this->undo($division),
-            'clear_stats' => $this->clear($division),
-            default => null
-        };
+        $data = [];
+        foreach ($this->statsSchema as $col) {
+            $val = $request->post($col);
+            if ($val === null || $val === '') {
+                $this->redirectBack($division);
+                return;
+            }
+
+            $data[$col] = (int)$val;
+        }
+
+        $adjusted = $this->calculator->adjustPilotStats($data, $division);
+        $this->pilotRepo->addPilot(array_merge($adjusted, ['division' => $division]));
 
         $this->redirectBack($division);
     }
 
-    private function addPilot(Request $request, string $div): void
+    public function updateSeason(Request $request): void
     {
-        $schema = $this->config['config']['app']['stats_schema'];
-        $data = [];
-        foreach ($schema as $col) {
-            $val = $request->post($col);
-            if ($val === null || $val === '') return; // Validation fail
-            $data[$col] = (int)$val;
+        $division = (string)$request->post('division');
+
+        if (!$this->checkDevAccess($division)) {
+            return;
         }
 
-        $adjusted = $this->calculator->adjustPilotStats($data, $div);
-        $this->pilotRepo->addPilot(array_merge($adjusted, ['division' => $div]));
-    }
-
-    private function updateSeason(Request $request, string $div): void
-    {
         $season = (int)$request->post('season_number');
-        if ($season > 0) $this->metaRepo->updateSeason($div, $season);
+        if ($season > 0) {
+            $this->metaRepo->updateSeason($division, $season);
+        }
+
+        $this->redirectBack($division);
     }
 
-    private function undo(string $div): void { $this->pilotRepo->deleteLastPilot($div); }
-    private function clear(string $div): void { $this->pilotRepo->clearDivision($div); }
+    public function undoLastPilot(Request $request): void
+    {
+        $division = (string)$request->post('division');
 
-    private function redirectBack(string $div): void
+        if (!$this->checkDevAccess($division)) {
+            return;
+        }
+
+        $this->pilotRepo->deleteLastPilot($division);
+        $this->redirectBack($division);
+    }
+
+    public function clearStats(Request $request): void
+    {
+        $division = (string)$request->post('division');
+
+        if (!$this->checkDevAccess($division)) {
+            return;
+        }
+
+        $this->pilotRepo->clearDivision($division);
+        $this->redirectBack($division);
+    }
+
+    private function checkDevAccess(string $division): bool
+    {
+        if (!$this->isDev || empty($division)) {
+            $this->redirectBack($division);
+            return false;
+        }
+
+        return true;
+    }
+
+    private function redirectBack(string $division): void
     {
         $params = http_build_query([
             'main_tab' => 'Division Baseline',
-            'division_tab' => $div
+            'division_tab' => $division ?: 'Rookie'
         ]);
         header("Location: /?{$params}");
         exit;
