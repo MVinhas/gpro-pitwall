@@ -1,0 +1,162 @@
+{% extends "layout.twig" %}
+
+{% block content %}
+<div class="space-y-6">
+    
+    {# Header #}
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-200 pb-4">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                <svg class="h-6 w-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                System Debug
+            </h1>
+            <p class="text-sm text-slate-500 mt-1">Application telemetry and administrative controls.</p>
+        </div>
+        <div class="mt-4 sm:mt-0">
+            <form method="POST" action="/debug/flush" onsubmit="return confirm('Are you sure? This will clear all application caches and temporary session data.');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-md hover:bg-red-700 shadow-sm transition-colors">
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    Flush {{ cache_driver|upper }} Cache
+                </button>
+            </form>
+        </div>
+    </div>
+
+    {% if flash %}
+        <div class="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded text-sm font-medium">
+            {{ flash }}
+        </div>
+    {% endif %}
+
+    {# Top Metrics Grid #}
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        {# User Metrics #}
+        <div class="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
+            <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Total Users</h3>
+            <div class="mt-2 flex items-baseline gap-2">
+                <span class="text-2xl font-bold text-slate-800">{{ user_stats.total }}</span>
+                <span class="text-xs text-slate-400">Registered</span>
+            </div>
+        </div>
+
+        <div class="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
+            <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Premium / Token</h3>
+            <div class="mt-2 flex items-baseline gap-2">
+                <span class="text-2xl font-bold text-emerald-600">{{ user_stats.premium }}</span>
+                <span class="text-xs text-slate-400">/ {{ user_stats.with_token }} Active APIs</span>
+            </div>
+        </div>
+
+        {# System Health #}
+        <div class="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
+            <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wide">API Usage</h3>
+            <div class="mt-2 flex items-baseline gap-2">
+                <span class="text-2xl font-bold text-blue-600">{{ api_limit }}</span>
+                <span class="text-xs text-slate-400">Remaining</span>
+            </div>
+        </div>
+
+        <div class="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
+            <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Memory</h3>
+            <div class="mt-2 flex items-baseline gap-2">
+                <span class="text-2xl font-bold text-slate-800">{{ system.memory_usage }}</span>
+                {% if system.memory_limit != null %}
+                <span class="text-xs text-slate-400">of {{ system.memory_limit }}</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        {# Left Column: Environment & DB #}
+        <div class="space-y-6">
+            {# Database Status #}
+            <div class="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+                <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+                    <h3 class="text-sm font-semibold text-slate-800">Database (SQLite)</h3>
+                    {% if db_stats.writable %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Writable</span>
+                    {% else %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">Read Only</span>
+                    {% endif %}
+                </div>
+                <div class="p-4 space-y-2 text-sm">
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">File Path</span>
+                        <code class="text-slate-700 bg-slate-100 px-1 rounded">{{ db_stats.path }}</code>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Size</span>
+                        <span class="font-mono font-medium">{{ db_stats.size }}</span>
+                    </div>
+                </div>
+            </div>
+
+            {# Runtime Info #}
+            <div class="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+                <div class="px-4 py-3 bg-slate-50 border-b border-slate-200">
+                    <h3 class="text-sm font-semibold text-slate-800">Runtime Environment</h3>
+                </div>
+                <div class="p-4 grid grid-cols-2 gap-y-2 text-sm">
+                    <div class="text-slate-500">PHP Version</div>
+                    <div class="text-right font-mono">{{ system.php_version }}</div>
+                    
+                    <div class="text-slate-500">Web Server</div>
+                    <div class="text-right font-mono text-xs">{{ system.server_software }}</div>
+
+                    <div class="text-slate-500">Max Execution</div>
+                    <div class="text-right font-mono">{{ system.max_execution_time }}</div>
+
+                    <div class="text-slate-500">Upload Limit</div>
+                    <div class="text-right font-mono">{{ system.upload_max_filesize }}</div>
+                </div>
+            </div>
+
+            {# Extensions #}
+            <div class="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+                <div class="px-4 py-3 bg-slate-50 border-b border-slate-200">
+                    <h3 class="text-sm font-semibold text-slate-800">Required Extensions</h3>
+                </div>
+                <div class="p-4 grid grid-cols-2 gap-2 text-sm">
+                    {% for ext, loaded in system.extensions %}
+                        <div class="flex items-center justify-between p-2 rounded {{ loaded ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700' }}">
+                            <span class="font-medium">{{ ext }}</span>
+                            {% if loaded %}
+                                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
+                            {% else %}
+                                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        {# Right Column: Environment Variables #}
+        <div class="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden flex flex-col h-full">
+            <div class="px-4 py-3 bg-slate-50 border-b border-slate-200">
+                <h3 class="text-sm font-semibold text-slate-800">Environment Variables</h3>
+            </div>
+            <div class="p-0 overflow-auto max-h-[600px] bg-slate-50">
+                <table class="min-w-full divide-y divide-slate-200 text-xs">
+                    <tbody class="divide-y divide-slate-200 bg-white">
+                        {% for key, val in env_vars %}
+                            <tr class="hover:bg-slate-50">
+                                <td class="whitespace-nowrap py-2 pl-4 pr-3 font-medium text-slate-600 font-mono">{{ key }}</td>
+                                <td class="whitespace-break-spaces py-2 px-3 text-slate-500 font-mono break-all">{{ val }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

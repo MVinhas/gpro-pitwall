@@ -26,8 +26,8 @@
 
             {# Main Form #}
             <div class="p-6 md:col-span-2">
-                <form method="POST" action="/" class="space-y-6">
-                    <input type="hidden" name="action" value="update_track_risks">
+                <form method="POST" action="/update_track_risks" class="space-y-6">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <input type="hidden" name="track_name" value="{{ active_track }}">
                     
                     <div class="grid grid-cols-2 gap-6">

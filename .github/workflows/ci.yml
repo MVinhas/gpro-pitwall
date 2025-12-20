@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, intl, sqlite, apcu, curl
+          coverage: none
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: |
+            composer-${{ runner.os }}-
+
+      - name: Validate composer.json and composer.lock
+        run: composer validate --strict
+
+      - name: Install dependencies (with dev)
+        run: composer install --prefer-dist --no-progress --no-suggest
+
+      - name: Static analysis (PHPStan)
+        run: composer analyse
+
+      - name: Code style (PHP_CodeSniffer)
+        run: composer lint
+
+      - name: Twig lint
+        run: composer twig-lint
+
+      - name: Composer audit (security check)
+        run: composer audit --no-interaction
+
+      - name: Ensure .env is not committed
+        run: |
+          if git ls-files | grep -q "^\.env$"; then
+            echo ".env file found in repository. Remove it before merging."
+            exit 1
+          fi
+
+      - name: Production install (no dev)
+        run: composer install --no-dev --optimize-autoloader --prefer-dist --no-progress --no-suggest

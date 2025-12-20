@@ -1,45 +1,166 @@
 <?php
-// gpro-driver-analyzer/src/Database/DatabaseSeeder.php
+
+declare(strict_types=1);
 
 namespace App\Database;
 
 use PDO;
-use PDOException;
 
 class DatabaseSeeder
 {
     public function __construct(
-        private PDO $db,
-        private array $statsSchema,
-        private array $divisions,
-        private array $tracks,
-        private string $defaultQ1Risk
-    ) {}
+        private readonly PDO $db,
+        private readonly array $statsSchema,
+        private readonly array $divisions,
+        private readonly string $defaultQ1Risk,
+        private array $secrets
+    ) {
+    }
 
     public function migrate(): void
     {
+        // 1. Core Tables
+        $this->createUsersTable();
+        $this->createVerificationTokensTable();
+        $this->createIndexVerificationUser();
+
         $this->createPilotsTable();
         $this->createMetadataTable();
-        $this->createTrackRisksTable(); // User preferences (Keep this)
-        
-        // NEW: Game Data Tables
-        $this->createTracksTable();           // Static Game Data (From Excel)
-        $this->createTrainingsTable();        // Training Gains (From Excel)
-        $this->createCarPartCoefficientsTable(); // Setup Math (From Excel Tables)
-        $this->createGameConstantsTable();    // Tyre Factors etc (From Excel ReverseCalc)
-        
-        $this->seedTrainings();               // Insert the static training data
-        $this->seedCarPartCoefficients();     // Insert the static setup math
-        $this->seedGameConstants();           // Insert tyre/brand factors
+        $this->createTrackRisksTable();
+        $this->createTracksTable();
+        $this->createTrainingsTable();
+        $this->createCarPartCoefficientsTable();
+        $this->createGameConstantsTable();
+
+        // 2. Seeds
+        $this->seedTrainings();
+        $this->seedCarPartCoefficients();
+        $this->seedGameConstants();
+
+        // 3. Dynamic Migrations
+        $this->applyUserMigrations();
+    }
+
+    private function createUsersTable(): void
+    {
+        $sql = "
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL UNIQUE,
+                email_encrypted TEXT NOT NULL,
+                email_hash TEXT NOT NULL UNIQUE,
+                is_premium INTEGER NOT NULL DEFAULT 0,
+                is_admin INTEGER NOT NULL DEFAULT 0,
+                api_token TEXT DEFAULT NULL,
+                verified_at TEXT DEFAULT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        ";
+
+        $this->db->exec($sql);
+    }
+
+    private function applyUserMigrations(): void
+    {
+        $cols = $this->db
+            ->query('PRAGMA table_info(users)')
+            ->fetchAll(PDO::FETCH_ASSOC);
+
+        $existingCols = array_column($cols, 'name');
+
+        if (!in_array('username', $existingCols, true)) {
+            $this->db->exec(
+                "ALTER TABLE users ADD COLUMN username TEXT DEFAULT NULL"
+            );
+            $this->db->exec(
+                "UPDATE users SET username = 'User_' || id WHERE username IS NULL"
+            );
+        }
+
+        if (!in_array('is_premium', $existingCols, true)) {
+            $this->db->exec(
+                "ALTER TABLE users ADD COLUMN is_premium INTEGER NOT NULL DEFAULT 0"
+            );
+        }
+
+        if (!in_array('api_token', $existingCols, true)) {
+            $this->db->exec(
+                "ALTER TABLE users ADD COLUMN api_token TEXT DEFAULT NULL"
+            );
+        }
+
+        if (!in_array('verified_at', $existingCols, true)) {
+            $this->db->exec(
+                "ALTER TABLE users ADD COLUMN verified_at TEXT DEFAULT NULL"
+            );
+
+            if (in_array('is_verified', $existingCols, true)) {
+                $this->db->exec(
+                    "UPDATE users
+                     SET verified_at = datetime('now')
+                     WHERE is_verified = 1"
+                );
+            }
+        }
+
+        if (!in_array('is_admin', $existingCols, true)) {
+            $this->db->exec(
+                "ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0"
+            );
+        }
+
+        if (!in_array('email_encrypted', $existingCols, true)) {
+            $this->db->exec(
+                "ALTER TABLE users ADD COLUMN email_encrypted TEXT"
+            );
+        }
+
+        if (!in_array('email_hash', $existingCols, true)) {
+            $this->db->exec(
+                "ALTER TABLE users ADD COLUMN email_hash TEXT"
+            );
+        }
+    }
+
+    private function createVerificationTokensTable(): void
+    {
+        $sql = "
+            CREATE TABLE IF NOT EXISTS verification_tokens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                code_hmac TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                attempts INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (user_id)
+                    REFERENCES users(id)
+                    ON DELETE CASCADE
+            )
+        ";
+
+        $this->db->exec($sql);
+    }
+
+    private function createIndexVerificationUser(): void
+    {
+        $sql = "
+            CREATE INDEX IF NOT EXISTS idx_verification_user
+            ON verification_tokens(user_id)
+        ";
+
+        $this->db->exec($sql);
     }
 
     private function createPilotsTable(): void
     {
         $columns = 'id INTEGER PRIMARY KEY AUTOINCREMENT, division TEXT NOT NULL';
-        foreach ($this->statsSchema as $column_name) {
-            $columns .= ", {$column_name} INTEGER NOT NULL";
+
+        foreach ($this->statsSchema as $columnName) {
+            $columns .= ", {$columnName} INTEGER NOT NULL";
         }
+
         $sql = "CREATE TABLE IF NOT EXISTS pilots ({$columns})";
+
         $this->db->exec($sql);
     }
 
@@ -52,9 +173,15 @@ class DatabaseSeeder
                 last_retrieved_race INTEGER NOT NULL DEFAULT 1
             )
         ";
+
         $this->db->exec($sql);
-        // (Keep existing logic for seeding initial metadata)
-         $stmt = $this->db->prepare("INSERT OR IGNORE INTO division_metadata (division, last_retrieved_season, last_retrieved_race) VALUES (:div, 0, 1)");
+
+        $stmt = $this->db->prepare(
+            "INSERT OR IGNORE INTO division_metadata
+             (division, last_retrieved_season, last_retrieved_race)
+             VALUES (:div, 0, 1)"
+        );
+
         foreach ($this->divisions as $division) {
             $stmt->execute([':div' => $division]);
         }
@@ -62,53 +189,50 @@ class DatabaseSeeder
 
     private function createTrackRisksTable(): void
     {
-         $q1_columns = '';
-        $default_risk_sql = $this->db->quote($this->defaultQ1Risk);
-        foreach ($this->divisions as $div) {
-            $column_name = 'q1_' . strtolower($div);
-            $q1_columns .= ", {$column_name} TEXT NOT NULL DEFAULT {$default_risk_sql}";
+        $q1Columns = '';
+        $defaultRiskSql = $this->db->quote($this->defaultQ1Risk);
+
+        foreach ($this->divisions as $division) {
+            $q1Columns .=
+                ", q1_" . strtolower((string) $division) .
+                " TEXT NOT NULL DEFAULT {$defaultRiskSql}";
         }
+
         $sql = "
             CREATE TABLE IF NOT EXISTS track_risks (
                 track_name TEXT PRIMARY KEY,
                 overtaking_risk INTEGER NOT NULL DEFAULT 50,
                 defense_risk INTEGER NOT NULL DEFAULT 50
-                {$q1_columns}
+                {$q1Columns}
             )
         ";
+
         $this->db->exec($sql);
     }
 
-
     private function createTracksTable(): void
     {
-        // This table mirrors the 'GPRO Version 6 - Tracks' sheet
         $sql = "
             CREATE TABLE IF NOT EXISTS tracks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT UNIQUE NOT NULL,
+                lap_length REAL,
                 laps INTEGER,
                 distance REAL,
                 avg_speed REAL,
                 corners INTEGER,
                 pit_time REAL,
-                
-                -- Base Setup Values
                 base_wings INTEGER,
                 base_engine INTEGER,
                 base_brakes INTEGER,
                 base_gear INTEGER,
                 base_suspension INTEGER,
-                
-                -- Track Factors
-                fuel_consumption TEXT, -- 'High', 'Low' etc
-                tyre_wear TEXT,        -- 'Medium', 'Very High' etc
+                fuel_consumption TEXT,
+                tyre_wear TEXT,
                 wing_split REAL,
-                fuel_per_lap REAL,     -- Dry
+                fuel_per_lap REAL,
                 fuel_per_lap_wet REAL,
                 tyre_wear_factor REAL,
-                
-                -- Parts Wear Factors (Cha, Eng, FW...)
                 wear_chassis INTEGER,
                 wear_engine INTEGER,
                 wear_fwing INTEGER,
@@ -122,6 +246,7 @@ class DatabaseSeeder
                 wear_electronics INTEGER
             )
         ";
+
         $this->db->exec($sql);
     }
 
@@ -143,17 +268,17 @@ class DatabaseSeeder
                 gain_weight REAL DEFAULT 0
             )
         ";
+
         $this->db->exec($sql);
     }
 
     private function createCarPartCoefficientsTable(): void
     {
-        // From 'Tables' sheet
         $sql = "
             CREATE TABLE IF NOT EXISTS car_part_coefficients (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                part_name TEXT NOT NULL, -- 'Wings', 'Engine', etc
-                type TEXT NOT NULL,      -- 'level' or 'wear'
+                part_name TEXT NOT NULL,
+                type TEXT NOT NULL,
                 cha REAL DEFAULT 0,
                 eng REAL DEFAULT 0,
                 f_wing REAL DEFAULT 0,
@@ -168,91 +293,92 @@ class DatabaseSeeder
                 constant REAL DEFAULT 0
             )
         ";
+
         $this->db->exec($sql);
     }
 
     private function createGameConstantsTable(): void
     {
-        // Generic table for key-value factors from 'ReverseCalc'
         $sql = "
             CREATE TABLE IF NOT EXISTS game_constants (
-                category TEXT NOT NULL, -- 'tyre_compound', 'tyre_brand', 'track_wear_level'
-                name TEXT NOT NULL,     -- 'Extra Soft', 'Yokomama', 'Very high'
-                value REAL NOT NULL,    -- 0.998, 2.0, 4.0
+                category TEXT NOT NULL,
+                name TEXT NOT NULL,
+                value REAL NOT NULL,
                 PRIMARY KEY (category, name)
             )
         ";
+
         $this->db->exec($sql);
     }
 
     private function seedTrainings(): void
     {
-        // Data extracted from 'Driver Training Planner - Internal'
-        $trainings = [
-            ['Fitness',   700000, 0,  0, 0,    0, 0,  2,  0, -7.4, -1],
-            ['Yoga',      700000, 5,  0, -2,   0, 0, -2,  0,  7.2,  0],
-            ['PR',        500000, -3, 0, 0,    0, 0,  0,  6,  0,    0],
-            ['Technical', 600000, 0,  0, 0,    0, 5,  0,  0, -24.5, 0],
-            ['Psycho',    400000, 0,  0, 0,    0, 0,  0,  0,  16.7, 0],
-            ['Ninja',     550000, 1,  0, 4.6,  0, 0,  0,  0,  0,    0],
-        ];
+        $trainings = $this->secrets['trainings_seed'] ?? [];
 
-        $stmt = $this->db->prepare("INSERT OR IGNORE INTO trainings (name, cost, gain_concentration, gain_talent, gain_aggressiveness, gain_experience, gain_technical_insight, gain_stamina, gain_charisma, gain_motivation, gain_weight) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        foreach ($trainings as $t) {
-            $stmt->execute($t);
+        $stmt = $this->db->prepare(
+            "INSERT OR IGNORE INTO trainings (
+                name, cost,
+                gain_concentration, gain_talent, gain_aggressiveness,
+                gain_experience, gain_technical_insight, gain_stamina,
+                gain_charisma, gain_motivation, gain_weight
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        );
+
+        foreach ($trainings as $training) {
+            $stmt->execute($training);
         }
     }
 
     private function seedCarPartCoefficients(): void
     {
-        // Data from 'Tables' sheet (Rows 1-5 for Level)
-        // part_name, type, cha, eng, f_wing, r_wing, und, side, cool, gear, brake, susp, elec, constant
-        $coeffs = [
-            ['Wings',      'level', -19.74, 0, 30.03, 30.03, -15.07, 0, 0, 0, 0, 0, 0, 151.50],
-            ['Engine',     'level', 0, 16.04, 0, 0, 0, 0, 4.9, 0, 0, 0, 3.34, 145.68],
-            ['Brakes',     'level', 6.04, 0, 0, 0, 0, 0, 0, 0, -29.14, 0, 6.11, -101.94],
-            ['Gearbox',    'level', 0, 0, 0, 0, 0, 0, 0, -41, 0, 0, 9.00, -192.00],
-            ['Suspension', 'level', -15.27, 0, 0, 0, -10.72, 6.03, 0, 0, 0, 31.0, 0, 66.24],
-        ];
+        $coeffs = $this->secrets['car_part_coeffs_seed'] ?? [];
 
-        $stmt = $this->db->prepare("INSERT OR IGNORE INTO car_part_coefficients (part_name, type, cha, eng, f_wing, r_wing, und, side, cool, gear, brake, susp, elec, constant) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        foreach ($coeffs as $c) {
-            $stmt->execute($c);
+        $stmt = $this->db->prepare(
+            "INSERT OR IGNORE INTO car_part_coefficients (
+                part_name, type,
+                cha, eng, f_wing, r_wing, und,
+                side, cool, gear, brake, susp, elec, constant
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        );
+
+        foreach ($coeffs as $coeff) {
+            $stmt->execute($coeff);
         }
     }
 
     private function seedGameConstants(): void
     {
-        // Data from 'ReverseCalc' sheet
-        $constants = [
-            // Tyre Compounds Factors
-            ['tyre_compound', 'Extra Soft', 0.99816375],
-            ['tyre_compound', 'Soft',       0.99706484],
-            ['tyre_compound', 'Medium',     0.99638035],
-            ['tyre_compound', 'Hard',       0.99586253],
-            ['tyre_compound', 'Rain',       0.99608785],
-            
-            // Tyre Brand IDs (Assuming these act as IDs or specific small modifiers)
-            ['tyre_brand', 'Pipirelli',  1],
-            ['tyre_brand', 'Avonn',      1], // Assuming Avonn is 1 based on typical GPRO data not shown but inferred
-            ['tyre_brand', 'Yokomama',   2],
-            ['tyre_brand', 'Dunnolop',   4],
-            ['tyre_brand', 'Badyear',    7],
-            ['tyre_brand', 'Michelini',  5],
-            ['tyre_brand', 'Bridgerock', 6],
-            ['tyre_brand', 'Hancock',    8], // Guessing 8 if needed
-            
-            // Track Wear Levels (IDs/Factors)
-            ['track_wear_level', 'Very high', 4],
-            ['track_wear_level', 'High',      3],
-            ['track_wear_level', 'Medium',    2],
-            ['track_wear_level', 'Low',       1],
-            ['track_wear_level', 'Very low',  0],
-        ];
+        $stmt = $this->db->prepare(
+            "INSERT OR IGNORE INTO game_constants
+             (category, name, value)
+             VALUES (:cat, :name, :val)"
+        );
 
-        $stmt = $this->db->prepare("INSERT OR IGNORE INTO game_constants (category, name, value) VALUES (?, ?, ?)");
-        foreach ($constants as $c) {
-            $stmt->execute($c);
+        $compounds = $this->secrets['tyre_calc']['tyre_risk_factors'] ?? [];
+        foreach ($compounds as $name => $value) {
+            $stmt->execute([
+                ':cat' => 'tyre_compound',
+                ':name' => $name,
+                ':val' => $value,
+            ]);
+        }
+
+        $suppliers = $this->secrets['tyre_suppliers_durabilities'] ?? [];
+        foreach ($suppliers as $name => $value) {
+            $stmt->execute([
+                ':cat' => 'tyre_brand',
+                ':name' => $name,
+                ':val' => $value,
+            ]);
+        }
+
+        $wearLevels = $this->secrets['tyre_calc']['track_wear_values'] ?? [];
+        foreach ($wearLevels as $name => $value) {
+            $stmt->execute([
+                ':cat' => 'track_wear_level',
+                ':name' => ucfirst(strtolower((string) $name)),
+                ':val' => $value,
+            ]);
         }
     }
 }

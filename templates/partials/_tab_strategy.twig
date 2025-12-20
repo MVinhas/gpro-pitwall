@@ -1,0 +1,335 @@
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+    
+    {# LEFT: Configuration Panel #}
+    <div class="lg:col-span-3">
+        <form method="POST" action="/calculate_strategy" id="stratForm">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="action" value="calculate_strategy">
+            {# CARD 1: RACE SETTINGS #}
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-4">
+                <div class="px-4 py-2 border-b border-slate-200 bg-slate-50">
+                    <h3 class="text-xs font-bold text-slate-700 uppercase">Race Settings</h3>
+                </div>
+                <div class="p-4 space-y-3">
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase">Track Temp (°C)</label>
+                        <input type="number" name="temp" value="{{ strategy_results.inputs.temp ?? '' }}" placeholder="Auto" step="0.1" class="w-full rounded border-slate-300 py-1 px-2 text-sm focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase">Humidity (%)</label>
+                        <input type="number" name="humidity" value="{{ strategy_results.inputs.hum ?? '' }}" placeholder="Auto" class="w-full rounded border-slate-300 py-1 px-2 text-sm focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase">Clear Track Risk</label>
+                        <input type="number" name="risk" value="{{ strategy_results.inputs.risk ?? 0 }}" class="w-full rounded border-slate-300 py-1 px-2 text-sm focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase">Target Wear Limit</label>
+                        <div class="flex items-center gap-2">
+                            <input type="number" name="target_wear" value="{{ strategy_results.inputs.target_wear ?? 15 }}" class="w-full rounded border-slate-300 py-1 px-2 text-sm focus:ring-blue-500">
+                            <span class="text-xs text-slate-500">%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# CARD 2: DRIVER ATTRIBUTES #}
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-4">
+                <div class="px-4 py-2 border-b border-slate-200 bg-slate-50">
+                    <h3 class="text-xs font-bold text-slate-700 uppercase">Driver</h3>
+                </div>
+
+                <div class="p-4 grid grid-cols-2 gap-2">
+                    {% set d = strategy_results.stats.driver %}
+                    <div>
+                        <label class="block text-[9px] text-slate-400 uppercase">Concentration</label>
+                        <input type="number" name="d_conc" value="{{ d.concentration }}" clsass="w-full rounded border-slate-300 py-1 px-1 text-xs focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-[9px] text-slate-400 uppercase">Talent</label>
+                        <input type="number" name="d_tal" value="{{ d.talent }}" class="w-full rounded border-slate-300 py-1 px-1 text-xs focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-[9px] text-slate-400 uppercase">Aggressiveness</label>
+                        <input type="number" name="d_agg" value="{{ d.aggressiveness }}" class="w-full rounded border-slate-300 py-1 px-1 text-xs focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-[9px] text-slate-400 uppercase">Experience</label>
+                        <input type="number" name="d_exp" value="{{ d.experience }}" class="w-full rounded border-slate-300 py-1 px-1 text-xs focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-[9px] text-slate-400 uppercase">Tech Insight</label>
+                        <input type="number" name="d_tech" value="{{ d.technical_insight }}" class="w-full rounded border-slate-300 py-1 px-1 text-xs focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-[9px] text-slate-400 uppercase">Weight</label>
+                        <input type="number" name="d_wgt" value="{{ d.weight }}" class="w-full rounded border-slate-300 py-1 px-1 text-xs focus:ring-blue-500">
+                    </div>
+                </div>
+            </div>
+
+            {# CARD 3: TEAM #}
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-4">
+                <div class="px-4 py-2 border-b border-slate-200 bg-slate-50">
+                    <h3 class="text-xs font-bold text-slate-700 uppercase">Team</h3>
+                </div>
+                <div class="p-4 space-y-3">
+                    {# Car #}
+                    <div>
+                        <p class="text-[10px] font-bold text-blue-600 mb-1">CAR LEVELS</p>
+                        <div class="grid grid-cols-3 gap-1">
+                            <div>
+                                <label class="block text-[9px] text-slate-400 text-center">Eng</label>
+                                <input type="number" name="c_eng" value="{{ strategy_results.stats.car.lvlEngine }}" class="rounded border-slate-300 py-1 px-1 text-xs text-center w-full">
+                            </div>
+                            <div>
+                                <label class="block text-[9px] text-slate-400 text-center">Susp</label>
+                                <input type="number" name="c_susp" value="{{ strategy_results.stats.car.lvlSusp }}" class="rounded border-slate-300 py-1 px-1 text-xs text-center w-full">
+                            </div>
+                            <div>
+                                <label class="block text-[9px] text-slate-400 text-center">Elec</label>
+                                <input type="number" name="c_elec" value="{{ strategy_results.stats.car.lvlElectronics }}" class="rounded border-slate-300 py-1 px-1 text-xs text-center w-full">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {# Staff #}
+                    <div>
+                        <p class="text-[10px] font-bold text-orange-600 mb-1">STAFF</p>
+                        <div class="grid grid-cols-2 gap-1">
+                            <div>
+                                <label class="block text-[9px] text-slate-400">Concentration</label>
+                                <input type="number" name="s_conc" value="{{ strategy_results.stats.staff.concentration }}" class="rounded border-slate-300 py-1 px-1 text-xs w-full">
+                            </div>
+                            <div>
+                                <label class="block text-[9px] text-slate-400">Stress</label>
+                                <input type="number" name="s_stress" value="{{ strategy_results.stats.staff.stressHandling }}" class="rounded border-slate-300 py-1 px-1 text-xs w-full">
+                            </div>
+                        </div>
+                    </div>
+
+                    {# TD #}
+                    <div>
+                        <p class="text-[10px] font-bold text-emerald-600 mb-1">TECH DIRECTOR</p>
+                        <div class="grid grid-cols-2 gap-1">
+                            <div>
+                                <label class="block text-[9px] text-slate-400">Experience</label>
+                                <input type="number" name="td_exp" value="{{ strategy_results.stats.td.experience }}" class="rounded border-slate-300 py-1 px-1 text-xs w-full">
+                            </div>
+                            <div>
+                                <label class="block text-[9px] text-slate-400">Pit Coord</label>
+                                <input type="number" name="td_pit" value="{{ strategy_results.stats.td.pitCoordination }}" class="rounded border-slate-300 py-1 px-1 text-xs w-full">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# Hidden Setup Inputs #}
+            <div class="hidden">
+               <input type="hidden" name="q1_temp" value="{{ strategy_results.weather_inputs.Q1.temp }}">
+               <input type="hidden" name="q1_weather" value="{{ strategy_results.weather_inputs.Q1.weather }}">
+               <input type="hidden" name="q2_temp" value="{{ strategy_results.weather_inputs.Q2.temp }}">
+               <input type="hidden" name="q2_weather" value="{{ strategy_results.weather_inputs.Q2.weather }}">
+               <input type="hidden" name="race_weather" value="{{ strategy_results.weather_inputs.Race.weather }}">
+            </div>
+
+            {% if user.is_premium %}
+                <button type="submit" id="stratBtn"
+                    class="btn btn-lg btn-primary w-full">
+                    Calculate Strategy
+                </button>
+            {% else %}
+                <div class="p-4 bg-amber-50 border border-amber-200 rounded-lg text-center">
+                    <p class="text-sm font-bold text-amber-800 mb-1">Premium Only</p>
+                    <p class="text-xs text-amber-700 mb-3">
+                        Strategy tools require a premium account.
+                    </p>
+                    <button type="button" disabled
+                        class="btn btn-lg btn-disabled w-full">
+                        Calculate Strategy
+                    </button>
+                </div>
+            {% endif %}
+        </form>
+    </div>
+
+    {# RIGHT: Results Display (Unchanged) #}
+    <div class="lg:col-span-9">
+        {% if strategy_results %}
+            <div class="space-y-6">
+                {# HEADER #}
+                <div class="flex justify-between items-center border-b border-slate-200 pb-4">
+                    <div>
+                        <h2 class="text-2xl font-bold text-slate-800">{{ strategy_results.track }}</h2>
+                        <p class="text-sm text-slate-500">
+                            Season {{ strategy_results.season }} Race {{ strategy_results.race }} • {{ strategy_results.inputs.laps }} Laps
+                        </p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-xs text-slate-400 uppercase">Supplier</p>
+                        <p class="text-xl font-bold text-blue-600">{{ strategy_results.supplier }}</p>
+                    </div>
+                </div>
+
+                {# FUEL CARD #}
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex justify-between items-center">
+                    <div>
+                        <h4 class="text-sm font-bold text-slate-500 uppercase">Fuel Required</h4>
+                        <p class="text-xs text-slate-400">Consumption: {{ strategy_results.fuel.l_per_lap }} L/lap</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-2xl font-bold text-slate-800">{{ strategy_results.fuel.dry }} L</p>
+                        <p class="text-xs text-slate-500">Dry Race</p>
+                    </div>
+                    <div class="text-right border-l pl-6 border-slate-100">
+                        <p class="text-2xl font-bold text-blue-600">{{ strategy_results.fuel.wet }} L</p>
+                        <p class="text-xs text-slate-500">Wet Race</p>
+                    </div>
+                </div>
+
+                {# STRATEGY TABLE #}
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-slate-200">
+                            <thead class="bg-slate-800 text-white">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-xs font-bold uppercase">Compound</th>
+                                    <th class="px-4 py-3 text-center text-xs font-bold uppercase">Stops</th>
+                                    <th class="px-4 py-3 text-center text-xs font-bold uppercase">Fuel/Stint</th>
+                                    <th class="px-4 py-3 text-center text-xs font-bold uppercase">Est. Pit</th>
+                                    <th class="px-4 py-3 text-center text-xs font-bold uppercase text-red-200 border-l border-slate-600">Lost (Pits)</th>
+                                    <th class="px-4 py-3 text-center text-xs font-bold uppercase text-red-200">Lost (Fuel)</th>
+                                    <th class="px-4 py-3 text-center text-xs font-bold uppercase text-red-200">Lost (TCD)</th>
+                                    <th class="px-4 py-3 text-center text-xs font-bold uppercase bg-slate-900">Total Lost</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-slate-200">
+                                {% for comp, data in strategy_results.tyres %}
+                                    <tr class="hover:bg-slate-50 transition-colors">
+                                        <td class="px-4 py-3 text-sm font-bold text-slate-900">{{ comp }}</td>
+                                        <td class="px-4 py-3 text-center text-sm font-bold {{ data.stops > 3 ? 'text-red-500' : 'text-blue-600' }}">
+                                            {{ data.stops }}
+                                        </td>
+                                        <td class="px-4 py-3 text-center text-sm text-slate-600">{{ data.fuel_load }} L</td>
+                                        <td class="px-4 py-3 text-center text-sm text-slate-500">{{ data.pit_time_est }}s</td>
+                                        
+                                        <td class="px-4 py-3 text-center text-sm text-red-500 font-medium border-l border-slate-100">
+                                            {{ data.lost_pits }}
+                                        </td>
+                                        <td class="px-4 py-3 text-center text-sm text-red-500 font-medium">
+                                            {{ data.lost_fuel }}
+                                        </td>
+                                        <td class="px-4 py-3 text-center text-sm text-red-500 font-medium">
+                                            {{ data.lost_tcd }}
+                                        </td>
+                                        
+                                        <td class="px-4 py-3 text-center text-sm font-bold text-slate-900 bg-slate-50 border-l border-slate-200">
+                                            {{ data.total_lost }}s
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                {# SETUP CALCULATOR TABLE #}
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="px-6 py-3 bg-slate-50 border-b border-slate-200">
+                        <h3 class="text-sm font-bold text-slate-700 uppercase">Car Setup</h3>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-slate-200 text-sm">
+                            <thead>
+                                <tr class="bg-white">
+                                    <th class="px-4 py-2 w-1/4"></th>
+                                    
+                                    {# Q1 Column #}
+                                    <th class="px-4 py-3 text-center border-l border-slate-200">
+                                        <span class="block font-bold text-slate-700 mb-1">Qualifying 1</span>
+                                        <div class="flex justify-center gap-2 items-center">
+                                            <input form="stratForm" type="number" name="q1_temp" value="{{ strategy_results.weather_inputs.Q1.temp }}" class="w-14 text-xs text-center rounded border-slate-300 py-1" placeholder="°C">
+                                            <select form="stratForm" name="q1_weather" class="text-xs rounded border-slate-300 py-1">
+                                                <option value="Dry" {{ strategy_results.weather_inputs.Q1.weather == 'Dry' ? 'selected' }}>Dry</option>
+                                                <option value="Wet" {{ strategy_results.weather_inputs.Q1.weather == 'Wet' ? 'selected' }}>Wet</option>
+                                            </select>
+                                        </div>
+                                    </th>
+                                    
+                                    {# Q2 Column #}
+                                    <th class="px-4 py-3 text-center border-l border-slate-200">
+                                        <span class="block font-bold text-slate-700 mb-1">Qualifying 2</span>
+                                        <div class="flex justify-center gap-2 items-center">
+                                            <input form="stratForm" type="number" name="q2_temp" value="{{ strategy_results.weather_inputs.Q2.temp }}" class="w-14 text-xs text-center rounded border-slate-300 py-1" placeholder="°C">
+                                            <select form="stratForm" name="q2_weather" class="text-xs rounded border-slate-300 py-1">
+                                                <option value="Dry" {{ strategy_results.weather_inputs.Q2.weather == 'Dry' ? 'selected' }}>Dry</option>
+                                                <option value="Wet" {{ strategy_results.weather_inputs.Q2.weather == 'Wet' ? 'selected' }}>Wet</option>
+                                            </select>
+                                        </div>
+                                    </th>
+                                    
+                                    {# Race Column #}
+                                    <th class="px-4 py-3 text-center border-l border-slate-200 bg-blue-50">
+                                        <span class="block font-bold text-blue-800 mb-1">Race</span>
+                                        <div class="flex justify-center gap-2 items-center">
+                                            <span class="text-xs font-bold px-2">{{ strategy_results.inputs.temp }}°C</span>
+                                            <select form="stratForm" name="race_weather" class="text-xs rounded border-slate-300 py-1">
+                                                <option value="Dry" {{ strategy_results.weather_inputs.Race.weather == 'Dry' ? 'selected' }}>Dry</option>
+                                                <option value="Wet" {{ strategy_results.weather_inputs.Race.weather == 'Wet' ? 'selected' }}>Wet</option>
+                                            </select>
+                                        </div>
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-200">
+                                {% for part in ['Front Wing', 'Rear Wing', 'Engine', 'Brakes', 'Gearbox', 'Suspension'] %}
+                                    <tr>
+                                        <td class="px-4 py-3 font-bold text-slate-700 pl-6">{{ part }}</td>
+                                        <td class="px-4 py-3 text-center font-mono text-lg border-l border-slate-100">{{ strategy_results.setups.Q1[part] }}</td>
+                                        <td class="px-4 py-3 text-center font-mono text-lg border-l border-slate-100">{{ strategy_results.setups.Q2[part] }}</td>
+                                        <td class="px-4 py-3 text-center font-mono text-lg font-bold text-blue-700 bg-blue-50 border-l border-blue-100">
+                                            {{ strategy_results.setups.Race[part] }}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="rounded-md bg-blue-50 p-4 border-l-4 border-blue-400 shadow-sm">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm text-blue-700 font-bold">Info regarding setup</p>
+                            <p class="text-sm text-blue-700 font-medium">
+                                If any value is above 999, just put 999. We decided not to clamp the value just in case your driver complains - that way you know why.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        {% else %}
+            <div class="h-full flex flex-col items-center justify-center bg-slate-50 rounded-xl border border-dashed border-slate-200 text-slate-400 p-12">
+                <p class="text-lg font-medium text-slate-500">Strategy & Setup</p>
+                <p class="text-sm">Click "Calculate Strategy" to simulate race outcomes.</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+{# Loading Script #}
+<script>
+    document.getElementById('stratForm').addEventListener('submit', function(e) {
+        const btn = document.getElementById('stratBtn');
+        btn.disabled = true;
+        btn.classList.add('opacity-75', 'cursor-not-allowed');
+        btn.innerHTML = `Processing...`;
+    });
+</script>

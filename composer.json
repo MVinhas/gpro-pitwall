@@ -1,6 +1,6 @@
 {
-    "name": "mvinhas/gpro-driver-analyzer",
-    "description": "A refactored GPRO Ideal Pilot Analyzer.",
+    "name": "mvinhas/gpro-assistant",
+    "description": "Your daily helper for the GPRO game.",
     "type": "project",
     "license": "proprietary",
     "authors": [
@@ -11,8 +11,22 @@
     ],
     "require": {
         "php": ">=8.3",
+        "ext-pdo": "*",
+        "ext-sqlite3": "*",
+        "ext-mbstring": "*",
+        "ext-intl": "*",
+        "ext-curl": "*",
+        "ext-json": "*",
         "twig/twig": "^3.22",
-        "vlucas/phpdotenv": "^5.6"
+        "vlucas/phpdotenv": "^5.6",
+        "phpmailer/phpmailer": "^7.0"
+    },
+    "require-dev": {
+        "phpstan/phpstan": "^2.1",
+        "rector/rector": "^2.2",
+        "squizlabs/php_codesniffer": "^4.0",
+        "sserbin/twig-linter": "^3.1.2",
+        "symfony/var-dumper": "^7.0"
     },
     "autoload": {
         "psr-4": {
@@ -21,7 +35,15 @@
     },
     "config": {
         "optimize-autoloader": true,
-        "preferred-install": "dist"
+        "preferred-install": "dist",
+        "sort-packages": true
+    },
+    "scripts": {
+        "analyse": "phpstan analyse src --level=5",
+        "lint": "phpcs --standard=PSR12 src",
+        "twig-lint": "vendor/bin/twig-linter lint templates",
+        "audit": "composer audit",
+        "refactor": "rector process src"
     },
     "minimum-stability": "stable",
     "prefer-stable": true

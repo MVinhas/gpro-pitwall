@@ -1,21 +1,43 @@
 <?php
+
 namespace App\Controller;
 
 use App\Http\Request;
 use App\Service\GproApiClient;
 use App\Service\GproDataMapper;
 use App\Service\TrainingService;
+use App\Repository\UserRepository;
 
 class TrainingController
 {
     public function __construct(
-        private GproApiClient $apiClient,
-        private GproDataMapper $mapper,
-        private TrainingService $trainingService
-    ) {}
+        private readonly GproApiClient $apiClient,
+        private readonly GproDataMapper $mapper,
+        private readonly TrainingService $trainingService,
+        private readonly UserRepository $userRepo
+    ) {
+    }
 
     public function handle(Request $request): void
     {
+        $isLoggedIn = !empty($_SESSION['user_id']);
+        $userId = $isLoggedIn ? (int) $_SESSION['user_id'] : 0;
+        $user = $userId ? $this->userRepo->findById($userId) : null;
+
+        if ($isLoggedIn && !$user) {
+            session_destroy();
+            $isLoggedIn = false;
+            $user = null;
+        }
+
+        $hasToken  = !empty($user['api_token']);
+        $isPremium = !empty($user['is_premium']);
+        $isAdmin   = !empty($user['is_admin']);
+
+        if ($isLoggedIn && $hasToken) {
+            $this->apiClient->setToken($user['api_token']);
+        }
+
         $action = $request->post('action');
 
         if ($action === 'import_driver') {
@@ -32,18 +54,12 @@ class TrainingController
     private function importDriver(): void
     {
         try {
-            // 1. Fetch from API
             $apiData = $this->apiClient->getMyPilotDetails();
-            
-            // 2. Map to App Schema
             $driver = $this->mapper->mapDriver($apiData);
-            
-            // 3. Store in Session for the Form
             $_SESSION['imported_driver'] = $driver;
             $_SESSION['training_error'] = null;
-
-        } catch (\Exception $e) {
-            $_SESSION['training_error'] = "Import Failed: " . $e->getMessage();
+        } catch (\Exception $exception) {
+            $_SESSION['training_error'] = "Import Failed: " . $exception->getMessage();
         }
     }
 
@@ -74,9 +90,7 @@ class TrainingController
             $result = $this->trainingService->predictResult($currentStats, $trainingType);
             $currentStats = $result['stats'];
             $totalCost += $result['cost'];
-            
-            // Log progress every session (or maybe just end result?)
-            // Let's log every session for detailed analysis
+
             $log[] = [
                 'session' => $i,
                 'stats' => $currentStats,
