@@ -5,3 +5,4 @@
 /vendor
 composer.lock
 gpro_pilots.sqlite
+/bin/act
