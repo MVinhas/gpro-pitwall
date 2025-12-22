@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Service;
 
 use PDO;
@@ -35,7 +37,7 @@ class SetupCalculatorService
         $sessions = ['Q1', 'Q2', 'Race'];
         $results = [];
 
-        // Helper for Special Tracks
+
         $trackName = $trackData['name'] ?? '';
         $isSpecialTrack = in_array($trackName, ['Indianapolis Oval', 'Rafaela Oval']);
         $trackMult = $isSpecialTrack ? ($this->secrets['driver']['special_track_mult'] ?? 0.39) : 1.0;
@@ -45,7 +47,7 @@ class SetupCalculatorService
             $temp = round($weatherInputs[$session]['temp']);
             $isDry = ($weather === 'Dry');
 
-            // --- 1. TRACK BASE & 2. WEATHER ---
+
             $components = [];
             foreach ($this->secrets['weather_coeffs'] as $part => $coeffs) {
                 $baseVal = (float)$trackDb['base_' . strtolower((string) $part)];
@@ -67,7 +69,7 @@ class SetupCalculatorService
                 ];
             }
 
-            // --- 3. CAR INFLUENCE ---
+
             $car = [];
             $getLvl  = fn($k): float => (float)($carData["lvl$k"] ?? 1);
             $getWear = fn($k): float => (float)($carData["usa$k"] ?? 0);
@@ -89,7 +91,7 @@ class SetupCalculatorService
                 $car[$part] = $sum;
             }
 
-            // --- 4. DRIVER INFLUENCE ---
+
             $dri = [];
             $dSec = $this->secrets['driver'];
 
@@ -108,7 +110,7 @@ class SetupCalculatorService
                                + ($driver['weight'] * $dSec['susp_wgt'])
                                + $suspWet;
 
-            // --- 5. FINAL SUMMATION ---
+
             $s5 = [];
             foreach ($components as $part => $vals) {
                 $total = $vals['base'] + $vals['wea'] + $car[$part] + $dri[$part];
@@ -119,7 +121,7 @@ class SetupCalculatorService
                 }
             }
 
-            // --- 6. PERFECT SETUP ADJUSTMENTS ---
+
             $final = [];
             $fSec = $this->secrets['final'];
 

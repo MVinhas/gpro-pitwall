@@ -46,7 +46,6 @@ class PageController
         $isPremium = !empty($user['is_premium']);
         $isAdmin   = !empty($user['is_admin']);
 
-        // ✔ Correct place to configure API token
         if ($isLoggedIn && $hasToken) {
             $this->apiClient->setToken($user['api_token']);
         }

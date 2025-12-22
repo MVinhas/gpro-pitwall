@@ -15,7 +15,7 @@ class NullCache implements CacheInterface
 
     public function set(string $key, mixed $value, ?int $ttl = null): bool
     {
-        // Pretend we saved it, but we didn't.
+
         return true;
     }
 

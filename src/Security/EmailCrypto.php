@@ -15,7 +15,7 @@ final readonly class EmailCrypto
 
     public function encrypt(string $email): string
     {
-        $iv = random_bytes(12); // GCM standard
+        $iv = random_bytes(12);
         $ciphertext = openssl_encrypt(
             $email,
             'aes-256-gcm',

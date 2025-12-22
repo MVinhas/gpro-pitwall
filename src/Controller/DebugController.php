@@ -20,16 +20,13 @@ class DebugController
 
     public function index(): void
     {
-        // Capture the user from the admin check to pass to the view
         $user = $this->ensureAdmin();
 
-        // 1. System Info
         $memLimit = ini_get('memory_limit');
         $systemInfo = [
             'php_version' => PHP_VERSION,
             'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? 'Unknown',
             'memory_usage' => $this->formatBytes(memory_get_usage(true)),
-            // If limit is -1 (unlimited), pass null to hide the "of X" display
             'memory_limit' => ($memLimit === '-1') ? null : $memLimit,
             'upload_max_filesize' => ini_get('upload_max_filesize'),
             'post_max_size' => ini_get('post_max_size'),
@@ -44,21 +41,18 @@ class DebugController
             ]
         ];
 
-        // 2. Database Stats
         $dbStats = [
             'path' => $this->dbPath,
             'size' => file_exists($this->dbPath) ? $this->formatBytes(filesize($this->dbPath) ?: 0) : 'Not Found',
             'writable' => is_writable($this->dbPath) || is_writable(dirname($this->dbPath)),
         ];
 
-        // 3. User Stats
         $userStats = [
             'total' => $this->userRepo->countAll(),
             'premium' => $this->userRepo->countPremium(),
             'with_token' => $this->userRepo->countWithApiToken(),
         ];
 
-        // 4. Environment (Masked)
         $maskedEnv = $this->getMaskedEnv();
 
         echo $this->twig->render('admin/debug.twig', [
@@ -70,7 +64,6 @@ class DebugController
             'cache_driver' => $_ENV['CACHE_DRIVER'] ?? 'unknown',
             'flash' => $_SESSION['flash'] ?? null,
             'csrf_token' => $_SESSION['csrf_token'] ?? '',
-            // Pass user state for Layout menu rendering
             'is_logged_in' => true,
             'user' => $user
         ]);

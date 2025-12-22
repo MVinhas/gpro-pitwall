@@ -74,15 +74,6 @@ final class GproApiClient
         );
     }
 
-    public function getMarketData(): array
-    {
-        return $this->getCached(
-            'market_data',
-            '/gb/backend/api/v2/AvailDrivers',
-            $this->ttlVeryShort()
-        );
-    }
-
     public function getRaceSetup(bool $forceRefresh = false): array
     {
         return $this->getCached(
@@ -158,7 +149,7 @@ final class GproApiClient
             CURLOPT_HTTPHEADER => [
                 "Authorization: Bearer {$this->token}",
                 'Accept: application/json',
-                'User-Agent: GPRO-Assistant/1.0',
+                'User-Agent: GPRO-Assistant/0.2.0',
             ],
         ]);
 
@@ -190,10 +181,5 @@ final class GproApiClient
     private function ttlShort(): int
     {
         return (int) ($_ENV['CACHE_TTL_SHORT'] ?? 259200);
-    }
-
-    private function ttlVeryShort(): int
-    {
-        return (int) ($_ENV['CACHE_TTL_VERY_SHORT'] ?? 3600);
     }
 }

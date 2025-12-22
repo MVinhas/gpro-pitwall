@@ -1,10 +1,9 @@
 <?php
 
-// bootstrap.php
+declare(strict_types=1);
 
 require_once __DIR__ . '/vendor/autoload.php';
 
-// 1. Load Env
 try {
     $dotenv = Dotenv\Dotenv::createImmutable(__DIR__);
     $dotenv->load();
@@ -12,14 +11,12 @@ try {
     // Continue if .env missing
 }
 
-// 2. Container Setup
 $container = [];
 $container['settings'] = [
     'is_dev' => ($_ENV['IS_DEV'] ?? 'false') === 'true',
     'db_file' => $_ENV['DB_FILE'] ?? 'gpro_pilots.sqlite',
 ];
 
-// 3. Config Loading
 $container['config'] = [
     'app' => require __DIR__ . '/config/game_constants.php',
     'secrets' => file_exists(__DIR__ . '/config/secrets.php') ? require __DIR__ . '/config/secrets.php' : [],
@@ -27,18 +24,15 @@ $container['config'] = [
 
 $container['config']['settings'] = $container['settings'];
 
-// 4. API Config
 $container['config']['api'] = [
     'base_url' => $_ENV['GPRO_API_BASE_URL'] ?? 'https://gpro.net',
 ];
 
-// 5. Database
 use App\Database\Database;
 use App\Database\DatabaseSeeder;
 
 $container['db'] = Database::getConnection();
 
-// FIXED: Removed 'tracks' argument
 $seeder = new DatabaseSeeder(
     $container['db'],
     $container['config']['app']['stats_schema'],
@@ -59,7 +53,6 @@ $cacheConfig = [
 
 $container['service.cache'] = CacheFactory::create($cacheConfig);
 
-// 6. Twig
 use Twig\Environment;
 use Twig\Loader\FilesystemLoader;
 $loader = new FilesystemLoader(__DIR__ . '/templates');
@@ -70,7 +63,6 @@ if ($container['settings']['is_dev']) {
     $container['twig']->addExtension(new \Twig\Extension\DebugExtension());
 }
 
-// Repositories
 use App\Repository\PilotRepository;
 use App\Repository\DivisionMetadataRepository;
 use App\Repository\TrackRepository;
@@ -81,7 +73,6 @@ $container['repo.pilot'] = new PilotRepository($container['db']);
 $container['repo.metadata'] = new DivisionMetadataRepository($container['db']);
 $container['repo.track'] = new TrackRepository($container['db']);
 
-// Services
 use App\Service\PilotCalculatorService;
 use App\Service\IdealPilotService;
 use App\Service\InsightService;
@@ -93,11 +84,14 @@ use App\Service\GproDataMapper;
 use App\Service\SetupCalculatorService;
 use App\Service\TrainingService;
 
+use App\Service\GproSyncService;
+
+
+
 use App\Security\EmailCrypto;
 
 $container['service.email_crypto'] = new EmailCrypto($_ENV['APP_SECRET']);
 
-// Authorization
 $container['service.user_repo'] = new \App\Repository\UserRepository(
     $container['db'],
     $container['service.email_crypto']
@@ -110,12 +104,23 @@ $mailCfg = [
     'user' => $_ENV['MAIL_USER'],
     'pass' => $_ENV['MAIL_PASS'],
     'from' => $_ENV['MAIL_FROM'],
-    'from_name' => $_ENV['MAIL_FROM_NAME'] ?: 'GPRO Driver Analyzer'
+    'from_name' => $_ENV['MAIL_FROM_NAME'] ?: 'GPRO Assistant'
 ];
 
 $container['service.rate_limiter'] = new \App\Service\RateLimiterService($container['service.cache']);
 $container['service.email_service']  = new \App\Service\EmailService($mailCfg);
 $container['service.recaptcha'] = new \App\Service\ReCaptchaService($_ENV['RECAPTCHA_SECRET_KEY'] ?? '');
+
+
+
+$container['service.api_client'] = new GproApiClient(
+    $container['config']['api'],
+    $container['service.cache']
+);
+$container['service.gpro_sync'] = new GproSyncService(
+    $container['service.api_client'],
+    $container['service.user_repo']
+);
 $container['service.auth_service']  = new \App\Service\AuthService(
     $container['service.user_repo'],
     $container['service.token_repo'],
@@ -124,18 +129,12 @@ $container['service.auth_service']  = new \App\Service\AuthService(
     $container['service.recaptcha'],
     $container['service.email_crypto'],
     $_ENV['APP_SECRET'],
+    $container['service.gpro_sync'],
     (int)$_ENV['VERIFICATION_CODE_TTL_SECONDS'] ?: 600,
-    (int)$_ENV['VERIFICATION_MAX_ATTEMPTS'] ?: 5
-);
-
-// API & Mapper
-$container['service.api_client'] = new GproApiClient(
-    $container['config']['api'],
-    $container['service.cache']
+    (int)$_ENV['VERIFICATION_MAX_ATTEMPTS'] ?: 5,
 );
 $container['service.data_mapper'] = new GproDataMapper();
 
-// Calculators
 $container['service.calculator'] = new PilotCalculatorService(
     $container['config']['secrets']['pilot_factors'],
     $container['config']['secrets']['division_caps']
@@ -168,7 +167,8 @@ $container['service.strategy'] = new StrategyService(
 $container['service.setup_calculator'] = new SetupCalculatorService($container['db'], $container['config']['secrets']);
 $container['service.training'] = new TrainingService($container['db']);
 
-// Controllers
+
+
 use App\Controller\PageController;
 use App\Controller\BaselineController;
 use App\Controller\TrackRiskController;
@@ -190,7 +190,8 @@ $container['controller.auth'] = new AuthController(
     $container['service.auth_service'],
     $container['service.user_repo'],
     $container['twig'],
-    $_ENV['RECAPTCHA_SITE_KEY'] ?? ''
+    $_ENV['RECAPTCHA_SITE_KEY'] ?? '',
+    $container['service.gpro_sync']
 );
 
 $container['controller.page'] = new PageController(
@@ -251,8 +252,8 @@ $container['controller.training'] = new TrainingController(
 use App\Controller\ApiWarmupController;
 
 $container['controller.api_warmup'] = new ApiWarmupController(
-    $container['service.api_client'],
-    $container['service.user_repo']
+    $container['service.user_repo'],
+    $container['service.gpro_sync']
 );
 
 return $container;

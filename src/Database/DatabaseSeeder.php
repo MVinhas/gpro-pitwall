@@ -19,7 +19,7 @@ class DatabaseSeeder
 
     public function migrate(): void
     {
-        // 1. Core Tables
+
         $this->createUsersTable();
         $this->createVerificationTokensTable();
         $this->createIndexVerificationUser();
@@ -32,12 +32,12 @@ class DatabaseSeeder
         $this->createCarPartCoefficientsTable();
         $this->createGameConstantsTable();
 
-        // 2. Seeds
+
         $this->seedTrainings();
         $this->seedCarPartCoefficients();
         $this->seedGameConstants();
 
-        // 3. Dynamic Migrations
+
         $this->applyUserMigrations();
     }
 
@@ -118,6 +118,18 @@ class DatabaseSeeder
         if (!in_array('email_hash', $existingCols, true)) {
             $this->db->exec(
                 "ALTER TABLE users ADD COLUMN email_hash TEXT"
+            );
+        }
+
+        if (!in_array('last_synced_at', $existingCols, true)) {
+            $this->db->exec(
+                "ALTER TABLE users ADD COLUMN last_synced_at TEXT DEFAULT NULL"
+            );
+        }
+
+        if (!in_array('sync_status', $existingCols, true)) {
+            $this->db->exec(
+                "ALTER TABLE users ADD COLUMN sync_status TEXT NOT NULL DEFAULT 'idle'"
             );
         }
     }

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Controller;
 
 use App\Http\Request;
@@ -70,7 +72,6 @@ class StrategyController
     {
 
         try {
-            // 1. FETCH ALL API DATA
             $trackProfile = $this->api->getNextRaceProfile();
             $office = $this->api->getOfficeData();
             $pilotRaw = $this->api->getMyPilotDetails();
@@ -78,10 +79,8 @@ class StrategyController
             $staffRaw = $this->api->getStaffAndFacilities();
             $tdRaw    = $this->api->getTechnicalDirector();
             $weatherData = $this->api->getRaceSetup();
-            // 2. RESOLVE SUPPLIER
             $supplierId = (int)($office['tyreSupplierId'] ?? 0);
 
-            // Invert the mapping once
             $tyreSuppliers = [
                 1 => 'Pipirelli',
                 9 => 'Avonn',
@@ -97,7 +96,6 @@ class StrategyController
             $supplierName = $tyreSuppliers[$supplierId] ?? 'Pipirelli';
 
 
-            // 3. PREPARE DEFAULTS
             $driver = $this->mapper->mapDriver($pilotRaw);
 
             $car = [
@@ -138,10 +136,8 @@ class StrategyController
                 'pitCoordination' => (float)($tdRaw['pitCoord'] ?? ($tdRaw['pitCoordination'] ?? 0))
             ];
 
-            // 4. MERGE USER INPUTS
             $has = fn($k): bool => ($request->post($k) !== null && $request->post($k) !== '');
 
-            // Driver
             if ($has('d_conc')) {
                 $driver['concentration'] = (int)$request->post('d_conc');
             }
@@ -166,7 +162,7 @@ class StrategyController
                 $driver['weight']        = (int)$request->post('d_wgt');
             }
 
-            // Car
+
             if ($has('c_eng')) {
                 $car['lvlEngine']      = (int)$request->post('c_eng');
             }
@@ -179,7 +175,7 @@ class StrategyController
                 $car['lvlElectronics'] = (int)$request->post('c_elec');
             }
 
-            // Staff
+
             if ($has('s_conc')) {
                 $staff['concentration']  = (float)$request->post('s_conc');
             }
@@ -188,7 +184,7 @@ class StrategyController
                 $staff['stressHandling'] = (float)$request->post('s_stress');
             }
 
-            // TD
+
             if ($has('td_exp')) {
                 $td['experience'] = (float)$request->post('td_exp');
                 if ($td['experience'] > 0) {
@@ -200,8 +196,6 @@ class StrategyController
                 $td['pitCoordination'] = (float)$request->post('td_pit');
             }
 
-
-            // 5. WEATHER & ENV
             $w = $weatherData['weather'] ?? [];
             $q1IsWet = isset($w['q1Weather']) && stripos($w['q1Weather'], 'Rain') !== false;
             $q2IsWet = isset($w['q2Weather']) && stripos($w['q2Weather'], 'Rain') !== false;
@@ -210,7 +204,6 @@ class StrategyController
             $raceRainCount = 0;
             $quarters = ['Q1', 'Q2', 'Q3', 'Q4'];
             foreach ($quarters as $q) {
-                // API provides 'raceQ1RainPLow', 'raceQ1RainPHigh', etc.
                 $low  = $w["race{$q}RainPLow"] ?? 0;
                 $high = $w["race{$q}RainPHigh"] ?? 0;
                 $raceRainSum += ($low + $high);
@@ -245,7 +238,6 @@ class StrategyController
                 $trackProfile['name'] = $office['trackName'];
             }
 
-            // 6. CALCULATE STRATEGY
             $strategyResults = $this->strategyService->calculateStrategy(
                 $trackProfile,
                 $car,
@@ -256,7 +248,6 @@ class StrategyController
                 $supplierName
             );
 
-            // 7. CALCULATE SETUPS
             $setupWeatherInputs = [
                 'Q1' => [
                     'temp' => $request->post('q1_temp') ?: $q1Temp,
@@ -282,7 +273,6 @@ class StrategyController
             $strategyResults['setups'] = $setupResults;
             $strategyResults['weather_inputs'] = $setupWeatherInputs;
 
-            // Redundant is_array check removed
             $strategyResults['season'] = $office['seasonNb'] ?? '?';
             $strategyResults['race'] = $office['raceNb'] ?? '?';
 

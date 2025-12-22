@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Service;
 
 use PDO;
@@ -18,13 +20,13 @@ class TrainingService
      */
     public function predictResult(array $currentStats, string $trainingName): array
     {
-        // Fetch training gains
+
         $stmt = $this->db->prepare("SELECT * FROM trainings WHERE name = :name");
         $stmt->execute([':name' => $trainingName]);
         $training = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$training) {
-            return $currentStats; // No change if training not found
+            return $currentStats;
         }
 
         $newStats = $currentStats;
@@ -39,11 +41,11 @@ class TrainingService
             $dbCol = 'gain_' . $key;
             $gain = $training[$dbCol] ?? 0;
 
-            // Apply gain
+
             if (isset($newStats[$key])) {
                 $newStats[$key] += $gain;
 
-                // Basic Clamping (Can't go below 0, or above reasonable max)
+
                 if ($newStats[$key] < 0) {
                     $newStats[$key] = 0;
                 }
@@ -53,7 +55,7 @@ class TrainingService
         return [
             'stats' => $newStats,
             'cost' => $cost,
-            'diff' => $training // Return the raw gains for display
+            'diff' => $training
         ];
     }
 

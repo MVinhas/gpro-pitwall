@@ -24,7 +24,6 @@ class Router
         $path = $request->getPath();
 
         if (!isset($this->routes[$method][$path])) {
-            //Simple 404 handling for now
             http_response_code(404);
             echo "404 Not Found: $method $path";
             return null;

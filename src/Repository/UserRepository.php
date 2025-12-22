@@ -115,4 +115,26 @@ class UserRepository
             "SELECT COUNT(*) FROM users WHERE api_token IS NOT NULL AND api_token != ''"
         )->fetchColumn();
     }
+
+    public function updateSyncStatus(int $userId, string $status): void
+    {
+        $stmt = $this->pdo->prepare(
+            "UPDATE users SET sync_status = :status WHERE id = :id"
+        );
+        $stmt->execute([
+            'status' => $status,
+            'id' => $userId,
+        ]);
+    }
+
+    public function markSynced(int $userId): void
+    {
+        $stmt = $this->pdo->prepare(
+            "UPDATE users
+            SET last_synced_at = datetime('now'),
+                sync_status = 'idle'
+            WHERE id = :id"
+        );
+        $stmt->execute(['id' => $userId]);
+    }
 }

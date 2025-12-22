@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Service;
 
 use App\Repository\PilotRepository;
@@ -31,7 +33,7 @@ class IdealPilotService
                 $totalStats[$col] += (int)$pilot[$col];
             }
 
-            // Calculate OA for this specific pilot row
+
             $totalOverall += $this->calculator->calculateOverall($pilot);
         }
 
@@ -43,7 +45,7 @@ class IdealPilotService
                 : round($val, 0);
         }
 
-        // Add Average Overall Ability
+
         $averageStats = array_merge(
             ['Overall Ability' => round($totalOverall / $count, 1)],
             $averageStats

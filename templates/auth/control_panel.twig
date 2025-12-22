@@ -55,7 +55,9 @@
                            {{ not user.is_premium ? 'disabled' : '' }}
                     >
                     <p class="mt-2 text-xs text-slate-500">
-                        Found in your GPRO driver profile settings. Keep this secret.
+                        1. Go to <a href="https://app.gpro.net/apiaccess" target="_blank" class="text-blue-600 underline">app.gpro.net/apiaccess</a><br>
+                        2. Generate a new API token if you don’t have one<br>
+                        3. Copy the token and paste it here
                     </p>
                 </div>
 
@@ -76,10 +78,6 @@
                 <div>
                     <span class="block text-slate-500">Username</span>
                     <span class="font-medium">{{ user.username }}</span>
-                </div>
-                <div>
-                    <span class="block text-slate-500">Email</span>
-                    <span class="font-medium">{{ user.email }}</span>
                 </div>
                 <div>
                     <span class="block text-slate-500">Member Since</span>

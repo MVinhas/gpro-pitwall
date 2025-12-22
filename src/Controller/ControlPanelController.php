@@ -43,7 +43,7 @@ class ControlPanelController
 
         $token = trim((string)$request->post('api_token'));
 
-        // Basic validation
+
         if (strlen($token) < 10) {
             $_SESSION['flash'] = "Token looks too short.";
             header('Location: /control_panel');

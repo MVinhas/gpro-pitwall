@@ -93,7 +93,7 @@ class CarWearService
                 'level' => $level,
                 'start' => $startWear,
                 'est'   => round($estWear, 1),
-                'end'   => min(100, $startWear + round($estWear, 1)),
+                'end'   => $startWear + round($estWear, 1),
             ];
         }
 

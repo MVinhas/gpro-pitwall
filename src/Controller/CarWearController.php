@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Controller;
 
 use App\Http\Request;
@@ -34,9 +36,6 @@ class CarWearController
         $isPremium = !empty($user['is_premium']);
         $isAdmin   = !empty($user['is_admin']);
 
-        // -------------------------------------------------
-        // 2. Configure API client ONCE for this request
-        // -------------------------------------------------
         if ($isLoggedIn && $hasToken) {
             $this->api->setToken($user['api_token']);
         }
@@ -44,12 +43,10 @@ class CarWearController
         $risk = (int)$request->post('risk', 0);
 
         try {
-            // 1. Context & Car (Always fetch/cache these as user can't guess them)
             $trackProfile = $this->api->getNextRaceProfile();
             $office = $this->api->getOfficeData();
             $carData = $this->api->getCarData();
 
-            // 2. Driver Strategy (Manual Input vs API)
             if ($request->post('talent') !== null) {
                 $driver = [
                     'concentration' => (int)$request->post('concentration'),
@@ -59,26 +56,22 @@ class CarWearController
                     'aggressiveness' => 0
                 ];
             } else {
-                // Use cached driver
                 $driver = $_SESSION['wear_inputs']['driver'] ?? $this->mapper->mapDriver(
                     $this->api->getMyPilotDetails()
                 );
             }
 
-            // 3. Calculate
             if (empty($trackProfile['name']) && !empty($office['trackName'])) {
                 $trackProfile['name'] = $office['trackName'];
             }
 
             $results = $this->service->calculateWear($trackProfile, $carData, $driver, $risk);
 
-            // Result is guaranteed array by service return type
             $results['season'] = $office['seasonNb'] ?? '?';
             $results['race'] = $office['raceNb'] ?? '?';
 
             $_SESSION['wear_results'] = $results;
 
-            // Save inputs to Session so they repopulate the form
             $_SESSION['wear_inputs'] = [
                 'risk' => $risk,
                 'driver' => $driver
@@ -86,7 +79,6 @@ class CarWearController
             $_SESSION['wear_error'] = null;
         } catch (\Exception $exception) {
             $_SESSION['wear_error'] = "Error: " . $exception->getMessage();
-            // Keep previous inputs if error
         }
 
         session_write_close();

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPRO Driver Analyzer</title>
+    <title>GPRO Assistant</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -69,7 +69,7 @@
             <div>
                 <h1 class="text-3xl font-bold text-slate-900">
                     <a href="/" class="hover:opacity-80">
-                        <span class="text-blue-600">GPRO</span> Driver Analyzer
+                        <span class="text-blue-600">GPRO</span> Assistant
                     </a>
                 </h1>
                 <p class="mt-1 text-sm text-slate-500">
@@ -106,6 +106,20 @@
             </div>
         </div>
     </header>
+    {% if is_logged_in %}
+    <div class="bg-slate-50 border-b border-slate-200">
+        <div class="mx-auto max-w-7xl px-4 py-2 text-sm text-slate-600 flex items-center gap-3">
+            {% if user.sync_status == 'running' %}
+                <span class="animate-spin">⏳</span>
+                <span>Syncing GPRO data…</span>
+            {% elseif user.sync_status == 'failed' %}
+                <span class="text-red-600">⚠ Sync failed</span>
+            {% elseif user.last_synced_at %}
+                <span>Last sync: {{ user.last_synced_at|date("M j, H:i") }}</span>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
 
     {% if can_submit %}
     <div class="bg-slate-50 border-b border-slate-200">
@@ -120,7 +134,7 @@
                     <path class="opacity-75" fill="currentColor"
                           d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/>
                 </svg>
-                <span id="apiWarmupText">Warm up API cache</span>
+                <span id="apiWarmupText">Re-sync your data</span>
             </button>
         </div>
     </div>
@@ -134,7 +148,7 @@
 
     <footer class="py-6 text-center">
         <div class="inline-flex items-center gap-2 text-xs text-slate-400">
-            <span>&copy; {{ "now"|date("Y") }} GPRO Assistant</span>
+            <span>&copy; {{ "now"|date("Y") }} GPRO Assistant 0.2.0</span>
             <span class="opacity-50">•</span>
             <a
                 href="https://github.com/MVinhas/gpro-assistant"
@@ -160,6 +174,14 @@
                 </svg>
                 <span>View source on GitHub</span>
             </a>
+            <span class="opacity-50">•</span>
+            <a
+                href="https://github.com/MVinhas/gpro-assistant/issues"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="inline-flex items-center gap-1 font-medium text-slate-500
+                    hover:text-blue-600 transition"
+            >Report issue</a>
         </div>
     </footer>
 </div>
@@ -172,7 +194,7 @@ document.getElementById('apiWarmupBtn')?.addEventListener('click', async functio
 
     btn.disabled = true;
     spinner.classList.remove('hidden');
-    text.textContent = 'Warming API cache...';
+    text.textContent = 'Re-syncing...';
 
     try {
         const res = await fetch('/api/warmup', {
@@ -189,7 +211,7 @@ document.getElementById('apiWarmupBtn')?.addEventListener('click', async functio
     setTimeout(() => {
         btn.disabled = false;
         spinner.classList.add('hidden');
-        text.textContent = 'Warm up API cache';
+        text.textContent = 'Re-sync your data';
     }, 3000);
 });
 </script>

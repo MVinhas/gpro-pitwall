@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Controller;
 
 use App\Http\Request;
@@ -46,7 +48,7 @@ class TrainingController
             $this->calculateTraining($request);
         }
 
-        // Redirect back to the planner tab
+
         header("Location: /?main_tab=Training Planner");
         exit;
     }
@@ -65,7 +67,6 @@ class TrainingController
 
     private function calculateTraining(Request $request): void
     {
-        // Get starting stats from form
         $stats = [
             'concentration' => (int)$request->post('concentration'),
             'talent' => (int)$request->post('talent'),
@@ -78,10 +79,9 @@ class TrainingController
             'weight' => (int)$request->post('weight'),
         ];
 
-        $trainingType = $request->post('training_type'); // e.g. 'Fitness'
-        $intensity = (int)$request->post('intensity', 1); // Number of sessions
+        $trainingType = $request->post('training_type');
+        $intensity = (int)$request->post('intensity', 1);
 
-        // Simulate the training sessions loop
         $currentStats = $stats;
         $totalCost = 0;
         $log = [];

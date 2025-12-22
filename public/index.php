@@ -4,8 +4,7 @@ use App\Http\Request;
 use App\Http\Router;
 use App\Security\Csrf;
 
-// Session Setup (Runtime Environment)
-$lifetime = 60 * 60 * 24 * 7; // 7 days
+$lifetime = 60 * 60 * 24 * 7;
 session_set_cookie_params([
     'lifetime' => $lifetime,
     'path' => '/',
@@ -15,17 +14,17 @@ session_set_cookie_params([
 ]);
 session_start();
 
-// Bootstrap Application
+
 $container = require_once __DIR__ . '/../bootstrap.php';
 
-// Security & Request
+
 $csrf = new Csrf();
 $request = Request::createFromGlobals();
 
-// Inject CSRF token globally
+
 $container['twig']->addGlobal('csrf_token', $csrf->getToken());
 
-// Session Activity Check (Auto-Logout)
+
 if (isset($_SESSION['user_id'])) {
     if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity'] > $lifetime)) {
         session_unset();
@@ -37,7 +36,7 @@ if (isset($_SESSION['user_id'])) {
     $_SESSION['last_activity'] = time();
 }
 
-// Global CSRF Check
+
 if ($request->getMethod() === 'POST') {
     $submittedToken = $request->post('csrf_token');
     if (!$csrf->validate($submittedToken)) {
@@ -46,7 +45,7 @@ if ($request->getMethod() === 'POST') {
     }
 }
 
-// Dispatch
+
 $router = new Router();
 $routes = require_once __DIR__ . '/../config/routes.php';
 $routes($router);

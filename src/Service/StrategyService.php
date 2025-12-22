@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Service;
 
 use PDO;
@@ -30,7 +32,7 @@ class StrategyService
         array $inputs,
         string $supplierName = 'Pipirelli'
     ): array {
-        $trackId = $trackData['id'] ?? 0;
+        $trackId = $trackData['id'];
         $stmt = $this->db->prepare("SELECT * FROM tracks WHERE id = :id OR name = :name");
         $stmt->execute([':id' => $trackId, ':name' => $trackData['name'] ?? '']);
 
@@ -40,37 +42,37 @@ class StrategyService
             return ['error' => 'Track not found in DB. Please re-seed tracks.'];
         }
 
-        // --- 1. INPUTS ---
-        $laps = (int)($inputs['laps'] ?? $trackDb['laps']);
-        $targetWear = (int)($inputs['target_wear'] ?? 15);
-        $temp = (float)$inputs['temp'];
-        $risk = (int)($inputs['risk'] ?? 0);
 
-        // Calculate Lap Length (km)
+        $laps = (int)($inputs['laps'] ?? $trackDb['laps']);
+        $targetWear = (int)($inputs['target_wear']);
+        $temp = (float)$inputs['temp'];
+        $risk = (int)($inputs['risk']);
+
+
         $trackTotalDist = (float)$trackDb['distance'];
         $trackTotalLaps = (int)$trackDb['laps'];
         $lapLen = ($trackTotalLaps > 0) ? ($trackTotalDist / $trackTotalLaps) : 4.5;
 
-        // --- 2. FUEL CALCULATION ---
+
         $fplBaseDry = (float)$trackDb['fuel_per_lap'];
         $fplBaseWet = (float)$trackDb['fuel_per_lap_wet'];
 
         $ff = $this->secrets['fuel_factors'] ?? [];
 
-        $dConc = (float)($driver['concentration'] ?? 0);
-        $dAgg  = (float)($driver['aggressiveness'] ?? 0);
-        $dExp  = (float)($driver['experience'] ?? 0);
-        $dTe   = (float)($driver['technical_insight'] ?? 0);
-        $cEng  = (int)($carData['lvlEngine'] ?? 1);
-        $cEle  = (int)($carData['lvlElectronics'] ?? 1);
+        $dConc = (float)($driver['concentration']);
+        $dAgg  = (float)($driver['aggressiveness']);
+        $dExp  = (float)($driver['experience']);
+        $dTe   = (float)($driver['technical_insight']);
+        $cEng  = (int)($carData['lvlEngine']);
+        $cEle  = (int)($carData['lvlElectronics']);
 
-        $fuelAdj = ($dConc * ($ff['conc'] ?? 0)) +
-                   ($dAgg  * ($ff['agg']  ?? 0)) +
-                   ($dExp  * ($ff['exp']  ?? 0)) +
-                   ($dTe   * ($ff['te']   ?? 0)) +
-                   ($cEng  * ($ff['eng_lvl'] ?? 0)) +
-                   ($cEle  * ($ff['ele_lvl'] ?? 0)) +
-                   ($ff['constant'] ?? 0);
+        $fuelAdj = ($dConc * ($ff['conc'])) +
+                   ($dAgg  * ($ff['agg'])) +
+                   ($dExp  * ($ff['exp'])) +
+                   ($dTe   * ($ff['te'])) +
+                   ($cEng  * ($ff['eng_lvl'])) +
+                   ($cEle  * ($ff['ele_lvl'])) +
+                   ($ff['constant']);
 
         $lkmDry = max(0.1, $fplBaseDry + $fuelAdj);
         $lkmWet = max(0.1, $fplBaseWet + $fuelAdj);
@@ -80,32 +82,32 @@ class StrategyService
         $totalFuelDry = $simulatedDistance * $lkmDry;
         $totalFuelWet = $simulatedDistance * $lkmWet;
 
-        // --- 3. TYRE CALCULATION ---
+
         $tyreSecrets = $this->secrets['tyre_calc'] ?? [];
 
         $factors = $tyreSecrets['factors'] ?? [];
 
-        // Track Wear
+
         $trackWearKey = (string)($trackDb['tyre_wear'] ?? 'Medium');
         $trackWearVal = $tyreSecrets['track_wear_values'][$trackWearKey] ?? 2.0;
-        $f_Track = ($factors['track_wear'] ?? 0.896) ** $trackWearVal;
+        $f_Track = ($factors['track_wear']) ** $trackWearVal;
 
-        $f_Temp = ($factors['avg_temp'] ?? 0.988) ** $temp;
+        $f_Temp = ($factors['avg_temp']) ** $temp;
 
-        // Supplier
+
         $supplierMap = $this->secrets['tyre_suppliers_durabilities'] ?? [];
         $supplierId = $supplierMap[$supplierName] ?? 1;
-        $f_Dur = ($factors['tyre_durability'] ?? 1.049) ** $supplierId;
+        $f_Dur = ($factors['tyre_durability']) ** $supplierId;
 
-        // Car/Driver
-        $cSusp = (int)($carData['lvlSusp'] ?? 1);
-        $f_Susp = ($factors['suspension'] ?? 1.009) ** $cSusp;
 
-        $f_Agg = ($factors['aggressiveness'] ?? 0.999) ** $dAgg;
-        $f_Exp = ($factors['experience'] ?? 1.000) ** $dExp;
+        $cSusp = (int)($carData['lvlSusp']);
+        $f_Susp = ($factors['suspension']) ** $cSusp;
 
-        $dWgt = (float)($driver['weight'] ?? 80);
-        $f_Wgt = ($factors['weight'] ?? 0.999) ** $dWgt;
+        $f_Agg = ($factors['aggressiveness']) ** $dAgg;
+        $f_Exp = ($factors['experience']) ** $dExp;
+
+        $dWgt = (float)($driver['weight']);
+        $f_Wgt = ($factors['weight']) ** $dWgt;
 
         $factors_val = $f_Track * $f_Temp * $f_Dur * $f_Susp * $f_Agg * $f_Exp * $f_Wgt;
 
@@ -113,17 +115,17 @@ class StrategyService
         $tyreResults = [];
 
         foreach ($compounds as $comp) {
-            $typeVal = $tyreSecrets['tyre_type_values'][$comp] ?? 0;
-            $f_Type = ($factors['tyre_type_base'] ?? 1.355) ** $typeVal;
+            $typeVal = $tyreSecrets['tyre_type_values'][$comp];
+            $f_Type = ($factors['tyre_type_base']) ** $typeVal;
 
-            $riskBase = $tyreSecrets['tyre_risk_factors'][$comp] ?? 0.998;
+            $riskBase = $tyreSecrets['tyre_risk_factors'][$comp];
             $f_Risk = $riskBase ** $risk;
 
             $tyreWearMultiplier = $factors_val * $f_Type * $f_Risk;
 
             $trackBaseWear = (float)$trackDb['tyre_wear_factor'];
             $rainMod = ($comp === 'Rain') ? 0.73 : 1.0;
-            $constant = $tyreSecrets['base_wear_constant'] ?? 129.776;
+            $constant = $tyreSecrets['base_wear_constant'];
 
             $maxKm = $tyreWearMultiplier * $trackBaseWear * $constant * $rainMod;
 
@@ -139,7 +141,7 @@ class StrategyService
                 $stops = 0;
             }
 
-            // --- FUEL PER STINT ---
+
             $relevantTotalFuel = ($comp === 'Rain') ? $totalFuelWet : $totalFuelDry;
             $fuelPerStint = $relevantTotalFuel / ($stops + 1);
             $maxFuel = 180.0;
@@ -153,7 +155,7 @@ class StrategyService
 
             $lapsPerSetForced = floor($laps / ($stops + 1));
 
-            // --- PIT TIME ---
+
             $hasTd = false;
             if (isset($td['ownTD']) && $td['ownTD'] == 1) {
                 $hasTd = true;
@@ -174,21 +176,21 @@ class StrategyService
 
             $pc = $this->secrets['pit_stop'] ?? [];
 
-            $fFuel = $hasTd ? ($pc['factor_fuel_td'] ?? 0.0315) : ($pc['factor_fuel_no_td'] ?? 0.0355);
-            $fSConc = $hasTd ? ($pc['factor_staff_conc_td'] ?? -0.0945) : ($pc['factor_staff_conc_no_td'] ?? -0.0797);
-            $fSStress = $hasTd ? ($pc['factor_staff_stress_td'] ?? -0.0355) : ($pc['factor_staff_stress_no_td'] ?? 0.0);
-            $baseTime = $pc['base_time'] ?? 24.26;
+            $fFuel = $hasTd ? ($pc['factor_fuel_td']) : ($pc['factor_fuel_no_td']);
+            $fSConc = $hasTd ? ($pc['factor_staff_conc_td']) : ($pc['factor_staff_conc_no_td']);
+            $fSStress = $hasTd ? ($pc['factor_staff_stress_td']) : ($pc['factor_staff_stress_no_td']);
+            $baseTime = $pc['base_time'];
 
             $pitTime = ($fuelPerStint * $fFuel)
                      + $baseTime
                      + ($vStaffConc * $fSConc)
                      + ($vStaffStress * $fSStress)
-                     + ($vTdExp * ($pc['factor_td_exp'] ?? -0.0094))
-                     + ($vTdPit * ($pc['factor_td_pit'] ?? -0.0112));
+                     + ($vTdExp * ($pc['factor_td_exp']))
+                     + ($vTdPit * ($pc['factor_td_pit']));
 
             $pitTime = max(15.0, $pitTime);
 
-            // --- LOST TIME ---
+
             $pitLaneLoss = (float)$trackDb['pit_time'];
             $lostPits = $stops * ($pitTime + $pitLaneLoss);
 

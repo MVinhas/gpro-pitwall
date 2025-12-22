@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Controller;
 
 use App\Http\Request;
@@ -15,7 +17,7 @@ class TrackRiskController
 
     public function update(Request $request): void
     {
-        // Enforce Dev/Admin check
+
         if (empty($this->config['settings']['is_dev'])) {
             $this->redirectBack((string)$request->post('track_name'));
             return;

@@ -3,12 +3,12 @@
 use App\Http\Router;
 
 return function (Router $router): void {
-    // Auth Routes
+
     $router->add('GET', '/login', 'controller.auth', 'showLogin');
     $router->add('GET', '/register', 'controller.auth', 'showRegister');
     $router->add('GET', '/verify', 'controller.auth', 'showVerify');
 
-    // Auth Actions
+
     $router->add('POST', '/login_request', 'controller.auth', 'handleLoginRequest');
     $router->add('POST', '/register_request', 'controller.auth', 'handleRegister');
     $router->add('POST', '/login_verify', 'controller.auth', 'handleVerify');
@@ -20,10 +20,10 @@ return function (Router $router): void {
     $router->add('GET', '/debug', 'controller.debug', 'index');
     $router->add('POST', '/debug/flush', 'controller.debug', 'flushCache');
 
-    // Main App
+
     $router->add('GET', '/', 'controller.page', 'index');
 
-    // Feature Routes
+
     $router->add('POST', '/add_pilot', 'controller.baseline', 'addPilot');
     $router->add('POST', '/update_season', 'controller.baseline', 'updateSeason');
     $router->add('POST', '/undo_last_pilot', 'controller.baseline', 'undoLastPilot');
