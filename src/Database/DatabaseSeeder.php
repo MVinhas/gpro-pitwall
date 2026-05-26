@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Database;
 
 use PDO;
+use App\Security\ApiTokenCrypto;
 
 class DatabaseSeeder
 {
@@ -13,7 +14,8 @@ class DatabaseSeeder
         private readonly array $statsSchema,
         private readonly array $divisions,
         private readonly string $defaultQ1Risk,
-        private array $secrets
+        private array $secrets,
+        private readonly ApiTokenCrypto $apiTokenCrypto,
     ) {
     }
 
@@ -39,6 +41,32 @@ class DatabaseSeeder
 
 
         $this->applyUserMigrations();
+        $this->encryptLegacyApiTokens();
+    }
+
+    /**
+     * One-shot: re-encrypt any api_token value still stored as plaintext.
+     * Safe to run repeatedly — looksEncrypted() short-circuits on ciphertext.
+     */
+    private function encryptLegacyApiTokens(): void
+    {
+        $rows = $this->db
+            ->query("SELECT id, api_token FROM users WHERE api_token IS NOT NULL AND api_token != ''")
+            ->fetchAll(PDO::FETCH_ASSOC);
+
+        $update = $this->db->prepare("UPDATE users SET api_token = :token WHERE id = :id");
+
+        foreach ($rows as $row) {
+            $current = (string)$row['api_token'];
+            if ($this->apiTokenCrypto->looksEncrypted($current)) {
+                continue;
+            }
+
+            $update->execute([
+                'token' => $this->apiTokenCrypto->encrypt($current),
+                'id' => (int)$row['id'],
+            ]);
+        }
     }
 
     private function createUsersTable(): void

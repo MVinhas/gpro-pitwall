@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Http\Request;
+use App\Security\Authorize;
 use App\Service\GproApiClient;
 use App\Service\GproDataMapper;
 use App\Service\TrainingService;
-use App\Repository\UserRepository;
 
 class TrainingController
 {
@@ -16,27 +16,15 @@ class TrainingController
         private readonly GproApiClient $apiClient,
         private readonly GproDataMapper $mapper,
         private readonly TrainingService $trainingService,
-        private readonly UserRepository $userRepo
+        private readonly Authorize $authorize,
     ) {
     }
 
     public function handle(Request $request): void
     {
-        $isLoggedIn = !empty($_SESSION['user_id']);
-        $userId = $isLoggedIn ? (int) $_SESSION['user_id'] : 0;
-        $user = $userId ? $this->userRepo->findById($userId) : null;
+        $user = $this->authorize->requirePremium();
 
-        if ($isLoggedIn && !$user) {
-            session_destroy();
-            $isLoggedIn = false;
-            $user = null;
-        }
-
-        $hasToken  = !empty($user['api_token']);
-        $isPremium = !empty($user['is_premium']);
-        $isAdmin   = !empty($user['is_admin']);
-
-        if ($isLoggedIn && $hasToken) {
+        if (!empty($user['api_token'])) {
             $this->apiClient->setToken($user['api_token']);
         }
 

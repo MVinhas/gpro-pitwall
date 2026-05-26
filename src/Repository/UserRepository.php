@@ -6,12 +6,14 @@ namespace App\Repository;
 
 use PDO;
 use App\Security\EmailCrypto;
+use App\Security\ApiTokenCrypto;
 
 class UserRepository
 {
     public function __construct(
         private readonly PDO $pdo,
-        private readonly EmailCrypto $crypto
+        private readonly EmailCrypto $crypto,
+        private readonly ApiTokenCrypto $apiTokenCrypto,
     ) {
     }
 
@@ -30,7 +32,7 @@ class UserRepository
             return null;
         }
 
-        return $user;
+        return $this->hydrate($user);
     }
 
 
@@ -39,7 +41,7 @@ class UserRepository
         $stmt = $this->pdo->prepare("SELECT * FROM users WHERE username = :username LIMIT 1");
         $stmt->execute(['username' => $username]);
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $result ?: null;
+        return $result ? $this->hydrate($result) : null;
     }
 
     public function findById(int $id): ?array
@@ -47,7 +49,7 @@ class UserRepository
         $stmt = $this->pdo->prepare("SELECT * FROM users WHERE id = :id LIMIT 1");
         $stmt->execute(['id' => $id]);
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $result ?: null;
+        return $result ? $this->hydrate($result) : null;
     }
 
     public function findEncryptedEmailById(int $id): ?string
@@ -89,8 +91,30 @@ class UserRepository
 
     public function updateApiToken(int $userId, string $token): void
     {
+        $stored = $token === '' ? '' : $this->apiTokenCrypto->encrypt($token);
         $stmt = $this->pdo->prepare("UPDATE users SET api_token = :token WHERE id = :id");
-        $stmt->execute(['token' => $token, 'id' => $userId]);
+        $stmt->execute(['token' => $stored, 'id' => $userId]);
+    }
+
+    /**
+     * Decrypts api_token in-place on a freshly-fetched user row so callers
+     * keep seeing plaintext. Leaves the row untouched if the column is empty
+     * or already plaintext (pre-migration data, removed by applyUserMigrations).
+     */
+    private function hydrate(array $user): array
+    {
+        if (!array_key_exists('api_token', $user) || $user['api_token'] === null || $user['api_token'] === '') {
+            return $user;
+        }
+
+        try {
+            $user['api_token'] = $this->apiTokenCrypto->decrypt($user['api_token']);
+        } catch (\RuntimeException) {
+            // Not ciphertext — treat as legacy plaintext and leave as-is.
+            // DatabaseSeeder migrates these to ciphertext on next boot.
+        }
+
+        return $user;
     }
 
     public function setPremium(int $userId, bool $status): void

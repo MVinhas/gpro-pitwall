@@ -14,6 +14,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Secret scan (must pass before anything else)
+        run: bin/check_no_secrets.sh
+
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
         with:
@@ -43,6 +46,9 @@ jobs:
 
       - name: Twig lint
         run: composer twig-lint
+
+      - name: Tests (PHPUnit)
+        run: composer test
 
       - name: Composer audit (security check)
         run: composer audit --no-interaction

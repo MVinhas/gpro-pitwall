@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Repository\UserRepository;
+use App\Security\Authorize;
 use App\Cache\CacheInterface;
 use Twig\Environment;
 
@@ -14,13 +15,14 @@ class DebugController
         private readonly UserRepository $userRepo,
         private readonly CacheInterface $cache,
         private readonly Environment $twig,
-        private readonly string $dbPath
+        private readonly string $dbPath,
+        private readonly Authorize $authorize,
     ) {
     }
 
     public function index(): void
     {
-        $user = $this->ensureAdmin();
+        $user = $this->authorize->requireAdmin();
 
         $memLimit = ini_get('memory_limit');
         $systemInfo = [
@@ -72,7 +74,7 @@ class DebugController
 
     public function flushCache(): void
     {
-        $this->ensureAdmin();
+        $this->authorize->requireAdmin();
 
         try {
             if ($this->cache->clear()) {
@@ -94,25 +96,6 @@ class DebugController
 
         header('Location: /debug');
         exit;
-    }
-
-    /**
-     * @return array<string, mixed> The authenticated admin user
-     */
-    private function ensureAdmin(): array
-    {
-        if (empty($_SESSION['user_id'])) {
-            header('Location: /login');
-            exit;
-        }
-
-        $user = $this->userRepo->findById((int)$_SESSION['user_id']);
-        if (!$user || empty($user['is_admin'])) {
-            http_response_code(403);
-            die("403 Forbidden");
-        }
-
-        return $user;
     }
 
     /**

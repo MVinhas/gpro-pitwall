@@ -7,6 +7,7 @@ namespace App\Controller;
 use App\Http\Request;
 use App\Repository\PilotRepository;
 use App\Repository\DivisionMetadataRepository;
+use App\Security\Authorize;
 use App\Service\PilotCalculatorService;
 
 class BaselineController
@@ -16,15 +17,17 @@ class BaselineController
         private readonly DivisionMetadataRepository $metaRepo,
         private readonly PilotCalculatorService $calculator,
         private readonly array $statsSchema,
-        private readonly bool $isDev
+        private readonly Authorize $authorize,
     ) {
     }
 
     public function addPilot(Request $request): void
     {
-        $division = (string)$request->post('division');
+        $this->authorize->requirePremium();
 
-        if (!$this->checkDevAccess($division)) {
+        $division = (string)$request->post('division');
+        if ($division === '') {
+            $this->redirectBack($division);
             return;
         }
 
@@ -47,9 +50,11 @@ class BaselineController
 
     public function updateSeason(Request $request): void
     {
-        $division = (string)$request->post('division');
+        $this->authorize->requirePremium();
 
-        if (!$this->checkDevAccess($division)) {
+        $division = (string)$request->post('division');
+        if ($division === '') {
+            $this->redirectBack($division);
             return;
         }
 
@@ -63,9 +68,11 @@ class BaselineController
 
     public function undoLastPilot(Request $request): void
     {
-        $division = (string)$request->post('division');
+        $this->authorize->requirePremium();
 
-        if (!$this->checkDevAccess($division)) {
+        $division = (string)$request->post('division');
+        if ($division === '') {
+            $this->redirectBack($division);
             return;
         }
 
@@ -75,24 +82,16 @@ class BaselineController
 
     public function clearStats(Request $request): void
     {
-        $division = (string)$request->post('division');
+        $this->authorize->requirePremium();
 
-        if (!$this->checkDevAccess($division)) {
+        $division = (string)$request->post('division');
+        if ($division === '') {
+            $this->redirectBack($division);
             return;
         }
 
         $this->pilotRepo->clearDivision($division);
         $this->redirectBack($division);
-    }
-
-    private function checkDevAccess(string $division): bool
-    {
-        if (!$this->isDev || empty($division)) {
-            $this->redirectBack($division);
-            return false;
-        }
-
-        return true;
     }
 
     private function redirectBack(string $division): void

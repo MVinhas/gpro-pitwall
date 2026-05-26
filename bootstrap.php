@@ -30,15 +30,19 @@ $container['config']['api'] = [
 
 use App\Database\Database;
 use App\Database\DatabaseSeeder;
+use App\Security\ApiTokenCrypto;
 
 $container['db'] = Database::getConnection();
+
+$container['service.api_token_crypto'] = new ApiTokenCrypto($_ENV['APP_SECRET']);
 
 $seeder = new DatabaseSeeder(
     $container['db'],
     $container['config']['app']['stats_schema'],
     $container['config']['app']['divisions'],
     $container['config']['app']['default_q1_risk'],
-    $container['config']['secrets']
+    $container['config']['secrets'],
+    $container['service.api_token_crypto'],
 );
 $seeder->migrate();
 
@@ -94,9 +98,12 @@ $container['service.email_crypto'] = new EmailCrypto($_ENV['APP_SECRET']);
 
 $container['service.user_repo'] = new \App\Repository\UserRepository(
     $container['db'],
-    $container['service.email_crypto']
+    $container['service.email_crypto'],
+    $container['service.api_token_crypto'],
 );
 $container['service.token_repo'] = new \App\Repository\TokenRepository($container['db']);
+
+$container['service.authorize'] = new \App\Security\Authorize($container['service.user_repo']);
 
 $mailCfg = [
     'host' => $_ENV['MAIL_HOST'],
@@ -109,7 +116,10 @@ $mailCfg = [
 
 $container['service.rate_limiter'] = new \App\Service\RateLimiterService($container['service.cache']);
 $container['service.email_service']  = new \App\Service\EmailService($mailCfg);
-$container['service.recaptcha'] = new \App\Service\ReCaptchaService($_ENV['RECAPTCHA_SECRET_KEY'] ?? '');
+$container['service.recaptcha'] = new \App\Service\ReCaptchaService(
+    $_ENV['RECAPTCHA_SECRET_KEY'] ?? '',
+    $container['settings']['is_dev'],
+);
 
 
 
@@ -183,15 +193,13 @@ $container['controller.strategy'] = new StrategyController(
     $container['service.api_client'],
     $container['service.data_mapper'],
     $container['service.setup_calculator'],
-    $container['service.user_repo']
+    $container['service.authorize'],
 );
 
 $container['controller.auth'] = new AuthController(
     $container['service.auth_service'],
-    $container['service.user_repo'],
     $container['twig'],
-    $_ENV['RECAPTCHA_SITE_KEY'] ?? '',
-    $container['service.gpro_sync']
+    $_ENV['RECAPTCHA_SITE_KEY'] ?? ''
 );
 
 $container['controller.page'] = new PageController(
@@ -210,7 +218,8 @@ $container['controller.debug'] = new \App\Controller\DebugController(
     $container['service.user_repo'],
     $container['service.cache'],
     $container['twig'],
-    $container['settings']['db_file']
+    $container['settings']['db_file'],
+    $container['service.authorize'],
 );
 
 $container['controller.baseline'] = new BaselineController(
@@ -218,42 +227,45 @@ $container['controller.baseline'] = new BaselineController(
     $container['repo.metadata'],
     $container['service.calculator'],
     $container['config']['app']['stats_schema'],
-    $container['settings']['is_dev']
+    $container['service.authorize'],
 );
 
 $container['controller.track_risk'] = new TrackRiskController(
     $container['repo.track'],
-    $container
+    $container,
+    $container['service.authorize'],
 );
 
 $container['controller.control_panel'] = new \App\Controller\ControlPanelController(
     $container['service.user_repo'],
-    $container['twig']
+    $container['twig'],
+    $container['service.authorize'],
 );
 
 $container['controller.recruitment'] = new RecruitmentController(
-    $container['service.recruitment']
+    $container['service.recruitment'],
+    $container['service.authorize'],
 );
 
 $container['controller.car_wear'] = new CarWearController(
     $container['service.car_wear'],
     $container['service.api_client'],
     $container['service.data_mapper'],
-    $container['service.user_repo']
+    $container['service.authorize'],
 );
 
 $container['controller.training'] = new TrainingController(
     $container['service.api_client'],
     $container['service.data_mapper'],
     $container['service.training'],
-    $container['service.user_repo']
+    $container['service.authorize'],
 );
 
 use App\Controller\ApiWarmupController;
 
 $container['controller.api_warmup'] = new ApiWarmupController(
-    $container['service.user_repo'],
-    $container['service.gpro_sync']
+    $container['service.gpro_sync'],
+    $container['service.authorize'],
 );
 
 return $container;

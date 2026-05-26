@@ -6,22 +6,20 @@ namespace App\Controller;
 
 use App\Http\Request;
 use App\Repository\TrackRepository;
+use App\Security\Authorize;
 
 class TrackRiskController
 {
     public function __construct(
         private readonly TrackRepository $repo,
-        private array $config
+        private array $config,
+        private readonly Authorize $authorize,
     ) {
     }
 
     public function update(Request $request): void
     {
-
-        if (empty($this->config['settings']['is_dev'])) {
-            $this->redirectBack((string)$request->post('track_name'));
-            return;
-        }
+        $this->authorize->requirePremium();
 
         $track = (string)$request->post('track_name');
         $over = (int)$request->post('overtaking_risk');

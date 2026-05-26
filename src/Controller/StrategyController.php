@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Http\Request;
+use App\Security\Authorize;
 use App\Service\StrategyService;
 use App\Service\SetupCalculatorService;
 use App\Service\GproApiClient;
 use App\Service\GproDataMapper;
-use App\Repository\UserRepository;
 
 class StrategyController
 {
@@ -18,37 +18,26 @@ class StrategyController
         private readonly GproApiClient $api,
         private readonly GproDataMapper $mapper,
         private readonly SetupCalculatorService $setupService,
-        private readonly UserRepository $userRepo
+        private readonly Authorize $authorize,
     ) {
     }
 
     public function handle(Request $request): void
     {
-        $isLoggedIn = !empty($_SESSION['user_id']);
-        $userId = $isLoggedIn ? (int) $_SESSION['user_id'] : 0;
-        $user = $userId ? $this->userRepo->findById($userId) : null;
-
-        if ($isLoggedIn && !$user) {
-            session_destroy();
-            $isLoggedIn = false;
-            $user = null;
-        }
-
-        $hasToken  = !empty($user['api_token']);
-        $isPremium = !empty($user['is_premium']);
-        $isAdmin   = !empty($user['is_admin']);
-
-        if ($isLoggedIn && $hasToken) {
-            $this->api->setToken($user['api_token']);
-        }
-
         $action = $request->post('action');
+
         if ($action === 'flush_cache') {
+            // Session-only reset; no DB write, no secrets — safe for free users.
+            $this->authorize->requireAuth();
             $this->flushCache();
             return;
         }
 
         if ($action === 'calculate_strategy') {
+            $user = $this->authorize->requirePremium();
+            if (!empty($user['api_token'])) {
+                $this->api->setToken($user['api_token']);
+            }
             $this->calculate($request);
             return;
         }

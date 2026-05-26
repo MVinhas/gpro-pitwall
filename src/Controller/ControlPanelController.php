@@ -6,24 +6,21 @@ namespace App\Controller;
 
 use App\Http\Request;
 use App\Repository\UserRepository;
+use App\Security\Authorize;
 use Twig\Environment;
 
 class ControlPanelController
 {
     public function __construct(
         private readonly UserRepository $userRepo,
-        private readonly Environment $twig
+        private readonly Environment $twig,
+        private readonly Authorize $authorize,
     ) {
     }
 
     public function index(): void
     {
-        if (empty($_SESSION['user_id'])) {
-            header('Location: /login');
-            exit;
-        }
-
-        $user = $this->userRepo->findById((int)$_SESSION['user_id']);
+        $user = $this->authorize->requireAuth();
 
         echo $this->twig->render('auth/control_panel.twig', [
             'user' => $user,
@@ -36,13 +33,9 @@ class ControlPanelController
 
     public function updateToken(Request $request): void
     {
-        if (empty($_SESSION['user_id'])) {
-            header('Location: /login');
-            exit;
-        }
+        $user = $this->authorize->requireAuth();
 
         $token = trim((string)$request->post('api_token'));
-
 
         if (strlen($token) < 10) {
             $_SESSION['flash'] = "Token looks too short.";
@@ -50,7 +43,7 @@ class ControlPanelController
             exit;
         }
 
-        $this->userRepo->updateApiToken((int)$_SESSION['user_id'], $token);
+        $this->userRepo->updateApiToken((int)$user['id'], $token);
 
         $_SESSION['flash'] = "API Token saved successfully.";
         header('Location: /control_panel');

@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Pre-commit hook — install once with `composer install-hooks`.
+# Mirrors CI: secret scan first, then composer check (lint + analyse +
+# twig-lint + tests). Bypassing this (--no-verify) is documented as
+# unsupported in CLAUDE.md.
+
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+# Run the same secret scan that CI does. Output never leaks secret values.
+bash bin/check_no_secrets.sh
+
+# Then the full check pipeline. This deliberately runs against the working
+# tree, not the staged-only diff, because PHPStan + tests need the full
+# project on disk to be coherent.
+composer check

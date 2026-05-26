@@ -11,12 +11,19 @@ final readonly class ReCaptchaService
     private const float SCORE_THRESHOLD = 0.5;
 
     public function __construct(
-        private string $secretKey
+        private string $secretKey,
+        private bool $isDev = false,
     ) {
     }
 
     public function verify(string $token, ?string $remoteIp = null): bool
     {
+        if ($this->secretKey === '') {
+            // Empty key is only acceptable in dev — outside dev it must fail closed,
+            // otherwise a misconfigured prod silently allows every request through.
+            return $this->isDev;
+        }
+
         if ($token === '') {
             return false;
         }

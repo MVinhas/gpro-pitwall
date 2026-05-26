@@ -5,17 +5,21 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Http\Request;
+use App\Security\Authorize;
 use App\Service\RecruitmentService;
 
 class RecruitmentController
 {
     public function __construct(
-        private readonly RecruitmentService $service
+        private readonly RecruitmentService $service,
+        private readonly Authorize $authorize,
     ) {
     }
 
     public function analyze(Request $request): void
     {
+        $this->authorize->requirePremium();
+
         try {
             $file = $request->file('driver_csv_file');
             if (!$file || $file['error'] !== UPLOAD_ERR_OK) {

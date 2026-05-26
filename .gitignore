@@ -1,8 +1,21 @@
 .env
 /data
-/public/.htaccess
 /config/secrets.php
 /vendor
 composer.lock
 gpro_pilots.sqlite
+*.sqlite
 /bin/act
+/var/
+
+# Claude-meta and project info — never committed
+/CLAUDE.md
+/TODO.md
+/gpro-public-api.yml
+/GPRO Assistant.docx
+/db_browser.php
+/bin/db_browser.php
+
+# Build & test artefacts
+/dist/
+.phpunit.result.cache

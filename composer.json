@@ -23,6 +23,7 @@
     },
     "require-dev": {
         "phpstan/phpstan": "^2.1",
+        "phpunit/phpunit": "^11.0",
         "rector/rector": "^2.2",
         "squizlabs/php_codesniffer": "^4.0",
         "sserbin/twig-linter": "^3.1.2",
@@ -33,17 +34,30 @@
             "App\\": "src/"
         }
     },
+    "autoload-dev": {
+        "psr-4": {
+            "App\\Tests\\": "tests/"
+        }
+    },
     "config": {
         "optimize-autoloader": true,
         "preferred-install": "dist",
         "sort-packages": true
     },
     "scripts": {
-        "analyse": "phpstan analyse src --level=5",
+        "analyse": "phpstan analyse src --level=5 --memory-limit=512M",
         "lint": "phpcs --standard=PSR12 src",
         "twig-lint": "vendor/bin/twig-linter lint templates",
         "audit": "composer audit",
-        "refactor": "rector process src"
+        "refactor": "rector process src",
+        "test": "phpunit",
+        "check": [
+            "@lint",
+            "@analyse",
+            "@twig-lint",
+            "@test"
+        ],
+        "install-hooks": "ln -sf ../../bin/git_hooks/pre-commit .git/hooks/pre-commit && echo 'Pre-commit hook installed.'"
     },
     "minimum-stability": "stable",
     "prefer-stable": true
