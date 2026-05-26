@@ -1,0 +1,38 @@
+# Front controller — every request that doesn't map to a real file goes to index.php.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^ index.php [QSA,L]
+</IfModule>
+
+# Hide dotfiles (.env, .git, .htaccess itself).
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>
+
+# Block direct access to SQLite databases and their sidecar files,
+# in case the DB ever lands under docroot.
+<FilesMatch "\.(sqlite|sqlite-shm|sqlite-wal|db)$">
+    Require all denied
+</FilesMatch>
+
+# Block direct PHP access except for the front controller. Defence in depth
+# against stray scripts ending up in public/ during a sloppy deploy.
+<FilesMatch "\.php$">
+    Require all denied
+</FilesMatch>
+<Files "index.php">
+    Require all granted
+</Files>
+
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set X-Frame-Options "DENY"
+    Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+    # HSTS only when the request actually came in over HTTPS — never on plain HTTP.
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains" "expr=%{HTTPS} == 'on'"
+</IfModule>
+
+Options -Indexes
