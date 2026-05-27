@@ -111,7 +111,9 @@ $mailCfg = [
     'user' => $_ENV['MAIL_USER'],
     'pass' => $_ENV['MAIL_PASS'],
     'from' => $_ENV['MAIL_FROM'],
-    'from_name' => $_ENV['MAIL_FROM_NAME'] ?: 'GPRO Assistant'
+    'from_name' => $_ENV['MAIL_FROM_NAME'] ?: 'GPRO Assistant',
+    'is_dev'   => $container['settings']['is_dev'],
+    'mail_dir' => __DIR__ . '/var/mail',
 ];
 
 $container['service.rate_limiter'] = new \App\Service\RateLimiterService($container['service.cache']);

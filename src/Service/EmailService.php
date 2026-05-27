@@ -18,6 +18,11 @@ class EmailService
         }
     }
 
+    private function isDev(): bool
+    {
+        return !empty($this->config['is_dev']);
+    }
+
     public function sendVerificationCode(string $toEmail, string $code): bool
     {
         $subject = "{$code} is your verification code";
@@ -70,6 +75,10 @@ class EmailService
 
     private function send(string $to, string $subject, string $body, string $alt): bool
     {
+        if ($this->isDev()) {
+            return $this->writeDevEml($to, $subject, $body, $alt);
+        }
+
         $mail = $this->createMailer();
 
         try {
@@ -85,6 +94,51 @@ class EmailService
             error_log('[EmailService Error] ' . $mail->ErrorInfo);
             return false;
         }
+    }
+
+    /**
+     * Writes an RFC 5322 .eml file to var/mail/ instead of hitting SMTP.
+     * Used in dev so the verification code is readable without external infra.
+     * Filename: {YYYYmmddHHiiss}-{to-slug}.eml — sortable and human-scannable.
+     */
+    private function writeDevEml(string $to, string $subject, string $htmlBody, string $altBody): bool
+    {
+        $dir = $this->config['mail_dir'] ?? 'var/mail';
+        if (!is_dir($dir) && !mkdir($dir, 0750, true) && !is_dir($dir)) {
+            error_log('[EmailService dev] cannot create ' . $dir);
+            return false;
+        }
+
+        $boundary = bin2hex(random_bytes(8));
+        $fromAddr = $this->config['from'];
+        $fromName = $this->config['from_name'];
+        $date = date('r');
+
+        $eml = "From: {$fromName} <{$fromAddr}>\r\n"
+             . "To: {$to}\r\n"
+             . "Subject: {$subject}\r\n"
+             . "Date: {$date}\r\n"
+             . "MIME-Version: 1.0\r\n"
+             . "Content-Type: multipart/alternative; boundary=\"{$boundary}\"\r\n"
+             . "\r\n"
+             . "--{$boundary}\r\n"
+             . "Content-Type: text/plain; charset=UTF-8\r\n"
+             . "Content-Transfer-Encoding: 8bit\r\n"
+             . "\r\n"
+             . $altBody . "\r\n"
+             . "\r\n"
+             . "--{$boundary}\r\n"
+             . "Content-Type: text/html; charset=UTF-8\r\n"
+             . "Content-Transfer-Encoding: 8bit\r\n"
+             . "\r\n"
+             . $htmlBody . "\r\n"
+             . "\r\n"
+             . "--{$boundary}--\r\n";
+
+        $slug = preg_replace('/[^A-Za-z0-9._@-]+/', '_', $to) ?? 'recipient';
+        $path = $dir . '/' . date('YmdHis') . '-' . $slug . '.eml';
+
+        return file_put_contents($path, $eml) !== false;
     }
 
 

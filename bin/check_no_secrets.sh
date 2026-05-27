@@ -44,6 +44,12 @@ if grep -E '^(data|var)/' <<<"$tracked" >/dev/null; then
   grep -E '^(data|var)/' <<<"$tracked" | while read -r f; do note "$f"; done
 fi
 
+# Offline spreadsheets contain the same secret formulas as config/secrets.php.
+if grep -E '^offline-spreadsheets/' <<<"$tracked" >/dev/null; then
+  flag "offline-spreadsheets/ contents are tracked"
+  grep -E '^offline-spreadsheets/' <<<"$tracked" | while read -r f; do note "$f"; done
+fi
+
 # Content scan: only on staged additions (pre-commit) OR full tree on CI.
 # Mode: pre-commit if running with staged changes; otherwise scan tracked files.
 if git diff --cached --name-only --diff-filter=ACM 2>/dev/null | grep -q .; then
