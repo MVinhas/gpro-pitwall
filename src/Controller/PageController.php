@@ -81,16 +81,20 @@ class PageController
             $activeDivision = 'Rookie';
         }
 
-        $activeTrack = $request->get('track', 2);
-        $trackIds   = array_keys($tracks);
         $trackNames = array_values($tracks);
+        $defaultTrack = $trackNames[0] ?? '';
 
-        if (!in_array($activeTrack, $trackIds, true) && !in_array($activeTrack, $trackNames, true)) {
-            $activeTrack = $trackNames[0] ?? 2;
-        }
+        $activeTrack = $request->get('track', $defaultTrack);
 
+        // Resolve a numeric track id ("2") to its name first, then validate
+        // the result is a known track name. Anything else falls back to the
+        // default so the UI never displays a raw id.
         if (is_numeric($activeTrack) && isset($tracks[(int) $activeTrack])) {
             $activeTrack = $tracks[(int) $activeTrack];
+        }
+
+        if (!in_array($activeTrack, $trackNames, true)) {
+            $activeTrack = $defaultTrack;
         }
 
         $viewData = [
@@ -172,8 +176,39 @@ class PageController
                 break;
 
             case 'Race Strategy':
-                $viewData['strategy_results'] = $_SESSION['strategy_results'] ?? null;
-                $viewData['strategy_error']   = $_SESSION['strategy_error'] ?? null;
+                $existing = $_SESSION['strategy_results'] ?? null;
+
+                // Pre-warm the form on first visit so the user doesn't see empty
+                // inputs. Skip if a real calculation result is already cached.
+                if ($hasToken && !is_array($existing)) {
+                    try {
+                        $pilotRaw = $this->apiClient->getMyPilotDetails();
+                        $carRaw   = $this->apiClient->getCarData();
+                        $weather  = $this->apiClient->getRaceSetup();
+                        $driver = (new GproDataMapper())->mapDriver($pilotRaw);
+
+                        $viewData['strategy_results'] = [
+                            'stats' => [
+                                'driver' => $driver,
+                                'car' => [
+                                    'lvlEngine'      => (int)($carRaw['lvlEngine'] ?? 1),
+                                    'lvlSusp'        => (int)($carRaw['lvlSusp'] ?? 1),
+                                    'lvlElectronics' => (int)($carRaw['lvlElectronics'] ?? 1),
+                                ],
+                                'staff' => ['concentration' => 0, 'stressHandling' => 0],
+                                'td'    => ['experience' => 0, 'pitCoordination' => 0],
+                            ],
+                            'weather_inputs' => $this->weatherDefaults($weather['weather'] ?? []),
+                            'inputs' => ['risk' => 0, 'target_wear' => 15],
+                        ];
+                    } catch (\Throwable $e) {
+                        $viewData['strategy_error'] = $e->getMessage();
+                    }
+                } else {
+                    $viewData['strategy_results'] = $existing;
+                }
+
+                $viewData['strategy_error'] = $_SESSION['strategy_error'] ?? $viewData['strategy_error'] ?? null;
                 unset($_SESSION['strategy_error']);
                 break;
         }
@@ -235,6 +270,22 @@ class PageController
         $viewData['sort'] = [
             'col'   => $sortCol,
             'order' => $sortOrder,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $w
+     * @return array<string, array<string, mixed>>
+     */
+    private function weatherDefaults(array $w): array
+    {
+        $isWet = static fn(string $key): string =>
+            ($w[$key] ?? '') === 'Rain' ? 'Wet' : 'Dry';
+
+        return [
+            'Q1'   => ['temp' => $w['q1Temp'] ?? '', 'weather' => $isWet('q1Weather')],
+            'Q2'   => ['temp' => $w['q2Temp'] ?? '', 'weather' => $isWet('q2Weather')],
+            'Race' => ['weather' => 'Dry'],
         ];
     }
 }

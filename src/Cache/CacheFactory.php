@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Cache;
 
 use App\Cache\Adapter\ApcuCache;
+use App\Cache\Adapter\FilesystemCache;
 use App\Cache\Adapter\NullCache;
 use App\Cache\Adapter\RedisCache;
 use RuntimeException;
@@ -16,14 +17,18 @@ class CacheFactory
      */
     public static function create(array $config): CacheInterface
     {
-        $driver = strtolower((string)($config['CACHE_DRIVER'] ?? 'none'));
+        $driver = strtolower((string)($config['CACHE_DRIVER'] ?? 'filesystem'));
 
         try {
             return match ($driver) {
-                'redis' => self::createRedis($config),
-                'apcu'  => self::createApcu(),
-                'none'  => new NullCache(),
-                default => new NullCache(),
+                'redis'      => self::createRedis($config),
+                'apcu'       => self::createApcu(),
+                'filesystem' => self::createFilesystem($config),
+                'none'       => new NullCache(),
+                // Unknown driver degrades to a *working* cache, not a no-op —
+                // a misconfigured CACHE_DRIVER should never silently disable
+                // caching and hammer the upstream API.
+                default      => self::createFilesystem($config),
             };
         } catch (RuntimeException $runtimeException) {
             error_log(
@@ -31,10 +36,24 @@ class CacheFactory
                 .
                 $runtimeException->getMessage()
                 .
-                ". Falling back to NullCache."
+                ". Falling back to filesystem cache."
             );
-            return new NullCache();
+
+            try {
+                return self::createFilesystem($config);
+            } catch (RuntimeException) {
+                return new NullCache();
+            }
         }
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     */
+    private static function createFilesystem(array $config): CacheInterface
+    {
+        $dir = (string)($config['CACHE_DIR'] ?? (dirname(__DIR__, 2) . '/var/cache'));
+        return new FilesystemCache($dir);
     }
 
     private static function createApcu(): CacheInterface

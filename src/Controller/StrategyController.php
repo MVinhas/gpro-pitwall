@@ -239,11 +239,11 @@ class StrategyController
 
             $setupWeatherInputs = [
                 'Q1' => [
-                    'temp' => $request->post('q1_temp') ?: $q1Temp,
+                    'temp' => (float)($request->post('q1_temp') ?: $q1Temp),
                     'weather' => $request->post('q1_weather') ?: $defQ1W
                 ],
                 'Q2' => [
-                    'temp' => $request->post('q2_temp') ?: $q2Temp,
+                    'temp' => (float)($request->post('q2_temp') ?: $q2Temp),
                     'weather' => $request->post('q2_weather') ?: $defQ2W
                 ],
                 'Race' => [
@@ -264,6 +264,10 @@ class StrategyController
 
             $strategyResults['season'] = $office['seasonNb'] ?? '?';
             $strategyResults['race'] = $office['raceNb'] ?? '?';
+            $strategyResults['best_compound'] = $this->pickBestCompound(
+                $strategyResults['tyres'] ?? [],
+                $raceStartIsWet,
+            );
 
             $_SESSION['strategy_results'] = $strategyResults;
         } catch (\Exception $exception) {
@@ -297,5 +301,27 @@ class StrategyController
         }
 
         return $count > 0 ? round($sum / $count, 1) : 20;
+    }
+
+    /**
+     * Pick the lowest-total-lost compound, excluding Rain unless the race itself starts wet.
+     *
+     * @param array<string, array<string, mixed>> $tyres
+     */
+    private function pickBestCompound(array $tyres, bool $raceWet): ?string
+    {
+        $best = null;
+        $bestLost = INF;
+        foreach ($tyres as $compound => $row) {
+            if (!$raceWet && $compound === 'Rain') {
+                continue;
+            }
+            $lost = (float)($row['total_lost'] ?? INF);
+            if ($lost < $bestLost) {
+                $bestLost = $lost;
+                $best = $compound;
+            }
+        }
+        return $best;
     }
 }

@@ -44,7 +44,7 @@ class SetupCalculatorService
 
         foreach ($sessions as $session) {
             $weather = $weatherInputs[$session]['weather'] ?? 'Dry';
-            $temp = round($weatherInputs[$session]['temp']);
+            $temp = round((float)($weatherInputs[$session]['temp'] ?? 0));
             $isDry = ($weather === 'Dry');
 
 

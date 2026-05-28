@@ -35,19 +35,11 @@ class CarWearController
             $office = $this->api->getOfficeData();
             $carData = $this->api->getCarData();
 
-            if ($request->post('talent') !== null) {
-                $driver = [
-                    'concentration' => (int)$request->post('concentration'),
-                    'talent'        => (int)$request->post('talent'),
-                    'experience'    => (int)$request->post('experience'),
-                    'weight'        => 0,
-                    'aggressiveness' => 0
-                ];
-            } else {
-                $driver = $_SESSION['wear_inputs']['driver'] ?? $this->mapper->mapDriver(
-                    $this->api->getMyPilotDetails()
-                );
-            }
+            // Driver stats come from the API only — the form no longer exposes
+            // them as editable fields. PageController pre-warms the session;
+            // we re-fetch here to make sure we use whatever the API reports
+            // *now* (so training between visits is reflected).
+            $driver = $this->mapper->mapDriver($this->api->getMyPilotDetails());
 
             if (empty($trackProfile['name']) && !empty($office['trackName'])) {
                 $trackProfile['name'] = $office['trackName'];

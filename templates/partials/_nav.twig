@@ -1,5 +1,5 @@
 <nav class="mb-8">
-    <div class="sm:hidden">
+    <div class="md:hidden">
         {# Mobile Dropdown fallback #}
         <label for="tabs" class="sr-only">Select a tab</label>
         <select id="tabs" name="tabs" class="block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500" onchange="window.location.href=this.value">
@@ -11,7 +11,7 @@
         </select>
     </div>
     
-    <div class="hidden sm:block">
+    <div class="hidden md:block">
         <div class="border-b border-slate-200">
             <nav class="-mb-px flex space-x-8" aria-label="Tabs">
                 {% for section in main_sections %}

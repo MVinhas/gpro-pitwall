@@ -40,9 +40,13 @@
         {# Division Switcher #}
         <div class="flex justify-center space-x-2 p-1 bg-slate-200 rounded-lg self-center">
             {% for div in divisions %}
+                {% set div_cap = config.secrets.division_caps[div] %}
                 <a href="?main_tab=Division Baseline&division_tab={{ div }}&track={{ active_track }}"
-                   class="px-4 py-2 text-sm font-medium rounded-md transition-all {{ div == active_division ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700' }}">
-                    {{ div }}
+                   class="flex flex-col items-center px-4 py-2 rounded-md transition-all {{ div == active_division ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700' }}">
+                    <span class="text-sm font-medium leading-none">{{ div }}</span>
+                    <span class="mt-0.5 text-[10px] font-medium uppercase tracking-wide opacity-70">
+                        Cap {{ div_cap == 999 ? '∞' : div_cap }}
+                    </span>
                 </a>
             {% endfor %}
         </div>
