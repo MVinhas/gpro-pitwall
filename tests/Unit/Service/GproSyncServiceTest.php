@@ -64,6 +64,60 @@ final class GproSyncServiceTest extends TestCase
         $svc->trySyncForUser(['id' => 7, 'api_token' => 'tok']);
     }
 
+    public function testDefersWhenBudgetBelowMargin(): void
+    {
+        // 8 calls + margin 20 = needs 28; only 25 remaining → defer.
+        $this->cache->set(GproApiClient::API_LIMIT_KEY, 25, 3600);
+
+        $users = $this->createMock(UserRepository::class);
+        $users->expects($this->once())
+            ->method('updateSyncStatus')
+            ->with(7, 'deferred_low_budget');
+        $users->expects($this->never())->method('markSynced');
+
+        $svc = new GproSyncService($this->apiClient(), $users, $this->cache, 20);
+        $svc->trySyncForUser(['id' => 7, 'api_token' => 'tok']);
+
+        // Deferring must not leave a lock behind.
+        $this->assertFalse($this->cache->has('sync_lock_7'));
+    }
+
+    public function testProceedsWhenBudgetAboveMargin(): void
+    {
+        // 8 + 20 = 28; 50 remaining → comfortably above, sync proceeds (and
+        // fails against the unreachable host, which is fine — it still ran).
+        $this->cache->set(GproApiClient::API_LIMIT_KEY, 50, 3600);
+
+        $users = $this->createMock(UserRepository::class);
+        $statuses = [];
+        $users->method('updateSyncStatus')
+            ->willReturnCallback(function (int $id, string $status) use (&$statuses): void {
+                $statuses[] = $status;
+            });
+
+        $svc = new GproSyncService($this->apiClient(), $users, $this->cache, 20);
+        $svc->trySyncForUser(['id' => 7, 'api_token' => 'tok']);
+
+        $this->assertContains('running', $statuses, 'sufficient budget must start the sync');
+        $this->assertNotContains('deferred_low_budget', $statuses);
+    }
+
+    public function testFirstEverSyncProceedsWhenBudgetUnknown(): void
+    {
+        // No API_LIMIT_KEY in cache → null → allow (it's how we learn the budget).
+        $users = $this->createMock(UserRepository::class);
+        $statuses = [];
+        $users->method('updateSyncStatus')
+            ->willReturnCallback(function (int $id, string $status) use (&$statuses): void {
+                $statuses[] = $status;
+            });
+
+        $svc = new GproSyncService($this->apiClient(), $users, $this->cache, 20);
+        $svc->trySyncForUser(['id' => 7, 'api_token' => 'tok']);
+
+        $this->assertContains('running', $statuses);
+    }
+
     public function testLockIsReleasedAfterRun(): void
     {
         $users = $this->createMock(UserRepository::class);

@@ -133,6 +133,7 @@ $container['service.gpro_sync'] = new GproSyncService(
     $container['service.api_client'],
     $container['service.user_repo'],
     $container['service.cache'],
+    (int) ($_ENV['SYNC_SAFETY_MARGIN'] ?? 20),
 );
 $container['service.auth_service']  = new \App\Service\AuthService(
     $container['service.user_repo'],

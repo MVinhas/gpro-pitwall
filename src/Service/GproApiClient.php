@@ -118,15 +118,41 @@ final class GproApiClient
         );
     }
 
+    /**
+     * Cache key for the last-seen apiRequestsRemaining, so the sync guard can
+     * read the budget without spending an API call.
+     */
+    public const string API_LIMIT_KEY = 'api_requests_remaining';
+
+    /**
+     * Last-known remaining API budget, or null if never observed.
+     * Read from the shared cache so it survives across requests.
+     */
+    public function lastKnownRemaining(): ?int
+    {
+        $v = $this->cache->get(self::API_LIMIT_KEY);
+        return is_numeric($v) ? (int) $v : null;
+    }
+
+    private function rememberApiLimit(array $data): void
+    {
+        if (!isset($data['apiRequestsRemaining'])) {
+            return;
+        }
+
+        $remaining = (int) $data['apiRequestsRemaining'];
+        $_SESSION['api_limit'] = $remaining;
+        // Hold a little longer than a sync cycle so the guard can read it
+        // between race-weekend visits.
+        $this->cache->set(self::API_LIMIT_KEY, $remaining, 3600);
+    }
+
     private function getCached(string $key, string $endpoint, int $ttl, bool $force = false): array
     {
         if (!$force) {
             $cached = $this->cache->get($key);
             if ($cached !== null) {
-                if (isset($cached['apiRequestsRemaining'])) {
-                    $_SESSION['api_limit'] = $cached['apiRequestsRemaining'];
-                }
-
+                $this->rememberApiLimit($cached);
                 return $cached;
             }
         }
@@ -173,9 +199,7 @@ final class GproApiClient
             throw new RuntimeException('Invalid JSON response');
         }
 
-        if (isset($data['apiRequestsRemaining'])) {
-            $_SESSION['api_limit'] = $data['apiRequestsRemaining'];
-        }
+        $this->rememberApiLimit($data);
 
         return $data;
     }

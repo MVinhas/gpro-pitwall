@@ -17,10 +17,14 @@ final class GproSyncService
      */
     private const int LOCK_TTL_SECONDS = 60;
 
+    /** Number of GPRO API calls one full sync spends. */
+    private const int CALLS_PER_SYNC = 8;
+
     public function __construct(
         private readonly GproApiClient $apiClient,
         private readonly UserRepository $users,
         private readonly CacheInterface $cache,
+        private readonly int $safetyMargin = 20,
     ) {
     }
 
@@ -39,6 +43,15 @@ final class GproSyncService
 
         if (empty($user['api_token'])) {
             $this->users->updateSyncStatus($userId, 'needs_token');
+            return;
+        }
+
+        // Refuse to start if the sync would push the remaining API budget
+        // below the safety margin. null = never observed, so allow the first
+        // sync (it's how we learn the budget in the first place).
+        $remaining = $this->apiClient->lastKnownRemaining();
+        if ($remaining !== null && $remaining < (self::CALLS_PER_SYNC + $this->safetyMargin)) {
+            $this->users->updateSyncStatus($userId, 'deferred_low_budget');
             return;
         }
 

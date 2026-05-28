@@ -134,6 +134,8 @@
                 <span>Syncing GPRO data…</span>
             {% elseif user.sync_status == 'failed' %}
                 <span class="text-red-600">⚠ Sync failed</span>
+            {% elseif user.sync_status == 'deferred_low_budget' %}
+                <span class="text-amber-600">⏸ Sync paused — GPRO API budget low. It'll resume once your hourly allowance recovers.</span>
             {% elseif user.last_synced_at %}
                 <span>Last sync: {{ user.last_synced_at|date("M j, H:i") }}</span>
             {% endif %}
