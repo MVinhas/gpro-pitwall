@@ -8,7 +8,6 @@ use App\Repository\UserRepository;
 use App\Repository\TokenRepository;
 use App\Security\EmailCrypto;
 use DateTimeImmutable;
-use Throwable;
 
 final class AuthService
 {
@@ -22,7 +21,8 @@ final class AuthService
         private readonly string $appSecret,
         private readonly GproSyncService $syncService,
         private readonly int $codeTtlSeconds = 600,
-        private readonly int $maxAttempts = 5
+        private readonly int $maxAttempts = 5,
+        private readonly int $syncMinIntervalSeconds = 600
     ) {
     }
 
@@ -146,23 +146,16 @@ final class AuthService
         $_SESSION['is_premium'] = (bool) $user['is_premium'];
         $_SESSION['sync_status'] = 'idle';
 
-        if (!empty($user['api_token'])) {
-            try {
-                $_SESSION['sync_status'] = 'in_progress';
-
-                $this->syncService->trySyncForUser($user, true);
-
-                $this->users->markSynced(
-                    (int) $user['id']
-                );
-
-                $_SESSION['sync_status'] = 'done';
-            } catch (Throwable $e) {
-                $_SESSION['sync_status'] = 'failed';
-                $_SESSION['sync_error'] = $e->getMessage();
-            }
-        } else {
+        if (empty($user['api_token'])) {
             $_SESSION['sync_status'] = 'needs_token';
+        } elseif ($this->recentlySynced($user)) {
+            // A sync within the interval already warmed the cache — don't spend
+            // 8 more API calls just because the user re-logged in.
+            $_SESSION['sync_status'] = 'idle';
+        } else {
+            // trySyncForUser persists DB status and never throws; it returns the
+            // outcome, which drives the verify page's immediate feedback.
+            $_SESSION['sync_status'] = $this->syncService->trySyncForUser($user, true);
         }
 
         $this->tokens->delete((int) $token['id']);
@@ -214,6 +207,30 @@ final class AuthService
 
         $email = $this->getDecryptedEmail((int) $user['id']);
         $this->mailer->sendVerificationCode($email, $code);
+    }
+
+    /**
+     * True if the user synced within syncMinIntervalSeconds — so a login-time
+     * auto-sync would just re-spend API calls on already-warm data.
+     *
+     * @param array<string, mixed> $user
+     */
+    private function recentlySynced(array $user): bool
+    {
+        $last = $user['last_synced_at'] ?? null;
+        if (!is_string($last) || $last === '') {
+            return false;
+        }
+
+        try {
+            // markSynced() stores SQLite datetime('now'), which is UTC — parse
+            // it as UTC so the comparison against time() (UTC epoch) is correct.
+            $lastTs = new DateTimeImmutable($last, new \DateTimeZone('UTC'));
+        } catch (\Exception) {
+            return false;
+        }
+
+        return (time() - $lastTs->getTimestamp()) < $this->syncMinIntervalSeconds;
     }
 
     private function getDecryptedEmail(int $userId): string

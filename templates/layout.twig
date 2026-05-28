@@ -225,9 +225,13 @@ document.getElementById('apiWarmupBtn')?.addEventListener('click', async functio
             body: new URLSearchParams({ csrf_token: '{{ csrf_token }}' })
         });
         const data = await res.json();
-        text.textContent = data.success ? 'API cache ready ✔' : 'Warmup failed';
+        text.textContent = (data.success ? '✔ ' : '⚠ ') + (data.message || 'Done');
+        // Reload so the freshly-synced data shows on the current tab.
+        if (data.status === 'synced') {
+            setTimeout(() => window.location.reload(), 800);
+        }
     } catch {
-        text.textContent = 'Network error';
+        text.textContent = '⚠ Network error';
     }
 
     setTimeout(() => {

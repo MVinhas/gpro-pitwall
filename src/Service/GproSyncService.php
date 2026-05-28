@@ -35,15 +35,18 @@ final class GproSyncService
      * (e.g. a tab change fires a second request while the first is running),
      * the later call returns immediately rather than duplicating the API work.
      *
+     * Returns the outcome so callers (e.g. the warmup endpoint) can report it:
+     *   'needs_token' | 'deferred_low_budget' | 'in_progress' | 'synced' | 'failed'
+     *
      * @param array<string, mixed> $user
      */
-    public function trySyncForUser(array $user, bool $force = true): void
+    public function trySyncForUser(array $user, bool $force = true): string
     {
         $userId = (int) $user['id'];
 
         if (empty($user['api_token'])) {
             $this->users->updateSyncStatus($userId, 'needs_token');
-            return;
+            return 'needs_token';
         }
 
         // Refuse to start if the sync would push the remaining API budget
@@ -52,13 +55,13 @@ final class GproSyncService
         $remaining = $this->apiClient->lastKnownRemaining();
         if ($remaining !== null && $remaining < (self::CALLS_PER_SYNC + $this->safetyMargin)) {
             $this->users->updateSyncStatus($userId, 'deferred_low_budget');
-            return;
+            return 'deferred_low_budget';
         }
 
         $lockKey = 'sync_lock_' . $userId;
         if ($this->cache->has($lockKey)) {
             // A sync is already running for this user — coalesce, don't duplicate.
-            return;
+            return 'in_progress';
         }
         $this->cache->set($lockKey, time(), self::LOCK_TTL_SECONDS);
 
@@ -77,8 +80,10 @@ final class GproSyncService
             $this->apiClient->getTyreSuppliers($force);
 
             $this->users->markSynced($userId);
+            return 'synced';
         } catch (Throwable) {
             $this->users->updateSyncStatus($userId, 'failed');
+            return 'failed';
         } finally {
             $this->cache->delete($lockKey);
         }

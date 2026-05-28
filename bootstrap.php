@@ -146,6 +146,7 @@ $container['service.auth_service']  = new \App\Service\AuthService(
     $container['service.gpro_sync'],
     (int)$_ENV['VERIFICATION_CODE_TTL_SECONDS'] ?: 600,
     (int)$_ENV['VERIFICATION_MAX_ATTEMPTS'] ?: 5,
+    (int) ($_ENV['SYNC_MIN_INTERVAL_SECONDS'] ?? 600),
 );
 $container['service.data_mapper'] = new GproDataMapper();
 

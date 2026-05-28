@@ -47,7 +47,7 @@ final class GproSyncServiceTest extends TestCase
             ->with(7, 'needs_token');
 
         $svc = new GproSyncService($this->apiClient(), $users, $this->cache);
-        $svc->trySyncForUser(['id' => 7, 'api_token' => '']);
+        $this->assertSame('needs_token', $svc->trySyncForUser(['id' => 7, 'api_token' => '']));
     }
 
     public function testConcurrentSyncIsCoalesced(): void
@@ -61,7 +61,7 @@ final class GproSyncServiceTest extends TestCase
         $users->expects($this->never())->method('markSynced');
 
         $svc = new GproSyncService($this->apiClient(), $users, $this->cache);
-        $svc->trySyncForUser(['id' => 7, 'api_token' => 'tok']);
+        $this->assertSame('in_progress', $svc->trySyncForUser(['id' => 7, 'api_token' => 'tok']));
     }
 
     public function testDefersWhenBudgetBelowMargin(): void
@@ -76,7 +76,7 @@ final class GproSyncServiceTest extends TestCase
         $users->expects($this->never())->method('markSynced');
 
         $svc = new GproSyncService($this->apiClient(), $users, $this->cache, 20);
-        $svc->trySyncForUser(['id' => 7, 'api_token' => 'tok']);
+        $this->assertSame('deferred_low_budget', $svc->trySyncForUser(['id' => 7, 'api_token' => 'tok']));
 
         // Deferring must not leave a lock behind.
         $this->assertFalse($this->cache->has('sync_lock_7'));
@@ -96,10 +96,12 @@ final class GproSyncServiceTest extends TestCase
             });
 
         $svc = new GproSyncService($this->apiClient(), $users, $this->cache, 20);
-        $svc->trySyncForUser(['id' => 7, 'api_token' => 'tok']);
+        $result = $svc->trySyncForUser(['id' => 7, 'api_token' => 'tok']);
 
         $this->assertContains('running', $statuses, 'sufficient budget must start the sync');
         $this->assertNotContains('deferred_low_budget', $statuses);
+        // Unreachable host → the sync body runs but ends in failure.
+        $this->assertSame('failed', $result);
     }
 
     public function testFirstEverSyncProceedsWhenBudgetUnknown(): void
