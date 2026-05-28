@@ -1,0 +1,97 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Tests\Unit\Service;
+
+use App\Cache\Adapter\FilesystemCache;
+use App\Repository\UserRepository;
+use App\Service\GproApiClient;
+use App\Service\GproSyncService;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\TestCase;
+
+#[CoversClass(GproSyncService::class)]
+final class GproSyncServiceTest extends TestCase
+{
+    private string $cacheDir;
+    private FilesystemCache $cache;
+
+    protected function setUp(): void
+    {
+        $this->cacheDir = sys_get_temp_dir() . '/gpro_sync_' . bin2hex(random_bytes(6));
+        $this->cache = new FilesystemCache($this->cacheDir);
+    }
+
+    protected function tearDown(): void
+    {
+        foreach (glob($this->cacheDir . '/*') ?: [] as $f) {
+            @unlink($f);
+        }
+        @rmdir($this->cacheDir);
+    }
+
+    private function apiClient(): GproApiClient
+    {
+        // Pointed at an unreachable host so any real call fails fast. The
+        // coalescing path never calls it; the "ran" path does and is expected
+        // to land in the failed branch.
+        return new GproApiClient(['base_url' => 'http://127.0.0.1:9'], $this->cache);
+    }
+
+    public function testNoTokenSetsNeedsTokenAndNeverSyncs(): void
+    {
+        $users = $this->createMock(UserRepository::class);
+        $users->expects($this->once())
+            ->method('updateSyncStatus')
+            ->with(7, 'needs_token');
+
+        $svc = new GproSyncService($this->apiClient(), $users, $this->cache);
+        $svc->trySyncForUser(['id' => 7, 'api_token' => '']);
+    }
+
+    public function testConcurrentSyncIsCoalesced(): void
+    {
+        // Simulate a sync already in flight by pre-setting the lock.
+        $this->cache->set('sync_lock_7', time(), 60);
+
+        $users = $this->createMock(UserRepository::class);
+        // The coalesced call must NOT touch status or start work.
+        $users->expects($this->never())->method('updateSyncStatus');
+        $users->expects($this->never())->method('markSynced');
+
+        $svc = new GproSyncService($this->apiClient(), $users, $this->cache);
+        $svc->trySyncForUser(['id' => 7, 'api_token' => 'tok']);
+    }
+
+    public function testLockIsReleasedAfterRun(): void
+    {
+        $users = $this->createMock(UserRepository::class);
+
+        $svc = new GproSyncService($this->apiClient(), $users, $this->cache);
+        $svc->trySyncForUser(['id' => 7, 'api_token' => 'tok']);
+
+        // Whether the sync succeeded or failed, the lock must be gone so the
+        // next attempt isn't blocked.
+        $this->assertFalse(
+            $this->cache->has('sync_lock_7'),
+            'lock must be released in the finally block',
+        );
+    }
+
+    public function testRunSetsRunningThenFailsOnUnreachableApi(): void
+    {
+        $users = $this->createMock(UserRepository::class);
+        $statuses = [];
+        $users->method('updateSyncStatus')
+            ->willReturnCallback(function (int $id, string $status) use (&$statuses): void {
+                $statuses[] = $status;
+            });
+
+        $svc = new GproSyncService($this->apiClient(), $users, $this->cache);
+        $svc->trySyncForUser(['id' => 7, 'api_token' => 'tok']);
+
+        $this->assertSame('running', $statuses[0] ?? null, 'first status must be running');
+        $this->assertContains('failed', $statuses, 'unreachable API must end in failed');
+    }
+}

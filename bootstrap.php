@@ -131,7 +131,8 @@ $container['service.api_client'] = new GproApiClient(
 );
 $container['service.gpro_sync'] = new GproSyncService(
     $container['service.api_client'],
-    $container['service.user_repo']
+    $container['service.user_repo'],
+    $container['service.cache'],
 );
 $container['service.auth_service']  = new \App\Service\AuthService(
     $container['service.user_repo'],

@@ -156,7 +156,9 @@ final class GproApiClient
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $error = curl_error($ch);
-        curl_close($ch);
+        // curl_close() is a no-op since PHP 8.0 and deprecated in 8.5; the
+        // handle is freed when $ch goes out of scope.
+        unset($ch);
 
         if ($error) {
             throw new RuntimeException($error);
