@@ -208,6 +208,7 @@ $container['controller.auth'] = new AuthController(
 );
 
 $container['service.pha_match'] = new \App\Service\PhaMatchService();
+$container['service.boost_fuel'] = new \App\Service\BoostFuelService();
 
 $container['controller.page'] = new PageController(
     $container['service.ideal_pilot'],
@@ -218,6 +219,7 @@ $container['controller.page'] = new PageController(
     $container['service.user_repo'],
     $container['service.api_client'],
     $container['service.pha_match'],
+    $container['service.boost_fuel'],
     $container['twig'],
     $container['config']
 );

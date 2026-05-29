@@ -14,6 +14,7 @@ use App\Service\TrainingService;
 use App\Service\GproApiClient;
 use App\Service\GproDataMapper;
 use App\Service\PhaMatchService;
+use App\Service\BoostFuelService;
 use Twig\Environment;
 
 class PageController
@@ -27,6 +28,7 @@ class PageController
         private readonly UserRepository $userRepo,
         private readonly GproApiClient $apiClient,
         private readonly PhaMatchService $phaMatch,
+        private readonly BoostFuelService $boostFuel,
         private readonly Environment $twig,
         private array $config
     ) {
@@ -147,7 +149,18 @@ class PageController
                             ],
                             $this->isFavouriteTrack($pilot, $trackId),
                         );
-                        $viewData['pha_track_name'] = $raceSetup['trackName'] ?? $activeTrack;
+                        $trackName = $raceSetup['trackName'] ?? $activeTrack;
+                        $viewData['pha_track_name'] = $trackName;
+
+                        // Boost-lap fuel cost for the upcoming track (dry coeff;
+                        // wet is only relevant if the race runs wet).
+                        $boost = $this->trackRepo->findBoostProfile((string) $trackName);
+                        if ($boost !== null) {
+                            $viewData['boost_costs'] = $this->boostFuel->costTable(
+                                $boost['lap_length'],
+                                $boost['boost_dry'],
+                            );
+                        }
                     } catch (\Throwable $e) {
                         $viewData['cockpit_error'] = $e->getMessage();
                     }
