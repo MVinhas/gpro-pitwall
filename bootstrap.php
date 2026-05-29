@@ -207,6 +207,8 @@ $container['controller.auth'] = new AuthController(
     $_ENV['RECAPTCHA_SITE_KEY'] ?? ''
 );
 
+$container['service.pha_match'] = new \App\Service\PhaMatchService();
+
 $container['controller.page'] = new PageController(
     $container['service.ideal_pilot'],
     $container['service.insight'],
@@ -215,6 +217,7 @@ $container['controller.page'] = new PageController(
     $container['service.training'],
     $container['service.user_repo'],
     $container['service.api_client'],
+    $container['service.pha_match'],
     $container['twig'],
     $container['config']
 );

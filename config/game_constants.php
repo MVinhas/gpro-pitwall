@@ -14,6 +14,7 @@ return [
     'divisions' => ['Rookie', 'Amateur', 'Pro', 'Master', 'Elite'],
 
     'main_sections' => [
+        'Cockpit',
         'Recruitment Analyzer',
         'Training Planner',
         'Division Baseline',

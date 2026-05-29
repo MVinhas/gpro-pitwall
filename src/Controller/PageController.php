@@ -13,6 +13,7 @@ use App\Service\InsightService;
 use App\Service\TrainingService;
 use App\Service\GproApiClient;
 use App\Service\GproDataMapper;
+use App\Service\PhaMatchService;
 use Twig\Environment;
 
 class PageController
@@ -25,6 +26,7 @@ class PageController
         private readonly TrainingService $trainingService,
         private readonly UserRepository $userRepo,
         private readonly GproApiClient $apiClient,
+        private readonly PhaMatchService $phaMatch,
         private readonly Environment $twig,
         private array $config
     ) {
@@ -124,6 +126,34 @@ class PageController
         }
 
         switch ($activeMainTab) {
+            case 'Cockpit':
+                if ($hasToken) {
+                    try {
+                        $raceSetup = $this->apiClient->getRaceSetup();
+                        $carData   = $this->apiClient->getCarData();
+                        $pilot     = $this->apiClient->getMyPilotDetails();
+
+                        $trackId = (int) ($raceSetup['trackId'] ?? 0);
+                        $viewData['pha'] = $this->phaMatch->evaluate(
+                            [
+                                'power'        => $raceSetup['trackPower'] ?? 0,
+                                'handling'     => $raceSetup['trackHandl'] ?? 0,
+                                'acceleration' => $raceSetup['trackAccel'] ?? 0,
+                            ],
+                            [
+                                'power'        => $carData['carPower'] ?? 0,
+                                'handling'     => $carData['carHandl'] ?? 0,
+                                'acceleration' => $carData['carAccel'] ?? 0,
+                            ],
+                            $this->isFavouriteTrack($pilot, $trackId),
+                        );
+                        $viewData['pha_track_name'] = $raceSetup['trackName'] ?? $activeTrack;
+                    } catch (\Throwable $e) {
+                        $viewData['cockpit_error'] = $e->getMessage();
+                    }
+                }
+                break;
+
             case 'Division Baseline':
                 if ($isAdmin) {
                     $viewData['all_ideal_pilots'] = $allIdealPilots;
@@ -271,6 +301,27 @@ class PageController
             'col'   => $sortCol,
             'order' => $sortOrder,
         ];
+    }
+
+    /**
+     * Is the next race on one of the driver's three favourite tracks?
+     * DriProfile exposes favTrack1/2/3 as {name, id} objects.
+     *
+     * @param array<string, mixed> $pilot
+     */
+    private function isFavouriteTrack(array $pilot, int $trackId): bool
+    {
+        if ($trackId <= 0) {
+            return false;
+        }
+
+        foreach (['favTrack1', 'favTrack2', 'favTrack3'] as $key) {
+            $fav = $pilot[$key] ?? null;
+            if (is_array($fav) && (int) ($fav['id'] ?? 0) === $trackId) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

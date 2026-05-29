@@ -6,7 +6,10 @@
 
     {# Main Content Area #}
     <div id="main-content-tabs" class="fade-in">
-        {% if active_main_tab == 'Recruitment Analyzer' %}
+        {% if active_main_tab == 'Cockpit' %}
+            {% include 'partials/_tab_cockpit.twig' %}
+
+        {% elseif active_main_tab == 'Recruitment Analyzer' %}
             {% include 'partials/_tab_recruitment.twig' %}
         
         {% elseif active_main_tab == 'Training Planner' %}
