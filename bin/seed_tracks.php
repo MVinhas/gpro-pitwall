@@ -25,12 +25,14 @@ $stmt = $db->prepare("
         id, name, lap_length, laps, distance, avg_speed, corners, pit_time,
         base_wings, base_engine, base_brakes, base_gear, base_suspension,
         fuel_consumption, tyre_wear, wing_split, fuel_per_lap, fuel_per_lap_wet, tyre_wear_factor,
-        wear_chassis, wear_engine, wear_fwing, wear_rwing, wear_underbody, wear_sidepod, wear_cooling, wear_gearbox, wear_brakes, wear_suspension, wear_electronics
+        wear_chassis, wear_engine, wear_fwing, wear_rwing, wear_underbody, wear_sidepod, wear_cooling, wear_gearbox, wear_brakes, wear_suspension, wear_electronics,
+        boost_dry, boost_wet
     ) VALUES (
         :id, :name, :lap_length, :laps, :distance, :avg_speed, :corners, :pit_time,
         :base_wings, :base_engine, :base_brakes, :base_gear, :base_suspension,
         :fuel_consumption, :tyre_wear, :wing_split, :fuel_per_lap, :fuel_per_lap_wet, :tyre_wear_factor,
-        :wear_chassis, :wear_engine, :wear_fwing, :wear_rwing, :wear_underbody, :wear_sidepod, :wear_cooling, :wear_gearbox, :wear_brakes, :wear_suspension, :wear_electronics
+        :wear_chassis, :wear_engine, :wear_fwing, :wear_rwing, :wear_underbody, :wear_sidepod, :wear_cooling, :wear_gearbox, :wear_brakes, :wear_suspension, :wear_electronics,
+        :boost_dry, :boost_wet
     )
 ");
 
@@ -81,6 +83,11 @@ while (($row = fgetcsv($handle, 0, ';')) !== false) {
         ':wear_brakes' => $n($row[39]),
         ':wear_suspension' => $n($row[40]),
         ':wear_electronics' => $n($row[41]),
+
+        // Boost-lap fuel coefficients (Tracks sheet cols AR/AS).
+        // extra_fuel = ROUNDUP(boost_laps * lap_length * coeff), dry vs wet.
+        ':boost_dry' => $n($row[43]),
+        ':boost_wet' => $n($row[44]),
     ];
 
     try {

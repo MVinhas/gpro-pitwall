@@ -283,11 +283,33 @@ class DatabaseSeeder
                 wear_gearbox INTEGER,
                 wear_brakes INTEGER,
                 wear_suspension INTEGER,
-                wear_electronics INTEGER
+                wear_electronics INTEGER,
+                boost_dry REAL,
+                boost_wet REAL
             )
         ";
 
         $this->db->exec($sql);
+        $this->applyTrackMigrations();
+    }
+
+    /**
+     * Add columns to an already-created tracks table. Tracks data is fully
+     * reseeded from data/tracks.csv, but the schema must gain the column
+     * before a reseed can populate it.
+     */
+    private function applyTrackMigrations(): void
+    {
+        $cols = $this->db
+            ->query('PRAGMA table_info(tracks)')
+            ->fetchAll(PDO::FETCH_ASSOC);
+        $existing = array_column($cols, 'name');
+
+        foreach (['boost_dry', 'boost_wet'] as $col) {
+            if (!in_array($col, $existing, true)) {
+                $this->db->exec("ALTER TABLE tracks ADD COLUMN {$col} REAL");
+            }
+        }
     }
 
     private function createTrainingsTable(): void
