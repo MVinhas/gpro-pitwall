@@ -167,6 +167,67 @@
             </div>
         {% endif %}
 
+        {# CAR WEAR #}
+        {% if wear_advice is defined %}
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="px-6 py-4 border-b border-slate-200 bg-slate-50">
+                    <h3 class="t-section">Car wear</h3>
+                </div>
+                <div class="p-6 space-y-4">
+                    <p class="text-sm font-medium {{ wear_advice.swap is not empty ? 'text-red-700' : (wear_advice.risky is not empty ? 'text-amber-700' : (wear_advice.watch is not empty ? 'text-slate-700' : 'text-emerald-700')) }}">
+                        {{ wear_advice.headline }}
+                    </p>
+
+                    {% if wear_advice.swap is not empty %}
+                        <div>
+                            <p class="t-label mb-2 text-red-700">Swap before the race</p>
+                            <ul class="space-y-1">
+                                {% for p in wear_advice.swap %}
+                                    <li class="flex justify-between items-baseline rounded-md bg-red-50 px-3 py-2 ring-1 ring-inset ring-red-600/10">
+                                        <span class="text-sm font-medium text-slate-900">{{ p.part }} <span class="t-caption">Lvl {{ p.level }}</span></span>
+                                        <span class="text-sm font-semibold text-red-700">{{ p.start }}% → {{ p.end }}%</span>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+
+                    {% if wear_advice.risky is not empty %}
+                        <div>
+                            <p class="t-label mb-2 text-amber-700">Finishing in the red</p>
+                            <ul class="space-y-1">
+                                {% for p in wear_advice.risky %}
+                                    <li class="flex justify-between items-baseline rounded-md bg-amber-50 px-3 py-2 ring-1 ring-inset ring-amber-600/10">
+                                        <span class="text-sm font-medium text-slate-900">{{ p.part }} <span class="t-caption">Lvl {{ p.level }}</span></span>
+                                        <span class="text-sm font-semibold text-amber-800">{{ p.start }}% → {{ p.end }}%</span>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+
+                    {% if wear_advice.watch is not empty %}
+                        <div>
+                            <p class="t-label mb-2">Watch</p>
+                            <ul class="space-y-1">
+                                {% for p in wear_advice.watch %}
+                                    <li class="flex justify-between items-baseline rounded-md bg-slate-50 px-3 py-2 ring-1 ring-inset ring-slate-200">
+                                        <span class="text-sm font-medium text-slate-900">{{ p.part }} <span class="t-caption">Lvl {{ p.level }}</span></span>
+                                        <span class="text-sm font-semibold text-slate-700">{{ p.start }}% → {{ p.end }}%</span>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+
+                    <p class="t-caption">
+                        Projection at neutral risk. Pushing or higher driver risk pulls these
+                        numbers up — use the Car Wear tab to model your real risk.
+                    </p>
+                </div>
+            </div>
+        {% endif %}
+
         {# JUMP TO STRATEGY #}
         <div class="text-center">
             <a href="?main_tab=Race Strategy&track={{ active_track|url_encode }}"

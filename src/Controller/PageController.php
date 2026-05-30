@@ -16,6 +16,8 @@ use App\Service\GproDataMapper;
 use App\Service\PhaMatchService;
 use App\Service\BoostFuelService;
 use App\Service\RaceWeatherService;
+use App\Service\CarWearService;
+use App\Service\WearAdvisorService;
 use Twig\Environment;
 
 class PageController
@@ -31,6 +33,9 @@ class PageController
         private readonly PhaMatchService $phaMatch,
         private readonly BoostFuelService $boostFuel,
         private readonly RaceWeatherService $raceWeather,
+        private readonly CarWearService $carWear,
+        private readonly WearAdvisorService $wearAdvisor,
+        private readonly GproDataMapper $mapper,
         private readonly Environment $twig,
         private array $config
     ) {
@@ -170,6 +175,20 @@ class PageController
                             'q1' => $w['q1Temp'] ?? null,
                             'q2' => $w['q2Temp'] ?? null,
                         ];
+
+                        $wear = $this->carWear->calculateWear(
+                            [
+                                'id'   => $trackId,
+                                'name' => $trackName,
+                                'laps' => $raceSetup['laps'] ?? null,
+                            ],
+                            $carData,
+                            $this->mapper->mapDriver($pilot),
+                            0,
+                        );
+                        if (!isset($wear['error'])) {
+                            $viewData['wear_advice'] = $this->wearAdvisor->classify($wear['parts']);
+                        }
                     } catch (\Throwable $e) {
                         $viewData['cockpit_error'] = $e->getMessage();
                     }
