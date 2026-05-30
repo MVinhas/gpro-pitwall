@@ -18,6 +18,7 @@ use App\Service\BoostFuelService;
 use App\Service\RaceWeatherService;
 use App\Service\CarWearService;
 use App\Service\WearAdvisorService;
+use App\Service\PartUpgradeAdvisorService;
 use Twig\Environment;
 
 class PageController
@@ -35,6 +36,7 @@ class PageController
         private readonly RaceWeatherService $raceWeather,
         private readonly CarWearService $carWear,
         private readonly WearAdvisorService $wearAdvisor,
+        private readonly PartUpgradeAdvisorService $upgradeAdvisor,
         private readonly GproDataMapper $mapper,
         private readonly Environment $twig,
         private array $config
@@ -136,6 +138,8 @@ class PageController
 
         switch ($activeMainTab) {
             case 'Cockpit':
+                $cockpitRisk = max(0, min(100, (int) $request->get('cockpit_risk', 0)));
+                $viewData['cockpit_risk'] = $cockpitRisk;
                 if ($hasToken) {
                     try {
                         $raceSetup = $this->apiClient->getRaceSetup();
@@ -184,10 +188,31 @@ class PageController
                             ],
                             $carData,
                             $this->mapper->mapDriver($pilot),
-                            0,
+                            $cockpitRisk,
                         );
                         if (!isset($wear['error'])) {
-                            $viewData['wear_advice'] = $this->wearAdvisor->classify($wear['parts']);
+                            $advice = $this->wearAdvisor->classify($wear['parts']);
+                            $viewData['wear_advice'] = $advice;
+
+                            $forcedSwaps = array_merge($advice['swap'], $advice['risky']);
+                            if ($forcedSwaps !== []) {
+                                $viewData['upgrade_suggestions'] = $this->upgradeAdvisor->suggest(
+                                    [
+                                        'power'        => $raceSetup['trackPower'] ?? 0,
+                                        'handling'     => $raceSetup['trackHandl'] ?? 0,
+                                        'acceleration' => $raceSetup['trackAccel'] ?? 0,
+                                    ],
+                                    [
+                                        'power'        => $carData['carPower'] ?? 0,
+                                        'handling'     => $carData['carHandl'] ?? 0,
+                                        'acceleration' => $carData['carAccel'] ?? 0,
+                                    ],
+                                    array_map(
+                                        fn(array $p): array => ['part' => $p['part'], 'level' => $p['level']],
+                                        $forcedSwaps,
+                                    ),
+                                );
+                            }
                         }
                     } catch (\Throwable $e) {
                         $viewData['cockpit_error'] = $e->getMessage();
@@ -282,6 +307,12 @@ class PageController
                 $viewData['strategy_error'] = $_SESSION['strategy_error'] ?? $viewData['strategy_error'] ?? null;
                 unset($_SESSION['strategy_error']);
                 break;
+        }
+
+        $fragment = (string) $request->get('fragment', '');
+        if ($fragment === 'cockpit_wear' && $activeMainTab === 'Cockpit') {
+            echo $this->twig->render('partials/_cockpit_wear.twig', $viewData);
+            return;
         }
 
         echo $this->twig->render('index.twig', $viewData);

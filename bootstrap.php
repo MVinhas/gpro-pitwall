@@ -213,6 +213,10 @@ $container['controller.auth'] = new AuthController(
 $container['service.pha_match'] = new \App\Service\PhaMatchService();
 $container['service.boost_fuel'] = new \App\Service\BoostFuelService();
 $container['service.wear_advisor'] = new \App\Service\WearAdvisorService();
+$container['service.upgrade_advisor'] = new \App\Service\PartUpgradeAdvisorService(
+    $container['service.pha_match'],
+    $container['config']['secrets']['part_pha_contribution'] ?? [],
+);
 
 $container['controller.page'] = new PageController(
     $container['service.ideal_pilot'],
@@ -227,6 +231,7 @@ $container['controller.page'] = new PageController(
     $container['service.race_weather'],
     $container['service.car_wear'],
     $container['service.wear_advisor'],
+    $container['service.upgrade_advisor'],
     $container['service.data_mapper'],
     $container['twig'],
     $container['config']

@@ -1,0 +1,84 @@
+<div class="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+    <h3 class="t-section">Car wear</h3>
+    <span class="t-caption">Risk: <span class="font-semibold text-slate-700">{{ cockpit_risk }}</span></span>
+</div>
+<div class="p-6 space-y-4">
+    <form method="GET" action="" class="space-y-2" data-cockpit-wear-form>
+        <input type="hidden" name="main_tab" value="Cockpit">
+        {% if active_track %}<input type="hidden" name="track" value="{{ active_track }}">{% endif %}
+        <label class="t-label block">Driver risk</label>
+        <div class="flex items-center gap-3">
+            <input type="range" name="cockpit_risk" min="0" max="100" value="{{ cockpit_risk }}"
+                   data-cockpit-risk-slider
+                   class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer">
+            <span data-cockpit-risk-value class="text-sm font-bold text-blue-600 w-10 text-right">{{ cockpit_risk }}</span>
+        </div>
+    </form>
+
+    <p class="text-sm font-medium {{ wear_advice.swap is not empty ? 'text-red-700' : (wear_advice.risky is not empty ? 'text-amber-700' : (wear_advice.watch is not empty ? 'text-slate-700' : 'text-emerald-700')) }}">
+        {{ wear_advice.headline }}
+    </p>
+
+    {% if wear_advice.swap is not empty %}
+        <div>
+            <p class="t-label mb-2 text-red-700">Swap before the race</p>
+            <ul class="space-y-1">
+                {% for p in wear_advice.swap %}
+                    <li class="flex justify-between items-baseline rounded-md bg-red-50 px-3 py-2 ring-1 ring-inset ring-red-600/10">
+                        <span class="text-sm font-medium text-slate-900">{{ p.part }} <span class="t-caption">Lvl {{ p.level }}</span></span>
+                        <span class="text-sm font-semibold text-red-700">{{ p.start }}% → {{ p.end }}%</span>
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+    {% endif %}
+
+    {% if wear_advice.risky is not empty %}
+        <div>
+            <p class="t-label mb-2 text-amber-700">Finishing in the red</p>
+            <ul class="space-y-1">
+                {% for p in wear_advice.risky %}
+                    <li class="flex justify-between items-baseline rounded-md bg-amber-50 px-3 py-2 ring-1 ring-inset ring-amber-600/10">
+                        <span class="text-sm font-medium text-slate-900">{{ p.part }} <span class="t-caption">Lvl {{ p.level }}</span></span>
+                        <span class="text-sm font-semibold text-amber-800">{{ p.start }}% → {{ p.end }}%</span>
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+    {% endif %}
+
+    {% if wear_advice.watch is not empty %}
+        <div>
+            <p class="t-label mb-2">Watch</p>
+            <ul class="space-y-1">
+                {% for p in wear_advice.watch %}
+                    <li class="flex justify-between items-baseline rounded-md bg-slate-50 px-3 py-2 ring-1 ring-inset ring-slate-200">
+                        <span class="text-sm font-medium text-slate-900">{{ p.part }} <span class="t-caption">Lvl {{ p.level }}</span></span>
+                        <span class="text-sm font-semibold text-slate-700">{{ p.start }}% → {{ p.end }}%</span>
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+    {% endif %}
+
+    {% if upgrade_suggestions is defined and upgrade_suggestions is not empty %}
+        <div class="rounded-lg border border-emerald-200 bg-emerald-50/60 p-4">
+            <p class="t-label text-emerald-800 mb-2">Smart swap</p>
+            <ul class="space-y-2">
+                {% for s in upgrade_suggestions %}
+                    <li class="text-sm text-slate-800">
+                        <span class="font-semibold">{{ s.part }}</span>:
+                        replace at <span class="font-semibold">Lvl {{ s.suggested_level }}</span>
+                        (currently Lvl {{ s.current_level }}, {{ s.delta > 0 ? '+1' : '−1' }}).
+                        <span class="t-caption block mt-0.5">{{ s.rationale }}</span>
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+    {% endif %}
+
+    <p class="t-caption">
+        Move the slider to model different driver-risk levels. The Car Wear tab
+        gives the full breakdown.
+    </p>
+</div>
