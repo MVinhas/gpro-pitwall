@@ -217,6 +217,18 @@ $container['service.upgrade_advisor'] = new \App\Service\PartUpgradeAdvisorServi
     $container['service.pha_match'],
     $container['config']['secrets']['part_pha_contribution'] ?? [],
 );
+$container['service.swap_advisor'] = new \App\Service\PartSwapAdvisorService(
+    $container['service.car_wear'],
+    $container['service.pha_match'],
+    $container['service.upgrade_advisor'],
+);
+$container['service.training_advisor'] = new \App\Service\TrainingAdvisorService(
+    $container['config']['secrets']['pilot_recruitment_factors'] ?? [],
+);
+$container['service.testing_projection'] = new \App\Service\TestingProjectionService(
+    $container['config']['secrets']['testing_priority_points'] ?? [],
+    (float) ($container['config']['secrets']['testing_decay_factor'] ?? 0.5),
+);
 
 $container['controller.page'] = new PageController(
     $container['service.ideal_pilot'],
@@ -231,7 +243,9 @@ $container['controller.page'] = new PageController(
     $container['service.race_weather'],
     $container['service.car_wear'],
     $container['service.wear_advisor'],
-    $container['service.upgrade_advisor'],
+    $container['service.swap_advisor'],
+    $container['service.testing_projection'],
+    $container['service.training_advisor'],
     $container['service.data_mapper'],
     $container['twig'],
     $container['config']

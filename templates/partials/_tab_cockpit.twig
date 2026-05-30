@@ -91,6 +91,49 @@
             </div>
         </div>
 
+        {# TESTING PROJECTION #}
+        {% if testing_projection is defined and testing_projection is not empty %}
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="px-6 py-4 border-b border-slate-200 bg-slate-50">
+                    <h3 class="t-section">If you test 100 laps today</h3>
+                    <p class="t-caption mt-0.5">PHA points that would land in your car after race +3 (Test → R&amp;D → Engineering → Car Character decay).</p>
+                </div>
+                <div class="p-6">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full text-sm">
+                            <thead>
+                                <tr class="text-left text-slate-500">
+                                    <th class="py-2 pr-3 font-medium">Priority</th>
+                                    <th class="py-2 px-2 font-medium text-right">Raw P / H / A</th>
+                                    <th class="py-2 px-2 font-medium text-right">Landed P / H / A</th>
+                                    <th class="py-2 pl-2 font-medium text-right">Car after race +3</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                {% for p in testing_projection %}
+                                    <tr>
+                                        <td class="py-2 pr-3 font-medium text-slate-800">{{ p.priority }}</td>
+                                        <td class="py-2 px-2 text-right tabular-nums text-slate-600">
+                                            +{{ p.raw.power|number_format(1) }} / +{{ p.raw.handling|number_format(1) }} / +{{ p.raw.acceleration|number_format(1) }}
+                                        </td>
+                                        <td class="py-2 px-2 text-right tabular-nums text-emerald-700">
+                                            +{{ p.landed.power|number_format(1) }} / +{{ p.landed.handling|number_format(1) }} / +{{ p.landed.acceleration|number_format(1) }}
+                                        </td>
+                                        <td class="py-2 pl-2 text-right tabular-nums text-slate-900">
+                                            P {{ p.new_car.power|number_format(0) }} · H {{ p.new_car.handling|number_format(0) }} · A {{ p.new_car.acceleration|number_format(0) }}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="t-caption mt-3">
+                        Decay applied at 0.5 per race over 3 races (~12.5% survives). Test laps also wear parts — adjust the risk slider on the wear card.
+                    </p>
+                </div>
+            </div>
+        {% endif %}
+
         {# BOOST LAPS #}
         {% if boost_costs is defined %}
             <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
@@ -163,6 +206,50 @@
                         Race-start call uses the average rain probability across the four race quarters
                         (≥ 50% = wet). Forecasts drift — recheck closer to qualifying.
                     </p>
+                </div>
+            </div>
+        {% endif %}
+
+        {# TRAINING PICKS #}
+        {% if training_baseline_count is defined %}
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+                    <h3 class="t-section">Training picks</h3>
+                    {% if training_division %}
+                        <span class="t-caption">vs {{ training_division }} ideal · {{ training_baseline_count }} pilot{{ training_baseline_count != 1 ? 's' : '' }}</span>
+                    {% endif %}
+                </div>
+                <div class="p-6 space-y-3">
+                    {% if training_picks is defined and training_picks is not empty %}
+                        <ul class="space-y-2">
+                            {% for t in training_picks %}
+                                <li class="flex items-baseline justify-between gap-3 rounded-md border border-slate-200 px-3 py-2">
+                                    <div class="min-w-0">
+                                        <span class="text-sm font-semibold text-slate-900">{{ t.name }}</span>
+                                        <span class="t-caption ml-1">${{ t.cost|number_format }}</span>
+                                        <div class="t-caption mt-0.5 truncate">
+                                            {% for attr, g in t.gains %}
+                                                <span>{{ g > 0 ? '+' : '' }}{{ g }} {{ attr|replace({'_': ' '}) }}</span>{% if not loop.last %} · {% endif %}
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                    <span class="text-sm font-bold {{ t.score > 0 ? 'text-emerald-700' : 'text-slate-400' }}">{{ t.score > 0 ? '+' : '' }}{{ t.score }}</span>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                        <p class="t-caption">
+                            Score = how much closer this training brings your driver to the
+                            division's ideal profile. Positive is better.
+                        </p>
+                    {% else %}
+                        <p class="text-sm text-slate-600">
+                            Not enough division baseline data yet.
+                        </p>
+                        <p class="t-caption">
+                            Add pilots in <a href="?main_tab=Division Baseline" class="underline">Division Baseline</a>
+                            to unlock training picks tuned to your division's ideal driver.
+                        </p>
+                    {% endif %}
                 </div>
             </div>
         {% endif %}

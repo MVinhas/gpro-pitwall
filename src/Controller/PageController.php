@@ -18,7 +18,9 @@ use App\Service\BoostFuelService;
 use App\Service\RaceWeatherService;
 use App\Service\CarWearService;
 use App\Service\WearAdvisorService;
-use App\Service\PartUpgradeAdvisorService;
+use App\Service\PartSwapAdvisorService;
+use App\Service\TestingProjectionService;
+use App\Service\TrainingAdvisorService;
 use Twig\Environment;
 
 class PageController
@@ -36,7 +38,9 @@ class PageController
         private readonly RaceWeatherService $raceWeather,
         private readonly CarWearService $carWear,
         private readonly WearAdvisorService $wearAdvisor,
-        private readonly PartUpgradeAdvisorService $upgradeAdvisor,
+        private readonly PartSwapAdvisorService $swapAdvisor,
+        private readonly TestingProjectionService $testingProjection,
+        private readonly TrainingAdvisorService $trainingAdvisor,
         private readonly GproDataMapper $mapper,
         private readonly Environment $twig,
         private array $config
@@ -190,13 +194,50 @@ class PageController
                             $this->mapper->mapDriver($pilot),
                             $cockpitRisk,
                         );
+                        $menu = $this->apiClient->getMenu();
+                        $division = $this->divisionFromMenu($menu);
+                        $cash = (int) ($menu['cash'] ?? 0);
+
+                        $moneyLevels = $this->apiClient->getMoneyLevels();
+                        $groupCarLevels = array_values(array_filter(array_map(
+                            static fn(array $m): int => (int) ($m['carLevel'] ?? 0),
+                            $moneyLevels['managers'] ?? [],
+                        ), static fn(int $lvl): bool => $lvl > 0));
+
+                        $viewData['testing_projection'] = $this->testingProjection->project([
+                            'power'        => $carData['carPower'] ?? 0,
+                            'handling'     => $carData['carHandl'] ?? 0,
+                            'acceleration' => $carData['carAccel'] ?? 0,
+                        ]);
+
+                        $trainings = $this->trainingService->getAllTrainings();
+                        if ($trainings !== []) {
+                            $ideal = $division !== null
+                                ? $this->idealPilotService->getIdealPilot($division)
+                                : null;
+                            $viewData['training_division'] = $division;
+                            $viewData['training_baseline_count'] = (int) ($ideal['count'] ?? 0);
+                            $picks = $this->trainingAdvisor->rank(
+                                $trainings,
+                                $this->mapper->mapDriver($pilot),
+                                $ideal,
+                            );
+                            if ($picks !== []) {
+                                $viewData['training_picks'] = array_slice($picks, 0, 3);
+                            }
+                        }
+
                         if (!isset($wear['error'])) {
                             $advice = $this->wearAdvisor->classify($wear['parts']);
                             $viewData['wear_advice'] = $advice;
 
                             $forcedSwaps = array_merge($advice['swap'], $advice['risky']);
                             if ($forcedSwaps !== []) {
-                                $viewData['upgrade_suggestions'] = $this->upgradeAdvisor->suggest(
+                                $viewData['swap_advice'] = $this->swapAdvisor->advise(
+                                    $forcedSwaps,
+                                    $carData,
+                                    $wear['parts'],
+                                    $this->mapper->mapDriver($pilot),
                                     [
                                         'power'        => $raceSetup['trackPower'] ?? 0,
                                         'handling'     => $raceSetup['trackHandl'] ?? 0,
@@ -207,10 +248,9 @@ class PageController
                                         'handling'     => $carData['carHandl'] ?? 0,
                                         'acceleration' => $carData['carAccel'] ?? 0,
                                     ],
-                                    array_map(
-                                        fn(array $p): array => ['part' => $p['part'], 'level' => $p['level']],
-                                        $forcedSwaps,
-                                    ),
+                                    $cockpitRisk,
+                                    $groupCarLevels,
+                                    $cash,
                                 );
                             }
                         }
@@ -381,6 +421,22 @@ class PageController
      *
      * @param array<string, mixed> $pilot
      */
+    /**
+     * Extracts the manager's current division (e.g. "Rookie") from a Menu
+     * response whose `group` field is shaped like "Rookie - 31".
+     *
+     * @param array<string, mixed> $menu
+     */
+    private function divisionFromMenu(array $menu): ?string
+    {
+        $group = (string) ($menu['group'] ?? '');
+        if ($group === '') {
+            return null;
+        }
+        $first = trim(explode('-', $group, 2)[0]);
+        return in_array($first, $this->config['app']['divisions'], true) ? $first : null;
+    }
+
     private function isFavouriteTrack(array $pilot, int $trackId): bool
     {
         if ($trackId <= 0) {

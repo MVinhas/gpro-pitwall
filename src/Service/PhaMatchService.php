@@ -71,6 +71,117 @@ final class PhaMatchService
         ];
     }
 
+    /** Tier values — lower is better; suitable for sorting. */
+    public const int TIER_PERFECT   = 0;
+    public const int TIER_TOP_MATCH = 1;
+    public const int TIER_TOP_SWAP  = 2;
+    public const int TIER_TRASH     = 3;
+
+    /**
+     * Classifies how well the car's PHA shape matches what the track
+     * rewards. Ranks group attributes by demand / strength (ties share
+     * a rank — competition ranking), then compares tiers:
+     *
+     *   - Perfect   : every car attribute sits at the same rank as the
+     *                 corresponding track attribute (including ties).
+     *   - Top match : the car's top-ranked attributes (one or more if
+     *                 tied) coincide with the track's top-ranked set.
+     *   - Top swap  : the car's top set coincides with the track's
+     *                 second tier (only meaningful when the track's
+     *                 top isn't tied with the second tier).
+     *   - Trash     : the car's top set coincides with the track's
+     *                 worst tier — the wrong car for this track.
+     *
+     * @param array<string, mixed> $track
+     * @param array<string, mixed> $car
+     */
+    public function tierFor(array $track, array $car): int
+    {
+        $trackRanks = $this->ranks($this->normalise($track));
+        $carRanks   = $this->ranks($this->normalise($car));
+
+        if ($this->ranksMatch($trackRanks, $carRanks)) {
+            return self::TIER_PERFECT;
+        }
+
+        $trackTopAttrs = $this->attrsAtRank($trackRanks, 1);
+        $carTopAttrs   = $this->attrsAtRank($carRanks, 1);
+
+        // Top match: the car's top set overlaps with the track's top set
+        // (any common attribute is enough — covers tied tracks where the
+        // car may only carry one of the tied top attributes).
+        if ($this->setsIntersect($trackTopAttrs, $carTopAttrs)) {
+            return self::TIER_TOP_MATCH;
+        }
+
+        // Top swap only exists when the track has a clear, untied top —
+        // otherwise there's no meaningful "second tier" to fall into.
+        if (count($trackTopAttrs) === 1) {
+            $trackSecondRank = $this->nextRankAfter($trackRanks, 1);
+            if ($trackSecondRank !== null) {
+                $trackSecondAttrs = $this->attrsAtRank($trackRanks, $trackSecondRank);
+                if ($this->setsIntersect($trackSecondAttrs, $carTopAttrs)) {
+                    return self::TIER_TOP_SWAP;
+                }
+            }
+        }
+
+        return self::TIER_TRASH;
+    }
+
+    /**
+     * @param array<string, int> $a
+     * @param array<string, int> $b
+     */
+    private function ranksMatch(array $a, array $b): bool
+    {
+        foreach (self::ATTRS as $attr) {
+            if ($a[$attr] !== $b[$attr]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * @param array<string, int> $ranks
+     * @return list<string>
+     */
+    private function attrsAtRank(array $ranks, int $rank): array
+    {
+        $out = [];
+        foreach ($ranks as $attr => $r) {
+            if ($r === $rank) {
+                $out[] = $attr;
+            }
+        }
+        sort($out);
+        return $out;
+    }
+
+    /**
+     * @param list<string> $a
+     * @param list<string> $b
+     */
+    private function setsIntersect(array $a, array $b): bool
+    {
+        return array_intersect($a, $b) !== [];
+    }
+
+    /**
+     * @param array<string, int> $ranks
+     */
+    private function nextRankAfter(array $ranks, int $rank): ?int
+    {
+        $next = null;
+        foreach ($ranks as $r) {
+            if ($r > $rank && ($next === null || $r < $next)) {
+                $next = $r;
+            }
+        }
+        return $next;
+    }
+
     /**
      * @param array<string, mixed> $raw
      * @return array<string, float>

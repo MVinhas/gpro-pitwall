@@ -113,4 +113,78 @@ final class PhaMatchServiceTest extends TestCase
         $this->assertSame(1, $r['attributes']['power']['track_rank']);
         $this->assertSame(1, $r['attributes']['power']['car_rank']);
     }
+
+    public function testTierPerfectWhenRanksMatchExactly(): void
+    {
+        // Track P > H > A, car P > H > A.
+        $track = ['power' => 15, 'handling' => 10, 'acceleration' => 5];
+        $car   = ['power' => 90, 'handling' => 80, 'acceleration' => 70];
+        $this->assertSame(PhaMatchService::TIER_PERFECT, $this->svc->tierFor($track, $car));
+    }
+
+    public function testTierTopMatchWhenTopAlignedButLowerOrderDiffers(): void
+    {
+        // Track P > H > A, car P > A > H — top matches, middle/bottom flipped.
+        $track = ['power' => 15, 'handling' => 10, 'acceleration' => 5];
+        $car   = ['power' => 90, 'handling' => 70, 'acceleration' => 80];
+        $this->assertSame(PhaMatchService::TIER_TOP_MATCH, $this->svc->tierFor($track, $car));
+    }
+
+    public function testTierTopSwapWhenCarTopMatchesTrackSecond(): void
+    {
+        // Track P > H > A, car H > P > A.
+        $track = ['power' => 15, 'handling' => 10, 'acceleration' => 5];
+        $car   = ['power' => 80, 'handling' => 90, 'acceleration' => 70];
+        $this->assertSame(PhaMatchService::TIER_TOP_SWAP, $this->svc->tierFor($track, $car));
+    }
+
+    public function testTierTrashWhenCarTopMatchesTrackBottom(): void
+    {
+        // Track P > H > A, car A > P > H.
+        $track = ['power' => 15, 'handling' => 10, 'acceleration' => 5];
+        $car   = ['power' => 80, 'handling' => 70, 'acceleration' => 90];
+        $this->assertSame(PhaMatchService::TIER_TRASH, $this->svc->tierFor($track, $car));
+    }
+
+    public function testTierPerfectWhenTrackTopIsTiedAndCarMirrors(): void
+    {
+        // Track 10P 10H 9A — P and H tied for top.
+        // Car must also tie P and H above A to be Perfect.
+        $track = ['power' => 10, 'handling' => 10, 'acceleration' => 9];
+        $car   = ['power' => 90, 'handling' => 90, 'acceleration' => 70];
+        $this->assertSame(PhaMatchService::TIER_PERFECT, $this->svc->tierFor($track, $car));
+    }
+
+    public function testTierTopMatchWhenTrackTopIsTiedAndCarTopOnly(): void
+    {
+        // Track 10P 10H 9A. Car P > H > A — P is in the top set, H isn't.
+        $track = ['power' => 10, 'handling' => 10, 'acceleration' => 9];
+        $car   = ['power' => 90, 'handling' => 80, 'acceleration' => 70];
+        $this->assertSame(PhaMatchService::TIER_TOP_MATCH, $this->svc->tierFor($track, $car));
+    }
+
+    public function testTierTrashWhenTrackTopIsTiedAndCarPicksBottom(): void
+    {
+        // Track 10P 10H 9A; car A > P > H — top is A, which is the track's
+        // bottom. No second tier to swap into (P/H tied at the top), so Trash.
+        $track = ['power' => 10, 'handling' => 10, 'acceleration' => 9];
+        $car   = ['power' => 80, 'handling' => 70, 'acceleration' => 90];
+        $this->assertSame(PhaMatchService::TIER_TRASH, $this->svc->tierFor($track, $car));
+    }
+
+    public function testTierPerfectOnFullyTiedTrackWhenCarFullyTied(): void
+    {
+        $track = ['power' => 10, 'handling' => 10, 'acceleration' => 10];
+        $car   = ['power' => 90, 'handling' => 90, 'acceleration' => 90];
+        $this->assertSame(PhaMatchService::TIER_PERFECT, $this->svc->tierFor($track, $car));
+    }
+
+    public function testTierTopMatchOnFullyTiedTrackWhenCarHasAnyOrder(): void
+    {
+        // Track has no preference, so any car ranking that doesn't perfectly
+        // mirror (i.e. isn't fully tied) is at worst Top match.
+        $track = ['power' => 10, 'handling' => 10, 'acceleration' => 10];
+        $car   = ['power' => 90, 'handling' => 80, 'acceleration' => 70];
+        $this->assertSame(PhaMatchService::TIER_TOP_MATCH, $this->svc->tierFor($track, $car));
+    }
 }

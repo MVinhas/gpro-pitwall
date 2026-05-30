@@ -21,12 +21,17 @@
 
     {% if wear_advice.swap is not empty %}
         <div>
-            <p class="t-label mb-2 text-red-700">Swap before the race</p>
+            <p class="t-label mb-2 text-red-700">Will not finish the race — replace it</p>
             <ul class="space-y-1">
                 {% for p in wear_advice.swap %}
-                    <li class="flex justify-between items-baseline rounded-md bg-red-50 px-3 py-2 ring-1 ring-inset ring-red-600/10">
-                        <span class="text-sm font-medium text-slate-900">{{ p.part }} <span class="t-caption">Lvl {{ p.level }}</span></span>
-                        <span class="text-sm font-semibold text-red-700">{{ p.start }}% → {{ p.end }}%</span>
+                    <li class="rounded-md bg-red-50 px-3 py-2 ring-1 ring-inset ring-red-600/10">
+                        <div class="flex justify-between items-baseline">
+                            <span class="text-sm font-semibold text-slate-900">{{ p.part }}</span>
+                            <span class="t-caption">Lvl {{ p.level }} · now at {{ p.start }}%</span>
+                        </div>
+                        <p class="t-caption text-red-700 mt-0.5">
+                            If untouched, ends the race at <span class="font-semibold">{{ p.end }}%</span>.
+                        </p>
                     </li>
                 {% endfor %}
             </ul>
@@ -35,12 +40,17 @@
 
     {% if wear_advice.risky is not empty %}
         <div>
-            <p class="t-label mb-2 text-amber-700">Finishing in the red</p>
+            <p class="t-label mb-2 text-amber-700">Will finish in the red</p>
             <ul class="space-y-1">
                 {% for p in wear_advice.risky %}
-                    <li class="flex justify-between items-baseline rounded-md bg-amber-50 px-3 py-2 ring-1 ring-inset ring-amber-600/10">
-                        <span class="text-sm font-medium text-slate-900">{{ p.part }} <span class="t-caption">Lvl {{ p.level }}</span></span>
-                        <span class="text-sm font-semibold text-amber-800">{{ p.start }}% → {{ p.end }}%</span>
+                    <li class="rounded-md bg-amber-50 px-3 py-2 ring-1 ring-inset ring-amber-600/10">
+                        <div class="flex justify-between items-baseline">
+                            <span class="text-sm font-semibold text-slate-900">{{ p.part }}</span>
+                            <span class="t-caption">Lvl {{ p.level }} · now at {{ p.start }}%</span>
+                        </div>
+                        <p class="t-caption text-amber-800 mt-0.5">
+                            If untouched, ends the race at <span class="font-semibold">{{ p.end }}%</span>.
+                        </p>
                     </li>
                 {% endfor %}
             </ul>
@@ -52,28 +62,78 @@
             <p class="t-label mb-2">Watch</p>
             <ul class="space-y-1">
                 {% for p in wear_advice.watch %}
-                    <li class="flex justify-between items-baseline rounded-md bg-slate-50 px-3 py-2 ring-1 ring-inset ring-slate-200">
-                        <span class="text-sm font-medium text-slate-900">{{ p.part }} <span class="t-caption">Lvl {{ p.level }}</span></span>
-                        <span class="text-sm font-semibold text-slate-700">{{ p.start }}% → {{ p.end }}%</span>
+                    <li class="rounded-md bg-slate-50 px-3 py-2 ring-1 ring-inset ring-slate-200">
+                        <div class="flex justify-between items-baseline">
+                            <span class="text-sm font-semibold text-slate-900">{{ p.part }}</span>
+                            <span class="t-caption">Lvl {{ p.level }} · now at {{ p.start }}%</span>
+                        </div>
+                        <p class="t-caption mt-0.5">
+                            If untouched, ends the race at <span class="font-semibold">{{ p.end }}%</span>.
+                        </p>
                     </li>
                 {% endfor %}
             </ul>
         </div>
     {% endif %}
 
-    {% if upgrade_suggestions is defined and upgrade_suggestions is not empty %}
-        <div class="rounded-lg border border-emerald-200 bg-emerald-50/60 p-4">
-            <p class="t-label text-emerald-800 mb-2">Smart swap</p>
-            <ul class="space-y-2">
-                {% for s in upgrade_suggestions %}
-                    <li class="text-sm text-slate-800">
-                        <span class="font-semibold">{{ s.part }}</span>:
-                        replace at <span class="font-semibold">Lvl {{ s.suggested_level }}</span>
-                        (currently Lvl {{ s.current_level }}, {{ s.delta > 0 ? '+1' : '−1' }}).
-                        <span class="t-caption block mt-0.5">{{ s.rationale }}</span>
-                    </li>
-                {% endfor %}
-            </ul>
+    {% if swap_advice is defined and swap_advice is not empty %}
+        <div class="rounded-lg border border-slate-200 bg-white p-4 space-y-4">
+            <p class="t-label text-slate-700">Swap options</p>
+            {% for part, opts in swap_advice %}
+                {% set cur = opts.current %}
+                <div class="rounded-md border border-slate-200 p-3">
+                    <div class="flex items-baseline justify-between mb-3">
+                        <span class="text-sm font-semibold text-slate-900">{{ part }}</span>
+                        <span class="t-caption">currently Lvl {{ cur.level }} · {{ cur.start }}% → {{ cur.end }}% if untouched</span>
+                    </div>
+
+                    {% if opts.picks is empty %}
+                        <p class="t-caption">No affordable, survivable option within your group's range.</p>
+                    {% else %}
+                        {# Picks are pre-sorted tier ASC then cost ASC, so the
+                           best pick is always the first row. Highlight it only
+                           if that best tier is Perfect (0) or Top match (1). #}
+                        {% set top_pick_qualifies = opts.picks[0].pha_tier in [0, 1] %}
+                        <ul class="space-y-2">
+                            {% for r in opts.picks %}
+                                {% set slot_label = {
+                                    'free_downgrade': 'Free downgrade',
+                                    'downgrade':      'Downgrade',
+                                    'sidegrade':      'Sidegrade',
+                                    'upgrade':        'Upgrade',
+                                }[r.slot] %}
+                                {% set tier_label = {0: 'Perfect', 1: 'Top match'}[r.pha_tier] ?? null %}
+                                {% set tier_bg = {
+                                    0: 'bg-emerald-100 text-emerald-800',
+                                    1: 'bg-lime-100 text-lime-800',
+                                }[r.pha_tier] ?? '' %}
+                                {% set tier_help = {
+                                    0: 'Your car PHA ranking exactly mirrors the track demand — strongest matches most-demanded, all the way down.',
+                                    1: 'Your car top attribute matches what the track demands most; the lower two may differ.',
+                                }[r.pha_tier] ?? '' %}
+                                {% set row_bg = loop.first and top_pick_qualifies
+                                    ? 'bg-emerald-50 border-emerald-200'
+                                    : 'bg-white border-slate-200' %}
+                                <li class="rounded-md border {{ row_bg }} px-3 py-2">
+                                    <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                                        <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ slot_label }}</span>
+                                        <span class="text-sm font-semibold text-slate-900">Lvl {{ r.level }}</span>
+                                        <span class="t-caption">{{ r.cost > 0 ? '$' ~ r.cost|number_format : 'free' }}</span>
+                                        <span class="t-caption">ends at {{ r.end }}%</span>
+                                        {% if tier_label %}
+                                            <span class="ml-auto inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold cursor-help {{ tier_bg }}"
+                                                  title="{{ tier_help }}">
+                                                {{ tier_label }}
+                                            </span>
+                                        {% endif %}
+                                    </div>
+                                    <p class="t-caption mt-1">{{ r.rationale }}</p>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                </div>
+            {% endfor %}
         </div>
     {% endif %}
 

@@ -119,6 +119,36 @@ final class GproApiClient
     }
 
     /**
+     * Manager menu. Carries `group` ("Rookie - 31"), `groupShort` ("R31"),
+     * cash, team metadata — used for division-aware features (training
+     * advisor, sponsors).
+     */
+    public function getMenu(bool $forceRefresh = false): array
+    {
+        return $this->getCached(
+            'manager_menu',
+            '/gb/backend/api/v2/Menu',
+            $this->ttlShort(),
+            $forceRefresh
+        );
+    }
+
+    /**
+     * Group-wide money and car levels. Returns one entry per manager in
+     * the user's group with `cash` and `carLevel` — used by the swap
+     * advisor to learn the peer car-strength envelope.
+     */
+    public function getMoneyLevels(bool $forceRefresh = false): array
+    {
+        return $this->getCached(
+            'money_levels',
+            '/gb/backend/api/v2/MoneyLevels',
+            $this->ttlShort(),
+            $forceRefresh
+        );
+    }
+
+    /**
      * Cache key for the last-seen apiRequestsRemaining, so the sync guard can
      * read the budget without spending an API call.
      */
