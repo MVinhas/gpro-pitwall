@@ -10,6 +10,7 @@ use App\Service\StrategyService;
 use App\Service\SetupCalculatorService;
 use App\Service\GproApiClient;
 use App\Service\GproDataMapper;
+use App\Service\RaceWeatherService;
 
 class StrategyController
 {
@@ -19,6 +20,7 @@ class StrategyController
         private readonly GproDataMapper $mapper,
         private readonly SetupCalculatorService $setupService,
         private readonly Authorize $authorize,
+        private readonly RaceWeatherService $weather,
     ) {
     }
 
@@ -186,26 +188,11 @@ class StrategyController
             }
 
             $w = $weatherData['weather'] ?? [];
-            $q1IsWet = isset($w['q1Weather']) && stripos($w['q1Weather'], 'Rain') !== false;
-            $q2IsWet = isset($w['q2Weather']) && stripos($w['q2Weather'], 'Rain') !== false;
+            $rain = $this->weather->assess($w);
 
-            $raceRainSum = 0;
-            $raceRainCount = 0;
-            $quarters = ['Q1', 'Q2', 'Q3', 'Q4'];
-            foreach ($quarters as $q) {
-                $low  = $w["race{$q}RainPLow"] ?? 0;
-                $high = $w["race{$q}RainPHigh"] ?? 0;
-                $raceRainSum += ($low + $high);
-                $raceRainCount += 2;
-            }
-
-            $raceRainAvg = ($raceRainSum / $raceRainCount);
-
-            $raceStartIsWet = $raceRainAvg >= 50;
-
-            $defQ1W = $q1IsWet ? 'Wet' : 'Dry';
-            $defQ2W = $q2IsWet ? 'Wet' : 'Dry';
-            $defRaceW = $raceStartIsWet ? 'Wet' : 'Dry';
+            $defQ1W = $rain['q1_wet'] ? 'Wet' : 'Dry';
+            $defQ2W = $rain['q2_wet'] ? 'Wet' : 'Dry';
+            $defRaceW = $rain['race_start_wet'] ? 'Wet' : 'Dry';
 
             $avgTemp = $this->calculateAvgWeather($weatherData, 'Temp');
             $avgHum = $this->calculateAvgWeather($weatherData, 'Hum');
@@ -266,7 +253,7 @@ class StrategyController
             $strategyResults['race'] = $office['raceNb'] ?? '?';
             $strategyResults['best_compound'] = $this->pickBestCompound(
                 $strategyResults['tyres'] ?? [],
-                $raceStartIsWet,
+                $rain['race_start_wet'],
             );
 
             $_SESSION['strategy_results'] = $strategyResults;

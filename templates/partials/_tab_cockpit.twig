@@ -129,8 +129,51 @@
             </div>
         {% endif %}
 
-        {# Remaining cockpit steps to wire next. #}
-        <p class="t-caption text-center">Next: weather call, and a jump to your race strategy.</p>
+        {# WEATHER CALL #}
+        {% if weather is defined %}
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="px-6 py-4 border-b border-slate-200 bg-slate-50">
+                    <h3 class="t-section">Weather</h3>
+                </div>
+                <div class="p-6 space-y-4">
+                    <div class="grid grid-cols-3 gap-3">
+                        <div class="rounded-lg border border-slate-200 p-3 text-center">
+                            <p class="t-label">Qualifying 1</p>
+                            <p class="t-value mt-1 {{ weather.q1_wet ? 'text-blue-600' : 'text-slate-900' }}">
+                                {{ weather.q1_wet ? 'Wet' : 'Dry' }}
+                            </p>
+                            {% if weather_temps.q1 is not null %}<p class="t-caption">{{ weather_temps.q1 }}°C</p>{% endif %}
+                        </div>
+                        <div class="rounded-lg border border-slate-200 p-3 text-center">
+                            <p class="t-label">Qualifying 2</p>
+                            <p class="t-value mt-1 {{ weather.q2_wet ? 'text-blue-600' : 'text-slate-900' }}">
+                                {{ weather.q2_wet ? 'Wet' : 'Dry' }}
+                            </p>
+                            {% if weather_temps.q2 is not null %}<p class="t-caption">{{ weather_temps.q2 }}°C</p>{% endif %}
+                        </div>
+                        <div class="rounded-lg border p-3 text-center {{ weather.race_start_wet ? 'border-blue-200 bg-blue-50' : 'border-slate-200' }}">
+                            <p class="t-label">Race start</p>
+                            <p class="t-value mt-1 {{ weather.race_start_wet ? 'text-blue-700' : 'text-slate-900' }}">
+                                {{ weather.race_start_wet ? 'Likely wet' : 'Likely dry' }}
+                            </p>
+                            <p class="t-caption">{{ weather.race_rain_avg }}% rain</p>
+                        </div>
+                    </div>
+                    <p class="t-caption">
+                        Race-start call uses the average rain probability across the four race quarters
+                        (≥ 50% = wet). Forecasts drift — recheck closer to qualifying.
+                    </p>
+                </div>
+            </div>
+        {% endif %}
+
+        {# JUMP TO STRATEGY #}
+        <div class="text-center">
+            <a href="?main_tab=Race Strategy&track={{ active_track|url_encode }}"
+               class="btn btn-md btn-primary">
+                Set your race strategy →
+            </a>
+        </div>
 
     {% endif %}
 </div>

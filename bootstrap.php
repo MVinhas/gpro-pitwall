@@ -193,12 +193,15 @@ use App\Controller\TrainingController;
 use App\Controller\StrategyController;
 use App\Controller\AuthController;
 
+$container['service.race_weather'] = new \App\Service\RaceWeatherService();
+
 $container['controller.strategy'] = new StrategyController(
     $container['service.strategy'],
     $container['service.api_client'],
     $container['service.data_mapper'],
     $container['service.setup_calculator'],
     $container['service.authorize'],
+    $container['service.race_weather'],
 );
 
 $container['controller.auth'] = new AuthController(
@@ -220,6 +223,7 @@ $container['controller.page'] = new PageController(
     $container['service.api_client'],
     $container['service.pha_match'],
     $container['service.boost_fuel'],
+    $container['service.race_weather'],
     $container['twig'],
     $container['config']
 );

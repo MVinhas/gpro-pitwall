@@ -15,6 +15,7 @@ use App\Service\GproApiClient;
 use App\Service\GproDataMapper;
 use App\Service\PhaMatchService;
 use App\Service\BoostFuelService;
+use App\Service\RaceWeatherService;
 use Twig\Environment;
 
 class PageController
@@ -29,6 +30,7 @@ class PageController
         private readonly GproApiClient $apiClient,
         private readonly PhaMatchService $phaMatch,
         private readonly BoostFuelService $boostFuel,
+        private readonly RaceWeatherService $raceWeather,
         private readonly Environment $twig,
         private array $config
     ) {
@@ -161,6 +163,13 @@ class PageController
                                 $boost['boost_dry'],
                             );
                         }
+
+                        $w = $raceSetup['weather'] ?? [];
+                        $viewData['weather'] = $this->raceWeather->assess($w);
+                        $viewData['weather_temps'] = [
+                            'q1' => $w['q1Temp'] ?? null,
+                            'q2' => $w['q2Temp'] ?? null,
+                        ];
                     } catch (\Throwable $e) {
                         $viewData['cockpit_error'] = $e->getMessage();
                     }
