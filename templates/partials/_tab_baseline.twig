@@ -69,9 +69,8 @@
                         {# FIX: Updated variable path to config.app.stats_schema #}
                         {% for display, col in config.app.stats_schema %}
                             <div>
-                                <label class="block text-xs font-medium text-slate-500 mb-1">{{ display }}</label>
-                                <input type="number" name="{{ col }}" required min="0" max="250"
-                                       class="block w-full rounded-md border-slate-300 py-1.5 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-slate-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6">
+                                <label class="t-label block mb-1">{{ display }}</label>
+                                <input type="number" name="{{ col }}" required min="0" max="250" class="form-input-sm">
                             </div>
                         {% endfor %}
                     </div>
@@ -95,8 +94,7 @@
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <input type="hidden" name="division" value="{{ active_division }}">
                     {# FIX: Added px-3 for padding #}
-                    <input type="number" name="season_number" value="{{ division_metadata.season }}" 
-                           class="w-20 rounded-md border-0 py-1.5 px-3 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6">
+                    <input type="number" name="season_number" value="{{ division_metadata.season }}" class="form-input-sm">
                     <button type="submit" class="rounded-md bg-white px-2.5 py-1.5 text-sm font-semibold text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 hover:bg-slate-50">Set</button>
                 </form>
             </div>

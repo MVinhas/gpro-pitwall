@@ -11,6 +11,7 @@ use App\Service\SetupCalculatorService;
 use App\Service\GproApiClient;
 use App\Service\GproDataMapper;
 use App\Service\RaceWeatherService;
+use Twig\Environment;
 
 class StrategyController
 {
@@ -21,6 +22,7 @@ class StrategyController
         private readonly SetupCalculatorService $setupService,
         private readonly Authorize $authorize,
         private readonly RaceWeatherService $weather,
+        private readonly Environment $twig,
     ) {
     }
 
@@ -44,8 +46,26 @@ class StrategyController
             return;
         }
 
+        if ($action === 'strategy_fragment') {
+            $user = $this->authorize->requirePremium();
+            if (!empty($user['api_token'])) {
+                $this->api->setToken($user['api_token']);
+            }
+            $this->fragment($request);
+            return;
+        }
+
         header("Location: /");
         exit;
+    }
+
+    private function fragment(Request $request): void
+    {
+        $result = $this->runCalc($request);
+        echo $this->twig->render('partials/_strategy_results.twig', [
+            'strategy_error'   => $result['error'] ?? null,
+            'strategy_results' => $result['error'] ?? null ? null : $result,
+        ]);
     }
 
     private function flushCache(): void
@@ -61,7 +81,27 @@ class StrategyController
 
     private function calculate(Request $request): void
     {
+        $result = $this->runCalc($request);
+        if (isset($result['error'])) {
+            $_SESSION['strategy_error'] = $result['error'];
+        } else {
+            $_SESSION['strategy_results'] = $result;
+        }
+        session_write_close();
+        header("Location: /?main_tab=Race Strategy");
+        exit;
+    }
 
+    /**
+     * Runs the strategy calculation. Returns the result array, or an
+     * `['error' => '...']` array on failure. No session writes here so
+     * the same call powers both the redirect-after-POST flow and the
+     * no-reload fragment refresh.
+     *
+     * @return array<string, mixed>
+     */
+    private function runCalc(Request $request): array
+    {
         try {
             $trackProfile = $this->api->getNextRaceProfile();
             $office = $this->api->getOfficeData();
@@ -256,14 +296,10 @@ class StrategyController
                 $rain['race_start_wet'],
             );
 
-            $_SESSION['strategy_results'] = $strategyResults;
+            return $strategyResults;
         } catch (\Exception $exception) {
-            $_SESSION['strategy_error'] = "Calculation Error: " . $exception->getMessage();
+            return ['error' => 'Calculation Error: ' . $exception->getMessage()];
         }
-
-        session_write_close();
-        header("Location: /?main_tab=Race Strategy");
-        exit;
     }
 
     /**

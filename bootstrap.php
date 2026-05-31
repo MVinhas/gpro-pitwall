@@ -202,6 +202,7 @@ $container['controller.strategy'] = new StrategyController(
     $container['service.setup_calculator'],
     $container['service.authorize'],
     $container['service.race_weather'],
+    $container['twig'],
 );
 
 $container['controller.auth'] = new AuthController(

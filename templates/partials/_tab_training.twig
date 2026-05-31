@@ -45,7 +45,7 @@
                         {% for key, label in config.app.stats_schema %}
                             <div>
                                 <label class="t-label block mb-1">{{ label }}</label>
-                                <input type="number" name="{{ key|lower }}" value="{{ driver[key|lower] ?? 0 }}" required class="form-input">
+                                <input type="number" name="{{ key|lower }}" value="{{ driver[key|lower] ?? 0 }}" required class="form-input-sm">
                             </div>
                         {% endfor %}
                     </div>
@@ -55,7 +55,7 @@
                         <div class="grid grid-cols-2 gap-4">
                             <div class="col-span-2 sm:col-span-1">
                                 <label class="t-label block mb-1">Program</label>
-                                <select name="training_type" class="form-input">
+                                <select name="training_type" class="form-select">
                                     {% for t in trainings %}
                                         <option value="{{ t.name }}">{{ t.name }} (${{ t.cost|number_format }})</option>
                                     {% endfor %}
@@ -63,7 +63,7 @@
                             </div>
                             <div class="col-span-2 sm:col-span-1">
                                 <label class="t-label block mb-1">Sessions</label>
-                                <input type="number" name="intensity" value="1" min="1" max="20" class="form-input">
+                                <input type="number" name="intensity" value="1" min="1" max="20" class="form-input-sm">
                             </div>
                         </div>
                     </div>

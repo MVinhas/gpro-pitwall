@@ -47,9 +47,7 @@
                     inputmode="numeric"
                     pattern="[0-9]*"
                     placeholder="123456"
-                    class="mt-1 block w-full rounded p-2 border border-slate-300 font-mono
-                           text-center text-2xl tracking-widest
-                           focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    class="form-input mt-1 font-mono text-center text-2xl tracking-widest py-3"
                     {% if sync_status is defined and sync_status == 'running' %}
                         disabled
                     {% endif %}

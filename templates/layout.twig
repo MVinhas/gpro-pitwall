@@ -64,11 +64,42 @@
         .t-value   { @apply text-base font-semibold text-slate-900; }
         .t-caption { @apply text-xs text-slate-500; }
 
-        /* Form inputs follow the same baseline — width, padding, focus ring. */
-        .form-input {
-            @apply block w-full rounded-md border border-slate-300 py-1.5 px-2
-                   text-sm text-slate-900 shadow-sm
-                   focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500;
+        /* ---- Form controls ---- */
+        /* Shared base — borders, focus ring, hover. */
+        .form-input,
+        .form-input-sm,
+        .form-select {
+            @apply rounded-md border-0 py-1.5 px-3 text-sm text-slate-900
+                   bg-white ring-1 ring-inset ring-slate-300
+                   placeholder:text-slate-400 transition-colors
+                   focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-600
+                   hover:ring-slate-400;
+        }
+        .form-input  { @apply block w-full; }
+        /* Compact numeric variant — wide enough for 4 digits, left-aligned for
+           consistent reading, tabular-nums so values line up across rows. */
+        .form-input-sm { @apply block w-20 text-left tabular-nums; }
+        /* No extra right padding — native <select> draws its own chevron in
+           its intrinsic area, so reserving pr-8 just clips short options. */
+        .form-select   { @apply block w-full; }
+
+        /* Input group with a trailing unit addon (e.g. °C, %, kg). The wrapper
+           positions the addon over the right padding of the input. */
+        .form-input-group { @apply relative; }
+        .form-input-group .form-input,
+        .form-input-group .form-input-sm { @apply pr-10; }
+        .form-input-addon {
+            @apply pointer-events-none absolute inset-y-0 right-0 flex items-center
+                   pr-3 text-xs font-medium text-slate-500 tabular-nums;
+        }
+
+        /* Subtle inset baseline for disabled / read-only fields. */
+        .form-input:disabled,
+        .form-input-sm:disabled,
+        .form-select:disabled,
+        .form-input[readonly],
+        .form-input-sm[readonly] {
+            @apply bg-slate-50 text-slate-500 cursor-not-allowed;
         }
 
         /* Scrollbar */

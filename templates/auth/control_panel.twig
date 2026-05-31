@@ -46,12 +46,12 @@
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 
                 <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">Your API Token</label>
-                    <input type="text" 
-                           name="api_token" 
-                           value="{{ user.api_token }}" 
+                    <label class="t-label block mb-1">Your API Token</label>
+                    <input type="text"
+                           name="api_token"
+                           value="{{ user.api_token }}"
                            placeholder="eyJ0eXAiOiJKV1QiLCAiYW..."
-                           class="block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 font-mono text-sm"
+                           class="form-input font-mono"
                            {{ not user.is_premium ? 'disabled' : '' }}
                     >
                     <p class="mt-2 text-xs text-slate-500">

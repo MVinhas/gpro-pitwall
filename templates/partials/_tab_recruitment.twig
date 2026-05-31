@@ -47,7 +47,7 @@
                     {# Separator #}
                     <div>
                         <label class="t-label block mb-1">CSV Separator</label>
-                        <select name="separator" class="form-input">
+                        <select name="separator" class="form-select">
                             <option value=",">Comma ( , )</option>
                             <option value=";">Semicolon ( ; )</option>
                         </select>
@@ -56,7 +56,7 @@
                     {# Target Division #}
                     <div>
                         <label class="t-label block mb-1">Target Division</label>
-                        <select name="target_division" class="form-input">
+                        <select name="target_division" class="form-select">
                             {% for div in divisions %}
                                 <option value="{{ div }}" {{ div == active_division ? 'selected' : '' }}>{{ div }}</option>
                             {% endfor %}
