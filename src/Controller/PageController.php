@@ -82,7 +82,7 @@ class PageController
             $mainSections = array_filter(
                 $mainSections,
                 fn (string $section): bool =>
-                    !in_array($section, ['Division Baseline', 'Track Risks'], true)
+                    $section !== 'Division Baseline'
             );
         }
 
@@ -325,13 +325,6 @@ class PageController
             case 'Division Differences':
                 $viewData['insights_data'] =
                     $this->insightService->generateInsights($allIdealPilots);
-                break;
-
-            case 'Track Risks':
-                if ($isAdmin) {
-                    $viewData['track_risks'] =
-                        $this->trackRepo->getTrackRisks((string) $activeTrack, $divisions);
-                }
                 break;
 
             case 'Recruitment Analyzer':

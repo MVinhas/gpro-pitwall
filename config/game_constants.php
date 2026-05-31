@@ -3,13 +3,6 @@
 // config/game_constants.php
 // Public game data, UI mappings, and non-sensitive lists.
 
-$q1_risk_options = [
-    "Keep the car on the track",
-    "Push the car a little",
-    "Push the car a lot",
-    "Push the car to the limit"
-];
-
 return [
     'divisions' => ['Rookie', 'Amateur', 'Pro', 'Master', 'Elite'],
 
@@ -19,13 +12,9 @@ return [
         'Training Planner',
         'Division Baseline',
         'Division Differences',
-        'Track Risks',
         'Car Wear',
         'Race Strategy'
     ],
-
-    'q1_risk_options' => $q1_risk_options,
-    'default_q1_risk' => $q1_risk_options[0],
 
     // UI Label Map
     'stats_schema' => [

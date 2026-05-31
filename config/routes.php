@@ -37,7 +37,6 @@ return function (Router $router): void {
     // Strategy, wear, and risk calculations
     $router->add('POST', '/calculate_strategy', 'controller.strategy', 'handle');
     $router->add('POST', '/calculate_wear', 'controller.car_wear', 'handle');
-    $router->add('POST', '/update_track_risks', 'controller.track_risk', 'update');
 
     // Recruitment and training
     $router->add('POST', '/analyze_recruitment', 'controller.recruitment', 'analyze');

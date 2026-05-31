@@ -18,7 +18,6 @@ class DatabaseSeeder
         private readonly PDO $db,
         private readonly array $statsSchema,
         private readonly array $divisions,
-        private readonly string $defaultQ1Risk,
         private array $secrets,
         private readonly ApiTokenCrypto $apiTokenCrypto,
     ) {
@@ -33,11 +32,11 @@ class DatabaseSeeder
 
         $this->createPilotsTable();
         $this->createMetadataTable();
-        $this->createTrackRisksTable();
         $this->createTracksTable();
         $this->createTrainingsTable();
         $this->createCarPartCoefficientsTable();
         $this->createGameConstantsTable();
+        $this->dropDeprecatedTables();
 
 
         $this->seedTrainings();
@@ -47,6 +46,15 @@ class DatabaseSeeder
 
         $this->applyUserMigrations();
         $this->encryptLegacyApiTokens();
+    }
+
+    /**
+     * Removes tables no longer used by the app. Runs every boot so a
+     * fresh checkout converges. Idempotent — DROP TABLE IF EXISTS.
+     */
+    private function dropDeprecatedTables(): void
+    {
+        $this->db->exec('DROP TABLE IF EXISTS track_risks');
     }
 
     /**
@@ -232,28 +240,6 @@ class DatabaseSeeder
         }
     }
 
-    private function createTrackRisksTable(): void
-    {
-        $q1Columns = '';
-        $defaultRiskSql = $this->db->quote($this->defaultQ1Risk);
-
-        foreach ($this->divisions as $division) {
-            $q1Columns .=
-                ", q1_" . strtolower((string) $division) .
-                " TEXT NOT NULL DEFAULT {$defaultRiskSql}";
-        }
-
-        $sql = "
-            CREATE TABLE IF NOT EXISTS track_risks (
-                track_name TEXT PRIMARY KEY,
-                overtaking_risk INTEGER NOT NULL DEFAULT 50,
-                defense_risk INTEGER NOT NULL DEFAULT 50
-                {$q1Columns}
-            )
-        ";
-
-        $this->db->exec($sql);
-    }
 
     private function createTracksTable(): void
     {

@@ -40,7 +40,6 @@ $seeder = new DatabaseSeeder(
     $container['db'],
     $container['config']['app']['stats_schema'],
     $container['config']['app']['divisions'],
-    $container['config']['app']['default_q1_risk'],
     $container['config']['secrets'],
     $container['service.api_token_crypto'],
 );
@@ -186,7 +185,6 @@ $container['service.training'] = new TrainingService($container['db']);
 
 use App\Controller\PageController;
 use App\Controller\BaselineController;
-use App\Controller\TrackRiskController;
 use App\Controller\RecruitmentController;
 use App\Controller\CarWearController;
 use App\Controller\TrainingController;
@@ -270,12 +268,6 @@ $container['controller.baseline'] = new BaselineController(
     $container['repo.metadata'],
     $container['service.calculator'],
     $container['config']['app']['stats_schema'],
-    $container['service.authorize'],
-);
-
-$container['controller.track_risk'] = new TrackRiskController(
-    $container['repo.track'],
-    $container,
     $container['service.authorize'],
 );
 
