@@ -14,7 +14,10 @@ class RecruitmentService
     ) {
     }
 
-    public function analyze(string $filePath, string $separator, string $targetDivision, bool $filterOffers): array
+    /**
+     * @param list<array<string, mixed>> $market driver rows from `GetMarketFile.asp` JSON
+     */
+    public function analyze(array $market, string $targetDivision, bool $filterOffers): array
     {
         $idealData = $this->idealPilotService->getIdealPilot($targetDivision);
 
@@ -26,38 +29,15 @@ class RecruitmentService
         $idealStats = $idealData['stats'];
         $candidates = [];
 
-        if (($handle = fopen($filePath, 'r')) !== false) {
-            $header = fgetcsv($handle, 1000, $separator);
-            if ($header && str_starts_with($header[0] ?? '', 'sep=')) {
-                $header = fgetcsv($handle, 1000, $separator);
-            }
+        foreach ($market as $raw) {
+            $driver = $this->normalizeDriverData($raw);
 
-            if (!$header) {
-                fclose($handle);
-                throw new \Exception("Could not read CSV header.");
-            }
-
-            $header = array_map(fn($h): string => trim((string) $h, "\xEF\xBB\xBF\" \t\n\r\0\x0B"), $header);
-
-            while (($row = fgetcsv($handle, 1000, $separator)) !== false) {
-                if (count($row) !== count($header)) {
-                    continue;
-                }
-
-                $raw = array_combine($header, $row);
-
-                $driver = $this->normalizeDriverData($raw);
-
-                if ($this->isEligible($driver, $targetDivision, $filterOffers)) {
-                    $driver['rating'] = $this->calculateRating($driver, $idealStats);
-
-                    if ($driver['rating'] >= 50) {
-                        $candidates[] = $driver;
-                    }
+            if ($this->isEligible($driver, $targetDivision, $filterOffers)) {
+                $driver['rating'] = $this->calculateRating($driver, $idealStats);
+                if ($driver['rating'] >= 50) {
+                    $candidates[] = $driver;
                 }
             }
-
-            fclose($handle);
         }
 
         return $candidates;

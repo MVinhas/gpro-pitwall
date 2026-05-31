@@ -419,6 +419,11 @@ class PageController
             unset($_SESSION['recruitment_error']);
         }
 
+        if (isset($_SESSION['recruitment_updated_at'])) {
+            $viewData['recruitment_updated_at'] = $_SESSION['recruitment_updated_at'];
+            unset($_SESSION['recruitment_updated_at']);
+        }
+
         if (empty($_SESSION['recruitment_results'])) {
             return;
         }

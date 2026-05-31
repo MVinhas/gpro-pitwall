@@ -286,6 +286,7 @@ $container['controller.control_panel'] = new \App\Controller\ControlPanelControl
 
 $container['controller.recruitment'] = new RecruitmentController(
     $container['service.recruitment'],
+    $container['service.api_client'],
     $container['service.authorize'],
 );
 

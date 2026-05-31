@@ -28,31 +28,19 @@
         </div>
 
         <div class="p-6">
-            <form method="POST" action="/analyze_recruitment" enctype="multipart/form-data" class="space-y-6">
+            <form method="POST" action="/analyze_recruitment" class="space-y-6">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
-                    {# File Input #}
-                    <div class="md:col-span-1">
-                        <label class="t-label block mb-1">Driver CSV File</label>
-                        <input type="file" name="driver_csv_file" required accept=".csv"
-                            class="block w-full text-sm text-slate-500
-                                      file:mr-4 file:py-2 file:px-4
-                                      file:rounded-full file:border-0
-                                      file:text-sm file:font-semibold
-                                      file:bg-blue-50 file:text-blue-700
-                                      hover:file:bg-blue-100 transition cursor-pointer">
-                    </div>
+                <p class="t-caption">
+                    The full GPRO driver market is pulled directly from
+                    <code class="text-xs">GetMarketFile.asp</code> (refreshes hourly upstream;
+                    cached locally for ~55 minutes).
+                    {% if recruitment_updated_at %}
+                        Last upstream update: <span class="font-semibold">{{ recruitment_updated_at }}</span>.
+                    {% endif %}
+                </p>
 
-                    {# Separator #}
-                    <div>
-                        <label class="t-label block mb-1">CSV Separator</label>
-                        <select name="separator" class="form-select">
-                            <option value=",">Comma ( , )</option>
-                            <option value=";">Semicolon ( ; )</option>
-                        </select>
-                    </div>
-
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
                     {# Target Division #}
                     <div>
                         <label class="t-label block mb-1">Target Division</label>
@@ -68,6 +56,14 @@
                         <label class="inline-flex items-center cursor-pointer">
                             <input type="checkbox" name="filter_offers" value="1" class="rounded border-slate-300 text-blue-600 shadow-sm focus:ring-blue-500 h-4 w-4">
                             <span class="ml-2 text-sm text-slate-700">Exclude drivers with offers</span>
+                        </label>
+                    </div>
+
+                    {# Force a fresh market pull (bypasses cache). #}
+                    <div class="pb-2">
+                        <label class="inline-flex items-center cursor-pointer">
+                            <input type="checkbox" name="refresh_market" value="1" class="rounded border-slate-300 text-blue-600 shadow-sm focus:ring-blue-500 h-4 w-4">
+                            <span class="ml-2 text-sm text-slate-700">Re-fetch market now</span>
                         </label>
                     </div>
                 </div>

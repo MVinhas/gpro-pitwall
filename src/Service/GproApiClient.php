@@ -237,6 +237,81 @@ final class GproApiClient
         $this->cache->set(self::API_LIMIT_KEY, $remaining, 3600);
     }
 
+    /**
+     * Hourly-refreshed full-market dump. Public endpoint (no token),
+     * response is gzip-encoded JSON / CSV / XML. We always use JSON,
+     * gunzip in-process, and cache the decoded payload for ~55 minutes
+     * to stay just inside the upstream refresh cadence.
+     *
+     * GPRO returns the payload as `{"Last updated": "...", "<market>": [...]}`.
+     * This method unwraps it to `{updated_at, rows}` so callers don't
+     * have to dance around the space in the key name.
+     *
+     * @param string $market `drivers` or `tds`
+     * @return array{updated_at: ?string, rows: list<array<string, mixed>>}
+     */
+    public function getMarketFile(string $market = 'drivers', bool $forceRefresh = false): array
+    {
+        $key = 'market_file_' . $market;
+        if (!$forceRefresh) {
+            $cached = $this->cache->get($key);
+            if (is_array($cached)) {
+                return $cached;
+            }
+        }
+
+        $url = $this->baseUrl . "/GetMarketFile.asp?market={$market}&type=json";
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_ENCODING       => '', // accept any encoding; curl will gunzip automatically when supported
+            CURLOPT_HTTPHEADER     => [
+                'Accept: application/json',
+                'Accept-Encoding: gzip',
+                'User-Agent: GPRO-Assistant/0.2.0',
+            ],
+        ]);
+        $raw = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        unset($ch);
+
+        if ($error) {
+            throw new RuntimeException("Market file fetch failed: {$error}");
+        }
+        if ($httpCode !== 200 || !is_string($raw)) {
+            throw new RuntimeException("Market file fetch failed: HTTP {$httpCode}");
+        }
+
+        // Detect raw gzip (curl didn't unzip — happens when the host doesn't
+        // declare Content-Encoding) and gunzip in PHP.
+        if (str_starts_with($raw, "\x1f\x8b")) {
+            $decoded = @gzdecode($raw);
+            if ($decoded === false) {
+                throw new RuntimeException('Market file gunzip failed');
+            }
+            $raw = $decoded;
+        }
+
+        $data = json_decode($raw, true);
+        if (!is_array($data)) {
+            throw new RuntimeException('Market file JSON decode failed');
+        }
+
+        $rows = $data[$market] ?? null;
+        if (!is_array($rows)) {
+            throw new RuntimeException("Market file payload missing `{$market}` array");
+        }
+
+        $payload = [
+            'updated_at' => isset($data['Last updated']) ? (string) $data['Last updated'] : null,
+            'rows'       => array_values(array_filter($rows, 'is_array')),
+        ];
+
+        $this->cache->set($key, $payload, 3300);
+        return $payload;
+    }
+
     private function getCached(string $key, string $endpoint, int $ttl, bool $force = false): array
     {
         if (!$force) {

@@ -6,12 +6,14 @@ namespace App\Controller;
 
 use App\Http\Request;
 use App\Security\Authorize;
+use App\Service\GproApiClient;
 use App\Service\RecruitmentService;
 
 class RecruitmentController
 {
     public function __construct(
         private readonly RecruitmentService $service,
+        private readonly GproApiClient $apiClient,
         private readonly Authorize $authorize,
     ) {
     }
@@ -20,31 +22,33 @@ class RecruitmentController
     {
         $this->authorize->requirePremium();
 
-        try {
-            $file = $request->file('driver_csv_file');
-            if (!$file || $file['error'] !== UPLOAD_ERR_OK) {
-                throw new \Exception("File upload failed or no file selected.");
-            }
+        $division = (string) $request->post('target_division', 'Rookie');
 
-            $ext = pathinfo((string) $file['name'], PATHINFO_EXTENSION);
-            if (strtolower($ext) !== 'csv' && strtolower($ext) !== 'txt') {
-                 throw new \Exception("Invalid file type. Only CSV or TXT allowed.");
-            }
+        try {
+            $forceRefresh = (bool) $request->post('refresh_market');
+            $market = $this->apiClient->getMarketFile('drivers', $forceRefresh);
+
             $results = $this->service->analyze(
-                $file['tmp_name'],
-                (string)$request->post('separator', ','),
-                (string)$request->post('target_division', 'Rookie'),
-                (bool)$request->post('filter_offers')
+                $market['rows'],
+                $division,
+                (bool) $request->post('filter_offers'),
             );
 
             $_SESSION['recruitment_results'] = $results;
+            $_SESSION['recruitment_updated_at'] = $market['updated_at'];
             $_SESSION['recruitment_error'] = null;
-        } catch (\Exception $exception) {
+        } catch (\Throwable $exception) {
             $_SESSION['recruitment_results'] = [];
+            $_SESSION['recruitment_updated_at'] = null;
             $_SESSION['recruitment_error'] = $exception->getMessage();
         }
 
-        header("Location: /?main_tab=Recruitment Analyzer&page=1");
+        $query = http_build_query([
+            'main_tab'     => 'Recruitment Analyzer',
+            'division_tab' => $division,
+            'page'         => 1,
+        ]);
+        header("Location: /?{$query}");
         exit;
     }
 }
