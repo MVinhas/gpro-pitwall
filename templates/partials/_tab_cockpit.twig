@@ -127,6 +127,28 @@
                             </tbody>
                         </table>
                     </div>
+                    {% if testing_targets is defined and testing_targets is not empty %}
+                        <div class="mt-6 pt-4 border-t border-slate-200">
+                            <p class="t-label mb-2">Tracks where the test will land (race +3, +4, +5)</p>
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                {% for t in testing_targets %}
+                                    <div class="rounded-md border p-3 {{ t.favourite ? 'border-amber-300 bg-amber-50' : 'border-slate-200' }}">
+                                        <p class="t-caption">+{{ t.offset }} → {{ t.season == 'next' ? 'next' : 'this' }} season race {{ t.race }}</p>
+                                        {% if t.track_name %}
+                                            <p class="text-sm font-semibold text-slate-900 mt-0.5">
+                                                {% if t.favourite %}<span class="text-amber-700">★</span> {% endif %}{{ t.track_name }}
+                                            </p>
+                                            <p class="t-caption tabular-nums">P {{ t.power }} · H {{ t.handling }} · A {{ t.acceleration }}</p>
+                                            {% if t.favourite %}<p class="t-caption text-amber-700 mt-0.5">Driver's favourite</p>{% endif %}
+                                        {% else %}
+                                            <p class="t-caption mt-0.5 italic">Next-season calendar not published yet.</p>
+                                        {% endif %}
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% endif %}
+
                     <p class="t-caption mt-3">
                         Decay applied at 0.5 per race over 3 races (~12.5% survives). Test laps also wear parts — adjust the risk slider on the wear card.
                     </p>

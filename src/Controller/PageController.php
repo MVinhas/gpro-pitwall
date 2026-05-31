@@ -21,6 +21,7 @@ use App\Service\WearAdvisorService;
 use App\Service\PartSwapAdvisorService;
 use App\Service\TestingProjectionService;
 use App\Service\SponsorAdvisorService;
+use App\Service\TestingTargetsService;
 use App\Service\TrainingAdvisorService;
 use Twig\Environment;
 
@@ -42,6 +43,7 @@ class PageController
         private readonly PartSwapAdvisorService $swapAdvisor,
         private readonly TestingProjectionService $testingProjection,
         private readonly SponsorAdvisorService $sponsorAdvisor,
+        private readonly TestingTargetsService $testingTargets,
         private readonly TrainingAdvisorService $trainingAdvisor,
         private readonly GproDataMapper $mapper,
         private readonly Environment $twig,
@@ -211,6 +213,24 @@ class PageController
                             'handling'     => $carData['carHandl'] ?? 0,
                             'acceleration' => $carData['carAccel'] ?? 0,
                         ]);
+
+                        $office = $this->apiClient->getOfficeData();
+                        $currentRace = (int) ($office['raceNb'] ?? 0);
+                        if ($currentRace > 0) {
+                            $calendar  = $this->apiClient->getCalendar();
+                            $allTracks = $this->apiClient->getAllTracksPreview();
+                            $targets = $this->testingTargets->targetsFor(
+                                $currentRace,
+                                $calendar,
+                                $allTracks,
+                            );
+                            foreach ($targets as &$target) {
+                                $target['favourite'] = $target['track_id'] !== null
+                                    && $this->isFavouriteTrack($pilot, $target['track_id']);
+                            }
+                            unset($target);
+                            $viewData['testing_targets'] = $targets;
+                        }
 
                         $negotiations = $this->apiClient->getSponsorNegotiations();
                         $ongoing = [];

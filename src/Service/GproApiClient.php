@@ -149,6 +149,36 @@ final class GproApiClient
     }
 
     /**
+     * Current + next-season calendar with per-race trackId. Used by
+     * the cockpit's testing target-race lookup. `nextSeasonPublished`
+     * gates whether `nextSeasonEvents` are usable.
+     */
+    public function getCalendar(bool $forceRefresh = false): array
+    {
+        return $this->getCached(
+            'calendar',
+            '/gb/backend/api/v2/Calendar',
+            $this->ttlShort(),
+            $forceRefresh
+        );
+    }
+
+    /**
+     * Every track's PHA + lap metadata in one call. Tracks are stable
+     * across the season — cache for hours so repeat cockpit renders
+     * don't refetch.
+     */
+    public function getAllTracksPreview(bool $forceRefresh = false): array
+    {
+        return $this->getCached(
+            'all_tracks_preview',
+            '/gb/backend/api/v2/Tracks',
+            21600,
+            $forceRefresh
+        );
+    }
+
+    /**
      * Currently signed sponsors and ongoing negotiations. `carSpots`
      * lists the 5 ad positions (filled or empty); `ongNegs` lists
      * proposals in flight, each with the sponsorId needed to fetch

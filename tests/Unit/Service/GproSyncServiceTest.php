@@ -66,7 +66,7 @@ final class GproSyncServiceTest extends TestCase
 
     public function testDefersWhenBudgetBelowMargin(): void
     {
-        // 11 calls + margin 20 = needs 31; only 25 remaining → defer.
+        // 12 calls + margin 20 = needs 32; only 25 remaining → defer.
         $this->cache->set(GproApiClient::API_LIMIT_KEY, 25, 3600);
 
         $users = $this->createMock(UserRepository::class);
@@ -84,7 +84,7 @@ final class GproSyncServiceTest extends TestCase
 
     public function testProceedsWhenBudgetAboveMargin(): void
     {
-        // 11 + 20 = 31; 50 remaining → comfortably above, sync proceeds (and
+        // 12 + 20 = 32; 50 remaining → comfortably above, sync proceeds (and
         // fails against the unreachable host, which is fine — it still ran).
         $this->cache->set(GproApiClient::API_LIMIT_KEY, 50, 3600);
 
