@@ -251,6 +251,7 @@ $container['controller.page'] = new PageController(
     $container['service.sponsor_advisor'],
     $container['service.testing_targets'],
     $container['service.training_advisor'],
+    $container['controller.strategy'],
     $container['service.data_mapper'],
     $container['twig'],
     $container['config']
@@ -298,8 +299,6 @@ $container['controller.car_wear'] = new CarWearController(
 );
 
 $container['controller.training'] = new TrainingController(
-    $container['service.api_client'],
-    $container['service.data_mapper'],
     $container['service.training'],
     $container['service.authorize'],
 );

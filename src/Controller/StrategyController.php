@@ -95,12 +95,12 @@ class StrategyController
     /**
      * Runs the strategy calculation. Returns the result array, or an
      * `['error' => '...']` array on failure. No session writes here so
-     * the same call powers both the redirect-after-POST flow and the
-     * no-reload fragment refresh.
+     * the same call powers the redirect-after-POST flow, the no-reload
+     * fragment refresh, and the auto-populate on first tab open.
      *
      * @return array<string, mixed>
      */
-    private function runCalc(Request $request): array
+    public function runCalc(Request $request): array
     {
         try {
             $trackProfile = $this->api->getNextRaceProfile();

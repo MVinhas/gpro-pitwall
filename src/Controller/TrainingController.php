@@ -6,15 +6,11 @@ namespace App\Controller;
 
 use App\Http\Request;
 use App\Security\Authorize;
-use App\Service\GproApiClient;
-use App\Service\GproDataMapper;
 use App\Service\TrainingService;
 
 class TrainingController
 {
     public function __construct(
-        private readonly GproApiClient $apiClient,
-        private readonly GproDataMapper $mapper,
         private readonly TrainingService $trainingService,
         private readonly Authorize $authorize,
     ) {
@@ -22,35 +18,15 @@ class TrainingController
 
     public function handle(Request $request): void
     {
-        $user = $this->authorize->requirePremium();
-
-        if (!empty($user['api_token'])) {
-            $this->apiClient->setToken($user['api_token']);
-        }
+        $this->authorize->requirePremium();
 
         $action = $request->post('action');
-
-        if ($action === 'import_driver') {
-            $this->importDriver();
-        } elseif ($action === 'calculate_training') {
+        if ($action === 'calculate_training') {
             $this->calculateTraining($request);
         }
 
-
         header("Location: /?main_tab=Training Planner");
         exit;
-    }
-
-    private function importDriver(): void
-    {
-        try {
-            $apiData = $this->apiClient->getMyPilotDetails();
-            $driver = $this->mapper->mapDriver($apiData);
-            $_SESSION['imported_driver'] = $driver;
-            $_SESSION['training_error'] = null;
-        } catch (\Exception $exception) {
-            $_SESSION['training_error'] = "Import Failed: " . $exception->getMessage();
-        }
     }
 
     private function calculateTraining(Request $request): void

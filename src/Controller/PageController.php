@@ -23,6 +23,7 @@ use App\Service\TestingProjectionService;
 use App\Service\SponsorAdvisorService;
 use App\Service\TestingTargetsService;
 use App\Service\TrainingAdvisorService;
+use App\Controller\StrategyController;
 use Twig\Environment;
 
 class PageController
@@ -46,6 +47,7 @@ class PageController
         private readonly SponsorAdvisorService $sponsorAdvisor,
         private readonly TestingTargetsService $testingTargets,
         private readonly TrainingAdvisorService $trainingAdvisor,
+        private readonly StrategyController $strategyController,
         private readonly GproDataMapper $mapper,
         private readonly Environment $twig,
         private array $config
@@ -338,7 +340,23 @@ class PageController
 
             case 'Training Planner':
                 $viewData['trainings'] = $this->trainingService->getAllTrainings();
-                $viewData['imported_driver'] = $_SESSION['imported_driver'] ?? null;
+
+                // Pre-fill the driver from the API so the user doesn't have to
+                // "Import Driver" on first visit. Cached as session state for
+                // subsequent renders.
+                $imported = $_SESSION['imported_driver'] ?? null;
+                if (!$imported && $hasToken && $isPremium) {
+                    try {
+                        $this->apiClient->setToken($user['api_token']);
+                        $pilotRaw = $this->apiClient->getMyPilotDetails();
+                        $imported = $this->mapper->mapDriver($pilotRaw);
+                        $_SESSION['imported_driver'] = $imported;
+                    } catch (\Throwable $e) {
+                        // Show the form unpopulated; the explicit Import button
+                        // is still there as a fallback.
+                    }
+                }
+                $viewData['imported_driver'] = $imported;
 
                 if (isset($_SESSION['training_results'])) {
                     $viewData['training_results'] = $_SESSION['training_results'];
@@ -366,34 +384,19 @@ class PageController
             case 'Race Strategy':
                 $existing = $_SESSION['strategy_results'] ?? null;
 
-                // Pre-warm the form on first visit so the user doesn't see empty
-                // inputs. Skip if a real calculation result is already cached.
-                if ($hasToken && !is_array($existing)) {
-                    try {
-                        $pilotRaw = $this->apiClient->getMyPilotDetails();
-                        $carRaw   = $this->apiClient->getCarData();
-                        $weather  = $this->apiClient->getRaceSetup();
-                        $driver = (new GproDataMapper())->mapDriver($pilotRaw);
-
-                        $viewData['strategy_results'] = [
-                            'stats' => [
-                                'driver' => $driver,
-                                'car' => [
-                                    'lvlEngine'      => (int)($carRaw['lvlEngine'] ?? 1),
-                                    'lvlSusp'        => (int)($carRaw['lvlSusp'] ?? 1),
-                                    'lvlElectronics' => (int)($carRaw['lvlElectronics'] ?? 1),
-                                ],
-                                'staff' => ['concentration' => 0, 'stressHandling' => 0],
-                                'td'    => ['experience' => 0, 'pitCoordination' => 0],
-                            ],
-                            'weather_inputs' => $this->weatherDefaults($weather['weather'] ?? []),
-                            'inputs' => ['risk' => 0, 'target_wear' => 15],
-                        ];
-                    } catch (\Throwable $e) {
-                        $viewData['strategy_error'] = $e->getMessage();
-                    }
-                } else {
+                if (is_array($existing)) {
                     $viewData['strategy_results'] = $existing;
+                } elseif ($hasToken && $isPremium) {
+                    // First visit (or fresh session) — run the calc with the
+                    // synced data + zero overrides so the user lands on a fully
+                    // populated panel without having to click Calculate.
+                    $this->apiClient->setToken($user['api_token']);
+                    $result = $this->strategyController->runCalc($request);
+                    if (isset($result['error'])) {
+                        $viewData['strategy_error'] = $result['error'];
+                    } else {
+                        $viewData['strategy_results'] = $result;
+                    }
                 }
 
                 $viewData['strategy_error'] = $_SESSION['strategy_error'] ?? $viewData['strategy_error'] ?? null;
@@ -508,21 +511,5 @@ class PageController
             }
         }
         return false;
-    }
-
-    /**
-     * @param array<string, mixed> $w
-     * @return array<string, array<string, mixed>>
-     */
-    private function weatherDefaults(array $w): array
-    {
-        $isWet = static fn(string $key): string =>
-            ($w[$key] ?? '') === 'Rain' ? 'Wet' : 'Dry';
-
-        return [
-            'Q1'   => ['temp' => $w['q1Temp'] ?? '', 'weather' => $isWet('q1Weather')],
-            'Q2'   => ['temp' => $w['q2Temp'] ?? '', 'weather' => $isWet('q2Weather')],
-            'Race' => ['weather' => 'Dry'],
-        ];
     }
 }

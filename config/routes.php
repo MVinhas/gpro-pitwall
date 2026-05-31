@@ -42,7 +42,6 @@ return function (Router $router): void {
     // Recruitment and training
     $router->add('POST', '/analyze_recruitment', 'controller.recruitment', 'analyze');
     $router->add('POST', '/calculate_training', 'controller.training', 'handle');
-    $router->add('POST', '/import_driver', 'controller.training', 'handle');
 
     // ========== API ==========
     $router->add('POST', '/api/warmup', 'controller.api_warmup', 'warmup');
