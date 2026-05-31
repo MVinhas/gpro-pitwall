@@ -27,6 +27,7 @@ use Twig\Environment;
 
 class PageController
 {
+    /** @param array<string, mixed> $config */
     public function __construct(
         private readonly IdealPilotService $idealPilotService,
         private readonly InsightService $insightService,
@@ -493,6 +494,7 @@ class PageController
         return in_array($first, $this->config['app']['divisions'], true) ? $first : null;
     }
 
+    /** @param array<string, mixed> $pilot */
     private function isFavouriteTrack(array $pilot, int $trackId): bool
     {
         if ($trackId <= 0) {

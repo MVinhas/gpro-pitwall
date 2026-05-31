@@ -10,6 +10,7 @@ use App\Security\Authorize;
 
 class TrackRiskController
 {
+    /** @param array<string, mixed> $config */
     public function __construct(
         private readonly TrackRepository $repo,
         private array $config,

@@ -29,6 +29,7 @@ final readonly class InsightService
 
     /**
      * @param array<string, array<string, mixed>> $allIdealPilots
+     * @return array<string, mixed>
      */
     public function generateInsights(array $allIdealPilots): array
     {

@@ -9,6 +9,11 @@ use App\Security\ApiTokenCrypto;
 
 class DatabaseSeeder
 {
+    /**
+     * @param array<string, string> $statsSchema
+     * @param list<string>          $divisions
+     * @param array<string, mixed>  $secrets
+     */
     public function __construct(
         private readonly PDO $db,
         private readonly array $statsSchema,

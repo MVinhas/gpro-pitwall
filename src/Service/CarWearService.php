@@ -98,6 +98,7 @@ class CarWearService
      * @param array<string, mixed> $trackData
      * @param array<string, mixed> $carData
      * @param array<string, mixed> $driver
+     * @return array<string, mixed>
      */
     public function calculateWear(
         array $trackData,

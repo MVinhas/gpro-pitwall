@@ -28,6 +28,7 @@ final class GproApiClient
         $this->token = trim($token);
     }
 
+    /** @return array<string, mixed> */
     public function getOfficeData(bool $forceRefresh = false): array
     {
         return $this->getCached(
@@ -38,6 +39,7 @@ final class GproApiClient
         );
     }
 
+    /** @return array<string, mixed> */
     public function getMyPilotDetails(bool $forceRefresh = false): array
     {
         $office = $this->getOfficeData($forceRefresh);
@@ -54,6 +56,7 @@ final class GproApiClient
         );
     }
 
+    /** @return array<string, mixed> */
     public function getNextRaceProfile(bool $forceRefresh = false): array
     {
         return $this->getCached(
@@ -64,6 +67,7 @@ final class GproApiClient
         );
     }
 
+    /** @return array<string, mixed> */
     public function getCarData(bool $forceRefresh = false): array
     {
         return $this->getCached(
@@ -74,6 +78,7 @@ final class GproApiClient
         );
     }
 
+    /** @return array<string, mixed> */
     public function getRaceSetup(bool $forceRefresh = false): array
     {
         return $this->getCached(
@@ -84,6 +89,7 @@ final class GproApiClient
         );
     }
 
+    /** @return array<string, mixed> */
     public function getStaffAndFacilities(bool $forceRefresh = false): array
     {
         return $this->getCached(
@@ -94,6 +100,7 @@ final class GproApiClient
         );
     }
 
+    /** @return array<string, mixed> */
     public function getTechnicalDirector(bool $forceRefresh = false): array
     {
         try {
@@ -108,6 +115,7 @@ final class GproApiClient
         }
     }
 
+    /** @return array<string, mixed> */
     public function getTyreSuppliers(bool $forceRefresh = false): array
     {
         return $this->getCached(
@@ -122,6 +130,8 @@ final class GproApiClient
      * Manager menu. Carries `group` ("Rookie - 31"), `groupShort` ("R31"),
      * cash, team metadata — used for division-aware features (training
      * advisor, sponsors).
+     *
+     * @return array<string, mixed>
      */
     public function getMenu(bool $forceRefresh = false): array
     {
@@ -137,6 +147,8 @@ final class GproApiClient
      * Group-wide money and car levels. Returns one entry per manager in
      * the user's group with `cash` and `carLevel` — used by the swap
      * advisor to learn the peer car-strength envelope.
+     *
+     * @return array<string, mixed>
      */
     public function getMoneyLevels(bool $forceRefresh = false): array
     {
@@ -152,6 +164,8 @@ final class GproApiClient
      * Current + next-season calendar with per-race trackId. Used by
      * the cockpit's testing target-race lookup. `nextSeasonPublished`
      * gates whether `nextSeasonEvents` are usable.
+     *
+     * @return array<string, mixed>
      */
     public function getCalendar(bool $forceRefresh = false): array
     {
@@ -167,6 +181,8 @@ final class GproApiClient
      * Every track's PHA + lap metadata in one call. Tracks are stable
      * across the season — cache for hours so repeat cockpit renders
      * don't refetch.
+     *
+     * @return array<string, mixed>
      */
     public function getAllTracksPreview(bool $forceRefresh = false): array
     {
@@ -183,6 +199,8 @@ final class GproApiClient
      * lists the 5 ad positions (filled or empty); `ongNegs` lists
      * proposals in flight, each with the sponsorId needed to fetch
      * the sponsor's profile for negotiation-answer recommendations.
+     *
+     * @return array<string, mixed>
      */
     public function getSponsorNegotiations(bool $forceRefresh = false): array
     {
@@ -197,6 +215,8 @@ final class GproApiClient
     /**
      * One sponsor's detailed profile (the 6 characteristics + metadata).
      * Cached per-sponsor so repeat cockpit renders don't refetch.
+     *
+     * @return array<string, mixed>
      */
     public function getSponsorProfile(int $sponsorId, bool $forceRefresh = false): array
     {
@@ -224,6 +244,7 @@ final class GproApiClient
         return is_numeric($v) ? (int) $v : null;
     }
 
+    /** @param array<string, mixed> $data */
     private function rememberApiLimit(array $data): void
     {
         if (!isset($data['apiRequestsRemaining'])) {
@@ -312,6 +333,7 @@ final class GproApiClient
         return $payload;
     }
 
+    /** @return array<string, mixed> */
     private function getCached(string $key, string $endpoint, int $ttl, bool $force = false): array
     {
         if (!$force) {
@@ -328,6 +350,7 @@ final class GproApiClient
         return $data;
     }
 
+    /** @return array<string, mixed> */
     private function request(string $endpoint): array
     {
         if (empty($this->token)) {

@@ -8,6 +8,7 @@ final class GproDataMapper
 {
     /**
      * @param array<string, mixed> $apiData
+     * @return array<string, mixed>
      */
     public function mapDriver(array $apiData): array
     {

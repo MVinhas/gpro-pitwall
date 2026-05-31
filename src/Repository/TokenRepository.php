@@ -25,6 +25,7 @@ class TokenRepository
         return (int)$this->pdo->lastInsertId();
     }
 
+    /** @return array<string, mixed>|null */
     public function findLatestByUserId(int $userId): ?array
     {
         $stmt = $this->pdo->prepare(

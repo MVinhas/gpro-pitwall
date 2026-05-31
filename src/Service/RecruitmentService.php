@@ -6,6 +6,11 @@ namespace App\Service;
 
 class RecruitmentService
 {
+    /**
+     * @param array<string, float>  $pilotRecruitmentFactors
+     * @param array<string, string> $csvMap
+     * @param array<string, int>    $caps
+     */
     public function __construct(
         private array $pilotRecruitmentFactors,
         private readonly array $csvMap,
@@ -16,6 +21,7 @@ class RecruitmentService
 
     /**
      * @param list<array<string, mixed>> $market driver rows from `GetMarketFile.asp` JSON
+     * @return list<array<string, mixed>>
      */
     public function analyze(array $market, string $targetDivision, bool $filterOffers): array
     {
@@ -43,6 +49,13 @@ class RecruitmentService
         return $candidates;
     }
 
+    /**
+     * @param list<array<string, mixed>> $results
+     * @return array{
+     *   data: list<array<string, mixed>>,
+     *   pagination: array{current: int, total_pages: int, total_items: int}
+     * }
+     */
     public function sortAndPaginate(array $results, string $sortCol, string $sortOrder, int $page, int $limit): array
     {
 
@@ -83,11 +96,19 @@ class RecruitmentService
 
     /**
      * @param array<string, mixed> $raw
+     * @return array<string, mixed>
      */
     private function normalizeDriverData(array $raw): array
     {
         $d = [];
         foreach ($raw as $key => $val) {
+            // The JSON market payload carries scalars (NAME/ID/OA/CON/...)
+            // alongside arrays (FAV is a list of track ids). Keep arrays as
+            // arrays; only the scalar fields participate in numeric coercion.
+            if (is_array($val)) {
+                $d[$key] = $val;
+                continue;
+            }
             $strVal = (string)$val;
 
             if (preg_match('/^\d+$/', $strVal)) {

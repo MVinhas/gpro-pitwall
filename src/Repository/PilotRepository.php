@@ -12,14 +12,16 @@ class PilotRepository
     {
     }
 
+    /** @return list<array<string, mixed>> */
     public function getPilotsByDivision(string $division): array
     {
         $stmt = $this->db->prepare("SELECT * FROM pilots WHERE division = :division");
         $stmt->execute([':division' => $division]);
-        /** @var array<int, array<string, mixed>> */
+        /** @var list<array<string, mixed>> */
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
+    /** @param array<string, mixed> $data */
     public function addPilot(array $data): bool
     {
         $columns = implode(', ', array_keys($data));

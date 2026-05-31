@@ -36,6 +36,7 @@ final readonly class Authorize
         return is_numeric($id) ? (int)$id : null;
     }
 
+    /** @return array<string, mixed> */
     public function requireAuth(): array
     {
         $id = $this->currentUserId();
@@ -54,6 +55,7 @@ final readonly class Authorize
         return $user;
     }
 
+    /** @return array<string, mixed> */
     public function requirePremium(): array
     {
         $user = $this->requireAuth();
@@ -64,6 +66,7 @@ final readonly class Authorize
         $this->denyPremium();
     }
 
+    /** @return array<string, mixed> */
     public function requireAdmin(): array
     {
         $user = $this->requireAuth();

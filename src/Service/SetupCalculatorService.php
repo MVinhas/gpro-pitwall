@@ -8,6 +8,7 @@ use PDO;
 
 class SetupCalculatorService
 {
+    /** @var array<string, mixed> */
     private array $secrets;
 
     /**
@@ -20,8 +21,10 @@ class SetupCalculatorService
 
     /**
      * @param array<string, mixed> $trackData
+     * @param array<string, mixed> $carData
      * @param array<string, mixed> $driver
-     * @param array<string, mixed> $weatherInputs
+     * @param array<string, array<string, mixed>> $weatherInputs
+     * @return array<string, array<string, mixed>>
      */
     public function calculateSetups(array $trackData, array $carData, array $driver, array $weatherInputs): array
     {

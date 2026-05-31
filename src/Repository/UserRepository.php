@@ -17,6 +17,7 @@ class UserRepository
     ) {
     }
 
+    /** @return array<string, mixed>|null */
     public function findByEmail(string $email): ?array
     {
         $stmt = $this->pdo->prepare("
@@ -36,6 +37,7 @@ class UserRepository
     }
 
 
+    /** @return array<string, mixed>|null */
     public function findByUsername(string $username): ?array
     {
         $stmt = $this->pdo->prepare("SELECT * FROM users WHERE username = :username LIMIT 1");
@@ -44,6 +46,7 @@ class UserRepository
         return $result ? $this->hydrate($result) : null;
     }
 
+    /** @return array<string, mixed>|null */
     public function findById(int $id): ?array
     {
         $stmt = $this->pdo->prepare("SELECT * FROM users WHERE id = :id LIMIT 1");
@@ -63,6 +66,7 @@ class UserRepository
         return is_string($email) ? $email : null;
     }
 
+    /** @return array<string, mixed>|null */
     public function create(string $username, string $email): ?array
     {
         $stmt = $this->pdo->prepare("
@@ -100,6 +104,10 @@ class UserRepository
      * Decrypts api_token in-place on a freshly-fetched user row so callers
      * keep seeing plaintext. Leaves the row untouched if the column is empty
      * or already plaintext (pre-migration data, removed by applyUserMigrations).
+     */
+    /**
+     * @param array<string, mixed> $user
+     * @return array<string, mixed>
      */
     private function hydrate(array $user): array
     {

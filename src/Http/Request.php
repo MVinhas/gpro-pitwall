@@ -6,6 +6,12 @@ namespace App\Http;
 
 class Request
 {
+    /**
+     * @param array<string, mixed> $get
+     * @param array<string, mixed> $post
+     * @param array<string, mixed> $files
+     * @param array<string, mixed> $server
+     */
     public function __construct(
         private array $get,
         private array $post,
@@ -29,6 +35,7 @@ class Request
         return $this->post[$key] ?? $default;
     }
 
+    /** @return array<string, mixed>|null */
     public function file(string $key): ?array
     {
         $file = $this->files[$key] ?? null;

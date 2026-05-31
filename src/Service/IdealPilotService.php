@@ -8,6 +8,7 @@ use App\Repository\PilotRepository;
 
 class IdealPilotService
 {
+    /** @param array<string, string> $statsSchema */
     public function __construct(
         private readonly PilotRepository $pilotRepo,
         private readonly PilotCalculatorService $calculator,
@@ -15,6 +16,7 @@ class IdealPilotService
     ) {
     }
 
+    /** @return array{stats: array<string, mixed>, count: int} */
     public function getIdealPilot(string $division): array
     {
         $pilots = $this->pilotRepo->getPilotsByDivision($division);

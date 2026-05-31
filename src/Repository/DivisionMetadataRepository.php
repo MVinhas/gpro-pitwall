@@ -12,6 +12,7 @@ class DivisionMetadataRepository
     {
     }
 
+    /** @return array<string, mixed> */
     public function getMetadata(string $division): array
     {
         $stmt = $this->db->prepare(

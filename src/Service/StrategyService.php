@@ -22,6 +22,7 @@ class StrategyService
      * @param array<string, mixed> $staff
      * @param array<string, mixed> $td
      * @param array<string, mixed> $inputs
+     * @return array<string, mixed>
      */
     public function calculateStrategy(
         array $trackData,

@@ -14,9 +14,10 @@ class TrainingService
 
     /**
      * Predicts the new stats of a pilot after a specific training.
-     * * @param array $currentStats Pilot stats ['stamina' => 10, ...]
+     *
+     * @param array<string, mixed> $currentStats Pilot stats ['stamina' => 10, ...]
      * @param string $trainingName 'Fitness', 'Yoga', etc.
-     * @return array New stats and cost
+     * @return array<string, mixed> New stats and cost
      */
     public function predictResult(array $currentStats, string $trainingName): array
     {
@@ -59,6 +60,7 @@ class TrainingService
         ];
     }
 
+    /** @return list<array<string, mixed>> */
     public function getAllTrainings(): array
     {
         return $this->db->query("SELECT * FROM trainings")->fetchAll(PDO::FETCH_ASSOC);

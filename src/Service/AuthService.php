@@ -28,6 +28,8 @@ final class AuthService
 
     /**
      * Handles New User Registration
+     *
+     * @return array{success: bool, error?: string, user_id?: int}
      */
     public function register(
         string $username,
@@ -70,6 +72,7 @@ final class AuthService
     /**
      * Handles Existing User Login
      */
+    /** @return array{success: bool, error?: string, user_id?: int} */
     public function login(string $username, string $ip): array
     {
         $username = trim($username);
@@ -190,6 +193,7 @@ final class AuthService
         session_regenerate_id(true);
     }
 
+    /** @param array<string, mixed> $user */
     private function generateAndSendCode(array $user): void
     {
         $this->tokens->deleteExpired(

@@ -12,6 +12,7 @@ use App\Service\PilotCalculatorService;
 
 class BaselineController
 {
+    /** @param array<string, string> $statsSchema */
     public function __construct(
         private readonly PilotRepository $pilotRepo,
         private readonly DivisionMetadataRepository $metaRepo,

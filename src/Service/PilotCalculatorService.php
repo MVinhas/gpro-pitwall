@@ -6,6 +6,10 @@ namespace App\Service;
 
 class PilotCalculatorService
 {
+    /**
+     * @param array<string, float> $factors
+     * @param array<string, int>   $caps
+     */
     public function __construct(
         private readonly array $factors,
         private readonly array $caps
@@ -29,6 +33,7 @@ class PilotCalculatorService
 
     /**
      * @param array<string, mixed> $pilotData
+     * @return array<string, mixed>
      */
     public function adjustPilotStats(array $pilotData, string $division): array
     {

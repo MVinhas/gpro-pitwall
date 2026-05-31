@@ -8,6 +8,7 @@ use RuntimeException;
 
 class Router
 {
+    /** @var array<string, array<string, array{controller: string, action: string}>> */
     private array $routes = [];
 
     public function add(string $method, string $path, string $controllerKey, string $action): void
@@ -18,6 +19,7 @@ class Router
         ];
     }
 
+    /** @param array<string, mixed> $container */
     public function dispatch(Request $request, array $container): mixed
     {
         $method = $request->getMethod();

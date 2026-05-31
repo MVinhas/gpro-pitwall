@@ -12,6 +12,10 @@ class TrackRepository
     {
     }
 
+    /**
+     * @param list<string> $divisions
+     * @return array<string, mixed>
+     */
     public function getTrackRisks(string $trackName, array $divisions): array
     {
         $columns = ['overtaking_risk', 'defense_risk'];
@@ -53,6 +57,7 @@ class TrackRepository
         ];
     }
 
+    /** @param array<string, string> $q1Risks */
     public function updateRisks(string $trackName, int $overtaking, int $defense, array $q1Risks): bool
     {
         $setClause = 'overtaking_risk = :overtaking, defense_risk = :defense';

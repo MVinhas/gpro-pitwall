@@ -9,6 +9,7 @@ use PHPMailer\PHPMailer\Exception;
 
 class EmailService
 {
+    /** @param array<string, mixed> $config */
     public function __construct(private readonly array $config)
     {
         foreach (['host', 'port', 'from', 'from_name'] as $key) {
