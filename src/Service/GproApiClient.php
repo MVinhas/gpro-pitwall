@@ -149,6 +149,36 @@ final class GproApiClient
     }
 
     /**
+     * Currently signed sponsors and ongoing negotiations. `carSpots`
+     * lists the 5 ad positions (filled or empty); `ongNegs` lists
+     * proposals in flight, each with the sponsorId needed to fetch
+     * the sponsor's profile for negotiation-answer recommendations.
+     */
+    public function getSponsorNegotiations(bool $forceRefresh = false): array
+    {
+        return $this->getCached(
+            'sponsor_negotiations',
+            '/gb/backend/api/v2/NegOverview',
+            $this->ttlShort(),
+            $forceRefresh
+        );
+    }
+
+    /**
+     * One sponsor's detailed profile (the 6 characteristics + metadata).
+     * Cached per-sponsor so repeat cockpit renders don't refetch.
+     */
+    public function getSponsorProfile(int $sponsorId, bool $forceRefresh = false): array
+    {
+        return $this->getCached(
+            'sponsor_profile_' . $sponsorId,
+            "/gb/backend/api/v2/NegotiateSponsor?id={$sponsorId}",
+            $this->ttlShort(),
+            $forceRefresh
+        );
+    }
+
+    /**
      * Cache key for the last-seen apiRequestsRemaining, so the sync guard can
      * read the budget without spending an API call.
      */

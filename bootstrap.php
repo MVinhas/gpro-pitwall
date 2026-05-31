@@ -229,6 +229,7 @@ $container['service.testing_projection'] = new \App\Service\TestingProjectionSer
     $container['config']['secrets']['testing_priority_points'] ?? [],
     (float) ($container['config']['secrets']['testing_decay_factor'] ?? 0.5),
 );
+$container['service.sponsor_advisor'] = new \App\Service\SponsorAdvisorService();
 
 $container['controller.page'] = new PageController(
     $container['service.ideal_pilot'],
@@ -245,6 +246,7 @@ $container['controller.page'] = new PageController(
     $container['service.wear_advisor'],
     $container['service.swap_advisor'],
     $container['service.testing_projection'],
+    $container['service.sponsor_advisor'],
     $container['service.training_advisor'],
     $container['service.data_mapper'],
     $container['twig'],

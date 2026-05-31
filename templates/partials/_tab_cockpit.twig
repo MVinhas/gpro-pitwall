@@ -254,6 +254,55 @@
             </div>
         {% endif %}
 
+        {# SPONSOR NEGOTIATIONS #}
+        {% if sponsor_negotiations is defined %}
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-baseline justify-between">
+                    <h3 class="t-section">Sponsors</h3>
+                    <span class="t-caption">
+                        {{ sponsor_negotiations.car_spots_taken }} / {{ sponsor_negotiations.car_spots_total }} car spots filled
+                    </span>
+                </div>
+                <div class="p-6 space-y-4">
+                    {% if sponsor_negotiations.ongoing is empty %}
+                        <p class="t-caption">No ongoing negotiations.</p>
+                    {% else %}
+                        {% for neg in sponsor_negotiations.ongoing %}
+                            <div class="rounded-md border border-slate-200 p-3">
+                                <div class="flex items-baseline justify-between mb-2 gap-3 flex-wrap">
+                                    <span class="text-sm font-semibold text-slate-900">{{ neg.name }}</span>
+                                    <span class="t-caption">
+                                        progress {{ neg.progress }}%
+                                        · priority {{ neg.priority }}
+                                        {% if neg.contested == 'Yes' %}· <span class="text-red-700 font-medium">contested</span>{% endif %}
+                                        {% if neg.attention %}· <span class="text-amber-700 font-medium">needs attention</span>{% endif %}
+                                    </span>
+                                </div>
+
+                                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3">
+                                    {% for k, v in neg.characteristics %}
+                                        <div class="rounded-md bg-slate-50 px-2 py-1 text-center">
+                                            <p class="t-label">{{ k|capitalize }}</p>
+                                            <p class="text-sm font-semibold text-slate-800">{{ v }}/7</p>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+
+                                <p class="t-label mb-1">Recommended answers</p>
+                                <ol class="space-y-1 list-decimal list-inside text-sm text-slate-800">
+                                    <li><span class="text-slate-500">Ad placement:</span> <span class="font-semibold">{{ neg.answers.car_spot }}</span></li>
+                                    <li><span class="text-slate-500">Next-season expectation:</span> <span class="font-semibold">{{ neg.answers.expectation }}</span></li>
+                                    <li><span class="text-slate-500">Driver popularity:</span> <span class="font-semibold">{{ neg.answers.driver_popularity }}</span></li>
+                                    <li><span class="text-slate-500">Amount per race:</span> <span class="font-semibold">{{ neg.answers.amount }}</span></li>
+                                    <li><span class="text-slate-500">Contract duration:</span> <span class="font-semibold">{{ neg.answers.duration }}</span></li>
+                                </ol>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+            </div>
+        {% endif %}
+
         {# CAR WEAR #}
         {% if wear_advice is defined %}
             <div id="cockpit-wear-card"

@@ -20,6 +20,7 @@ use App\Service\CarWearService;
 use App\Service\WearAdvisorService;
 use App\Service\PartSwapAdvisorService;
 use App\Service\TestingProjectionService;
+use App\Service\SponsorAdvisorService;
 use App\Service\TrainingAdvisorService;
 use Twig\Environment;
 
@@ -40,6 +41,7 @@ class PageController
         private readonly WearAdvisorService $wearAdvisor,
         private readonly PartSwapAdvisorService $swapAdvisor,
         private readonly TestingProjectionService $testingProjection,
+        private readonly SponsorAdvisorService $sponsorAdvisor,
         private readonly TrainingAdvisorService $trainingAdvisor,
         private readonly GproDataMapper $mapper,
         private readonly Environment $twig,
@@ -209,6 +211,35 @@ class PageController
                             'handling'     => $carData['carHandl'] ?? 0,
                             'acceleration' => $carData['carAccel'] ?? 0,
                         ]);
+
+                        $negotiations = $this->apiClient->getSponsorNegotiations();
+                        $ongoing = [];
+                        foreach ($negotiations['ongNegs'] ?? [] as $neg) {
+                            $sponsorId = (int) ($neg['sponsorId'] ?? 0);
+                            if ($sponsorId <= 0) {
+                                continue;
+                            }
+                            try {
+                                $profile = $this->apiClient->getSponsorProfile($sponsorId);
+                            } catch (\Throwable) {
+                                continue;
+                            }
+                            $advice = $this->sponsorAdvisor->adviseFor($profile);
+                            $ongoing[] = [
+                                'name'             => (string) ($neg['name'] ?? $profile['name'] ?? 'Unknown'),
+                                'progress'         => (string) ($neg['progress'] ?? '0'),
+                                'priority'         => (string) ($neg['priority'] ?? ''),
+                                'contested'        => (string) ($neg['contested'] ?? ''),
+                                'attention'        => (int) ($neg['attention'] ?? 0),
+                                'characteristics'  => $advice['characteristics'],
+                                'answers'          => $advice['answers'],
+                            ];
+                        }
+                        $viewData['sponsor_negotiations'] = [
+                            'car_spots_taken' => (int) ($negotiations['carSpotsTaken'] ?? 0),
+                            'car_spots_total' => count($negotiations['carSpots'] ?? []),
+                            'ongoing'         => $ongoing,
+                        ];
 
                         $trainings = $this->trainingService->getAllTrainings();
                         if ($trainings !== []) {

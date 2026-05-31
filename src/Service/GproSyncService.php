@@ -18,7 +18,7 @@ final class GproSyncService
     private const int LOCK_TTL_SECONDS = 60;
 
     /** Number of GPRO API calls one full sync spends. */
-    private const int CALLS_PER_SYNC = 10;
+    private const int CALLS_PER_SYNC = 11;
 
     public function __construct(
         private readonly GproApiClient $apiClient,
@@ -80,6 +80,7 @@ final class GproSyncService
             $this->apiClient->getTyreSuppliers($force);
             $this->apiClient->getMenu($force);
             $this->apiClient->getMoneyLevels($force);
+            $this->apiClient->getSponsorNegotiations($force);
 
             $this->users->markSynced($userId);
             return 'synced';
