@@ -6,12 +6,14 @@ namespace App\Controller;
 
 use App\Http\Request;
 use App\Security\Authorize;
+use App\Service\PilotCalculatorService;
 use App\Service\TrainingService;
 
 class TrainingController
 {
     public function __construct(
         private readonly TrainingService $trainingService,
+        private readonly PilotCalculatorService $calculator,
         private readonly Authorize $authorize,
     ) {
     }
@@ -43,31 +45,25 @@ class TrainingController
             'weight' => (int)$request->post('weight'),
         ];
 
-        $trainingType = $request->post('training_type');
-        $intensity = (int)$request->post('intensity', 1);
+        $sessions = $request->post('sessions');
+        $schedule = is_array($sessions) ? $sessions : [];
 
-        $currentStats = $stats;
-        $totalCost = 0;
-        $log = [];
+        $plan = $this->trainingService->planSchedule($stats, $schedule);
 
-        for ($i = 1; $i <= $intensity; $i++) {
-            $result = $this->trainingService->predictResult($currentStats, $trainingType);
-            $currentStats = $result['stats'];
-            $totalCost += $result['cost'];
-
-            $log[] = [
-                'session' => $i,
-                'stats' => $currentStats,
-                'cost_step' => $result['cost']
-            ];
-        }
+        $programSummary = array_map(
+            static fn(array $p): string => $p['name'] . ' x ' . $p['count'],
+            $plan['per_program'],
+        );
 
         $_SESSION['training_results'] = [
-            'start' => $stats,
-            'end' => $currentStats,
-            'total_cost' => $totalCost,
-            'program' => "$trainingType x $intensity",
-            'log' => $log
+            'start'       => $plan['start'],
+            'end'         => $plan['end'],
+            'start_oa'    => round($this->calculator->calculateOverall($plan['start']), 1),
+            'end_oa'      => round($this->calculator->calculateOverall($plan['end']), 1),
+            'total_cost'  => $plan['total_cost'],
+            'program'     => $programSummary === [] ? 'No sessions selected' : implode(' · ', $programSummary),
+            'per_program' => $plan['per_program'],
         ];
+        $_SESSION['training_schedule'] = $schedule;
     }
 }

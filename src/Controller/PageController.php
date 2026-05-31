@@ -355,6 +355,10 @@ class PageController
                     $viewData['training_results'] = $_SESSION['training_results'];
                     unset($_SESSION['training_results']);
                 }
+                if (isset($_SESSION['training_schedule'])) {
+                    $viewData['schedule'] = $_SESSION['training_schedule'];
+                    unset($_SESSION['training_schedule']);
+                }
                 break;
 
             case 'Car Wear':

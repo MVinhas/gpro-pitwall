@@ -292,6 +292,7 @@ $container['controller.car_wear'] = new CarWearController(
 
 $container['controller.training'] = new TrainingController(
     $container['service.training'],
+    $container['service.calculator'],
     $container['service.authorize'],
 );
 
