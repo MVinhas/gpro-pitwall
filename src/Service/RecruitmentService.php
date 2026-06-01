@@ -6,13 +6,14 @@ namespace App\Service;
 
 class RecruitmentService
 {
+    /** Score threshold below which a driver isn't worth showing. */
+    private const float MIN_RATING = 50.0;
+
     /**
-     * @param array<string, float>  $pilotRecruitmentFactors
      * @param array<string, string> $csvMap
      * @param array<string, int>    $caps
      */
     public function __construct(
-        private array $pilotRecruitmentFactors,
         private readonly array $csvMap,
         private array $caps,
         private readonly IdealPilotService $idealPilotService
@@ -37,13 +38,18 @@ class RecruitmentService
 
         foreach ($market as $raw) {
             $driver = $this->normalizeDriverData($raw);
-
-            if ($this->isEligible($driver, $targetDivision, $filterOffers)) {
-                $driver['rating'] = $this->calculateRating($driver, $idealStats);
-                if ($driver['rating'] >= 50) {
-                    $candidates[] = $driver;
-                }
+            if (!$this->isEligible($driver, $targetDivision, $filterOffers)) {
+                continue;
             }
+            $rating = $this->calculateRating($driver, $idealStats);
+            // Cull below 50 so the result set stays bounded — a full
+            // unfiltered market (4-5k drivers) blows the 128 MB heap
+            // when held in the session for sort + paginate.
+            if ($rating < self::MIN_RATING) {
+                continue;
+            }
+            $driver['rating'] = $rating;
+            $candidates[] = $driver;
         }
 
         return $candidates;
@@ -150,70 +156,63 @@ class RecruitmentService
     }
 
     /**
+     * Scores a candidate from 0..100 against the division's ideal pilot.
+     *
+     * Rules:
+     *   - Start at 100.
+     *   - Each attribute (con, tal, agg, exp, ti, sta, cha, mot): meeting or
+     *     exceeding the ideal costs nothing; for every unit BELOW the ideal,
+     *     subtract 0.1.
+     *   - Age: every year OLDER than the ideal subtracts 2; every year
+     *     YOUNGER adds 0.5.
+     *   - Weight: every kg HEAVIER than the ideal subtracts 0.5; every kg
+     *     LIGHTER adds 0.125.
+     *   - Salary / fee don't count.
+     *   - Clamp to [0, 100].
+     *
      * @param array<string, mixed> $driver
      * @param array<string, int|float> $ideal
      */
     private function calculateRating(array $driver, array $ideal): float
     {
-        $penalty = 0.0;
+        $score = 100.0;
 
         foreach ($this->csvMap as $csvKey => $schemaKey) {
-            $factorKey = strtolower((string) $schemaKey);
-
-            if (!isset($this->pilotRecruitmentFactors[$factorKey])) {
+            if (in_array($csvKey, ['WEI', 'AGE', 'FAV', 'OFF'], true)) {
                 continue;
             }
-
-            $actual = (float)($driver[$csvKey] ?? 0);
-            $target = (float)($ideal[$schemaKey] ?? 0);
-            $factor = (float)$this->pilotRecruitmentFactors[$factorKey];
-
+            if (!isset($ideal[$schemaKey])) {
+                continue;
+            }
+            $actual = (float) ($driver[$csvKey] ?? 0);
+            $target = (float) $ideal[$schemaKey];
             if ($actual < $target) {
-                $diff = $target - $actual;
-                $penalty += $diff * $factor;
+                $score -= ($target - $actual) * 0.1;
             }
         }
 
-
-
-
-
-        if (isset($driver['WEI'])) {
-            $weight = (int)$driver['WEI'];
-
-            $targetWeight = (float)($ideal['Weight'] ?? 0);
-
-            if ($weight > $targetWeight) {
-                $wFactor = abs((float)($this->pilotRecruitmentFactors['weight'] ?? 0.0));
-                $penalty += ($weight - $targetWeight) * $wFactor;
+        $idealAge = (int) ($ideal['Age'] ?? 0);
+        if ($idealAge > 0) {
+            $age = (int) ($driver['AGE'] ?? 0);
+            $delta = $age - $idealAge;
+            if ($delta > 0) {
+                $score -= $delta * 2.0;
+            } elseif ($delta < 0) {
+                $score += (-$delta) * 0.5;
             }
         }
 
-
-        $age = (int)($driver['AGE'] ?? 0);
-        if ($age <= 28) {
-            $maxBonus = -2.0;
-            $penalty += $maxBonus * ((28 - $age) / 10);
-        } elseif ($age <= 34) {
-            $startPenalty = 0.2;
-            $endPenalty   = 3.4;
-            $penalty += $startPenalty + ($endPenalty - $startPenalty) * (($age - 29) / 5);
-        } else {
-            $penalty += 3.4 + (($age - 35) * 1);
+        $idealWeight = (int) ($ideal['Weight (Kg)'] ?? 0);
+        if ($idealWeight > 0) {
+            $weight = (int) ($driver['WEI'] ?? 0);
+            $delta = $weight - $idealWeight;
+            if ($delta > 0) {
+                $score -= $delta * 0.5;
+            } elseif ($delta < 0) {
+                $score += (-$delta) * 0.125;
+            }
         }
 
-
-        $fee = (int)($driver['FEE'] ?? 0);
-        if ($fee > 300000) {
-            $penalty += (($fee - 300000) / 100000) * 0.5;
-        }
-
-        $salary = (int)($driver['SAL'] ?? 0);
-        if ($salary > 500000) {
-            $penalty += (($salary - 500000) / 100000) * 0.5;
-        }
-
-        $rating = 100.0 - $penalty;
-        return max(0, round($rating, 1));
+        return round(max(0.0, min(100.0, $score)), 1);
     }
 }

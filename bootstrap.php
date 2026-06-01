@@ -163,7 +163,6 @@ $container['service.ideal_pilot'] = new IdealPilotService(
 $container['service.insight'] = new InsightService($container['config']['app']['divisions']);
 
 $container['service.recruitment'] = new RecruitmentService(
-    $container['config']['secrets']['pilot_recruitment_factors'],
     $container['config']['app']['csv_to_schema_map'],
     $container['config']['secrets']['division_caps'],
     $container['service.ideal_pilot']
