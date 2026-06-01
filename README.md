@@ -123,17 +123,17 @@ bin/probe_security.sh <url>            # Post-deploy leak probe (must exit 0)
 
 ---
 
-## Deployment (Hetzner shared, SFTP)
+## Deployment
 
-Source of truth is GitHub; deployment is a manual SFTP copy.
+Source of truth is GitHub; deployment is a manual file copy to your host of choice.
 
-1. Locally: `bin/build_release.sh --tar`. Produces `dist/gpro-pitwall.tar.gz`.
-2. SFTP `dist/gpro-pitwall/*` to the domain's web root.
-3. In konsoleH:
+1. Locally: `bin/build_release.sh --tar`. Produces `dist/gpro-pitwall.tar.gz` — a self-contained bundle with `vendor/` already installed (no dev deps), the compiled CSS, and the writable `var/` skeleton.
+2. Upload `dist/gpro-pitwall/*` to your domain's web root.
+3. On the host, configure:
    - **Document root** = `public/` *(the load-bearing setting — every sensitive file lives outside)*
    - **PHP version** = 8.5
-   - **SSL** = Let's Encrypt enabled
-4. Create `.env` on the server from `.env.example`. Set `APP_ENV=prod`, fill SMTP credentials, generate fresh `APP_SECRET` + `EMAIL_ENCRYPTION_KEY` (never reuse dev keys).
+   - **HTTPS** enabled
+4. Create `.env` on the server. Set `APP_ENV=prod`, `IS_DEV=false`, fill SMTP credentials, generate fresh `APP_SECRET` + `EMAIL_ENCRYPTION_KEY` (never reuse dev keys — `openssl rand -hex 32`).
 5. Set file permissions:
    ```bash
    chmod 600 .env
