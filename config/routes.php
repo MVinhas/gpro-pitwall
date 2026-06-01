@@ -44,4 +44,7 @@ return function (Router $router): void {
 
     // ========== API ==========
     $router->add('POST', '/api/warmup', 'controller.api_warmup', 'warmup');
+
+    // ========== HEALTH ==========
+    $router->add('GET', '/healthz', 'controller.health', 'check');
 };
