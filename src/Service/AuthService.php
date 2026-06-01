@@ -29,7 +29,7 @@ final class AuthService
     /**
      * Handles New User Registration
      *
-     * @return array{success: bool, error?: string, user_id?: int}
+     * @return array{success: true, user_id: int}|array{success: false, error: string}
      */
     public function register(
         string $username,
@@ -72,7 +72,7 @@ final class AuthService
     /**
      * Handles Existing User Login
      */
-    /** @return array{success: bool, error?: string, user_id?: int} */
+    /** @return array{success: true, user_id: int}|array{success: false, error: string} */
     public function login(string $username, string $ip): array
     {
         $username = trim($username);
@@ -173,10 +173,11 @@ final class AuthService
 
         $_SESSION = [];
 
-        if (ini_get('session.use_cookies')) {
+        $sessionName = session_name();
+        if (ini_get('session.use_cookies') && $sessionName !== false) {
             $params = session_get_cookie_params();
             setcookie(
-                session_name(),
+                $sessionName,
                 '',
                 [
                     'expires'  => time() - 42000,

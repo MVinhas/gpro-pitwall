@@ -45,7 +45,7 @@
         "sort-packages": true
     },
     "scripts": {
-        "analyse": "phpstan analyse src --level=6 --memory-limit=512M",
+        "analyse": "phpstan analyse src --level=7 --memory-limit=512M",
         "lint": "phpcs --standard=PSR12 src",
         "twig-lint": "vendor/bin/twig-linter lint templates",
         "audit": "composer audit",

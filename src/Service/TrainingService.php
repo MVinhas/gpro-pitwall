@@ -63,7 +63,13 @@ class TrainingService
     /** @return list<array<string, mixed>> */
     public function getAllTrainings(): array
     {
-        return $this->db->query("SELECT * FROM trainings")->fetchAll(PDO::FETCH_ASSOC);
+        $stmt = $this->db->query("SELECT * FROM trainings");
+        if ($stmt === false) {
+            return [];
+        }
+        /** @var list<array<string, mixed>> $rows */
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return $rows;
     }
 
     /**

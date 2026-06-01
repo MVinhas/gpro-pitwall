@@ -127,14 +127,16 @@ class UserRepository
 
     public function countAll(): int
     {
-        return (int)$this->pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
+        $stmt = $this->pdo->query("SELECT COUNT(*) FROM users");
+        return $stmt === false ? 0 : (int) $stmt->fetchColumn();
     }
 
     public function countWithApiToken(): int
     {
-        return (int)$this->pdo->query(
+        $stmt = $this->pdo->query(
             "SELECT COUNT(*) FROM users WHERE api_token IS NOT NULL AND api_token != ''"
-        )->fetchColumn();
+        );
+        return $stmt === false ? 0 : (int) $stmt->fetchColumn();
     }
 
     public function updateSyncStatus(int $userId, string $status): void

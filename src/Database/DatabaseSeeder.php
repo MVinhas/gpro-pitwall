@@ -63,9 +63,10 @@ class DatabaseSeeder
      */
     private function encryptLegacyApiTokens(): void
     {
-        $rows = $this->db
-            ->query("SELECT id, api_token FROM users WHERE api_token IS NOT NULL AND api_token != ''")
-            ->fetchAll(PDO::FETCH_ASSOC);
+        $stmt = $this->db->query(
+            "SELECT id, api_token FROM users WHERE api_token IS NOT NULL AND api_token != ''"
+        );
+        $rows = $stmt === false ? [] : $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         $update = $this->db->prepare("UPDATE users SET api_token = :token WHERE id = :id");
 
@@ -102,9 +103,8 @@ class DatabaseSeeder
 
     private function applyUserMigrations(): void
     {
-        $cols = $this->db
-            ->query('PRAGMA table_info(users)')
-            ->fetchAll(PDO::FETCH_ASSOC);
+        $stmt = $this->db->query('PRAGMA table_info(users)');
+        $cols = $stmt === false ? [] : $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         $existingCols = array_column($cols, 'name');
 
@@ -289,9 +289,8 @@ class DatabaseSeeder
      */
     private function applyTrackMigrations(): void
     {
-        $cols = $this->db
-            ->query('PRAGMA table_info(tracks)')
-            ->fetchAll(PDO::FETCH_ASSOC);
+        $stmt = $this->db->query('PRAGMA table_info(tracks)');
+        $cols = $stmt === false ? [] : $stmt->fetchAll(PDO::FETCH_ASSOC);
         $existing = array_column($cols, 'name');
 
         foreach (['boost_dry', 'boost_wet'] as $col) {
