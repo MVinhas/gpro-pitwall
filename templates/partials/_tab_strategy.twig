@@ -4,7 +4,6 @@
     <div class="lg:col-span-3">
         <form method="POST" action="/calculate_strategy" id="stratForm">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <input type="hidden" name="action" value="calculate_strategy">
 
             {# CARD 1: RACE SETTINGS #}
             <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-4">
@@ -187,12 +186,8 @@
         if (pending) pending.abort();
         pending = new AbortController();
         const data = new FormData(form);
-        data.set('action', 'strategy_fragment');
         try {
-            // Use getAttribute — the form's <input name="action"> shadows
-            // the form.action property, returning the element instead of the URL.
-            const url = form.getAttribute('action');
-            const res = await fetch(url, {
+            const res = await fetch('/strategy_fragment', {
                 method: 'POST',
                 body: data,
                 signal: pending.signal,

@@ -15,7 +15,6 @@
                 {% endif %}
 
                 <form method="POST" action="/calculate_training">
-                    <input type="hidden" name="action" value="calculate_training">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
                     {% set driver = imported_driver ?? {} %}

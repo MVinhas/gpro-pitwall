@@ -35,12 +35,13 @@ return function (Router $router): void {
     $router->add('POST', '/clear_stats', 'controller.baseline', 'clearStats');
 
     // Strategy, wear, and risk calculations
-    $router->add('POST', '/calculate_strategy', 'controller.strategy', 'handle');
+    $router->add('POST', '/calculate_strategy', 'controller.strategy', 'calculate');
+    $router->add('POST', '/strategy_fragment',  'controller.strategy', 'fragment');
     $router->add('POST', '/calculate_wear', 'controller.car_wear', 'handle');
 
     // Recruitment and training
     $router->add('POST', '/analyze_recruitment', 'controller.recruitment', 'analyze');
-    $router->add('POST', '/calculate_training', 'controller.training', 'handle');
+    $router->add('POST', '/calculate_training', 'controller.training', 'calculate');
 
     // ========== API ==========
     $router->add('POST', '/api/warmup', 'controller.api_warmup', 'warmup');

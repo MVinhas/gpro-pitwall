@@ -26,61 +26,11 @@ class StrategyController
     ) {
     }
 
-    public function handle(Request $request): void
+    public function calculate(Request $request): void
     {
-        $action = $request->post('action');
+        $user = $this->authorize->requireAuth();
+        $this->api->setToken($user['api_token']);
 
-        if ($action === 'flush_cache') {
-            // Session-only reset; no DB write, no secrets — safe for free users.
-            $this->authorize->requireAuth();
-            $this->flushCache();
-            return;
-        }
-
-        if ($action === 'calculate_strategy') {
-            $user = $this->authorize->requireAuth();
-            if (!empty($user['api_token'])) {
-                $this->api->setToken($user['api_token']);
-            }
-            $this->calculate($request);
-            return;
-        }
-
-        if ($action === 'strategy_fragment') {
-            $user = $this->authorize->requireAuth();
-            if (!empty($user['api_token'])) {
-                $this->api->setToken($user['api_token']);
-            }
-            $this->fragment($request);
-            return;
-        }
-
-        header("Location: /");
-        exit;
-    }
-
-    private function fragment(Request $request): void
-    {
-        $result = $this->runCalc($request);
-        echo $this->twig->render('partials/_strategy_results.twig', [
-            'strategy_error'   => $result['error'] ?? null,
-            'strategy_results' => $result['error'] ?? null ? null : $result,
-        ]);
-    }
-
-    private function flushCache(): void
-    {
-        unset($_SESSION['api_cache']);
-        unset($_SESSION['imported_driver']);
-        unset($_SESSION['wear_results']);
-        unset($_SESSION['strategy_results']);
-        $_SESSION['flash_message'] = "Cache cleared.";
-        header("Location: " . $_SERVER['HTTP_REFERER']);
-        exit;
-    }
-
-    private function calculate(Request $request): void
-    {
         $result = $this->runCalc($request);
         if (isset($result['error'])) {
             $_SESSION['strategy_error'] = $result['error'];
@@ -90,6 +40,18 @@ class StrategyController
         session_write_close();
         header("Location: /?main_tab=Race Strategy");
         exit;
+    }
+
+    public function fragment(Request $request): void
+    {
+        $user = $this->authorize->requireAuth();
+        $this->api->setToken($user['api_token']);
+
+        $result = $this->runCalc($request);
+        echo $this->twig->render('partials/_strategy_results.twig', [
+            'strategy_error'   => $result['error'] ?? null,
+            'strategy_results' => $result['error'] ?? null ? null : $result,
+        ]);
     }
 
     /**

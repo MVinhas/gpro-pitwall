@@ -18,14 +18,10 @@ class TrainingController
     ) {
     }
 
-    public function handle(Request $request): void
+    public function calculate(Request $request): void
     {
         $this->authorize->requireAuth();
-
-        $action = $request->post('action');
-        if ($action === 'calculate_training') {
-            $this->calculateTraining($request);
-        }
+        $this->calculateTraining($request);
 
         header("Location: /?main_tab=Training Planner");
         exit;
