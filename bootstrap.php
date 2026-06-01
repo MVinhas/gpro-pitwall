@@ -4,12 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/vendor/autoload.php';
 
-try {
-    $dotenv = Dotenv\Dotenv::createImmutable(__DIR__);
-    $dotenv->load();
-} catch (\Dotenv\Exception\InvalidPathException $invalidPathException) {
-    // Continue if .env missing
-}
+\App\Support\Env::load(__DIR__ . '/.env');
 
 $container = [];
 $container['settings'] = [
