@@ -7,43 +7,37 @@ namespace App\Service;
 use App\Cache\CacheInterface;
 use RuntimeException;
 
+/**
+ * Friendly facade over the GPRO public API: one method per endpoint, with
+ * per-method cache keys and TTLs. The actual HTTP work lives in
+ * GproApiFetcher; this class composes fetch + cache + apiRequestsRemaining
+ * bookkeeping.
+ */
 final class GproApiClient
 {
-    private readonly string $baseUrl;
+    public const string API_LIMIT_KEY = 'api_requests_remaining';
 
-    private ?string $token = null;
-
-    /**
-     * @param array<string, mixed> $config
-     */
     public function __construct(
-        array $config,
-        private readonly CacheInterface $cache
+        private readonly GproApiFetcher $fetcher,
+        private readonly CacheInterface $cache,
     ) {
-        $this->baseUrl = rtrim((string) $config['base_url'], '/');
     }
 
     public function setToken(string $token): void
     {
-        $this->token = trim($token);
+        $this->fetcher->setToken($token);
     }
 
     /** @return array<string, mixed> */
     public function getOfficeData(bool $forceRefresh = false): array
     {
-        return $this->getCached(
-            'office_data',
-            '/gb/backend/api/v2/office',
-            $this->ttlShort(),
-            $forceRefresh
-        );
+        return $this->getCached('office_data', '/gb/backend/api/v2/office', $this->ttlShort(), $forceRefresh);
     }
 
     /** @return array<string, mixed> */
     public function getMyPilotDetails(bool $forceRefresh = false): array
     {
         $office = $this->getOfficeData($forceRefresh);
-
         if (!isset($office['driId'])) {
             throw new RuntimeException('Driver ID missing from office data');
         }
@@ -63,30 +57,20 @@ final class GproApiClient
             'next_race_profile',
             '/gb/backend/api/v2/TrackProfile',
             $this->ttlShort(),
-            $forceRefresh
+            $forceRefresh,
         );
     }
 
     /** @return array<string, mixed> */
     public function getCarData(bool $forceRefresh = false): array
     {
-        return $this->getCached(
-            'car_data',
-            '/gb/backend/api/v2/UpdateCar',
-            $this->ttlShort(),
-            $forceRefresh
-        );
+        return $this->getCached('car_data', '/gb/backend/api/v2/UpdateCar', $this->ttlShort(), $forceRefresh);
     }
 
     /** @return array<string, mixed> */
     public function getRaceSetup(bool $forceRefresh = false): array
     {
-        return $this->getCached(
-            'race_setup',
-            '/gb/backend/api/v2/RaceSetup',
-            $this->ttlShort(),
-            $forceRefresh
-        );
+        return $this->getCached('race_setup', '/gb/backend/api/v2/RaceSetup', $this->ttlShort(), $forceRefresh);
     }
 
     /** @return array<string, mixed> */
@@ -96,7 +80,7 @@ final class GproApiClient
             'staff_facilities',
             '/gb/backend/api/v2/StaffAndFacilities',
             $this->ttlShort(),
-            $forceRefresh
+            $forceRefresh,
         );
     }
 
@@ -104,12 +88,7 @@ final class GproApiClient
     public function getTechnicalDirector(bool $forceRefresh = false): array
     {
         try {
-            return $this->getCached(
-                'td_profile',
-                '/gb/backend/api/v2/TDProfile',
-                $this->ttlShort(),
-                $forceRefresh
-            );
+            return $this->getCached('td_profile', '/gb/backend/api/v2/TDProfile', $this->ttlShort(), $forceRefresh);
         } catch (\Throwable) {
             return [];
         }
@@ -118,106 +97,45 @@ final class GproApiClient
     /** @return array<string, mixed> */
     public function getTyreSuppliers(bool $forceRefresh = false): array
     {
-        return $this->getCached(
-            'tyre_suppliers',
-            '/gb/backend/api/v2/TyreSuppliers',
-            120000,
-            $forceRefresh
-        );
+        return $this->getCached('tyre_suppliers', '/gb/backend/api/v2/TyreSuppliers', 120000, $forceRefresh);
     }
 
-    /**
-     * Manager menu. Carries `group` ("Rookie - 31"), `groupShort` ("R31"),
-     * cash, team metadata — used for division-aware features (training
-     * advisor, sponsors).
-     *
-     * @return array<string, mixed>
-     */
+    /** @return array<string, mixed> */
     public function getMenu(bool $forceRefresh = false): array
     {
-        return $this->getCached(
-            'manager_menu',
-            '/gb/backend/api/v2/Menu',
-            $this->ttlShort(),
-            $forceRefresh
-        );
+        return $this->getCached('manager_menu', '/gb/backend/api/v2/Menu', $this->ttlShort(), $forceRefresh);
     }
 
-    /**
-     * Group-wide money and car levels. Returns one entry per manager in
-     * the user's group with `cash` and `carLevel` — used by the swap
-     * advisor to learn the peer car-strength envelope.
-     *
-     * @return array<string, mixed>
-     */
+    /** @return array<string, mixed> */
     public function getMoneyLevels(bool $forceRefresh = false): array
     {
-        return $this->getCached(
-            'money_levels',
-            '/gb/backend/api/v2/MoneyLevels',
-            $this->ttlShort(),
-            $forceRefresh
-        );
+        return $this->getCached('money_levels', '/gb/backend/api/v2/MoneyLevels', $this->ttlShort(), $forceRefresh);
     }
 
-    /**
-     * Current + next-season calendar with per-race trackId. Used by
-     * the cockpit's testing target-race lookup. `nextSeasonPublished`
-     * gates whether `nextSeasonEvents` are usable.
-     *
-     * @return array<string, mixed>
-     */
+    /** @return array<string, mixed> */
     public function getCalendar(bool $forceRefresh = false): array
     {
-        return $this->getCached(
-            'calendar',
-            '/gb/backend/api/v2/Calendar',
-            $this->ttlShort(),
-            $forceRefresh
-        );
+        return $this->getCached('calendar', '/gb/backend/api/v2/Calendar', $this->ttlShort(), $forceRefresh);
     }
 
-    /**
-     * Every track's PHA + lap metadata in one call. Tracks are stable
-     * across the season — cache for hours so repeat cockpit renders
-     * don't refetch.
-     *
-     * @return array<string, mixed>
-     */
+    /** @return array<string, mixed> */
     public function getAllTracksPreview(bool $forceRefresh = false): array
     {
-        return $this->getCached(
-            'all_tracks_preview',
-            '/gb/backend/api/v2/Tracks',
-            21600,
-            $forceRefresh
-        );
+        return $this->getCached('all_tracks_preview', '/gb/backend/api/v2/Tracks', 21600, $forceRefresh);
     }
 
-    /**
-     * Currently signed sponsors and ongoing negotiations. `carSpots`
-     * lists the 5 ad positions (filled or empty); `ongNegs` lists
-     * proposals in flight, each with the sponsorId needed to fetch
-     * the sponsor's profile for negotiation-answer recommendations.
-     *
-     * @return array<string, mixed>
-     */
+    /** @return array<string, mixed> */
     public function getSponsorNegotiations(bool $forceRefresh = false): array
     {
         return $this->getCached(
             'sponsor_negotiations',
             '/gb/backend/api/v2/NegOverview',
             $this->ttlShort(),
-            $forceRefresh
+            $forceRefresh,
         );
     }
 
-    /**
-     * One sponsor's detailed profile (the 6 characteristics + metadata).
-     * Cached per-sponsor so repeat cockpit renders don't refetch.
-     *
-     * @return array<string, mixed>
-     */
+    /** @return array<string, mixed> */
     public function getSponsorProfile(int $sponsorId, bool $forceRefresh = false): array
     {
         return $this->getCached(
@@ -229,46 +147,11 @@ final class GproApiClient
     }
 
     /**
-     * Cache key for the last-seen apiRequestsRemaining, so the sync guard can
-     * read the budget without spending an API call.
-     */
-    public const string API_LIMIT_KEY = 'api_requests_remaining';
-
-    /**
-     * Last-known remaining API budget, or null if never observed.
-     * Read from the shared cache so it survives across requests.
-     */
-    public function lastKnownRemaining(): ?int
-    {
-        $v = $this->cache->get(self::API_LIMIT_KEY);
-        return is_numeric($v) ? (int) $v : null;
-    }
-
-    /** @param array<string, mixed> $data */
-    private function rememberApiLimit(array $data): void
-    {
-        if (!isset($data['apiRequestsRemaining'])) {
-            return;
-        }
-
-        $remaining = (int) $data['apiRequestsRemaining'];
-        $_SESSION['api_limit'] = $remaining;
-        // Hold a little longer than a sync cycle so the guard can read it
-        // between race-weekend visits.
-        $this->cache->set(self::API_LIMIT_KEY, $remaining, 3600);
-    }
-
-    /**
-     * Hourly-refreshed full-market dump. Public endpoint (no token),
-     * response is gzip-encoded JSON / CSV / XML. We always use JSON,
-     * gunzip in-process, and cache the decoded payload for ~55 minutes
-     * to stay just inside the upstream refresh cadence.
+     * Hourly-refreshed full-market dump. GPRO returns
+     * `{"Last updated": "...", "<market>": [...]}`; this method unwraps it
+     * to `{updated_at, rows}` so callers don't have to dance around the
+     * space in the key name.
      *
-     * GPRO returns the payload as `{"Last updated": "...", "<market>": [...]}`.
-     * This method unwraps it to `{updated_at, rows}` so callers don't
-     * have to dance around the space in the key name.
-     *
-     * @param string $market `drivers` or `tds`
      * @return array{updated_at: ?string, rows: list<array<string, mixed>>}
      */
     public function getMarketFile(string $market = 'drivers', bool $forceRefresh = false): array
@@ -277,48 +160,12 @@ final class GproApiClient
         if (!$forceRefresh) {
             $cached = $this->cache->get($key);
             if (is_array($cached)) {
+                /** @var array{updated_at: ?string, rows: list<array<string, mixed>>} $cached */
                 return $cached;
             }
         }
 
-        $url = $this->baseUrl . "/GetMarketFile.asp?market={$market}&type=json";
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_ENCODING       => '', // accept any encoding; curl will gunzip automatically when supported
-            CURLOPT_HTTPHEADER     => [
-                'Accept: application/json',
-                'Accept-Encoding: gzip',
-                'User-Agent: GPRO-Assistant/0.2.0',
-            ],
-        ]);
-        $raw = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $error = curl_error($ch);
-        unset($ch);
-
-        if ($error) {
-            throw new RuntimeException("Market file fetch failed: {$error}");
-        }
-        if ($httpCode !== 200 || !is_string($raw)) {
-            throw new RuntimeException("Market file fetch failed: HTTP {$httpCode}");
-        }
-
-        // Detect raw gzip (curl didn't unzip — happens when the host doesn't
-        // declare Content-Encoding) and gunzip in PHP.
-        if (str_starts_with($raw, "\x1f\x8b")) {
-            $decoded = @gzdecode($raw);
-            if ($decoded === false) {
-                throw new RuntimeException('Market file gunzip failed');
-            }
-            $raw = $decoded;
-        }
-
-        $data = json_decode($raw, true);
-        if (!is_array($data)) {
-            throw new RuntimeException('Market file JSON decode failed');
-        }
-
+        $data = $this->fetcher->fetchMarketFile($market);
         $rows = $data[$market] ?? null;
         if (!is_array($rows)) {
             throw new RuntimeException("Market file payload missing `{$market}` array");
@@ -333,63 +180,45 @@ final class GproApiClient
         return $payload;
     }
 
+    /**
+     * Last-known remaining API budget, or null if never observed.
+     * Read from the shared cache so it survives across requests.
+     */
+    public function lastKnownRemaining(): ?int
+    {
+        $v = $this->cache->get(self::API_LIMIT_KEY);
+        return is_numeric($v) ? (int) $v : null;
+    }
+
     /** @return array<string, mixed> */
-    private function getCached(string $key, string $endpoint, int $ttl, bool $force = false): array
+    private function getCached(string $key, string $endpoint, int $ttl, bool $force): array
     {
         if (!$force) {
             $cached = $this->cache->get($key);
             if ($cached !== null) {
+                /** @var array<string, mixed> $cached */
                 $this->rememberApiLimit($cached);
                 return $cached;
             }
         }
 
-        $data = $this->request($endpoint);
+        $data = $this->fetcher->fetchJson($endpoint);
         $this->cache->set($key, $data, $ttl);
+        $this->rememberApiLimit($data);
 
         return $data;
     }
 
-    /** @return array<string, mixed> */
-    private function request(string $endpoint): array
+    /** @param array<string, mixed> $data */
+    private function rememberApiLimit(array $data): void
     {
-        if (empty($this->token)) {
-            throw new RuntimeException('GPRO API token not set for current user');
+        if (!isset($data['apiRequestsRemaining'])) {
+            return;
         }
 
-        $ch = curl_init($this->baseUrl . $endpoint);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER => [
-                "Authorization: Bearer {$this->token}",
-                'Accept: application/json',
-                'User-Agent: GPRO-Assistant/0.2.0',
-            ],
-        ]);
-
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $error = curl_error($ch);
-        // curl_close() is a no-op since PHP 8.0 and deprecated in 8.5; the
-        // handle is freed when $ch goes out of scope.
-        unset($ch);
-
-        if ($error) {
-            throw new RuntimeException($error);
-        }
-
-        if ($httpCode !== 200) {
-            throw new RuntimeException("API error ({$httpCode})");
-        }
-
-        $data = json_decode((string) $response, true);
-        if (!is_array($data)) {
-            throw new RuntimeException('Invalid JSON response');
-        }
-
-        $this->rememberApiLimit($data);
-
-        return $data;
+        $remaining = (int) $data['apiRequestsRemaining'];
+        $_SESSION['api_limit'] = $remaining;
+        $this->cache->set(self::API_LIMIT_KEY, $remaining, 3600);
     }
 
     private function ttlShort(): int

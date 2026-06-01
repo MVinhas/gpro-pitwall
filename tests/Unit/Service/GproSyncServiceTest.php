@@ -36,7 +36,8 @@ final class GproSyncServiceTest extends TestCase
         // Pointed at an unreachable host so any real call fails fast. The
         // coalescing path never calls it; the "ran" path does and is expected
         // to land in the failed branch.
-        return new GproApiClient(['base_url' => 'http://127.0.0.1:9'], $this->cache);
+        $fetcher = new \App\Service\GproApiFetcher(['base_url' => 'http://127.0.0.1:9']);
+        return new GproApiClient($fetcher, $this->cache);
     }
 
     public function testNoTokenSetsNeedsTokenAndNeverSyncs(): void

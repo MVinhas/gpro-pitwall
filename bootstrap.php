@@ -124,8 +124,9 @@ $container['service.recaptcha'] = new \App\Service\ReCaptchaService(
 
 
 
+$container['service.api_fetcher'] = new \App\Service\GproApiFetcher($container['config']['api']);
 $container['service.api_client'] = new GproApiClient(
-    $container['config']['api'],
+    $container['service.api_fetcher'],
     $container['service.cache']
 );
 $container['service.gpro_sync'] = new GproSyncService(
