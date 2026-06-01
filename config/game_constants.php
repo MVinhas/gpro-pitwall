@@ -8,12 +8,12 @@ return [
 
     'main_sections' => [
         'Cockpit',
-        'Recruitment Analyzer',
+        'Race Strategy',
+        'Car Wear',
         'Training Planner',
+        'Recruitment Analyzer',
         'Division Baseline',
         'Division Differences',
-        'Car Wear',
-        'Race Strategy'
     ],
 
     // UI Label Map

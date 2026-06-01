@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPRO Assistant</title>
+    <title>GPRO Pitwall</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -119,15 +119,28 @@
             <div>
                 <h1 class="text-3xl font-bold text-slate-900">
                     <a href="/" class="hover:opacity-80">
-                        <span class="text-blue-600">GPRO</span> Assistant
+                        <span class="text-blue-600">GPRO</span> Pitwall
                     </a>
                 </h1>
                 <p class="mt-1 text-sm text-slate-500">
-                    Optimize your team strategy and recruitment.
+                    Race-weekend cockpit for GPRO managers — strategy, wear, training, recruitment.
                 </p>
             </div>
 
             <div class="flex items-center gap-4 flex-wrap">
+                {% if is_logged_in and api_limit is defined and api_limit != '?' %}
+                    {% set api_tone = (api_limit < 20) ? 'bg-red-50 text-red-700 ring-red-600/20'
+                                      : ((api_limit < 50) ? 'bg-amber-50 text-amber-700 ring-amber-600/20'
+                                                          : 'bg-slate-50 text-slate-700 ring-slate-600/10') %}
+                    <span
+                        class="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium ring-1 ring-inset tabular-nums {{ api_tone }}"
+                        title="GPRO API calls remaining this hour"
+                    >
+                        <span class="text-slate-400">API</span>
+                        <span class="font-semibold">{{ api_limit|number_format }}</span>
+                        <span class="text-slate-400">left</span>
+                    </span>
+                {% endif %}
                 {% if is_logged_in and user.is_admin %}
                     <a href="/debug"
                     class="btn btn-sm btn-secondary">
@@ -201,7 +214,7 @@
 
     <footer class="py-6 text-center">
         <div class="inline-flex items-center gap-2 text-xs text-slate-400">
-            <span>&copy; {{ "now"|date("Y") }} GPRO Assistant 0.2.0</span>
+            <span>&copy; {{ "now"|date("Y") }} GPRO Pitwall 0.2.0</span>
             <span class="opacity-50">•</span>
             <a
                 href="https://github.com/MVinhas/gpro-assistant"

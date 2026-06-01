@@ -70,7 +70,14 @@ class PageController
         $isPremium = !empty($user['is_premium']);
         $isAdmin   = !empty($user['is_admin']);
 
-        if ($isLoggedIn && $hasToken) {
+        if ($isLoggedIn && !$hasToken) {
+            $_SESSION['flash'] = $_SESSION['flash']
+                ?? 'Add your GPRO API token to unlock the cockpit.';
+            header('Location: /control_panel');
+            exit;
+        }
+
+        if ($isLoggedIn) {
             $this->apiClient->setToken($user['api_token']);
         }
 
@@ -81,8 +88,11 @@ class PageController
         if (!$isAdmin) {
             $mainSections = array_filter(
                 $mainSections,
-                fn (string $section): bool =>
-                    $section !== 'Division Baseline'
+                fn (string $section): bool => !in_array(
+                    $section,
+                    ['Division Baseline', 'Division Differences'],
+                    true,
+                ),
             );
         }
 
@@ -90,7 +100,7 @@ class PageController
             array_filter($mainSections, fn (string $s): bool => $s !== 'Login')
         );
 
-        $defaultTab = 'Recruitment Analyzer';
+        $defaultTab = 'Cockpit';
         if (!in_array($defaultTab, $mainSections, true)) {
             $defaultTab = $mainSections[0] ?? '';
         }
@@ -134,7 +144,7 @@ class PageController
             'flash'           => $_SESSION['flash'] ?? null,
             'is_logged_in'    => $isLoggedIn,
             'user'            => $user,
-            'can_submit'      => ($isLoggedIn && $isPremium && $hasToken),
+            'can_submit'      => ($isLoggedIn && $isPremium),
         ];
 
         unset($_SESSION['flash']);
@@ -323,8 +333,10 @@ class PageController
                 break;
 
             case 'Division Differences':
-                $viewData['insights_data'] =
-                    $this->insightService->generateInsights($allIdealPilots);
+                if ($isAdmin) {
+                    $viewData['insights_data'] =
+                        $this->insightService->generateInsights($allIdealPilots);
+                }
                 break;
 
             case 'Recruitment Analyzer':
