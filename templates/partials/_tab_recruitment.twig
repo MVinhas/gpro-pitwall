@@ -74,25 +74,13 @@
                             Analyze Candidates
                         </button>
                     {% else %}
-                        {# Premium / Lock State #}
                         <div class="w-full md:w-1/2 p-4 bg-amber-50 border border-amber-200 rounded-md text-center">
-                            <p class="text-sm font-medium text-amber-800 mb-2">
-                                {% if not is_logged_in %}
-                                    Account Required
-                                {% elseif not user.is_premium %}
-                                    Premium Feature
-                                {% else %}
-                                    Setup Required
-                                {% endif %}
-                            </p>
+                            <p class="text-sm font-medium text-amber-800 mb-2">Account Required</p>
                             <p class="text-xs text-amber-600 mb-3">
-                                {% if not is_logged_in %}
-                                    <a href="/login" class="underline hover:text-amber-800">Log in</a> to analyze recruitment data.
-                                {% elseif not user.is_premium %}
-                                    Upgrade to Premium to use the Recruitment Analyzer.
-                                {% else %}
-                                    Please add your API Key in the Control Panel.
-                                {% endif %}
+                                <a href="/login" class="underline hover:text-amber-800">Log in</a>
+                                or
+                                <a href="/register" class="underline hover:text-amber-800">register</a>
+                                to analyze recruitment data.
                             </p>
                             <button type="button" disabled class="w-full rounded-md bg-slate-300 px-4 py-2 text-sm font-semibold text-white cursor-not-allowed">
                                 Analyze Candidates (Locked)

@@ -38,7 +38,7 @@ class StrategyController
         }
 
         if ($action === 'calculate_strategy') {
-            $user = $this->authorize->requirePremium();
+            $user = $this->authorize->requireAuth();
             if (!empty($user['api_token'])) {
                 $this->api->setToken($user['api_token']);
             }
@@ -47,7 +47,7 @@ class StrategyController
         }
 
         if ($action === 'strategy_fragment') {
-            $user = $this->authorize->requirePremium();
+            $user = $this->authorize->requireAuth();
             if (!empty($user['api_token'])) {
                 $this->api->setToken($user['api_token']);
             }

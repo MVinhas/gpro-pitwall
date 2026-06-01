@@ -125,20 +125,9 @@ class UserRepository
         return $user;
     }
 
-    public function setPremium(int $userId, bool $status): void
-    {
-        $stmt = $this->pdo->prepare("UPDATE users SET is_premium = :status WHERE id = :id");
-        $stmt->execute(['status' => $status ? 1 : 0, 'id' => $userId]);
-    }
-
     public function countAll(): int
     {
         return (int)$this->pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
-    }
-
-    public function countPremium(): int
-    {
-        return (int)$this->pdo->query("SELECT COUNT(*) FROM users WHERE is_premium = 1")->fetchColumn();
     }
 
     public function countWithApiToken(): int

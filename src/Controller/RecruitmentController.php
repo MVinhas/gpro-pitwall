@@ -20,7 +20,7 @@ class RecruitmentController
 
     public function analyze(Request $request): void
     {
-        $this->authorize->requirePremium();
+        $this->authorize->requireAuth();
 
         $division = (string) $request->post('target_division', 'Rookie');
 

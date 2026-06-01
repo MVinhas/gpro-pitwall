@@ -146,7 +146,6 @@ final class AuthService
 
         $_SESSION['user_id'] = (int) $user['id'];
         $_SESSION['username'] = $user['username'];
-        $_SESSION['is_premium'] = (bool) $user['is_premium'];
         $_SESSION['sync_status'] = 'idle';
 
         if (empty($user['api_token'])) {

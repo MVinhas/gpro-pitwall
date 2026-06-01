@@ -90,7 +90,6 @@ class DatabaseSeeder
                 username TEXT NOT NULL UNIQUE,
                 email_encrypted TEXT NOT NULL,
                 email_hash TEXT NOT NULL UNIQUE,
-                is_premium INTEGER NOT NULL DEFAULT 0,
                 is_admin INTEGER NOT NULL DEFAULT 0,
                 api_token TEXT DEFAULT NULL,
                 verified_at TEXT DEFAULT NULL,
@@ -118,10 +117,9 @@ class DatabaseSeeder
             );
         }
 
-        if (!in_array('is_premium', $existingCols, true)) {
-            $this->db->exec(
-                "ALTER TABLE users ADD COLUMN is_premium INTEGER NOT NULL DEFAULT 0"
-            );
+        if (in_array('is_premium', $existingCols, true)) {
+            // Premium tier removed 2026-06-01. SQLite 3.35+ supports DROP COLUMN.
+            $this->db->exec("ALTER TABLE users DROP COLUMN is_premium");
         }
 
         if (!in_array('api_token', $existingCols, true)) {

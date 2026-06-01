@@ -20,7 +20,7 @@ class TrainingController
 
     public function handle(Request $request): void
     {
-        $this->authorize->requirePremium();
+        $this->authorize->requireAuth();
 
         $action = $request->post('action');
         if ($action === 'calculate_training') {

@@ -67,19 +67,26 @@ class PageController
         }
 
         $hasToken  = !empty($user['api_token']);
-        $isPremium = !empty($user['is_premium']);
         $isAdmin   = !empty($user['is_admin']);
 
-        if ($isLoggedIn && !$hasToken) {
+        if (!$isLoggedIn) {
+            echo $this->twig->render('landing.twig', [
+                'csrf_token'   => $_SESSION['csrf_token'] ?? '',
+                'is_logged_in' => false,
+                'flash'        => $_SESSION['flash'] ?? null,
+            ]);
+            unset($_SESSION['flash']);
+            return;
+        }
+
+        if (!$hasToken) {
             $_SESSION['flash'] = $_SESSION['flash']
                 ?? 'Add your GPRO API token to unlock the cockpit.';
             header('Location: /control_panel');
             exit;
         }
 
-        if ($isLoggedIn) {
-            $this->apiClient->setToken($user['api_token']);
-        }
+        $this->apiClient->setToken($user['api_token']);
 
         $divisions    = $this->config['app']['divisions'];
         $tracks       = $this->config['app']['tracks'];
@@ -144,7 +151,7 @@ class PageController
             'flash'           => $_SESSION['flash'] ?? null,
             'is_logged_in'    => $isLoggedIn,
             'user'            => $user,
-            'can_submit'      => ($isLoggedIn && $isPremium),
+            'can_submit'      => $isLoggedIn,
         ];
 
         unset($_SESSION['flash']);
@@ -161,166 +168,164 @@ class PageController
             case 'Cockpit':
                 $cockpitRisk = max(0, min(100, (int) $request->get('cockpit_risk', 0)));
                 $viewData['cockpit_risk'] = $cockpitRisk;
-                if ($hasToken) {
-                    try {
-                        $raceSetup = $this->apiClient->getRaceSetup();
-                        $carData   = $this->apiClient->getCarData();
-                        $pilot     = $this->apiClient->getMyPilotDetails();
+                try {
+                    $raceSetup = $this->apiClient->getRaceSetup();
+                    $carData   = $this->apiClient->getCarData();
+                    $pilot     = $this->apiClient->getMyPilotDetails();
 
-                        $trackId = (int) ($raceSetup['trackId'] ?? 0);
-                        $viewData['pha'] = $this->phaMatch->evaluate(
-                            [
-                                'power'        => $raceSetup['trackPower'] ?? 0,
-                                'handling'     => $raceSetup['trackHandl'] ?? 0,
-                                'acceleration' => $raceSetup['trackAccel'] ?? 0,
-                            ],
-                            [
-                                'power'        => $carData['carPower'] ?? 0,
-                                'handling'     => $carData['carHandl'] ?? 0,
-                                'acceleration' => $carData['carAccel'] ?? 0,
-                            ],
-                            $this->isFavouriteTrack($pilot, $trackId),
-                        );
-                        $trackName = $raceSetup['trackName'] ?? $activeTrack;
-                        $viewData['pha_track_name'] = $trackName;
-
-                        // Boost-lap fuel cost for the upcoming track (dry coeff;
-                        // wet is only relevant if the race runs wet).
-                        $boost = $this->trackRepo->findBoostProfile((string) $trackName);
-                        if ($boost !== null) {
-                            $viewData['boost_costs'] = $this->boostFuel->costTable(
-                                $boost['lap_length'],
-                                $boost['boost_dry'],
-                            );
-                        }
-
-                        $w = $raceSetup['weather'] ?? [];
-                        $viewData['weather'] = $this->raceWeather->assess($w);
-                        $viewData['weather_temps'] = [
-                            'q1' => $w['q1Temp'] ?? null,
-                            'q2' => $w['q2Temp'] ?? null,
-                        ];
-
-                        $wear = $this->carWear->calculateWear(
-                            [
-                                'id'   => $trackId,
-                                'name' => $trackName,
-                                'laps' => $raceSetup['laps'] ?? null,
-                            ],
-                            $carData,
-                            $this->mapper->mapDriver($pilot),
-                            $cockpitRisk,
-                        );
-                        $menu = $this->apiClient->getMenu();
-                        $division = $this->divisionFromMenu($menu);
-                        $cash = (int) ($menu['cash'] ?? 0);
-
-                        $moneyLevels = $this->apiClient->getMoneyLevels();
-                        $groupCarLevels = array_values(array_filter(array_map(
-                            static fn(array $m): int => (int) ($m['carLevel'] ?? 0),
-                            $moneyLevels['managers'] ?? [],
-                        ), static fn(int $lvl): bool => $lvl > 0));
-
-                        $viewData['testing_projection'] = $this->testingProjection->project([
+                    $trackId = (int) ($raceSetup['trackId'] ?? 0);
+                    $viewData['pha'] = $this->phaMatch->evaluate(
+                        [
+                            'power'        => $raceSetup['trackPower'] ?? 0,
+                            'handling'     => $raceSetup['trackHandl'] ?? 0,
+                            'acceleration' => $raceSetup['trackAccel'] ?? 0,
+                        ],
+                        [
                             'power'        => $carData['carPower'] ?? 0,
                             'handling'     => $carData['carHandl'] ?? 0,
                             'acceleration' => $carData['carAccel'] ?? 0,
-                        ]);
+                        ],
+                        $this->isFavouriteTrack($pilot, $trackId),
+                    );
+                    $trackName = $raceSetup['trackName'] ?? $activeTrack;
+                    $viewData['pha_track_name'] = $trackName;
 
-                        $office = $this->apiClient->getOfficeData();
-                        $currentRace = (int) ($office['raceNb'] ?? 0);
-                        if ($currentRace > 0) {
-                            $calendar  = $this->apiClient->getCalendar();
-                            $allTracks = $this->apiClient->getAllTracksPreview();
-                            $targets = $this->testingTargets->targetsFor(
-                                $currentRace,
-                                $calendar,
-                                $allTracks,
-                            );
-                            foreach ($targets as &$target) {
-                                $target['favourite'] = $target['track_id'] !== null
-                                    && $this->isFavouriteTrack($pilot, $target['track_id']);
-                            }
-                            unset($target);
-                            $viewData['testing_targets'] = $targets;
-                        }
-
-                        $negotiations = $this->apiClient->getSponsorNegotiations();
-                        $ongoing = [];
-                        foreach ($negotiations['ongNegs'] ?? [] as $neg) {
-                            $sponsorId = (int) ($neg['sponsorId'] ?? 0);
-                            if ($sponsorId <= 0) {
-                                continue;
-                            }
-                            try {
-                                $profile = $this->apiClient->getSponsorProfile($sponsorId);
-                            } catch (\Throwable) {
-                                continue;
-                            }
-                            $advice = $this->sponsorAdvisor->adviseFor($profile);
-                            $ongoing[] = [
-                                'name'             => (string) ($neg['name'] ?? $profile['name'] ?? 'Unknown'),
-                                'progress'         => (string) ($neg['progress'] ?? '0'),
-                                'priority'         => (string) ($neg['priority'] ?? ''),
-                                'contested'        => (string) ($neg['contested'] ?? ''),
-                                'attention'        => (int) ($neg['attention'] ?? 0),
-                                'characteristics'  => $advice['characteristics'],
-                                'answers'          => $advice['answers'],
-                            ];
-                        }
-                        $viewData['sponsor_negotiations'] = [
-                            'car_spots_taken' => (int) ($negotiations['carSpotsTaken'] ?? 0),
-                            'car_spots_total' => count($negotiations['carSpots'] ?? []),
-                            'ongoing'         => $ongoing,
-                        ];
-
-                        $trainings = $this->trainingService->getAllTrainings();
-                        if ($trainings !== []) {
-                            $ideal = $division !== null
-                                ? $this->idealPilotService->getIdealPilot($division)
-                                : null;
-                            $viewData['training_division'] = $division;
-                            $viewData['training_baseline_count'] = (int) ($ideal['count'] ?? 0);
-                            $picks = $this->trainingAdvisor->rank(
-                                $trainings,
-                                $this->mapper->mapDriver($pilot),
-                                $ideal,
-                            );
-                            if ($picks !== []) {
-                                $viewData['training_picks'] = array_slice($picks, 0, 3);
-                            }
-                        }
-
-                        if (!isset($wear['error'])) {
-                            $advice = $this->wearAdvisor->classify($wear['parts']);
-                            $viewData['wear_advice'] = $advice;
-
-                            $forcedSwaps = array_merge($advice['swap'], $advice['risky']);
-                            if ($forcedSwaps !== []) {
-                                $viewData['swap_advice'] = $this->swapAdvisor->advise(
-                                    $forcedSwaps,
-                                    $carData,
-                                    $wear['parts'],
-                                    $this->mapper->mapDriver($pilot),
-                                    [
-                                        'power'        => $raceSetup['trackPower'] ?? 0,
-                                        'handling'     => $raceSetup['trackHandl'] ?? 0,
-                                        'acceleration' => $raceSetup['trackAccel'] ?? 0,
-                                    ],
-                                    [
-                                        'power'        => $carData['carPower'] ?? 0,
-                                        'handling'     => $carData['carHandl'] ?? 0,
-                                        'acceleration' => $carData['carAccel'] ?? 0,
-                                    ],
-                                    $cockpitRisk,
-                                    $groupCarLevels,
-                                    $cash,
-                                );
-                            }
-                        }
-                    } catch (\Throwable $e) {
-                        $viewData['cockpit_error'] = $e->getMessage();
+                    // Boost-lap fuel cost for the upcoming track (dry coeff;
+                    // wet is only relevant if the race runs wet).
+                    $boost = $this->trackRepo->findBoostProfile((string) $trackName);
+                    if ($boost !== null) {
+                        $viewData['boost_costs'] = $this->boostFuel->costTable(
+                            $boost['lap_length'],
+                            $boost['boost_dry'],
+                        );
                     }
+
+                    $w = $raceSetup['weather'] ?? [];
+                    $viewData['weather'] = $this->raceWeather->assess($w);
+                    $viewData['weather_temps'] = [
+                        'q1' => $w['q1Temp'] ?? null,
+                        'q2' => $w['q2Temp'] ?? null,
+                    ];
+
+                    $wear = $this->carWear->calculateWear(
+                        [
+                            'id'   => $trackId,
+                            'name' => $trackName,
+                            'laps' => $raceSetup['laps'] ?? null,
+                        ],
+                        $carData,
+                        $this->mapper->mapDriver($pilot),
+                        $cockpitRisk,
+                    );
+                    $menu = $this->apiClient->getMenu();
+                    $division = $this->divisionFromMenu($menu);
+                    $cash = (int) ($menu['cash'] ?? 0);
+
+                    $moneyLevels = $this->apiClient->getMoneyLevels();
+                    $groupCarLevels = array_values(array_filter(array_map(
+                        static fn(array $m): int => (int) ($m['carLevel'] ?? 0),
+                        $moneyLevels['managers'] ?? [],
+                    ), static fn(int $lvl): bool => $lvl > 0));
+
+                    $viewData['testing_projection'] = $this->testingProjection->project([
+                        'power'        => $carData['carPower'] ?? 0,
+                        'handling'     => $carData['carHandl'] ?? 0,
+                        'acceleration' => $carData['carAccel'] ?? 0,
+                    ]);
+
+                    $office = $this->apiClient->getOfficeData();
+                    $currentRace = (int) ($office['raceNb'] ?? 0);
+                    if ($currentRace > 0) {
+                        $calendar  = $this->apiClient->getCalendar();
+                        $allTracks = $this->apiClient->getAllTracksPreview();
+                        $targets = $this->testingTargets->targetsFor(
+                            $currentRace,
+                            $calendar,
+                            $allTracks,
+                        );
+                        foreach ($targets as &$target) {
+                            $target['favourite'] = $target['track_id'] !== null
+                                && $this->isFavouriteTrack($pilot, $target['track_id']);
+                        }
+                        unset($target);
+                        $viewData['testing_targets'] = $targets;
+                    }
+
+                    $negotiations = $this->apiClient->getSponsorNegotiations();
+                    $ongoing = [];
+                    foreach ($negotiations['ongNegs'] ?? [] as $neg) {
+                        $sponsorId = (int) ($neg['sponsorId'] ?? 0);
+                        if ($sponsorId <= 0) {
+                            continue;
+                        }
+                        try {
+                            $profile = $this->apiClient->getSponsorProfile($sponsorId);
+                        } catch (\Throwable) {
+                            continue;
+                        }
+                        $advice = $this->sponsorAdvisor->adviseFor($profile);
+                        $ongoing[] = [
+                            'name'             => (string) ($neg['name'] ?? $profile['name'] ?? 'Unknown'),
+                            'progress'         => (string) ($neg['progress'] ?? '0'),
+                            'priority'         => (string) ($neg['priority'] ?? ''),
+                            'contested'        => (string) ($neg['contested'] ?? ''),
+                            'attention'        => (int) ($neg['attention'] ?? 0),
+                            'characteristics'  => $advice['characteristics'],
+                            'answers'          => $advice['answers'],
+                        ];
+                    }
+                    $viewData['sponsor_negotiations'] = [
+                        'car_spots_taken' => (int) ($negotiations['carSpotsTaken'] ?? 0),
+                        'car_spots_total' => count($negotiations['carSpots'] ?? []),
+                        'ongoing'         => $ongoing,
+                    ];
+
+                    $trainings = $this->trainingService->getAllTrainings();
+                    if ($trainings !== []) {
+                        $ideal = $division !== null
+                            ? $this->idealPilotService->getIdealPilot($division)
+                            : null;
+                        $viewData['training_division'] = $division;
+                        $viewData['training_baseline_count'] = (int) ($ideal['count'] ?? 0);
+                        $picks = $this->trainingAdvisor->rank(
+                            $trainings,
+                            $this->mapper->mapDriver($pilot),
+                            $ideal,
+                        );
+                        if ($picks !== []) {
+                            $viewData['training_picks'] = array_slice($picks, 0, 3);
+                        }
+                    }
+
+                    if (!isset($wear['error'])) {
+                        $advice = $this->wearAdvisor->classify($wear['parts']);
+                        $viewData['wear_advice'] = $advice;
+
+                        $forcedSwaps = array_merge($advice['swap'], $advice['risky']);
+                        if ($forcedSwaps !== []) {
+                            $viewData['swap_advice'] = $this->swapAdvisor->advise(
+                                $forcedSwaps,
+                                $carData,
+                                $wear['parts'],
+                                $this->mapper->mapDriver($pilot),
+                                [
+                                    'power'        => $raceSetup['trackPower'] ?? 0,
+                                    'handling'     => $raceSetup['trackHandl'] ?? 0,
+                                    'acceleration' => $raceSetup['trackAccel'] ?? 0,
+                                ],
+                                [
+                                    'power'        => $carData['carPower'] ?? 0,
+                                    'handling'     => $carData['carHandl'] ?? 0,
+                                    'acceleration' => $carData['carAccel'] ?? 0,
+                                ],
+                                $cockpitRisk,
+                                $groupCarLevels,
+                                $cash,
+                            );
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    $viewData['cockpit_error'] = $e->getMessage();
                 }
                 break;
 
@@ -350,7 +355,7 @@ class PageController
                 // "Import Driver" on first visit. Cached as session state for
                 // subsequent renders.
                 $imported = $_SESSION['imported_driver'] ?? null;
-                if (!$imported && $hasToken && $isPremium) {
+                if (!$imported) {
                     try {
                         $this->apiClient->setToken($user['api_token']);
                         $pilotRaw = $this->apiClient->getMyPilotDetails();
@@ -374,7 +379,7 @@ class PageController
                 break;
 
             case 'Car Wear':
-                if ($hasToken && !isset($_SESSION['wear_inputs']['driver'])) {
+                if (!isset($_SESSION['wear_inputs']['driver'])) {
                     try {
                         $pilotData = $this->apiClient->getMyPilotDetails();
                         $_SESSION['wear_inputs']['driver'] =
@@ -395,7 +400,7 @@ class PageController
 
                 if (is_array($existing)) {
                     $viewData['strategy_results'] = $existing;
-                } elseif ($hasToken && $isPremium) {
+                } else {
                     // First visit (or fresh session) — run the calc with the
                     // synced data + zero overrides so the user lands on a fully
                     // populated panel without having to click Calculate.

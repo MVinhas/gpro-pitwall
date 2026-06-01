@@ -1,0 +1,107 @@
+{% extends "layout.twig" %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto px-4">
+
+    {# HERO #}
+    <section class="text-center pt-10 pb-12">
+        <span class="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
+            <span aria-hidden="true">●</span>
+            Free to use — no tier, no paywall
+        </span>
+        <h1 class="mt-5 text-4xl sm:text-5xl font-bold text-slate-900 tracking-tight">
+            Your race-weekend cockpit for
+            <span class="text-blue-600">GPRO</span>.
+        </h1>
+        <p class="mt-4 text-lg text-slate-600 max-w-2xl mx-auto">
+            Pitwall reads your own GPRO API data and turns it into the answers
+            you actually need before qualifying: what to train, what to swap,
+            what to set, what to bet on weather. Every tab. Every manager.
+        </p>
+        <div class="mt-8 flex flex-wrap gap-3 justify-center">
+            <a href="/register" class="btn btn-lg btn-primary">
+                Create a free account
+            </a>
+            <a href="/login" class="btn btn-lg btn-secondary">
+                I already have one
+            </a>
+        </div>
+        <p class="mt-3 t-caption">
+            You'll need your own GPRO API token —
+            <a href="https://app.gpro.net/apiaccess" target="_blank" rel="noopener noreferrer" class="underline hover:text-blue-600">grab it here</a>
+            after you register.
+        </p>
+    </section>
+
+    {# WHAT IT DOES #}
+    <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-12">
+        <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+            <h3 class="t-heading">Cockpit</h3>
+            <p class="t-caption mt-1">
+                Track PHA match, weather call, training picks, sponsor
+                negotiations, testing projection, and car wear — one
+                screen, in race-prep order.
+            </p>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+            <h3 class="t-heading">Race Strategy</h3>
+            <p class="t-caption mt-1">
+                Fuel + tyre + setup for every compound. Live risk slider
+                that re-runs the wear projection without a page reload.
+            </p>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+            <h3 class="t-heading">Car Wear</h3>
+            <p class="t-caption mt-1">
+                Per-part end-of-race wear forecast from your real driver
+                attributes — and a ranked list of swap options that fit
+                your cash and your group's car-level range.
+            </p>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+            <h3 class="t-heading">Training Planner</h3>
+            <p class="t-caption mt-1">
+                Combine multiple programs in one shot, see projected OA,
+                catch the motivation hit before it ruins the cycle.
+            </p>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+            <h3 class="t-heading">Recruitment Analyzer</h3>
+            <p class="t-caption mt-1">
+                Score the full driver market against your division's
+                ideal pilot. The more you populate the baseline, the
+                sharper the score gets.
+            </p>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+            <h3 class="t-heading">Privacy-first</h3>
+            <p class="t-caption mt-1">
+                Email and API token are encrypted at rest (AES-256-GCM).
+                No third-party trackers. No ads. Source on GitHub.
+            </p>
+        </div>
+    </section>
+
+    {# SUPPORT #}
+    <section class="bg-white rounded-xl border border-slate-200 p-6 mb-12 text-center">
+        <h2 class="t-heading">Free, and staying free.</h2>
+        <p class="t-caption mt-2 max-w-xl mx-auto">
+            Pitwall is a one-person side project. If it saved you a race,
+            buying me a coffee keeps it ticking — but it's never gated and
+            never will be.
+        </p>
+        <div class="mt-4">
+            <a
+                href="https://buymeacoffee.com/mvinhas"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="btn btn-md bg-amber-400 text-slate-900 hover:bg-amber-500 focus:ring-amber-500"
+            >
+                <span aria-hidden="true">☕</span>
+                <span>Buy me a coffee</span>
+            </a>
+        </div>
+    </section>
+
+</div>
+{% endblock %}

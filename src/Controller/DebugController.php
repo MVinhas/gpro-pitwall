@@ -51,7 +51,6 @@ class DebugController
 
         $userStats = [
             'total' => $this->userRepo->countAll(),
-            'premium' => $this->userRepo->countPremium(),
             'with_token' => $this->userRepo->countWithApiToken(),
         ];
 

@@ -22,7 +22,7 @@ class CarWearController
 
     public function handle(Request $request): void
     {
-        $user = $this->authorize->requirePremium();
+        $user = $this->authorize->requireAuth();
 
         if (!empty($user['api_token'])) {
             $this->api->setToken($user['api_token']);

@@ -24,7 +24,7 @@ class BaselineController
 
     public function addPilot(Request $request): void
     {
-        $this->authorize->requirePremium();
+        $this->authorize->requireAdmin();
 
         $division = (string)$request->post('division');
         if ($division === '') {
@@ -51,7 +51,7 @@ class BaselineController
 
     public function updateSeason(Request $request): void
     {
-        $this->authorize->requirePremium();
+        $this->authorize->requireAdmin();
 
         $division = (string)$request->post('division');
         if ($division === '') {
@@ -69,7 +69,7 @@ class BaselineController
 
     public function undoLastPilot(Request $request): void
     {
-        $this->authorize->requirePremium();
+        $this->authorize->requireAdmin();
 
         $division = (string)$request->post('division');
         if ($division === '') {
@@ -83,7 +83,7 @@ class BaselineController
 
     public function clearStats(Request $request): void
     {
-        $this->authorize->requirePremium();
+        $this->authorize->requireAdmin();
 
         $division = (string)$request->post('division');
         if ($division === '') {

@@ -143,23 +143,10 @@
                <input type="hidden" name="race_weather" value="{{ strategy_results.weather_inputs.Race.weather }}">
             </div>
 
-            {% if user.is_premium %}
-                <button type="submit" id="stratBtn"
-                    class="btn btn-lg btn-primary w-full">
-                    Calculate Strategy
-                </button>
-            {% else %}
-                <div class="p-4 bg-amber-50 border border-amber-200 rounded-lg text-center">
-                    <p class="text-sm font-bold text-amber-800 mb-1">Premium Only</p>
-                    <p class="text-xs text-amber-700 mb-3">
-                        Strategy tools require a premium account.
-                    </p>
-                    <button type="button" disabled
-                        class="btn btn-lg btn-disabled w-full">
-                        Calculate Strategy
-                    </button>
-                </div>
-            {% endif %}
+            <button type="submit" id="stratBtn"
+                class="btn btn-lg btn-primary w-full">
+                Calculate Strategy
+            </button>
         </form>
     </div>
 

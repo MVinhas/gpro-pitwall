@@ -55,22 +55,12 @@
                         </div>
                     </div>
 
-                    {% if user.is_premium %}
-                        <button type="submit" id="wearBtn" class="btn btn-md btn-primary w-full">
-                            <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                            </svg>
-                            <span>Analyze / Recalculate</span>
-                        </button>
-                    {% else %}
-                        <div class="p-4 bg-amber-50 border border-amber-200 rounded-md text-center">
-                            <p class="text-sm font-medium text-amber-800 mb-2">Premium Feature</p>
-                            <p class="t-caption text-amber-700 mb-3">Upgrade to calculate car wear predictions.</p>
-                            <button type="button" disabled class="btn btn-md btn-disabled w-full">
-                                Analyze / Recalculate
-                            </button>
-                        </div>
-                    {% endif %}
+                    <button type="submit" id="wearBtn" class="btn btn-md btn-primary w-full">
+                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        <span>Analyze / Recalculate</span>
+                    </button>
                 </form>
             </div>
 
