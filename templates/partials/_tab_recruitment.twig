@@ -115,10 +115,10 @@
             {% elseif recruitment_results is defined %}
                 <div class="mt-8">
                     <div class="flex justify-between items-end mb-4">
-                        <h3 class="text-base font-semibold leading-6 text-slate-900">
+                        <h3 class="t-heading">
                              Candidates (Found: {{ pagination.total_items }})
                         </h3>
-                        <span class="text-xs text-slate-500">
+                        <span class="t-caption tabular-nums">
                             Page {{ pagination.current }} of {{ pagination.total_pages }}
                         </span>
                     </div>
@@ -154,8 +154,8 @@
                                         {# Stats #}
                                         {% set stats = ['CON', 'TAL', 'AGG', 'EXP', 'TEI', 'STA', 'CHA', 'MOT', 'WEI', 'AGE'] %}
                                         {% for stat in stats %}
-                                            <th scope="col" class="px-1 py-3.5 text-center text-xs font-medium text-slate-500 uppercase cursor-pointer">
-                                                 {{ _self.sortLink(stat|capitalize, stat, sort) }}
+                                            <th scope="col" class="px-1 py-3.5 text-center cursor-pointer">
+                                                <span class="t-label">{{ _self.sortLink(stat|capitalize, stat, sort) }}</span>
                                             </th>
                                         {% endfor %}
                                         
@@ -173,7 +173,7 @@
                                     {% for d in recruitment_results %}
                                         {% set ratingColor = d.rating >= 90 ? 'text-emerald-600' : (d.rating >= 75 ? 'text-blue-600' : 'text-slate-600') %}
                                         <tr class="hover:bg-slate-50 transition-colors">
-                                            <td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-bold sm:pl-6 {{ ratingColor }}">
+                                            <td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-bold tabular-nums sm:pl-6 {{ ratingColor }}">
                                                 {{ d.rating }}
                                             </td>
                                             <td class="whitespace-nowrap px-2 py-4 text-sm font-medium text-slate-900">
@@ -182,21 +182,21 @@
                                                     <span class="ml-2 inline-flex items-center rounded-full bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-700 ring-1 ring-inset ring-red-600/10">{{ d.OFF }} Off</span>
                                                 {% endif %}
                                             </td>
-                                            <td class="whitespace-nowrap px-2 py-4 text-center text-sm font-bold text-slate-700">{{ d.OA }}</td>
-                                            
-                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm text-slate-500">{{ d.CON }}</td>
-                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm text-slate-500 font-medium text-slate-700">{{ d.TAL }}</td>
-                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm text-slate-500">{{ d.AGG }}</td>
-                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm text-slate-500">{{ d.EXP }}</td>
-                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm text-slate-500">{{ d.TEI }}</td>
-                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm text-slate-500">{{ d.STA }}</td>
-                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm text-slate-500">{{ d.CHA }}</td>
-                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm text-slate-500">{{ d.MOT }}</td>
-                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm text-slate-500">{{ d.WEI }}</td>
-                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm text-slate-500 font-bold">{{ d.AGE }}</td>
-                                            
-                                            <td class="whitespace-nowrap px-3 py-4 text-right text-sm text-slate-600">${{ d.SAL|number_format }}</td>
-                                            <td class="whitespace-nowrap px-3 py-4 text-right text-sm text-slate-600">${{ d.FEE|number_format }}</td>
+                                            <td class="whitespace-nowrap px-2 py-4 text-center text-sm font-bold tabular-nums text-slate-700">{{ d.OA }}</td>
+
+                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm tabular-nums text-slate-500">{{ d.CON }}</td>
+                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm tabular-nums font-medium text-slate-700">{{ d.TAL }}</td>
+                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm tabular-nums text-slate-500">{{ d.AGG }}</td>
+                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm tabular-nums text-slate-500">{{ d.EXP }}</td>
+                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm tabular-nums text-slate-500">{{ d.TEI }}</td>
+                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm tabular-nums text-slate-500">{{ d.STA }}</td>
+                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm tabular-nums text-slate-500">{{ d.CHA }}</td>
+                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm tabular-nums text-slate-500">{{ d.MOT }}</td>
+                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm tabular-nums text-slate-500">{{ d.WEI }}</td>
+                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm tabular-nums font-bold text-slate-500">{{ d.AGE }}</td>
+
+                                            <td class="whitespace-nowrap px-3 py-4 text-right text-sm tabular-nums text-slate-600">${{ d.SAL|number_format }}</td>
+                                            <td class="whitespace-nowrap px-3 py-4 text-right text-sm tabular-nums text-slate-600">${{ d.FEE|number_format }}</td>
                                             
                                             <td class="whitespace-nowrap px-3 py-4 text-center text-sm">
                                                 {% if d.ID > 0 %}
@@ -225,7 +225,7 @@
                                 
                                 <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
                                     <div>
-                                        <p class="text-sm text-slate-700">
+                                        <p class="text-sm text-slate-700 tabular-nums">
                                             Showing <span class="font-medium">{{ (pagination.current - 1) * 20 + 1 }}</span> to <span class="font-medium">{{ min(pagination.current * 20, pagination.total_items) }}</span> of <span class="font-medium">{{ pagination.total_items }}</span> results
                                         </p>
                                     </div>

@@ -21,30 +21,30 @@
         {# HEADER #}
         <div class="flex justify-between items-center border-b border-slate-200 pb-4">
             <div>
-                <h2 class="text-2xl font-bold text-slate-800">{{ strategy_results.track }}</h2>
-                <p class="text-sm text-slate-500">
+                <h2 class="t-display">{{ strategy_results.track }}</h2>
+                <p class="t-caption">
                     Season {{ strategy_results.season }} Race {{ strategy_results.race }} • {{ strategy_results.inputs.laps }} Laps
                 </p>
             </div>
             <div class="text-right">
-                <p class="text-xs text-slate-400 uppercase">Supplier</p>
-                <p class="text-xl font-bold text-blue-600">{{ strategy_results.supplier }}</p>
+                <p class="t-label">Supplier</p>
+                <p class="text-xl font-bold text-blue-600 tabular-nums">{{ strategy_results.supplier }}</p>
             </div>
         </div>
 
         {# FUEL CARD #}
         <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex justify-between items-center">
             <div>
-                <h4 class="text-sm font-bold text-slate-500 uppercase">Fuel Required</h4>
-                <p class="text-xs text-slate-400">Consumption: {{ strategy_results.fuel.l_per_lap }} L/lap</p>
+                <h4 class="t-section">Fuel Required</h4>
+                <p class="t-caption">Consumption: {{ strategy_results.fuel.l_per_lap }} L/lap</p>
             </div>
             <div class="text-right">
-                <p class="text-2xl font-bold text-slate-800">{{ strategy_results.fuel.dry }} L</p>
-                <p class="text-xs text-slate-500">Dry Race</p>
+                <p class="text-2xl font-bold text-slate-800 tabular-nums">{{ strategy_results.fuel.dry }} L</p>
+                <p class="t-caption">Dry Race</p>
             </div>
             <div class="text-right border-l pl-6 border-slate-100">
-                <p class="text-2xl font-bold text-blue-600">{{ strategy_results.fuel.wet }} L</p>
-                <p class="text-xs text-slate-500">Wet Race</p>
+                <p class="text-2xl font-bold text-blue-600 tabular-nums">{{ strategy_results.fuel.wet }} L</p>
+                <p class="t-caption">Wet Race</p>
             </div>
         </div>
 
@@ -52,16 +52,16 @@
         <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
             <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-slate-200">
-                    <thead class="bg-slate-800 text-white">
+                    <thead class="bg-slate-800">
                         <tr>
-                            <th class="px-4 py-3 text-left text-xs font-bold uppercase">Compound</th>
-                            <th class="px-4 py-3 text-center text-xs font-bold uppercase">Stops</th>
-                            <th class="px-4 py-3 text-center text-xs font-bold uppercase">Fuel/Stint</th>
-                            <th class="px-4 py-3 text-center text-xs font-bold uppercase">Est. Pit</th>
-                            <th class="px-4 py-3 text-center text-xs font-medium uppercase text-slate-400 border-l border-slate-600">Lost (Pits)</th>
-                            <th class="px-4 py-3 text-center text-xs font-medium uppercase text-slate-400">Lost (Fuel)</th>
-                            <th class="px-4 py-3 text-center text-xs font-medium uppercase text-slate-400">Lost (TCD)</th>
-                            <th class="px-4 py-3 text-center text-xs font-bold uppercase bg-slate-900">Total Lost</th>
+                            <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-white">Compound</th>
+                            <th class="px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-white">Stops</th>
+                            <th class="px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-white">Fuel/Stint</th>
+                            <th class="px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-white">Est. Pit</th>
+                            <th class="px-4 py-3 text-center text-xs font-medium uppercase tracking-wide text-slate-400 border-l border-slate-600">Lost (Pits)</th>
+                            <th class="px-4 py-3 text-center text-xs font-medium uppercase tracking-wide text-slate-400">Lost (Fuel)</th>
+                            <th class="px-4 py-3 text-center text-xs font-medium uppercase tracking-wide text-slate-400">Lost (TCD)</th>
+                            <th class="px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-white bg-slate-900">Total Lost</th>
                         </tr>
                     </thead>
                     <tbody class="bg-white divide-y divide-slate-200">
@@ -74,23 +74,23 @@
                                     {% endif %}
                                     {{ comp }}
                                 </td>
-                                <td class="px-4 py-3 text-center text-sm font-bold {{ data.stops > 3 ? 'text-red-500' : (is_best ? 'text-emerald-700' : 'text-blue-600') }}">
+                                <td class="px-4 py-3 text-center text-sm font-bold tabular-nums {{ data.stops > 3 ? 'text-red-500' : (is_best ? 'text-emerald-700' : 'text-blue-600') }}">
                                     {{ data.stops }}
                                 </td>
-                                <td class="px-4 py-3 text-center text-sm text-slate-600">{{ data.fuel_load }} L</td>
-                                <td class="px-4 py-3 text-center text-sm text-slate-500">{{ data.pit_time_est }}s</td>
+                                <td class="px-4 py-3 text-center text-sm text-slate-600 tabular-nums">{{ data.fuel_load }} L</td>
+                                <td class="px-4 py-3 text-center text-sm text-slate-500 tabular-nums">{{ data.pit_time_est }}s</td>
 
-                                <td class="px-4 py-3 text-center text-xs text-slate-500 border-l border-slate-100">
+                                <td class="px-4 py-3 text-center text-xs text-slate-500 tabular-nums border-l border-slate-100">
                                     {{ data.lost_pits }}
                                 </td>
-                                <td class="px-4 py-3 text-center text-xs text-slate-500">
+                                <td class="px-4 py-3 text-center text-xs text-slate-500 tabular-nums">
                                     {{ data.lost_fuel }}
                                 </td>
-                                <td class="px-4 py-3 text-center text-xs text-slate-500">
+                                <td class="px-4 py-3 text-center text-xs text-slate-500 tabular-nums">
                                     {{ data.lost_tcd }}
                                 </td>
 
-                                <td class="px-4 py-3 text-center text-sm font-bold border-l border-slate-200 {{ is_best ? 'text-emerald-700 bg-emerald-100' : 'text-slate-900 bg-slate-50' }}">
+                                <td class="px-4 py-3 text-center text-sm font-bold tabular-nums border-l border-slate-200 {{ is_best ? 'text-emerald-700 bg-emerald-100' : 'text-slate-900 bg-slate-50' }}">
                                     {{ data.total_lost }}s
                                 </td>
                             </tr>
@@ -103,7 +103,7 @@
         {# SETUP CALCULATOR TABLE #}
         <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
             <div class="px-6 py-3 bg-slate-50 border-b border-slate-200">
-                <h3 class="text-sm font-bold text-slate-700 uppercase">Car Setup</h3>
+                <h3 class="t-section">Car Setup</h3>
             </div>
             <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-slate-200 text-sm">
@@ -156,9 +156,9 @@
                         {% for part in ['Front Wing', 'Rear Wing', 'Engine', 'Brakes', 'Gearbox', 'Suspension'] %}
                             <tr>
                                 <td class="px-4 py-3 font-bold text-slate-700 pl-6">{{ part }}</td>
-                                <td class="px-4 py-3 text-center font-mono text-lg border-l border-slate-100">{{ strategy_results.setups.Q1[part] }}</td>
-                                <td class="px-4 py-3 text-center font-mono text-lg border-l border-slate-100">{{ strategy_results.setups.Q2[part] }}</td>
-                                <td class="px-4 py-3 text-center font-mono text-lg font-bold text-blue-700 bg-blue-50 border-l border-blue-100">
+                                <td class="px-4 py-3 text-center font-mono text-lg tabular-nums border-l border-slate-100">{{ strategy_results.setups.Q1[part] }}</td>
+                                <td class="px-4 py-3 text-center font-mono text-lg tabular-nums border-l border-slate-100">{{ strategy_results.setups.Q2[part] }}</td>
+                                <td class="px-4 py-3 text-center font-mono text-lg font-bold tabular-nums text-blue-700 bg-blue-50 border-l border-blue-100">
                                     {{ strategy_results.setups.Race[part] }}
                                 </td>
                             </tr>
@@ -186,8 +186,8 @@
 
     </div>
 {% else %}
-    <div class="h-full flex flex-col items-center justify-center bg-slate-50 rounded-xl border border-dashed border-slate-200 text-slate-400 p-12">
-        <p class="text-lg font-medium text-slate-500">Strategy & Setup</p>
-        <p class="text-sm">Click "Calculate Strategy" to simulate race outcomes.</p>
+    <div class="h-full flex flex-col items-center justify-center bg-slate-50 rounded-xl border border-dashed border-slate-200 p-12">
+        <p class="t-heading">Strategy &amp; Setup</p>
+        <p class="t-caption mt-1">Click "Calculate Strategy" to simulate race outcomes.</p>
     </div>
 {% endif %}
