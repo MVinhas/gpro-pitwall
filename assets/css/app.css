@@ -1,0 +1,93 @@
+@import "tailwindcss";
+
+@source "../../templates/**/*.twig";
+@source "../../src/**/*.php";
+@source "../../public/index.php";
+
+@theme {
+    --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* =========================
+   BUTTON STANDARD
+========================= */
+
+.btn {
+    @apply inline-flex items-center justify-center gap-2
+           rounded-md font-semibold transition-all
+           focus:outline-none focus:ring-2 focus:ring-offset-2
+           disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.btn-sm { @apply px-3 py-1.5 text-xs; }
+.btn-md { @apply px-4 py-2 text-sm; }
+.btn-lg { @apply px-5 py-3 text-sm; }
+
+.btn-primary {
+    @apply bg-blue-600 text-white
+           hover:bg-blue-700
+           focus:ring-blue-500;
+}
+
+.btn-secondary {
+    @apply bg-slate-200 text-slate-800
+           hover:bg-slate-300
+           focus:ring-slate-400;
+}
+
+.btn-danger {
+    @apply bg-red-500 text-white
+           hover:bg-red-600
+           focus:ring-red-400;
+}
+
+.btn-disabled {
+    @apply bg-slate-300 text-slate-500 cursor-not-allowed;
+}
+
+/*
+ * Type tokens — keep usage consistent across all tabs.
+ * Section headers are colour-neutral on purpose: colour is reserved for
+ * meaning (success / warning / danger / interactive), not decoration.
+ */
+.t-display { @apply text-2xl font-bold text-slate-900; }
+.t-heading { @apply text-lg font-semibold text-slate-800; }
+.t-section { @apply text-xs font-bold uppercase tracking-wide text-slate-500; }
+.t-label   { @apply text-[10px] font-medium uppercase tracking-wide text-slate-500; }
+.t-value   { @apply text-base font-semibold text-slate-900; }
+.t-caption { @apply text-xs text-slate-500; }
+
+/* ---- Form controls ---- */
+.form-input,
+.form-input-sm,
+.form-select {
+    @apply rounded-md border-0 py-1.5 px-3 text-sm text-slate-900
+           bg-white ring-1 ring-inset ring-slate-300
+           placeholder:text-slate-400 transition-colors
+           focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-600
+           hover:ring-slate-400;
+}
+.form-input  { @apply block w-full; }
+.form-input-sm { @apply block w-20 text-left tabular-nums; }
+.form-select   { @apply block w-full; }
+
+.form-input-group { @apply relative; }
+.form-input-group .form-input,
+.form-input-group .form-input-sm { @apply pr-10; }
+.form-input-addon {
+    @apply pointer-events-none absolute inset-y-0 right-0 flex items-center
+           pr-3 text-xs font-medium text-slate-500 tabular-nums;
+}
+
+.form-input:disabled,
+.form-input-sm:disabled,
+.form-select:disabled,
+.form-input[readonly],
+.form-input-sm[readonly] {
+    @apply bg-slate-50 text-slate-500 cursor-not-allowed;
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: #f1f5f9; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }

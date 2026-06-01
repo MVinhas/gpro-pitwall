@@ -23,3 +23,7 @@ gpro_pilots.sqlite
 # Build & test artefacts
 /dist/
 .phpunit.result.cache
+
+# Tailwind standalone CLI — downloaded on demand by bin/build_tailwind.sh.
+# The compiled CSS in public/assets/ IS committed.
+/bin/.tailwindcss
