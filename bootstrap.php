@@ -101,14 +101,14 @@ $container['service.token_repo'] = new \App\Repository\TokenRepository($containe
 $container['service.authorize'] = new \App\Security\Authorize($container['service.user_repo']);
 
 $mailCfg = [
-    'host' => $_ENV['MAIL_HOST'],
-    'port' => $_ENV['MAIL_PORT'],
-    'user' => $_ENV['MAIL_USER'],
-    'pass' => $_ENV['MAIL_PASS'],
-    'from' => $_ENV['MAIL_FROM'],
-    'from_name' => $_ENV['MAIL_FROM_NAME'] ?: 'GPRO Assistant',
-    'is_dev'   => $container['settings']['is_dev'],
-    'mail_dir' => __DIR__ . '/var/mail',
+    'host'      => $_ENV['MAIL_HOST'] ?? 'localhost',
+    'port'      => $_ENV['MAIL_PORT'] ?? 25,
+    'user'      => $_ENV['MAIL_USER'] ?? '',
+    'pass'      => $_ENV['MAIL_PASS'] ?? '',
+    'from'      => $_ENV['MAIL_FROM'] ?? 'admin@gpro-pitwall.com',
+    'from_name' => $_ENV['MAIL_FROM_NAME'] ?? 'GPRO Pitwall',
+    'is_dev'    => $container['settings']['is_dev'],
+    'mail_dir'  => __DIR__ . '/var/mail',
 ];
 
 $container['service.rate_limiter'] = new \App\Service\RateLimiterService($container['service.cache']);

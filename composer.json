@@ -1,12 +1,14 @@
 {
-    "name": "mvinhas/gpro-assistant",
-    "description": "Your daily helper for the GPRO game.",
+    "name": "mvinhas/gpro-pitwall",
+    "description": "Race-weekend cockpit for GPRO managers — strategy, wear, training, recruitment.",
+    "version": "1.0.0",
+    "homepage": "https://gpro-pitwall.com",
     "type": "project",
     "license": "proprietary",
     "authors": [
         {
             "name": "Micael Vinhas",
-            "email": "mvinhas.tirso@gmail.com"
+            "email": "admin@gpro-pitwall.com"
         }
     ],
     "require": {

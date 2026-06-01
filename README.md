@@ -1,101 +1,183 @@
-# GPRO Assistant
+# GPRO Pitwall
 
-This is a tool created to help players of Grand Prix Racing Online (GPRO). It helps to make calculations for the race, manage the driver and check the car wear. The project is using the GPRO API v2 to fetch data automatically so you do not need to type everything manually.
+Race-weekend cockpit for [Grand Prix Racing Online](https://www.gpro.net) managers. Pulls your own GPRO data via the public API and turns it into the answers you actually need before qualifying: what to train, what to swap, what to set, what to bet on weather.
 
-The code is written in PHP 8.3 without a big framework like Laravel, but it tries to follow good architecture with Services and Repositories.
+**Live:** [gpro-pitwall.com](https://gpro-pitwall.com)
+**Contact:** admin@gpro-pitwall.com
+**Source:** [github.com/MVinhas/gpro-pitwall](https://github.com/MVinhas/gpro-pitwall)
 
-This project has security and privacy by design. No passwords, no way to do user enumeration, no clear text emails in the database.
+Free for every registered user. No tier, no paywall. Voluntary support via [Buy Me a Coffee](https://buymeacoffee.com/mvinhas).
 
-## Requirements
+---
 
-To run this application on your machine, you need to have:
+## Features
 
-* PHP 8.3 or higher
-* Composer
-* An email service (I recommend `mailcatcher`)
-* Extensions for PHP: `curl`, `mbstring`, `sqlite3`
-* Optional: `apcu` or `redis` extension if you want better performance for caching
+### Cockpit (the race-weekend spine)
+One screen, in race-prep order:
 
-## Installation
+- **PHA match** — track vs car Power/Handling/Acceleration alignment, with favourite-track and verdict cards.
+- **Testing projection** — 100-lap forecast with 3-race decay (Test Points → R&D → Engineering → Car Character) so you see where the car actually lands.
+- **Boost-lap fuel cost** — per-track dry/wet coefficient lookup.
+- **Weather call** — Q1 / Q2 / race-start dry/wet assessment.
+- **Sponsors** — ongoing negotiation list with per-negotiation characteristics and the recommended answer for each of the five negotiation questions.
+- **Training picks** — gap-closer recommendations weighted against the division ideal.
+- **Car wear panel** — per-part end-of-race wear projection with a live risk slider that re-runs without a page reload, plus a ranked list of swap options for every flagged part (filtered by your group's car-level band from `MoneyLevels` and your live cash from `Menu`).
+- **"Set your race strategy" handoff** — one click to the Strategy tab pre-populated.
 
-1. First you need to clone the repository or download the files to your folder.
-2. Open the terminal in the project folder and run composer to install dependencies:
+### Race Strategy
+Fuel + tyre + setup for every compound (Extra Soft / Soft / Medium / Hard / Rain). Live risk slider; the calc auto-runs on first visit so you don't need to click Calculate. Best-compound highlighted; per-compound breakdown of lost time (pits / fuel / tyre-compound difference). Setup table for Q1, Q2 and race with weather-aware tyre choices.
+
+### Car Wear
+Per-part end-of-race wear forecast from your real driver attributes. Read-only driver stats pulled from the API (no manual entry). Risk slider. Per-part: level, start wear, estimated added wear, projected end wear (colour-coded by survival risk).
+
+### Training Planner
+Multi-program schedule — combine several programs in one shot, see the cumulative effect of every (program × count) combination with a sum-then-clamp model that respects the [0, 250] attribute bounds. Projected Overall Ability before/after for contract renegotiation context. Per-attribute delta chips and a full comparison table.
+
+### Recruitment Analyzer
+Scores the full GPRO driver market against your division's ideal pilot. Rating is anchored to the division baseline rather than a hand-tuned formula — the closer your ideal converges as you populate the baseline, the sharper the score gets. Self-improving feedback loop.
+
+- Attributes below ideal: −0.1 per unit.
+- Age: −2 per year older, +0.5 per year younger.
+- Weight: −0.5 per kg heavier, +0.125 per kg lighter.
+- Salary and fee don't count.
+- Floored at 0, capped at 100. `MIN_RATING = 50` filter so the result set stays bounded on a full 4–5k-driver market.
+
+### Division Baseline / Division Differences *(admin-only)*
+Per-division ideal-pilot tables with OA caps (Rookie 85 / Amateur 110 / Pro 135 / Master 160 / Elite ∞), plus pairwise comparison insights across divisions.
+
+### Admin user management *(admin-only)*
+`/admin/users` — paginated list, toggle admin flag (with self-demotion guard), resend verification, soft-delete. Every mutation is recorded in an append-only `audit_log` table. Audit panel shows the last 50 actions.
+
+### Health endpoint
+`GET /healthz` returns JSON with per-check status (DB reachable + cache roundtrip). 200 when both green, 503 when either fails. Built for an external uptime probe.
+
+---
+
+## Tech stack
+
+- **PHP 8.5** (composer requires `>=8.3`; deploy targets 8.5).
+- **Twig 3** templates.
+- **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile).
+- **SQLite** via PDO. Encrypted user emails (AES-256-GCM) and API tokens at rest.
+- **PHPMailer 7** for SMTP; in dev, writes `.eml` files to `var/mail/` instead.
+- **PHPUnit 11** — 139 tests, 383 assertions, all green at **PHPStan level 7**.
+- **No framework.** Custom front controller + flat DI container in `bootstrap.php`. Routes in `config/routes.php`.
+
+---
+
+## Local development
+
+Zero-infra by design — no Docker, no Mailpit, no Redis, no APCu required.
+
 ```bash
 composer install
-
+cp .env.example .env             # then fill in values
+php bin/seed_tracks.php          # bootstrap SQLite schema + seed tracks
+bin/build_tailwind.sh            # compile public/assets/app.css
+php -S localhost:8000 -t public  # dev server
 ```
 
-
-3. You need to create the configuration file. There is an example file you can copy:
-```bash
-cp .env.example .env
-
-```
-
-
-4. Open the `.env` file and edit your settings. It is very important that you put your GPRO API credentials there. If you do not have them, the sync feature will not work.
-
-## Database Setup
-
-The application uses SQLite, so it is a file inside the project, you don't need to install MySQL.
-
-To create the database and fill it with the track data and constants, you need to run the seeder script:
+In dev (`IS_DEV=true`), `EmailService` writes outgoing mail to `var/mail/*.eml` instead of hitting SMTP. Tail with:
 
 ```bash
-php bin/seed_tracks.php
-
+php bin/dev_mail_tail.php
 ```
 
-This will generate the `gpro_pilots.sqlite` file.
+### `.env` keys you must set
 
-5. You will also need to create your own secrets.php file
-```bash
-cp config/secrets.php.example secrets.php
+| Key | Notes |
+|---|---|
+| `APP_SECRET` | 64-hex random; HMAC root for email hashes + verification codes |
+| `EMAIL_ENCRYPTION_KEY` | 64-hex random; AES key for email + API-token storage |
+| `IS_DEV` | `true` in dev, `false` in prod |
+| `CACHE_DRIVER` | `filesystem` (default; zero infra), `apcu`, `redis`, or `none` |
+| `MAIL_HOST` / `MAIL_PORT` / `MAIL_USER` / `MAIL_PASS` | SMTP credentials in prod |
+| `MAIL_FROM` | Defaults to `admin@gpro-pitwall.com` |
+| `MAIL_FROM_NAME` | Defaults to `GPRO Pitwall` |
+| `RECAPTCHA_SITE_KEY` / `RECAPTCHA_SECRET_KEY` | Required in prod; bypassed when `IS_DEV=true` |
+| `SYNC_SAFETY_MARGIN` | Default 20. The sync defers when `apiRequestsRemaining < calls + margin` |
 
-```
-The secrets are...well, secrets, most of them would destroy the FOBY culture of GPRO. I understand this may look like it's defeating the purpose of having the source code of a GPRO tool, but with the basis you may get yourself to the actual formulas.
+Generate random keys with `openssl rand -hex 32`.
 
-## Caching
+---
 
-Because the GPRO API has limits on how many requests we can send, the application uses a caching system.
-
-Inside your `.env` file, you can change the `CACHE_DRIVER`.
-
-* Use `array` if you are testing and don't have cache extensions.
-* Use `apcu` or `redis` for production. This is better because it saves the data for 1 hour or more, so we don't get "Connection Error" from the API.
-
-## How to use
-
-You can run the application using the PHP built-in server for testing:
+## Commands
 
 ```bash
-php -S localhost:8000 -t public
+composer install                       # Install deps
+composer check                         # lint + analyse (PHPStan L7) + twig-lint + test
+composer test                          # PHPUnit only
+composer analyse                       # PHPStan only
+composer lint                          # PSR-12
 
+bin/build_tailwind.sh                  # Compile assets/css/app.css → public/assets/app.css
+bin/build_tailwind.sh --watch          # Rebuild on every save
+bin/build_release.sh                   # Assemble dist/gpro-pitwall/ for deploy
+bin/build_release.sh --tar             # Also produce dist/gpro-pitwall.tar.gz
+bin/seed_tracks.php                    # Initialise SQLite + seed tracks (one-shot)
+bin/dev_mail_tail.php                  # Tail var/mail/ in dev
+bin/db_browser.php                     # Local SQLite viewer (CLI only — never served)
+bin/check_no_secrets.sh                # Pre-commit secret scan
+bin/probe_security.sh <url>            # Post-deploy leak probe (must exit 0)
 ```
 
-Then go to your browser at `http://localhost:8000`.
+---
 
-### Features
+## Deployment (Hetzner shared, SFTP)
 
-* **Authentication:** You can register and login. It uses a secure session.
-* **Sync Data:** In the menu, there is a button to Sync. This downloads all your data (Office, Driver, Car) at once and saves it to cache.
-* **Car Wear:** Calculates the wear of parts based on the driver attributes from API.
-* **Strategy:** Helps to plan fuel and tyres for the race.
-* **Recruitment:** Calculate the best stats for a new pilot.
+Source of truth is GitHub; deployment is a manual SFTP copy.
 
-## Project Structure
+1. Locally: `bin/build_release.sh --tar`. Produces `dist/gpro-pitwall.tar.gz`.
+2. SFTP `dist/gpro-pitwall/*` to the domain's web root.
+3. In konsoleH:
+   - **Document root** = `public/` *(the load-bearing setting — every sensitive file lives outside)*
+   - **PHP version** = 8.5
+   - **SSL** = Let's Encrypt enabled
+4. Create `.env` on the server from `.env.example`. Set `APP_ENV=prod`, fill SMTP credentials, generate fresh `APP_SECRET` + `EMAIL_ENCRYPTION_KEY` (never reuse dev keys).
+5. Set file permissions:
+   ```bash
+   chmod 600 .env
+   chmod 640 config/secrets.php gpro_pilots.sqlite
+   chmod 750 var var/cache var/mail var/log
+   ```
+6. Visit `/` — should render the landing page.
+7. Run the probe:
+   ```bash
+   bin/probe_security.sh https://gpro-pitwall.com
+   ```
+   It must exit 0. Twenty sensitive paths must return 4xx; five public surfaces must return 200; four security headers must be present on `/`.
 
-* `src/`: All the classes are here.
-* `Controller/`: The pages logic.
-* `Service/`: The logic for calculations and API connection.
-* `Repository/`: Database access.
-* `Security/`: Csrf, email hashing into DB
+---
 
+## Security posture
 
-* `templates/`: The HTML files using Twig.
-* `public/`: The entry point `index.php`.
-* `bin/`: Scripts to run in command line.
+- CSRF token on every POST (validated in `public/index.php`).
+- Email + API token encrypted at rest via AES-256-GCM with domain-separated keys derived from `APP_SECRET` / `EMAIL_ENCRYPTION_KEY`.
+- `email_hash` (HMAC-SHA256) used for lookups so an attacker reading the DB can't enumerate users by email.
+- HSTS / X-Content-Type-Options / X-Frame-Options / Referrer-Policy headers set in `public/.htaccess`.
+- Session cookies HttpOnly + Secure (when HTTPS) + SameSite=Lax.
+- Login rate-limited per IP; verification codes have a TTL + max-attempts.
+- Pre-commit + CI secret scan (`bin/check_no_secrets.sh`).
+- PHPStan level 7 + PHPUnit suite required to pass before merge.
 
-## Notes
+---
 
-If you find a bug, please report it. The code is being refactored to be cleaner and safer. We are trying to move all logic out of controllers and into services to make it easy to test.
+## Architecture
+
+```
+Request → public/index.php → Http\Router → Controller → Service → Repository → Twig
+```
+
+- `bootstrap.php` wires every dependency into a flat `$container` array — adding a service means adding one line.
+- `config/routes.php` is the route table. No POST `action`-switch routing.
+- Controllers are thin. Logic lives in services. Services talk to repositories; repositories own SQL.
+- Cache adapters under `src/Cache/Adapter/` resolved by `src/Cache/CacheFactory`. Default driver `filesystem`.
+- `src/Service/GproApiFetcher` does raw HTTP. `src/Service/GproApiClient` composes it with cache + endpoint naming.
+
+---
+
+## License
+
+Proprietary — © 2026 Micael Vinhas. Source available for transparency; not licensed for redistribution. The game-mechanics formulas in `config/secrets.php` are deliberately git-ignored.
+
+Found a bug? [Open an issue](https://github.com/MVinhas/gpro-pitwall/issues).

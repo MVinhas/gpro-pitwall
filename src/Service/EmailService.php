@@ -35,7 +35,7 @@ class EmailService
 
     public function sendWelcomeEmail(string $toEmail, string $username): bool
     {
-        $subject = "Welcome to GPRO Assistant!";
+        $subject = "Welcome to GPRO Pitwall!";
         $body = $this->renderHtml(
             "Welcome, {$username}!",
             "Account Verified",
@@ -175,11 +175,11 @@ class EmailService
 </head>
 <body>
     <div class="container">
-        <div class="header">GPRO Assistant</div>
+        <div class="header">GPRO Pitwall</div>
         <div class="text">{$title}</div>
         <div class="code-box"><span class="code">{$highlight}</span></div>
         <div class="text">{$footer}</div>
-        <div class="footer">&copy; 2025 GPRO Assistant</div>
+        <div class="footer">&copy; 2026 GPRO Pitwall · <a href="https://gpro-pitwall.com">gpro-pitwall.com</a></div>
     </div>
 </body>
 </html>
