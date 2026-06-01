@@ -21,7 +21,7 @@ class UserRepository
     public function findByEmail(string $email): ?array
     {
         $stmt = $this->pdo->prepare("
-            SELECT * FROM users WHERE email_hash = :hash LIMIT 1
+            SELECT * FROM users WHERE email_hash = :hash AND deleted_at IS NULL LIMIT 1
         ");
 
         $stmt->execute([
@@ -40,7 +40,9 @@ class UserRepository
     /** @return array<string, mixed>|null */
     public function findByUsername(string $username): ?array
     {
-        $stmt = $this->pdo->prepare("SELECT * FROM users WHERE username = :username LIMIT 1");
+        $stmt = $this->pdo->prepare(
+            "SELECT * FROM users WHERE username = :username AND deleted_at IS NULL LIMIT 1"
+        );
         $stmt->execute(['username' => $username]);
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
         return $result ? $this->hydrate($result) : null;
@@ -49,7 +51,9 @@ class UserRepository
     /** @return array<string, mixed>|null */
     public function findById(int $id): ?array
     {
-        $stmt = $this->pdo->prepare("SELECT * FROM users WHERE id = :id LIMIT 1");
+        $stmt = $this->pdo->prepare(
+            "SELECT * FROM users WHERE id = :id AND deleted_at IS NULL LIMIT 1"
+        );
         $stmt->execute(['id' => $id]);
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
         return $result ? $this->hydrate($result) : null;
@@ -123,6 +127,53 @@ class UserRepository
         }
 
         return $user;
+    }
+
+    /**
+     * Paginated list of users for the admin screen. Excludes soft-deleted
+     * rows. Returns rows ordered by id DESC (newest first) plus a total
+     * count for pagination.
+     *
+     * @return array{rows: list<array<string, mixed>>, total: int}
+     */
+    public function paginate(int $page, int $perPage): array
+    {
+        $page    = max(1, $page);
+        $perPage = max(1, min(100, $perPage));
+        $offset  = ($page - 1) * $perPage;
+
+        $totalStmt = $this->pdo->query("SELECT COUNT(*) FROM users WHERE deleted_at IS NULL");
+        $total = $totalStmt === false ? 0 : (int) $totalStmt->fetchColumn();
+
+        $stmt = $this->pdo->prepare(
+            "SELECT id, username, email_hash, is_admin, api_token,
+                    verified_at, last_synced_at, sync_status, created_at
+             FROM users
+             WHERE deleted_at IS NULL
+             ORDER BY id DESC
+             LIMIT :limit OFFSET :offset"
+        );
+        $stmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
+        $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+        $stmt->execute();
+        /** @var list<array<string, mixed>> $rows */
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        return ['rows' => $rows, 'total' => $total];
+    }
+
+    public function updateAdmin(int $userId, bool $isAdmin): void
+    {
+        $stmt = $this->pdo->prepare("UPDATE users SET is_admin = :v WHERE id = :id");
+        $stmt->execute(['v' => $isAdmin ? 1 : 0, 'id' => $userId]);
+    }
+
+    public function softDelete(int $userId): void
+    {
+        $stmt = $this->pdo->prepare(
+            "UPDATE users SET deleted_at = :now WHERE id = :id AND deleted_at IS NULL"
+        );
+        $stmt->execute(['now' => date('Y-m-d H:i:s'), 'id' => $userId]);
     }
 
     public function countAll(): int

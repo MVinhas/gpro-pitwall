@@ -27,6 +27,12 @@ return function (Router $router): void {
     $router->add('GET', '/debug', 'controller.debug', 'index');
     $router->add('POST', '/debug/flush', 'controller.debug', 'flushCache');
 
+    // ========== ADMIN ==========
+    $router->add('GET',  '/admin/users', 'controller.admin_users', 'index');
+    $router->add('POST', '/admin/users/toggle_admin', 'controller.admin_users', 'toggleAdmin');
+    $router->add('POST', '/admin/users/resend_verification', 'controller.admin_users', 'resendVerification');
+    $router->add('POST', '/admin/users/delete', 'controller.admin_users', 'delete');
+
     // ========== CALCULATIONS & ANALYSIS ==========
     // Baseline management
     $router->add('POST', '/add_pilot', 'controller.baseline', 'addPilot');

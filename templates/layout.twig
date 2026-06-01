@@ -43,10 +43,8 @@
                     </span>
                 {% endif %}
                 {% if is_logged_in and user.is_admin %}
-                    <a href="/debug"
-                    class="btn btn-sm btn-secondary">
-                        Debug
-                    </a>
+                    <a href="/admin/users" class="btn btn-sm btn-secondary">Users</a>
+                    <a href="/debug" class="btn btn-sm btn-secondary">Debug</a>
                 {% endif %}
                 {% if is_logged_in %}
                     <a href="/control_panel"

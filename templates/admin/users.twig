@@ -1,0 +1,153 @@
+{% extends "layout.twig" %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 py-6 space-y-6">
+
+    <div class="flex items-baseline justify-between">
+        <div>
+            <h1 class="t-display">User Management</h1>
+            <p class="t-caption mt-1">{{ total }} registered · page {{ page }} / {{ total_pages }}</p>
+        </div>
+        <a href="/debug" class="btn btn-sm btn-secondary">Debug</a>
+    </div>
+
+    {% if flash %}
+        <div class="rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 p-3 text-sm">
+            {{ flash }}
+        </div>
+    {% endif %}
+    {% if flash_error %}
+        <div class="rounded-md bg-red-50 border border-red-200 text-red-700 p-3 text-sm">
+            {{ flash_error }}
+        </div>
+    {% endif %}
+
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200">
+                <thead class="bg-slate-50">
+                    <tr>
+                        <th class="px-4 py-3 text-left"><span class="t-label">#</span></th>
+                        <th class="px-4 py-3 text-left"><span class="t-label">Username</span></th>
+                        <th class="px-4 py-3 text-left"><span class="t-label">Email hash</span></th>
+                        <th class="px-4 py-3 text-center"><span class="t-label">Admin</span></th>
+                        <th class="px-4 py-3 text-center"><span class="t-label">Token</span></th>
+                        <th class="px-4 py-3 text-center"><span class="t-label">Verified</span></th>
+                        <th class="px-4 py-3 text-left"><span class="t-label">Last sync</span></th>
+                        <th class="px-4 py-3 text-left"><span class="t-label">Created</span></th>
+                        <th class="px-4 py-3 text-right"><span class="t-label">Actions</span></th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200">
+                    {% for u in users %}
+                        {% set is_self = (u.id == admin_self_id) %}
+                        <tr class="hover:bg-slate-50">
+                            <td class="px-4 py-3 text-sm text-slate-500 tabular-nums">{{ u.id }}</td>
+                            <td class="px-4 py-3 text-sm font-medium text-slate-900">
+                                {{ u.username }}
+                                {% if is_self %}<span class="ml-1 text-xs text-slate-400">(you)</span>{% endif %}
+                            </td>
+                            <td class="px-4 py-3 text-xs text-slate-400 font-mono">{{ u.email_hash|slice(0, 12) }}…</td>
+                            <td class="px-4 py-3 text-center">
+                                {% if u.is_admin %}
+                                    <span class="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-600/20">Yes</span>
+                                {% else %}
+                                    <span class="t-caption">—</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3 text-center text-xs">
+                                {% if u.api_token %}<span class="text-emerald-600">●</span>{% else %}<span class="text-slate-300">○</span>{% endif %}
+                            </td>
+                            <td class="px-4 py-3 text-center text-xs">
+                                {% if u.verified_at %}<span class="text-emerald-600">●</span>{% else %}<span class="text-amber-500">○</span>{% endif %}
+                            </td>
+                            <td class="px-4 py-3 text-xs text-slate-500 tabular-nums">
+                                {% if u.last_synced_at %}{{ u.last_synced_at|date("M j, H:i") }}{% else %}—{% endif %}
+                            </td>
+                            <td class="px-4 py-3 text-xs text-slate-500 tabular-nums">
+                                {{ u.created_at|date("M j, Y") }}
+                            </td>
+                            <td class="px-4 py-3 text-right space-x-2 whitespace-nowrap">
+                                {% if not is_self %}
+                                    <form method="POST" action="/admin/users/toggle_admin" class="inline">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                        <input type="hidden" name="user_id" value="{{ u.id }}">
+                                        <button class="btn btn-sm btn-secondary" type="submit">
+                                            {{ u.is_admin ? 'Demote' : 'Promote' }}
+                                        </button>
+                                    </form>
+                                {% endif %}
+                                {% if not u.verified_at %}
+                                    <form method="POST" action="/admin/users/resend_verification" class="inline">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                        <input type="hidden" name="user_id" value="{{ u.id }}">
+                                        <button class="btn btn-sm btn-secondary" type="submit">Resend</button>
+                                    </form>
+                                {% endif %}
+                                {% if not is_self %}
+                                    <form method="POST" action="/admin/users/delete" class="inline"
+                                          onsubmit="return confirm('Soft-delete {{ u.username }}? They will no longer appear in this list.');">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                        <input type="hidden" name="user_id" value="{{ u.id }}">
+                                        <button class="btn btn-sm btn-danger" type="submit">Delete</button>
+                                    </form>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr><td colspan="9" class="px-4 py-10 text-center t-caption">No users.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if total_pages > 1 %}
+            <div class="flex items-center justify-between border-t border-slate-200 px-4 py-3 bg-slate-50">
+                <span class="t-caption tabular-nums">Page {{ page }} of {{ total_pages }}</span>
+                <div class="space-x-1">
+                    {% for i in 1..total_pages %}
+                        <a href="?page={{ i }}"
+                           class="inline-flex items-center px-3 py-1 text-xs font-medium rounded-md {{ i == page ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-100 ring-1 ring-inset ring-slate-300' }}">
+                            {{ i }}
+                        </a>
+                    {% endfor %}
+                </div>
+            </div>
+        {% endif %}
+    </div>
+
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-baseline justify-between">
+            <h2 class="t-heading">Recent admin actions</h2>
+            <span class="t-caption">Newest first · last {{ audit|length }}</span>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200">
+                <thead class="bg-slate-50">
+                    <tr>
+                        <th class="px-4 py-3 text-left"><span class="t-label">When</span></th>
+                        <th class="px-4 py-3 text-left"><span class="t-label">Actor</span></th>
+                        <th class="px-4 py-3 text-left"><span class="t-label">Action</span></th>
+                        <th class="px-4 py-3 text-left"><span class="t-label">Target</span></th>
+                        <th class="px-4 py-3 text-left"><span class="t-label">Metadata</span></th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200">
+                    {% for row in audit %}
+                        <tr class="hover:bg-slate-50">
+                            <td class="px-4 py-2 text-xs text-slate-500 tabular-nums">{{ row.created_at }}</td>
+                            <td class="px-4 py-2 text-xs text-slate-600 tabular-nums">#{{ row.actor_id }}</td>
+                            <td class="px-4 py-2 text-xs font-medium text-slate-800">{{ row.action }}</td>
+                            <td class="px-4 py-2 text-xs text-slate-600 tabular-nums">{{ row.target_user_id ? '#' ~ row.target_user_id : '—' }}</td>
+                            <td class="px-4 py-2 text-xs text-slate-500 font-mono">{{ row.metadata_json ?: '—' }}</td>
+                        </tr>
+                    {% else %}
+                        <tr><td colspan="5" class="px-4 py-6 text-center t-caption">No actions logged yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

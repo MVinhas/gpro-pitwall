@@ -56,6 +56,7 @@ final class AuthServiceTest extends TestCase
                 verified_at TEXT DEFAULT NULL,
                 sync_status TEXT NOT NULL DEFAULT 'idle',
                 last_synced_at TEXT DEFAULT NULL,
+                deleted_at TEXT DEFAULT NULL,
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             )
         ");

@@ -70,6 +70,7 @@ use App\Repository\TokenRepository;
 $container['repo.pilot'] = new PilotRepository($container['db']);
 $container['repo.metadata'] = new DivisionMetadataRepository($container['db']);
 $container['repo.track'] = new TrackRepository($container['db']);
+$container['repo.audit'] = new \App\Repository\AuditLogRepository($container['db']);
 
 use App\Service\PilotCalculatorService;
 use App\Service\IdealPilotService;
@@ -301,6 +302,18 @@ $container['controller.api_warmup'] = new ApiWarmupController(
 $container['controller.health'] = new \App\Controller\HealthController(
     $container['db'],
     $container['service.cache'],
+);
+
+$container['service.admin_users'] = new \App\Service\AdminUserService(
+    $container['service.user_repo'],
+    $container['repo.audit'],
+    $container['service.auth_service'],
+);
+
+$container['controller.admin_users'] = new \App\Controller\AdminUserController(
+    $container['service.admin_users'],
+    $container['service.authorize'],
+    $container['twig'],
 );
 
 return $container;

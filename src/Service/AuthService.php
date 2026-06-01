@@ -9,7 +9,7 @@ use App\Repository\TokenRepository;
 use App\Security\EmailCrypto;
 use DateTimeImmutable;
 
-final class AuthService
+class AuthService
 {
     public function __construct(
         private readonly UserRepository $users,

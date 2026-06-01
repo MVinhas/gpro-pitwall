@@ -29,6 +29,7 @@ class DatabaseSeeder
         $this->createUsersTable();
         $this->createVerificationTokensTable();
         $this->createIndexVerificationUser();
+        $this->createAuditLogTable();
 
         $this->createPilotsTable();
         $this->createMetadataTable();
@@ -171,6 +172,27 @@ class DatabaseSeeder
                 "ALTER TABLE users ADD COLUMN sync_status TEXT NOT NULL DEFAULT 'idle'"
             );
         }
+
+        if (!in_array('deleted_at', $existingCols, true)) {
+            $this->db->exec(
+                "ALTER TABLE users ADD COLUMN deleted_at TEXT DEFAULT NULL"
+            );
+        }
+    }
+
+    private function createAuditLogTable(): void
+    {
+        $sql = "
+            CREATE TABLE IF NOT EXISTS audit_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                actor_id INTEGER NOT NULL,
+                action TEXT NOT NULL,
+                target_user_id INTEGER,
+                metadata_json TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        ";
+        $this->db->exec($sql);
     }
 
     private function createVerificationTokensTable(): void
