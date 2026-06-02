@@ -5,34 +5,30 @@ declare(strict_types=1);
 namespace App\Service;
 
 /**
- * Verifies reCAPTCHA Enterprise tokens via the REST API.
+ * Verifies reCAPTCHA v2 "I'm not a robot" checkbox tokens.
  *
- * We use the bare REST endpoint instead of google/cloud-recaptcha-enterprise
- * to keep the dep tree thin — that package pulls in gRPC + protobuf and ~30
- * transitive packages for a single HTTP POST.
- *
- * Auth is via a GCP API key restricted to the reCAPTCHA Enterprise API only
- * (create in GCP → APIs & Services → Credentials → Create API key).
+ * Pairs with the classic api.js loader and <div class="g-recaptcha">
+ * widget in the form. The widget injects a hidden g-recaptcha-response
+ * field with the token; this service POSTs that token to Google's
+ * siteverify endpoint and reads the success boolean. No score, no
+ * action — checkbox is binary pass/fail.
  */
 final readonly class ReCaptchaService
 {
-    private const string ENDPOINT_BASE = 'https://recaptchaenterprise.googleapis.com/v1/projects/';
-    private const float SCORE_THRESHOLD = 0.5;
+    private const string VERIFY_URL = 'https://www.google.com/recaptcha/api/siteverify';
 
     public function __construct(
-        private string $siteKey,
-        private string $projectId,
-        private string $apiKey,
+        private string $secretKey,
         private bool $isDev = false,
     ) {
     }
 
     public function verify(string $token, ?string $remoteIp = null): bool
     {
-        // Fail-closed in prod when any of the three required values is missing.
-        // Dev bypass is intentional so local registration doesn't need a real
-        // GCP project — fenced behind isDev so it cannot engage in prod.
-        if ($this->siteKey === '' || $this->projectId === '' || $this->apiKey === '') {
+        if ($this->secretKey === '') {
+            // Fail-closed in prod. Dev bypass intentional so local registration
+            // doesn't need a real key. Fenced behind isDev so prod can't silently
+            // accept every request.
             return $this->isDev;
         }
 
@@ -40,31 +36,24 @@ final readonly class ReCaptchaService
             return false;
         }
 
-        $url = self::ENDPOINT_BASE
-             . rawurlencode($this->projectId)
-             . '/assessments?key=' . rawurlencode($this->apiKey);
-
-        $event = [
-            'token'   => $token,
-            'siteKey' => $this->siteKey,
+        $data = [
+            'secret'   => $this->secretKey,
+            'response' => $token,
         ];
         if ($remoteIp !== null && $remoteIp !== '') {
-            $event['userIpAddress'] = $remoteIp;
+            $data['remoteip'] = $remoteIp;
         }
-
-        $body = json_encode(['event' => $event], JSON_THROW_ON_ERROR);
 
         $context = stream_context_create([
             'http' => [
-                'method'        => 'POST',
-                'header'        => "Content-Type: application/json\r\n",
-                'content'       => $body,
-                'timeout'       => 3,
-                'ignore_errors' => true,
+                'method'  => 'POST',
+                'header'  => "Content-Type: application/x-www-form-urlencoded\r\n",
+                'content' => http_build_query($data),
+                'timeout' => 3,
             ],
         ]);
 
-        $response = @file_get_contents($url, false, $context);
+        $response = @file_get_contents(self::VERIFY_URL, false, $context);
         if ($response === false) {
             return false;
         }
@@ -74,17 +63,6 @@ final readonly class ReCaptchaService
             return false;
         }
 
-        // Enterprise response shape:
-        //   tokenProperties.valid   bool   — token decoded and not expired
-        //   riskAnalysis.score      float  — 0.0 (bot) to 1.0 (human); for
-        //                                    Challenge (checkbox) keys this
-        //                                    is ~0.9 on pass.
-        $valid = $payload['tokenProperties']['valid'] ?? false;
-        $score = $payload['riskAnalysis']['score'] ?? 0.0;
-
-        if ($valid !== true) {
-            return false;
-        }
-        return (float) $score >= self::SCORE_THRESHOLD;
+        return ($payload['success'] ?? false) === true;
     }
 }

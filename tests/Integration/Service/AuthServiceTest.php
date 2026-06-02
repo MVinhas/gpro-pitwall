@@ -80,9 +80,7 @@ final class AuthServiceTest extends TestCase
         $tokenRepo      = new TokenRepository($this->db);
         $cache          = new FilesystemCache($this->cacheDir);
         $limiter        = new RateLimiterService($cache);
-        $captcha        = new ReCaptchaService(
-            siteKey: '', projectId: '', apiKey: '', isDev: true,
-        );
+        $captcha        = new ReCaptchaService(secretKey: '', isDev: true);
         $mailer         = new EmailService([
             'host' => 'localhost', 'port' => 25,
             'from' => 'test@example.invalid', 'from_name' => 'GPRO Test',
