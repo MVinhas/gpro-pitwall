@@ -197,7 +197,12 @@ final class GproApiClient
             $cached = $this->cache->get($key);
             if ($cached !== null) {
                 /** @var array<string, mixed> $cached */
-                $this->rememberApiLimit($cached);
+                // Cache hits do NOT update the remaining-calls counter:
+                // the cached payload carries an apiRequestsRemaining value
+                // from the moment it was originally fetched, which is older
+                // than what's in the session right now. Writing it back
+                // would rewind the counter and make the header badge
+                // ping-pong as the user navigates between tabs.
                 return $cached;
             }
         }

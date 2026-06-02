@@ -44,6 +44,7 @@ return function (Router $router): void {
     $router->add('POST', '/calculate_strategy', 'controller.strategy', 'calculate');
     $router->add('POST', '/strategy_fragment',  'controller.strategy', 'fragment');
     $router->add('POST', '/calculate_wear', 'controller.car_wear', 'handle');
+    $router->add('POST', '/car_wear_fragment', 'controller.car_wear', 'fragment');
 
     // Recruitment and training
     $router->add('POST', '/analyze_recruitment', 'controller.recruitment', 'analyze');

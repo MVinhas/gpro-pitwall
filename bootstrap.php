@@ -228,6 +228,16 @@ $container['service.testing_projection'] = new \App\Service\TestingProjectionSer
 $container['service.sponsor_advisor'] = new \App\Service\SponsorAdvisorService();
 $container['service.testing_targets'] = new \App\Service\TestingTargetsService();
 
+// CarWearController is constructed early because PageController needs it
+// (auto-populate on first Car Wear tab visit). All deps already wired above.
+$container['controller.car_wear'] = new CarWearController(
+    $container['service.car_wear'],
+    $container['service.api_client'],
+    $container['service.data_mapper'],
+    $container['service.authorize'],
+    $container['twig'],
+);
+
 $container['controller.page'] = new PageController(
     $container['service.ideal_pilot'],
     $container['service.insight'],
@@ -247,6 +257,7 @@ $container['controller.page'] = new PageController(
     $container['service.testing_targets'],
     $container['service.training_advisor'],
     $container['controller.strategy'],
+    $container['controller.car_wear'],
     $container['service.data_mapper'],
     $container['twig'],
     $container['config']
@@ -277,13 +288,6 @@ $container['controller.control_panel'] = new \App\Controller\ControlPanelControl
 $container['controller.recruitment'] = new RecruitmentController(
     $container['service.recruitment'],
     $container['service.api_client'],
-    $container['service.authorize'],
-);
-
-$container['controller.car_wear'] = new CarWearController(
-    $container['service.car_wear'],
-    $container['service.api_client'],
-    $container['service.data_mapper'],
     $container['service.authorize'],
 );
 

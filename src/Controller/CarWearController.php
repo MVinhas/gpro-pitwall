@@ -9,6 +9,7 @@ use App\Security\Authorize;
 use App\Service\CarWearService;
 use App\Service\GproApiClient;
 use App\Service\GproDataMapper;
+use Twig\Environment;
 
 class CarWearController
 {
@@ -17,52 +18,82 @@ class CarWearController
         private readonly GproApiClient $api,
         private readonly GproDataMapper $mapper,
         private readonly Authorize $authorize,
+        private readonly Environment $twig,
     ) {
     }
 
     public function handle(Request $request): void
     {
         $user = $this->authorize->requireAuth();
+        $this->api->setToken($user['api_token']);
 
-        if (!empty($user['api_token'])) {
-            $this->api->setToken($user['api_token']);
+        $risk = (int) $request->post('risk', 0);
+        $result = $this->runCalc($risk);
+
+        if (isset($result['error'])) {
+            $_SESSION['wear_error'] = $result['error'];
+        } else {
+            $_SESSION['wear_results'] = $result['results'];
+            $_SESSION['wear_inputs'] = [
+                'risk'   => $risk,
+                'driver' => $result['driver'],
+            ];
+            $_SESSION['wear_error'] = null;
         }
 
-        $risk = (int)$request->post('risk', 0);
+        session_write_close();
+        header('Location: /?main_tab=Car Wear');
+        exit;
+    }
 
+    public function fragment(Request $request): void
+    {
+        $user = $this->authorize->requireAuth();
+        $this->api->setToken($user['api_token']);
+
+        $risk = (int) $request->post('risk', 0);
+        $result = $this->runCalc($risk);
+
+        echo $this->twig->render('partials/_car_wear_results.twig', [
+            'wear_results' => $result['results'] ?? null,
+            'wear_error'   => $result['error'] ?? null,
+            'wear_inputs'  => [
+                'risk'   => $risk,
+                'driver' => $result['driver'] ?? null,
+            ],
+        ]);
+    }
+
+    /**
+     * Runs the wear calculation. Returns:
+     *   ['results' => array, 'driver' => array]  on success
+     *   ['error'   => string]                    on failure
+     *
+     * No session writes here — the same call powers the redirect-after-POST
+     * flow, the no-reload slider refresh, and the auto-populate on first
+     * tab open.
+     *
+     * @return array<string, mixed>
+     */
+    public function runCalc(int $risk): array
+    {
         try {
             $trackProfile = $this->api->getNextRaceProfile();
-            $office = $this->api->getOfficeData();
-            $carData = $this->api->getCarData();
-
-            // Driver stats come from the API only — the form no longer exposes
-            // them as editable fields. PageController pre-warms the session;
-            // we re-fetch here to make sure we use whatever the API reports
-            // *now* (so training between visits is reflected).
-            $driver = $this->mapper->mapDriver($this->api->getMyPilotDetails());
+            $office       = $this->api->getOfficeData();
+            $carData      = $this->api->getCarData();
+            $driver       = $this->mapper->mapDriver($this->api->getMyPilotDetails());
 
             if (empty($trackProfile['name']) && !empty($office['trackName'])) {
                 $trackProfile['name'] = $office['trackName'];
             }
 
             $results = $this->service->calculateWear($trackProfile, $carData, $driver, $risk);
-
             $results['season'] = $office['seasonNb'] ?? '?';
-            $results['race'] = $office['raceNb'] ?? '?';
+            $results['race']   = $office['raceNb'] ?? '?';
 
-            $_SESSION['wear_results'] = $results;
-
-            $_SESSION['wear_inputs'] = [
-                'risk' => $risk,
-                'driver' => $driver
-            ];
-            $_SESSION['wear_error'] = null;
+            return ['results' => $results, 'driver' => $driver];
         } catch (\Exception $exception) {
-            $_SESSION['wear_error'] = "Error: " . $exception->getMessage();
+            return ['error' => 'Error: ' . $exception->getMessage()];
         }
-
-        session_write_close();
-        header("Location: /?main_tab=Car Wear");
-        exit;
     }
 }

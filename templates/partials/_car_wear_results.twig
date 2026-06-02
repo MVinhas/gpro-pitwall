@@ -1,0 +1,63 @@
+{% if wear_error %}
+    <div class="mb-4 p-3 bg-red-50 text-red-700 text-sm rounded border border-red-200">
+        {{ wear_error }}
+    </div>
+{% endif %}
+
+{% if wear_results %}
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+            <div>
+                <h3 class="t-heading">
+                    {{ wear_results.track_name }}
+                    <span class="t-caption ml-2">
+                        (Season {{ wear_results.season }}, Race {{ wear_results.race }})
+                    </span>
+                </h3>
+                <p class="t-caption tabular-nums">{{ wear_results.laps }} Laps</p>
+            </div>
+            <span class="inline-flex items-center rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20">
+                Live Data
+            </span>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200">
+                <thead class="bg-slate-50">
+                    <tr>
+                        <th scope="col" class="px-6 py-3 text-left"><span class="t-label">Part</span></th>
+                        <th scope="col" class="px-6 py-3 text-center"><span class="t-label">Level</span></th>
+                        <th scope="col" class="px-6 py-3 text-center"><span class="t-label">Start</span></th>
+                        <th scope="col" class="px-6 py-3 text-center"><span class="t-label">Est. Wear</span></th>
+                        <th scope="col" class="px-6 py-3 text-center"><span class="t-label">End Wear</span></th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-slate-200">
+                    {% for part, data in wear_results.parts %}
+                        <tr class="hover:bg-slate-50">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{{ part }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-center tabular-nums text-slate-500">Lvl {{ data.level }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-center tabular-nums text-slate-600">{{ data.start }}%</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-center font-medium tabular-nums text-blue-600">+{{ data.est }}%</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-center">
+                                {% set endVal = data.end %}
+                                <span class="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium tabular-nums ring-1
+                                    ring-inset {{ endVal >= 90 ? 'bg-red-50 text-red-700 ring-red-600/10' : (endVal >= 50 ? 'bg-yellow-50 text-yellow-800 ring-yellow-600/20' : 'bg-green-50 text-green-700 ring-green-600/20') }}">
+                                    {{ endVal }}%
+                                </span>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+{% elseif not wear_error %}
+    <div class="h-full flex flex-col items-center justify-center p-12 bg-slate-50 border border-dashed border-slate-200 rounded-xl text-center">
+        <svg class="h-12 w-12 text-slate-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+        </svg>
+        <h3 class="t-heading">Loading wear projection…</h3>
+        <p class="t-caption mt-1">Drag the Driver Risk slider to refresh.</p>
+    </div>
+{% endif %}

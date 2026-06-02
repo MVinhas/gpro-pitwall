@@ -23,6 +23,7 @@ use App\Service\TestingProjectionService;
 use App\Service\SponsorAdvisorService;
 use App\Service\TestingTargetsService;
 use App\Service\TrainingAdvisorService;
+use App\Controller\CarWearController;
 use App\Controller\StrategyController;
 use Twig\Environment;
 
@@ -48,6 +49,7 @@ class PageController
         private readonly TestingTargetsService $testingTargets,
         private readonly TrainingAdvisorService $trainingAdvisor,
         private readonly StrategyController $strategyController,
+        private readonly CarWearController $carWearController,
         private readonly GproDataMapper $mapper,
         private readonly Environment $twig,
         private array $config
@@ -379,19 +381,30 @@ class PageController
                 break;
 
             case 'Car Wear':
-                if (!isset($_SESSION['wear_inputs']['driver'])) {
-                    try {
-                        $pilotData = $this->apiClient->getMyPilotDetails();
-                        $_SESSION['wear_inputs']['driver'] =
-                            (new GproDataMapper())->mapDriver($pilotData);
-                    } catch (\Throwable $e) {
-                        $_SESSION['wear_error'] = $e->getMessage();
+                // Auto-populate on first visit (mirrors Race Strategy). The
+                // calc reads exactly what GproApiClient has already cached
+                // for the cockpit pass, so no extra API call is spent.
+                $existing = $_SESSION['wear_results'] ?? null;
+
+                if (!is_array($existing)) {
+                    $risk = (int) ($_SESSION['wear_inputs']['risk'] ?? 0);
+                    $this->apiClient->setToken($user['api_token']);
+                    $result = $this->carWearController->runCalc($risk);
+                    if (isset($result['error'])) {
+                        $viewData['wear_error'] = $result['error'];
+                    } else {
+                        $viewData['wear_results'] = $result['results'];
+                        $_SESSION['wear_inputs'] = [
+                            'risk'   => $risk,
+                            'driver' => $result['driver'],
+                        ];
                     }
+                } else {
+                    $viewData['wear_results'] = $existing;
                 }
 
-                $viewData['wear_results'] = $_SESSION['wear_results'] ?? null;
-                $viewData['wear_inputs']  = $_SESSION['wear_inputs'] ?? [];
-                $viewData['wear_error']   = $_SESSION['wear_error'] ?? null;
+                $viewData['wear_inputs'] = $_SESSION['wear_inputs'] ?? [];
+                $viewData['wear_error']  = $_SESSION['wear_error'] ?? $viewData['wear_error'] ?? null;
                 unset($_SESSION['wear_error']);
                 break;
 
