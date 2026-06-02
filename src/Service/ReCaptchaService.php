@@ -55,14 +55,26 @@ final readonly class ReCaptchaService
 
         $response = @file_get_contents(self::VERIFY_URL, false, $context);
         if ($response === false) {
+            error_log('[recaptcha] siteverify request failed (network or DNS)');
             return false;
         }
 
         $payload = json_decode($response, true);
         if (!is_array($payload)) {
+            error_log('[recaptcha] siteverify returned non-JSON: ' . substr($response, 0, 200));
             return false;
         }
 
-        return ($payload['success'] ?? false) === true;
+        if (($payload['success'] ?? false) === true) {
+            return true;
+        }
+
+        // Log Google's error codes so a deploy-time misconfiguration is
+        // visible in var/log/ instead of silently failing closed.
+        $codes = $payload['error-codes'] ?? [];
+        $codeStr = is_array($codes) ? implode(',', $codes) : (string) $codes;
+        error_log("[recaptcha] verification failed; error-codes={$codeStr}");
+
+        return false;
     }
 }
