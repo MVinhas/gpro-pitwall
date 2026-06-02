@@ -44,18 +44,25 @@ final readonly class ReCaptchaService
             $data['remoteip'] = $remoteIp;
         }
 
-        $context = stream_context_create([
-            'http' => [
-                'method'  => 'POST',
-                'header'  => "Content-Type: application/x-www-form-urlencoded\r\n",
-                'content' => http_build_query($data),
-                'timeout' => 3,
-            ],
+        // cURL rather than file_get_contents — shared hosts (Hetzner
+        // Webhosting et al.) routinely ship with allow_url_fopen disabled,
+        // which makes the streams wrapper fail before sending a packet.
+        $ch = curl_init(self::VERIFY_URL);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => http_build_query($data),
+            CURLOPT_HTTPHEADER     => ['Content-Type: application/x-www-form-urlencoded'],
+            CURLOPT_TIMEOUT        => 5,
+            CURLOPT_CONNECTTIMEOUT => 3,
         ]);
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlErr  = curl_error($ch);
+        unset($ch);
 
-        $response = @file_get_contents(self::VERIFY_URL, false, $context);
-        if ($response === false) {
-            error_log('[recaptcha] siteverify request failed (network or DNS)');
+        if (!is_string($response) || $httpCode !== 200) {
+            error_log("[recaptcha] siteverify cURL failed: HTTP {$httpCode} err={$curlErr}");
             return false;
         }
 
