@@ -18,7 +18,6 @@ final readonly class ReCaptchaService
 {
     private const string ENDPOINT_BASE = 'https://recaptchaenterprise.googleapis.com/v1/projects/';
     private const float SCORE_THRESHOLD = 0.5;
-    private const string EXPECTED_ACTION = 'register';
 
     public function __construct(
         private string $siteKey,
@@ -46,9 +45,8 @@ final readonly class ReCaptchaService
              . '/assessments?key=' . rawurlencode($this->apiKey);
 
         $event = [
-            'token'          => $token,
-            'siteKey'        => $this->siteKey,
-            'expectedAction' => self::EXPECTED_ACTION,
+            'token'   => $token,
+            'siteKey' => $this->siteKey,
         ];
         if ($remoteIp !== null && $remoteIp !== '') {
             $event['userIpAddress'] = $remoteIp;
@@ -78,16 +76,13 @@ final readonly class ReCaptchaService
 
         // Enterprise response shape:
         //   tokenProperties.valid   bool   — token decoded and not expired
-        //   tokenProperties.action  string — matches what the JS called execute() with
-        //   riskAnalysis.score      float  — 0.0 (bot) to 1.0 (human)
-        $valid  = $payload['tokenProperties']['valid'] ?? false;
-        $action = $payload['tokenProperties']['action'] ?? '';
-        $score  = $payload['riskAnalysis']['score'] ?? 0.0;
+        //   riskAnalysis.score      float  — 0.0 (bot) to 1.0 (human); for
+        //                                    Challenge (checkbox) keys this
+        //                                    is ~0.9 on pass.
+        $valid = $payload['tokenProperties']['valid'] ?? false;
+        $score = $payload['riskAnalysis']['score'] ?? 0.0;
 
         if ($valid !== true) {
-            return false;
-        }
-        if ($action !== self::EXPECTED_ACTION) {
             return false;
         }
         return (float) $score >= self::SCORE_THRESHOLD;
