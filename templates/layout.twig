@@ -47,9 +47,12 @@
                     {% set api_tone = (api_limit < 20) ? 'bg-red-50 text-red-700 ring-red-600/20'
                                       : ((api_limit < 50) ? 'bg-amber-50 text-amber-700 ring-amber-600/20'
                                                           : 'bg-slate-50 text-slate-700 ring-slate-600/10') %}
+                    {% set api_age = api_limit_updated_at
+                        ? ' · checked ' ~ ((('now'|date('U')) - api_limit_updated_at) // 60) ~ 'm ago'
+                        : '' %}
                     {% set api_tip = (api_limit < 50)
-                        ? 'Few API calls left this race weekend — avoid hard-refreshing data; the cache keeps recent answers warm for you.'
-                        : 'GPRO API calls remaining this hour.' %}
+                        ? 'Few API calls left this race weekend — avoid hard-refreshing data; the cache keeps recent answers warm for you.' ~ api_age
+                        : 'GPRO API calls remaining this hour.' ~ api_age %}
                     <span
                         class="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium ring-1 ring-inset tabular-nums cursor-help {{ api_tone }}"
                         title="{{ api_tip }}"

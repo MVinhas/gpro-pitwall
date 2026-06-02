@@ -214,6 +214,24 @@ final class GproApiClient
         return $data;
     }
 
+    /**
+     * Spend exactly one API call to refresh the apiRequestsRemaining counter
+     * to its real current value. Used by PageController to keep the header
+     * badge honest during idle periods (cache hits don't refresh it).
+     */
+    public function refreshBudgetCounter(): void
+    {
+        try {
+            // getOfficeData is the lightest authenticated endpoint we use.
+            // Force-refresh so the response (and its apiRequestsRemaining)
+            // is read fresh from the API, not from cache.
+            $this->getOfficeData(forceRefresh: true);
+        } catch (\Throwable) {
+            // Swallow — a probe failure shouldn't block page rendering.
+            // The next attempt will retry.
+        }
+    }
+
     /** @param array<string, mixed> $data */
     private function rememberApiLimit(array $data): void
     {
@@ -223,6 +241,7 @@ final class GproApiClient
 
         $remaining = (int) $data['apiRequestsRemaining'];
         $_SESSION['api_limit'] = $remaining;
+        $_SESSION['api_limit_updated_at'] = time();
         $this->cache->set(self::API_LIMIT_KEY, $remaining, 3600);
     }
 

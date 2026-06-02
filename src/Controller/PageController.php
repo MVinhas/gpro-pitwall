@@ -90,6 +90,16 @@ class PageController
 
         $this->apiClient->setToken($user['api_token']);
 
+        // Heartbeat refresh of the API-budget counter. Cache hits don't carry
+        // a fresh apiRequestsRemaining value, so the header badge drifts during
+        // idle navigation. After ~5 min of stale, spend exactly one fresh call
+        // so the displayed count stays honest. Active use already keeps it
+        // updated naturally via the calls each tab makes.
+        $lastUpdate = (int) ($_SESSION['api_limit_updated_at'] ?? 0);
+        if (time() - $lastUpdate > 300) {
+            $this->apiClient->refreshBudgetCounter();
+        }
+
         $divisions    = $this->config['app']['divisions'];
         $tracks       = $this->config['app']['tracks'];
         $mainSections = $this->config['app']['main_sections'];
@@ -150,6 +160,7 @@ class PageController
             'config'          => $this->config,
             'settings'        => $this->config['settings'],
             'api_limit'       => $_SESSION['api_limit'] ?? '?',
+            'api_limit_updated_at' => $_SESSION['api_limit_updated_at'] ?? null,
             'flash'           => $_SESSION['flash'] ?? null,
             'is_logged_in'    => $isLoggedIn,
             'user'            => $user,
