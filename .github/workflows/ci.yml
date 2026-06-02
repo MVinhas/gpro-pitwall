@@ -65,15 +65,3 @@ jobs:
 
       - name: Production install (no dev)
         run: composer install --no-dev --optimize-autoloader --prefer-dist --no-progress --no-suggest
-
-      - name: Build deployment bundle
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: bin/build_release.sh --tar
-
-      - name: Upload bundle artefact
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        uses: actions/upload-artifact@v4
-        with:
-          name: gpro-pitwall-bundle
-          path: dist/gpro-pitwall.tar.gz
-          retention-days: 14

@@ -15,6 +15,7 @@ gpro_pilots.sqlite
 /GPRO Assistant.docx
 /db_browser.php
 /bin/db_browser.php
+/bin/build_release.sh
 
 # Offline reference spreadsheets — contain the same secret-sauce formulas
 # as config/secrets.php. Working copies only, never in git.
