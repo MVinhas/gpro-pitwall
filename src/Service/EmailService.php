@@ -62,9 +62,18 @@ class EmailService
             $mail->SMTPAuth = false;
         }
 
-        if (!empty($this->config['encryption']) && $this->config['encryption'] !== 'null') {
-            $mail->SMTPSecure = $this->config['encryption'];
-        } else {
+        // Encryption mode. 'tls' = STARTTLS upgrade on the existing connection
+        // (port 587), 'ssl' = SMTPS implicit TLS (port 465). Anything else
+        // ('none' / empty) disables TLS entirely — only safe on localhost.
+        // PHPMailer's auto-TLS (on by default) handles STARTTLS when the
+        // server advertises it, so the typical case 'just works' without
+        // setting MAIL_ENCRYPTION explicitly — but we honour it when set.
+        $encryption = strtolower((string) ($this->config['encryption'] ?? 'tls'));
+        if ($encryption === 'tls') {
+            $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+        } elseif ($encryption === 'ssl') {
+            $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
+        } elseif ($encryption === 'none' || $encryption === '') {
             $mail->SMTPAutoTLS = false;
         }
 
@@ -91,8 +100,8 @@ class EmailService
             $mail->AltBody = $alt;
 
             return $mail->send();
-        } catch (Exception) {
-            error_log('[EmailService Error] ' . $mail->ErrorInfo);
+        } catch (Exception $e) {
+            error_log("[EmailService] send failed to {$to}: " . $mail->ErrorInfo);
             return false;
         }
     }
