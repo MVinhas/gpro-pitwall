@@ -99,7 +99,10 @@ class EmailService
             $mail->Body    = $body;
             $mail->AltBody = $alt;
 
-            return $mail->send();
+            $ok = $mail->send();
+            $okStr = $ok ? 'true' : 'false';
+            error_log("[EmailService] handed off to {$to} (subject: {$subject}) — ok={$okStr}");
+            return $ok;
         } catch (Exception $e) {
             error_log("[EmailService] send failed to {$to}: " . $mail->ErrorInfo);
             return false;

@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GPRO Pitwall</title>
 
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="apple-touch-icon" href="/logo.svg">
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -18,14 +22,17 @@
     <header class="bg-white shadow-sm border-b border-slate-200">
         <div class="mx-auto max-w-7xl px-4 py-6 flex flex-col gap-4 md:flex-row md:justify-between md:items-center">
             <div>
-                <h1 class="text-3xl font-bold text-slate-900">
-                    <a href="/" class="hover:opacity-80">
-                        <span class="text-blue-600">GPRO</span> Pitwall
-                    </a>
-                </h1>
-                <p class="mt-1 text-sm text-slate-500">
-                    Race-weekend cockpit for GPRO managers — strategy, wear, training, recruitment.
-                </p>
+                <a href="/" class="flex items-center gap-3 hover:opacity-80 transition-opacity">
+                    <img src="/logo.svg" alt="" class="h-10 w-10 shrink-0" width="40" height="40">
+                    <div>
+                        <h1 class="text-3xl font-bold text-slate-900 leading-tight">
+                            <span class="text-blue-600">GPRO</span> Pitwall
+                        </h1>
+                        <p class="mt-1 text-sm text-slate-500">
+                            Race-weekend cockpit for GPRO managers — strategy, wear, training, recruitment.
+                        </p>
+                    </div>
+                </a>
             </div>
 
             <div class="flex items-center gap-4 flex-wrap">
@@ -113,7 +120,7 @@
 
     <footer class="py-6 text-center">
         <div class="inline-flex items-center gap-2 text-xs text-slate-400">
-            <span>&copy; {{ "now"|date("Y") }} GPRO Pitwall 1.0.1</span>
+            <span>&copy; {{ "now"|date("Y") }} GPRO Pitwall 1.0.2</span>
             <span class="opacity-50">•</span>
             <a
                 href="https://github.com/MVinhas/gpro-pitwall"
