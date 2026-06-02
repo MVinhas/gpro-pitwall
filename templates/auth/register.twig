@@ -42,25 +42,18 @@
     </div>
 </div>
 
-{# ReCaptcha v3 Script #}
+{# reCAPTCHA Enterprise — note the .enterprise endpoints + global #}
 {% if recaptcha_site_key %}
-<script src="https://www.google.com/recaptcha/api.js?render={{ recaptcha_site_key }}"></script>
+<script src="https://www.google.com/recaptcha/enterprise.js?render={{ recaptcha_site_key }}"></script>
 <script>
     document.getElementById('regForm').addEventListener('submit', function(e) {
         e.preventDefault();
-        grecaptcha.ready(function() {
-            grecaptcha.execute('{{ recaptcha_site_key }}', {action: 'register'}).then(function(token) {
+        grecaptcha.enterprise.ready(function() {
+            grecaptcha.enterprise.execute('{{ recaptcha_site_key }}', {action: 'register'}).then(function(token) {
                 document.getElementById('g-recaptcha-response').value = token;
                 document.getElementById('regForm').submit();
             });
         });
-    });
-</script>
-{% else %}
-<script>
-    // reCAPTCHA not configured - allow form submission without it
-    document.getElementById('regForm').addEventListener('submit', function(e) {
-        // Let normal form submission proceed
     });
 </script>
 {% endif %}

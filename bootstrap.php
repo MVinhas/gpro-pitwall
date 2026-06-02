@@ -114,7 +114,9 @@ $mailCfg = [
 $container['service.rate_limiter'] = new \App\Service\RateLimiterService($container['service.cache']);
 $container['service.email_service']  = new \App\Service\EmailService($mailCfg);
 $container['service.recaptcha'] = new \App\Service\ReCaptchaService(
-    $_ENV['RECAPTCHA_SECRET_KEY'] ?? '',
+    $_ENV['RECAPTCHA_SITE_KEY'] ?? '',
+    $_ENV['RECAPTCHA_PROJECT_ID'] ?? '',
+    $_ENV['RECAPTCHA_API_KEY'] ?? '',
     $container['settings']['is_dev'],
 );
 
