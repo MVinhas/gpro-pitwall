@@ -26,12 +26,18 @@ RESET='\033[0m'
 fails=0
 checks=0
 
+# Pause between probes so shared-host WAFs (Hetzner / cPanel / etc.) don't
+# fingerprint the burst as a scanner and ban the running IP. ~400ms × ~25
+# checks = a 10-second probe instead of a 2-second one.
+PROBE_DELAY="${PROBE_DELAY:-0.4}"
+
 # A leak check passes when the path is NOT served (status 4xx / 5xx).
 # 200 OR a redirect into a login flow that returns content of the file = FAIL.
 leak_must_fail() {
     local path="$1"
     local description="$2"
     checks=$((checks + 1))
+    sleep "$PROBE_DELAY"
 
     local response
     response="$(curl -sS -o /dev/null -w "%{http_code} %{size_download}" -L --max-redirs 2 "${URL}${path}" 2>/dev/null || echo "000 0")"
@@ -54,6 +60,7 @@ surface_must_pass() {
     local path="$1"
     local description="$2"
     checks=$((checks + 1))
+    sleep "$PROBE_DELAY"
 
     local code
     code="$(curl -sS -o /dev/null -w "%{http_code}" "${URL}${path}" 2>/dev/null || echo "000")"
