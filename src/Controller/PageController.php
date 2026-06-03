@@ -197,8 +197,15 @@ class PageController
                     ];
 
                     $wear = $this->carWear->calculateWear(
+                        // Resolve the track by name only. raceSetup.trackId is
+                        // GPRO's track id, NOT our local tracks.id (an
+                        // autoincrement PK), so passing it would let the
+                        // "id = :id OR name = :name" lookup match an unrelated
+                        // row and read the wrong per-part base wear. The Car
+                        // Wear tab feeds id=0 (TrackProfile has no id) and is
+                        // correct — match that.
                         [
-                            'id'   => $trackId,
+                            'id'   => 0,
                             'name' => $trackName,
                             'laps' => $raceSetup['laps'] ?? null,
                         ],

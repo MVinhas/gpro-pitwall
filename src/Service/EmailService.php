@@ -37,11 +37,15 @@ class EmailService
     {
         $subject = "Welcome to GPRO Pitwall!";
         $body = $this->renderHtml(
-            "Welcome, {$username}!",
-            "Account Verified",
-            "Your account is now active. You can log in anytime using your username."
+            "Welcome! Your account is now active. Your username — and the only way to log in — is:",
+            $username,
+            "Memorise it. We store your email encrypted at the application layer (zero-knowledge), "
+            . "so you cannot log in or recover access with your email address — only with this username."
         );
-        $altBody = "Welcome {$username}! Your account is now active.";
+        $altBody = "Welcome! Your account is now active.\n\n"
+            . "Your username is: {$username}\n\n"
+            . "Memorise it — it is the only way to log in. We store your email encrypted "
+            . "(zero-knowledge), so you cannot log in or recover access with your email address.";
 
         return $this->send($toEmail, $subject, $body, $altBody);
     }
