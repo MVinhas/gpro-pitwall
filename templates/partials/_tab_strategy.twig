@@ -47,6 +47,16 @@
                                   class="text-sm font-bold text-blue-600 w-10 text-right">{{ strategy_results.inputs.target_wear ?? 15 }}</span>
                         </div>
                     </div>
+                    <div>
+                        {% set bs = strategy_results.inputs.boost_stints ?? 0 %}
+                        <label class="t-label block mb-1" title="Each stint runs 3 boost laps. Extra fuel is spread across race stints.">Boost Lap Stints</label>
+                        <select name="boost_stints" data-strategy-fragment-trigger class="form-select">
+                            <option value="0" {{ bs == 0 ? 'selected' }}>0 — no boost (0 laps)</option>
+                            <option value="1" {{ bs == 1 ? 'selected' }}>1 stint (3 boost laps)</option>
+                            <option value="2" {{ bs == 2 ? 'selected' }}>2 stints (6 boost laps)</option>
+                            <option value="3" {{ bs == 3 ? 'selected' }}>3 stints (9 boost laps)</option>
+                        </select>
+                    </div>
                 </div>
             </div>
 

@@ -6,12 +6,14 @@ namespace App\Controller;
 
 use App\Http\Request;
 use App\Security\Authorize;
+use App\Service\GproApiClient;
 use App\Service\GproSyncService;
 
 final readonly class ApiWarmupController
 {
     public function __construct(
         private GproSyncService $syncService,
+        private GproApiClient $apiClient,
         private Authorize $authorize,
     ) {
     }
@@ -51,6 +53,36 @@ final readonly class ApiWarmupController
             'success' => $ok,
             'status'  => $status,
             'message' => $messages[$status] ?? 'Unknown sync state',
+        ]);
+    }
+
+    /**
+     * Spend exactly one API call to refresh the budget counter. The user
+     * explicitly opted in via the modal (refreshing during idle is
+     * otherwise expensive, so we never do it automatically).
+     */
+    public function refreshBudget(Request $request): void
+    {
+        $user = $this->authorize->requireAuth();
+
+        header('Content-Type: application/json');
+
+        if (empty($user['api_token'])) {
+            http_response_code(400);
+            echo json_encode([
+                'success' => false,
+                'message' => 'No API token configured',
+            ]);
+            return;
+        }
+
+        $this->apiClient->setToken($user['api_token']);
+        $this->apiClient->refreshBudgetCounter();
+
+        echo json_encode([
+            'success'    => true,
+            'remaining'  => $_SESSION['api_limit'] ?? null,
+            'updated_at' => $_SESSION['api_limit_updated_at'] ?? null,
         ]);
     }
 }

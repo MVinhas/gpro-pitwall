@@ -41,7 +41,7 @@ final class GproApiFetcher
             CURLOPT_HTTPHEADER => [
                 "Authorization: Bearer {$this->token}",
                 'Accept: application/json',
-                'User-Agent: GPRO-Pitwall/1.0.3',
+                'User-Agent: GPRO-Pitwall/1.0.5',
             ],
         ]);
 
@@ -83,7 +83,7 @@ final class GproApiFetcher
             CURLOPT_HTTPHEADER     => [
                 'Accept: application/json',
                 'Accept-Encoding: gzip',
-                'User-Agent: GPRO-Pitwall/1.0.3',
+                'User-Agent: GPRO-Pitwall/1.0.5',
             ],
         ]);
         $raw = curl_exec($ch);

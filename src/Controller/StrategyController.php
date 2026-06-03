@@ -210,6 +210,7 @@ class StrategyController
                 'hum'  => $finalRaceHum,
                 'risk' => (int)$request->post('risk', 0),
                 'target_wear' => (int)$request->post('target_wear', 15),
+                'boost_stints' => (int)$request->post('boost_stints', 0),
             ];
 
             if (empty($trackProfile['name']) && !empty($office['trackName'])) {

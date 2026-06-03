@@ -49,6 +49,15 @@ class StrategyService
         $temp = (float)$inputs['temp'];
         $risk = (int)($inputs['risk']);
 
+        // Boost lap stints: 0..3. Each stint runs 3 boost laps (richer
+        // engine map). Total boost laps = stints × 3, capped 0..9.
+        // Extra fuel per the GPRO formula: laps × lap_length × boost_coeff,
+        // ceil-rounded; spread evenly across race stints below.
+        $boostStints = max(0, min(3, (int) ($inputs['boost_stints'] ?? 0)));
+        $boostLaps = $boostStints * 3;
+        $boostCoeffDry = (float) ($trackDb['boost_dry'] ?? 0.0);
+        $boostCoeffWet = (float) ($trackDb['boost_wet'] ?? $boostCoeffDry);
+
 
         $trackTotalDist = (float)$trackDb['distance'];
         $trackTotalLaps = (int)$trackDb['laps'];
@@ -238,10 +247,27 @@ class StrategyService
                 $tcdVal = $lostTcd * 3;
             }
 
+            // Per-lap fuel cost already includes the car+driver adjustment;
+            // 'fuel_recommended' is the minimum-per-stint plus one extra
+            // lap's worth, ceil-rounded once. Gives the user a 1-lap
+            // safety net without re-running on a different worst case.
+            $fuelPerLapAdj = (($comp === 'Rain') ? $lkmWet : $lkmDry) * $lapLen;
+
+            // Boost laps add extra fuel. We don't know which race stint will
+            // host them, so spread evenly across stints — gives the manager
+            // enough buffer regardless of when they actually press the boost.
+            $boostCoeff = ($comp === 'Rain') ? $boostCoeffWet : $boostCoeffDry;
+            $boostExtraTotal = ($boostLaps > 0 && $boostCoeff > 0 && $lapLen > 0)
+                ? $boostLaps * $lapLen * $boostCoeff
+                : 0.0;
+            $boostExtraPerStint = $boostExtraTotal / ($stops + 1);
+            $stintFuelInclusive = $fuelPerStint + $boostExtraPerStint;
+
             $tyreResults[$comp] = [
                 'stops' => $stops,
                 'laps_set' => ($stops > 0 && $lapsPerSetForced < $lapsPerSet) ? $lapsPerSetForced : $lapsPerSet,
-                'fuel_load' => ceil($fuelPerStint),
+                'fuel_load' => ceil($stintFuelInclusive),
+                'fuel_recommended' => ceil($stintFuelInclusive + $fuelPerLapAdj),
                 'pit_time_est' => round($pitTime, 2),
                 'lost_pits' => round($lostPits, 2),
                 'lost_fuel' => round($fuelCost, 2),

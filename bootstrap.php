@@ -241,13 +241,11 @@ $container['controller.car_wear'] = new CarWearController(
 $container['controller.page'] = new PageController(
     $container['service.ideal_pilot'],
     $container['service.insight'],
-    $container['repo.track'],
     $container['repo.metadata'],
     $container['service.training'],
     $container['service.user_repo'],
     $container['service.api_client'],
     $container['service.pha_match'],
-    $container['service.boost_fuel'],
     $container['service.race_weather'],
     $container['service.car_wear'],
     $container['service.wear_advisor'],
@@ -301,6 +299,7 @@ use App\Controller\ApiWarmupController;
 
 $container['controller.api_warmup'] = new ApiWarmupController(
     $container['service.gpro_sync'],
+    $container['service.api_client'],
     $container['service.authorize'],
 );
 

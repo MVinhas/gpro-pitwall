@@ -53,14 +53,27 @@
                     {% set api_tip = (api_limit < 50)
                         ? 'Few API calls left this race weekend — avoid hard-refreshing data; the cache keeps recent answers warm for you.' ~ api_age
                         : 'GPRO API calls remaining this hour.' ~ api_age %}
-                    <span
-                        class="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium ring-1 ring-inset tabular-nums cursor-help {{ api_tone }}"
-                        title="{{ api_tip }}"
-                    >
-                        {% if api_limit < 50 %}<span aria-hidden="true">⚠</span>{% endif %}
-                        <span class="text-slate-400">API</span>
-                        <span class="font-semibold">{{ api_limit|number_format }}</span>
-                        <span class="text-slate-400">left</span>
+                    <span class="inline-flex items-center" data-api-budget-wrap>
+                        <span
+                            class="inline-flex items-center gap-1.5 rounded-l-md px-2.5 py-1 text-xs font-medium ring-1 ring-inset tabular-nums cursor-help {{ api_tone }}"
+                            title="{{ api_tip }}"
+                            data-api-budget-pill
+                        >
+                            {% if api_limit < 50 %}<span aria-hidden="true">⚠</span>{% endif %}
+                            <span class="text-slate-400">API</span>
+                            <span class="font-semibold" data-api-budget-value>{{ api_limit|number_format }}</span>
+                            <span class="text-slate-400">left</span>
+                        </span>
+                        <button
+                            type="button"
+                            class="-ml-px inline-flex items-center px-1.5 py-1 rounded-r-md text-xs ring-1 ring-inset hover:bg-slate-100 cursor-pointer {{ api_tone }}"
+                            title="Refresh the counter (costs 1 API call)"
+                            data-api-budget-refresh
+                            data-updated-at="{{ api_limit_updated_at ?? '' }}"
+                            aria-label="Refresh API budget counter"
+                        >
+                            <span aria-hidden="true">↻</span>
+                        </button>
                     </span>
                 {% endif %}
                 {% if is_logged_in and user.is_admin %}
@@ -134,7 +147,7 @@
 
     <footer class="py-6 text-center">
         <div class="inline-flex items-center gap-2 text-xs text-slate-400">
-            <span>&copy; {{ "now"|date("Y") }} GPRO Pitwall 1.0.3</span>
+            <span>&copy; {{ "now"|date("Y") }} GPRO Pitwall 1.0.5</span>
             <span class="opacity-50">•</span>
             <a
                 href="https://github.com/MVinhas/gpro-pitwall"
@@ -183,6 +196,98 @@
         </div>
     </footer>
 </div>
+
+{# API budget refresh confirmation modal — opens when the ↻ next to the
+   budget badge is clicked. Explicit so the user understands the cost. #}
+{% if is_logged_in and api_limit is defined and api_limit != '?' %}
+<div
+    id="apiBudgetModal"
+    class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/40"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="apiBudgetModalTitle"
+>
+    <div class="bg-white rounded-xl shadow-xl border border-slate-200 max-w-sm w-full mx-4 p-5">
+        <h2 id="apiBudgetModalTitle" class="t-heading mb-2">Refresh the API counter?</h2>
+        <p class="t-caption mb-3">
+            Reading the real current value from GPRO <strong>costs 1 API call</strong>.
+            There is no free way to query it.
+        </p>
+        <p class="t-caption mb-4">
+            Counter was last updated
+            <strong data-api-budget-modal-age>—</strong>.
+            If the displayed number is close enough for your decision, you can skip the refresh.
+        </p>
+        <div class="flex justify-end gap-2">
+            <button type="button" class="btn btn-md btn-secondary" data-api-budget-cancel>Cancel</button>
+            <button type="button" class="btn btn-md btn-primary" data-api-budget-confirm data-busy-text="Refreshing…">
+                Refresh now (1 call)
+            </button>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<script>
+// API-budget refresh modal: explicit click → confirm → 1 API call.
+(() => {
+    const refreshBtn = document.querySelector('[data-api-budget-refresh]');
+    const modal = document.getElementById('apiBudgetModal');
+    if (!refreshBtn || !modal) return;
+    const cancelBtn = modal.querySelector('[data-api-budget-cancel]');
+    const confirmBtn = modal.querySelector('[data-api-budget-confirm]');
+    const ageEl = modal.querySelector('[data-api-budget-modal-age]');
+    const valueEl = document.querySelector('[data-api-budget-value]');
+    const csrf = '{{ csrf_token }}';
+
+    function ageText() {
+        const ts = parseInt(refreshBtn.dataset.updatedAt || '0', 10);
+        if (!ts) return 'never';
+        const mins = Math.floor((Date.now() / 1000 - ts) / 60);
+        const time = new Date(ts * 1000).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+        if (mins < 1) return 'just now (at ' + time + ')';
+        return mins + ' minute' + (mins === 1 ? '' : 's') + ' ago (at ' + time + ')';
+    }
+    function open() {
+        ageEl.textContent = ageText();
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+    function close() {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+
+    refreshBtn.addEventListener('click', open);
+    cancelBtn.addEventListener('click', close);
+    modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !modal.classList.contains('hidden')) close(); });
+
+    confirmBtn.addEventListener('click', async () => {
+        const original = confirmBtn.textContent;
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = confirmBtn.dataset.busyText || 'Refreshing…';
+        try {
+            const res = await fetch('/api/refresh_budget', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: new URLSearchParams({ csrf_token: csrf })
+            });
+            const data = await res.json();
+            if (data.success && typeof data.remaining === 'number') {
+                if (valueEl) valueEl.textContent = data.remaining.toLocaleString();
+                if (data.updated_at) refreshBtn.dataset.updatedAt = String(data.updated_at);
+            }
+        } catch (_) {
+            // Network error — leave the badge as-is; the next page load will update.
+        } finally {
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = original;
+            close();
+        }
+    });
+})();
+</script>
 
 <script>
 document.getElementById('apiWarmupBtn')?.addEventListener('click', async function () {

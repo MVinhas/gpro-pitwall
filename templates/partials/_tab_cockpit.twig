@@ -156,44 +156,6 @@
             </div>
         {% endif %}
 
-        {# BOOST LAPS #}
-        {% if boost_costs is defined %}
-            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <div class="px-6 py-4 border-b border-slate-200 bg-slate-50">
-                    <h3 class="t-section">Boost laps</h3>
-                </div>
-                <div class="p-6 space-y-4">
-                    {% if pha.verdict == 'all_in' %}
-                        <p class="text-sm text-emerald-700 font-medium">
-                            Verdict is ALL IN — spend your boost laps. Extra fuel to budget:
-                        </p>
-                    {% elseif pha.verdict == 'push' %}
-                        <p class="text-sm text-blue-700 font-medium">
-                            Pushing this weekend — consider boost laps. Extra fuel to budget:
-                        </p>
-                    {% else %}
-                        <p class="t-caption">
-                            No strong push signal — boost laps are optional. Extra fuel if you use them:
-                        </p>
-                    {% endif %}
-
-                    <div class="grid grid-cols-3 gap-3">
-                        {% for laps, fuel in boost_costs %}
-                            <div class="rounded-lg border border-slate-200 p-3 text-center">
-                                <p class="t-label">{{ laps }} boost lap{{ laps > 1 ? 's' : '' }}</p>
-                                <p class="t-value mt-1">+{{ fuel }} L</p>
-                            </div>
-                        {% endfor %}
-                    </div>
-
-                    <p class="t-caption">
-                        Up to 3 sets per race. Fuel shown is the extra load on top of your normal
-                        race fuel; add it when setting your strategy.
-                    </p>
-                </div>
-            </div>
-        {% endif %}
-
         {# WEATHER CALL #}
         {% if weather is defined %}
             <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">

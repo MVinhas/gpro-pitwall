@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Http\Request;
-use App\Repository\TrackRepository;
 use App\Repository\DivisionMetadataRepository;
 use App\Repository\UserRepository;
 use App\Service\IdealPilotService;
@@ -14,7 +13,6 @@ use App\Service\TrainingService;
 use App\Service\GproApiClient;
 use App\Service\GproDataMapper;
 use App\Service\PhaMatchService;
-use App\Service\BoostFuelService;
 use App\Service\RaceWeatherService;
 use App\Service\CarWearService;
 use App\Service\WearAdvisorService;
@@ -33,13 +31,11 @@ class PageController
     public function __construct(
         private readonly IdealPilotService $idealPilotService,
         private readonly InsightService $insightService,
-        private readonly TrackRepository $trackRepo,
         private readonly DivisionMetadataRepository $metaRepo,
         private readonly TrainingService $trainingService,
         private readonly UserRepository $userRepo,
         private readonly GproApiClient $apiClient,
         private readonly PhaMatchService $phaMatch,
-        private readonly BoostFuelService $boostFuel,
         private readonly RaceWeatherService $raceWeather,
         private readonly CarWearService $carWear,
         private readonly WearAdvisorService $wearAdvisor,
@@ -89,16 +85,6 @@ class PageController
         }
 
         $this->apiClient->setToken($user['api_token']);
-
-        // Heartbeat refresh of the API-budget counter. Cache hits don't carry
-        // a fresh apiRequestsRemaining value, so the header badge drifts during
-        // idle navigation. After ~5 min of stale, spend exactly one fresh call
-        // so the displayed count stays honest. Active use already keeps it
-        // updated naturally via the calls each tab makes.
-        $lastUpdate = (int) ($_SESSION['api_limit_updated_at'] ?? 0);
-        if (time() - $lastUpdate > 300) {
-            $this->apiClient->refreshBudgetCounter();
-        }
 
         $divisions    = $this->config['app']['divisions'];
         $tracks       = $this->config['app']['tracks'];
@@ -202,16 +188,6 @@ class PageController
                     );
                     $trackName = $raceSetup['trackName'] ?? $activeTrack;
                     $viewData['pha_track_name'] = $trackName;
-
-                    // Boost-lap fuel cost for the upcoming track (dry coeff;
-                    // wet is only relevant if the race runs wet).
-                    $boost = $this->trackRepo->findBoostProfile((string) $trackName);
-                    if ($boost !== null) {
-                        $viewData['boost_costs'] = $this->boostFuel->costTable(
-                            $boost['lap_length'],
-                            $boost['boost_dry'],
-                        );
-                    }
 
                     $w = $raceSetup['weather'] ?? [];
                     $viewData['weather'] = $this->raceWeather->assess($w);
