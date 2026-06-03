@@ -296,11 +296,15 @@
         {% endif %}
 
         {# JUMP TO STRATEGY #}
-        <div class="text-center">
+        <div class="text-center space-y-2">
             <a href="?main_tab=Race Strategy&track={{ active_track|url_encode }}"
-               class="btn btn-md btn-primary">
+               class="btn btn-md btn-primary"
+               onclick="return confirm('Did you change anything on the car (part swaps, levels)? If so, re-sync your data first — otherwise the race strategy will be based on stale car data.\n\nOK to continue to Race Strategy, Cancel to go re-sync.');">
                 Set your race strategy →
             </a>
+            <p class="t-caption">
+                Changed parts since your last sync? Re-sync first so the strategy uses the current car.
+            </p>
         </div>
 
     {% endif %}
