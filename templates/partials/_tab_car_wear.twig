@@ -1,7 +1,7 @@
 <div class="mb-4 rounded-md bg-amber-50 border-l-4 border-amber-400 p-4 shadow-sm">
     <p class="text-sm text-amber-800">
         <span class="font-bold">Changed the car?</span>
-        Re-sync first — these projections use your last-synced car data.
+        Re-sync first — these projections use your last-synced car data{% if user.last_synced_at %} (last sync: {{ user.last_synced_at|date("M j, H:i") }}){% endif %}.
     </p>
 </div>
 
