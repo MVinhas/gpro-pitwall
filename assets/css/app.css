@@ -57,22 +57,42 @@
 .t-value   { @apply text-base font-semibold text-slate-900; }
 .t-caption { @apply text-xs text-slate-500; }
 
-/* ---- Form controls ---- */
+/* ---- Form controls ----
+   One shared look: rounded, inset ring, blue focus. Height is pinned with
+   h-9 so inputs and selects line up across a card. Width is per-variant:
+   - form-input        full-width (auth fields, free text)
+   - form-input-compact content-sized numeric box (temp, humidity, %)
+   - form-input-sm     fixed narrow box with right padding for an addon
+   - form-select       full-width, custom chevron (no native arrow). */
 .form-input,
+.form-input-compact,
 .form-input-sm,
 .form-select {
-    @apply rounded-md border-0 py-1.5 px-3 text-sm text-slate-900
+    @apply h-9 rounded-md border-0 px-3 text-sm text-slate-900
            bg-white ring-1 ring-inset ring-slate-300
-           placeholder:text-slate-400 transition-colors
+           placeholder:text-slate-400 transition-[box-shadow]
            focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-600
            hover:ring-slate-400;
 }
-.form-input  { @apply block w-full; }
-.form-input-sm { @apply block w-20 text-left tabular-nums; }
-.form-select   { @apply block w-full; }
+.form-input         { @apply block w-full; }
+.form-input-compact { @apply block w-28 max-w-full tabular-nums; }
+.form-input-sm      { @apply block w-20 text-left tabular-nums; }
+
+/* Native select arrow off; draw our own chevron so it matches the inputs
+   and stays consistent across browsers. Room on the right for the icon. */
+.form-select {
+    @apply block w-full pr-9 appearance-none bg-no-repeat cursor-pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%2364748b' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E");
+    background-position: right 0.625rem center;
+    background-size: 1.1rem 1.1rem;
+}
+
+/* Hide the legacy IE/Edge select arrow. */
+.form-select::-ms-expand { display: none; }
 
 .form-input-group { @apply relative; }
 .form-input-group .form-input,
+.form-input-group .form-input-compact,
 .form-input-group .form-input-sm { @apply pr-10; }
 .form-input-addon {
     @apply pointer-events-none absolute inset-y-0 right-0 flex items-center
@@ -80,9 +100,11 @@
 }
 
 .form-input:disabled,
+.form-input-compact:disabled,
 .form-input-sm:disabled,
 .form-select:disabled,
 .form-input[readonly],
+.form-input-compact[readonly],
 .form-input-sm[readonly] {
     @apply bg-slate-50 text-slate-500 cursor-not-allowed;
 }
