@@ -15,7 +15,13 @@ use RuntimeException;
  */
 final class GproApiClient
 {
-    public const string API_LIMIT_KEY = 'api_requests_remaining';
+    /**
+     * Per-user cache namespace, derived from the active token. Every
+     * user-specific cache key is prefixed with this so one manager's data
+     * (driver, car, sponsors, budget…) can never be served to another.
+     * Empty until setToken() runs.
+     */
+    private string $scope = '';
 
     public function __construct(
         private readonly GproApiFetcher $fetcher,
@@ -26,6 +32,36 @@ final class GproApiClient
     public function setToken(string $token): void
     {
         $this->fetcher->setToken($token);
+        // Bind the cache namespace to the exact credential that produces the
+        // data. Hash so the raw token never lands in a cache key/filename.
+        $this->scope = self::scopeFor($token);
+    }
+
+    /** Stable per-user cache namespace for a token (no raw token exposed). */
+    public static function scopeFor(string $token): string
+    {
+        return substr(hash('sha256', $token), 0, 16);
+    }
+
+    /**
+     * Cache key under which a token's remaining-API-budget counter lives.
+     * Public + static so callers/tests can address it without a live client.
+     */
+    public static function budgetKeyForToken(string $token): string
+    {
+        return 'u' . self::scopeFor($token) . ':api_requests_remaining';
+    }
+
+    /** Prefix a per-user key with the active token's namespace. */
+    private function userKey(string $key): string
+    {
+        return 'u' . $this->scope . ':' . $key;
+    }
+
+    /** Cache key for this user's remaining-API-budget counter. */
+    private function apiLimitKey(): string
+    {
+        return $this->userKey('api_requests_remaining');
     }
 
     /** @return array<string, mixed> */
@@ -97,7 +133,13 @@ final class GproApiClient
     /** @return array<string, mixed> */
     public function getTyreSuppliers(bool $forceRefresh = false): array
     {
-        return $this->getCached('tyre_suppliers', '/gb/backend/api/v2/TyreSuppliers', 120000, $forceRefresh);
+        return $this->getCached(
+            'tyre_suppliers',
+            '/gb/backend/api/v2/TyreSuppliers',
+            120000,
+            $forceRefresh,
+            shared: true,
+        );
     }
 
     /**
@@ -151,14 +193,14 @@ final class GproApiClient
      */
     public function getCachedCalendar(): array
     {
-        $cached = $this->cache->get('calendar');
+        $cached = $this->cache->get($this->userKey('calendar'));
         return is_array($cached) ? $cached : [];
     }
 
     /** @return array<string, mixed> */
     public function getAllTracksPreview(bool $forceRefresh = false): array
     {
-        return $this->getCached('all_tracks_preview', '/gb/backend/api/v2/Tracks', 21600, $forceRefresh);
+        return $this->getCached('all_tracks_preview', '/gb/backend/api/v2/Tracks', 21600, $forceRefresh, shared: true);
     }
 
     /** @return array<string, mixed> */
@@ -223,13 +265,20 @@ final class GproApiClient
      */
     public function lastKnownRemaining(): ?int
     {
-        $v = $this->cache->get(self::API_LIMIT_KEY);
+        $v = $this->cache->get($this->apiLimitKey());
         return is_numeric($v) ? (int) $v : null;
     }
 
-    /** @return array<string, mixed> */
-    private function getCached(string $key, string $endpoint, int $ttl, bool $force): array
+    /**
+     * @param bool $shared When true the key is global (same payload for every
+     *   user — market dump, static track list, season-wide supplier data).
+     *   Default false: the key is namespaced to the current user so per-user
+     *   payloads never leak across accounts.
+     * @return array<string, mixed>
+     */
+    private function getCached(string $key, string $endpoint, int $ttl, bool $force, bool $shared = false): array
     {
+        $key = $shared ? $key : $this->userKey($key);
         if (!$force) {
             $cached = $this->cache->get($key);
             if ($cached !== null) {
@@ -279,7 +328,7 @@ final class GproApiClient
         $remaining = (int) $data['apiRequestsRemaining'];
         $_SESSION['api_limit'] = $remaining;
         $_SESSION['api_limit_updated_at'] = time();
-        $this->cache->set(self::API_LIMIT_KEY, $remaining, 3600);
+        $this->cache->set($this->apiLimitKey(), $remaining, 3600);
     }
 
     private function ttlShort(): int

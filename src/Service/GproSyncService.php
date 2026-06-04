@@ -49,6 +49,10 @@ final class GproSyncService
             return 'needs_token';
         }
 
+        // Scope the client to this user's token before any cache read — the
+        // budget counter (and everything else) is namespaced per user.
+        $this->apiClient->setToken($user['api_token']);
+
         // Refuse to start if the sync would push the remaining API budget
         // below the safety margin. null = never observed, so allow the first
         // sync (it's how we learn the budget in the first place).
@@ -68,8 +72,6 @@ final class GproSyncService
         $this->users->updateSyncStatus($userId, 'running');
 
         try {
-            $this->apiClient->setToken($user['api_token']);
-
             $this->apiClient->getOfficeData($force);
             $this->apiClient->getMyPilotDetails($force);
             $this->apiClient->getCarData($force);
