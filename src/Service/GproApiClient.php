@@ -100,6 +100,29 @@ final class GproApiClient
         return $this->getCached('tyre_suppliers', '/gb/backend/api/v2/TyreSuppliers', 120000, $forceRefresh);
     }
 
+    /**
+     * Resolves a tyre supplier by its GPRO id from the TyreSuppliers feed.
+     * The feed is the single source of truth for supplier characteristics
+     * (durability, performance, peak temp, …), which GPRO can change per
+     * season — so we never hardcode them. Returns null if the id isn't
+     * found (e.g. feed unavailable); callers fall back to secrets.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function findTyreSupplierById(int $supplierId): ?array
+    {
+        $suppliers = $this->getTyreSuppliers()['suppliers'] ?? [];
+        if (!is_array($suppliers)) {
+            return null;
+        }
+        foreach ($suppliers as $supplier) {
+            if (is_array($supplier) && (int) ($supplier['id'] ?? 0) === $supplierId) {
+                return $supplier;
+            }
+        }
+        return null;
+    }
+
     /** @return array<string, mixed> */
     public function getMenu(bool $forceRefresh = false): array
     {

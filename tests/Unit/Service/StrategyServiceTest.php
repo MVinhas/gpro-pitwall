@@ -202,4 +202,61 @@ final class StrategyServiceTest extends TestCase
             $this->assertGreaterThanOrEqual(15.0, $row['pit_time_est']);
         }
     }
+
+    /**
+     * A service whose tyre-durability factor is observable (> 1) and whose
+     * wear constant is small enough that tyre life forces several pit stops —
+     * so a change in durability moves the stop count rather than saturating.
+     */
+    private function durabilityService(): StrategyService
+    {
+        $secrets = self::SECRETS;
+        $secrets['tyre_calc']['factors']['tyre_durability'] = 1.05;
+        $secrets['tyre_calc']['base_wear_constant'] = 0.15;
+        // Secrets snapshot deliberately disagrees with the API value used in
+        // the override tests, so we can tell which one the service applied.
+        $secrets['tyre_suppliers_durabilities'] = ['Pipirelli' => 1];
+        return new StrategyService($this->db(), $secrets);
+    }
+
+    private function runStops(StrategyService $svc, ?int $durability): int
+    {
+        $result = $svc->calculateStrategy(
+            ['id' => 1, 'name' => 'Imola'],
+            ['lvlEngine' => 1, 'lvlElectronics' => 1, 'lvlSusp' => 1],
+            ['concentration' => 50, 'aggressiveness' => 50, 'experience' => 50,
+             'technical_insight' => 50, 'weight' => 75],
+            ['concentration' => 0, 'stressHandling' => 0],
+            ['id' => 0, 'ownTD' => 0, 'experience' => 0, 'pitCoordination' => 0],
+            $this->inputs(),
+            'Pipirelli',
+            $durability,
+        );
+        return (int) $result['tyres']['Medium']['stops'];
+    }
+
+    public function testHigherApiDurabilityMeansFewerPitStops(): void
+    {
+        $svc = $this->durabilityService();
+
+        // durability is the exponent on a >1 factor: more durability =>
+        // tyres last longer => fewer stops.
+        $this->assertLessThan($this->runStops($svc, 1), $this->runStops($svc, 8));
+    }
+
+    public function testApiDurabilityOverridesSecretsSnapshot(): void
+    {
+        $svc = $this->durabilityService();
+
+        // Secrets says Pipirelli=1; passing the live API value 8 must win.
+        $this->assertLessThan($this->runStops($svc, null), $this->runStops($svc, 8));
+    }
+
+    public function testNullDurabilityFallsBackToSecretsSnapshot(): void
+    {
+        $svc = $this->durabilityService();
+
+        // null => use secrets (Pipirelli=1). Passing 1 explicitly must match.
+        $this->assertSame($this->runStops($svc, 1), $this->runStops($svc, null));
+    }
 }

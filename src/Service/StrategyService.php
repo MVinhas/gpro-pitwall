@@ -31,7 +31,8 @@ class StrategyService
         array $staff,
         array $td,
         array $inputs,
-        string $supplierName = 'Pipirelli'
+        string $supplierName = 'Pipirelli',
+        ?int $supplierDurability = null
     ): array {
         $trackId = $trackData['id'];
         $stmt = $this->db->prepare("SELECT * FROM tracks WHERE id = :id OR name = :name");
@@ -105,9 +106,13 @@ class StrategyService
         $f_Temp = ($factors['avg_temp']) ** $temp;
 
 
-        $supplierMap = $this->secrets['tyre_suppliers_durabilities'] ?? [];
-        $supplierId = $supplierMap[$supplierName] ?? 1;
-        $f_Dur = ($factors['tyre_durability']) ** $supplierId;
+        // Supplier durability drives the wear exponent. The live API
+        // (TyreSuppliers feed) is the source of truth — GPRO can re-tune
+        // these per season. Fall back to the secrets snapshot only when the
+        // caller couldn't resolve it from the API (feed unavailable).
+        $durability = $supplierDurability
+            ?? ($this->secrets['tyre_suppliers_durabilities'][$supplierName] ?? 1);
+        $f_Dur = ($factors['tyre_durability']) ** $durability;
 
 
         $cSusp = (int)($carData['lvlSusp']);
