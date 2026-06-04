@@ -9,6 +9,7 @@ use App\Repository\DivisionMetadataRepository;
 use App\Repository\UserRepository;
 use App\Service\IdealPilotService;
 use App\Service\InsightService;
+use App\Service\RecruitmentService;
 use App\Service\TrainingService;
 use App\Service\GproApiClient;
 use App\Service\GproDataMapper;
@@ -47,6 +48,7 @@ class PageController
         private readonly StrategyController $strategyController,
         private readonly CarWearController $carWearController,
         private readonly GproDataMapper $mapper,
+        private readonly RecruitmentService $recruitmentService,
         private readonly Environment $twig,
         private array $config
     ) {
@@ -484,7 +486,24 @@ class PageController
 
         $offset = ($currentPage - 1) * $perPage;
 
-        $viewData['recruitment_results'] = array_slice($allResults, $offset, $perPage);
+        $pageRows = array_slice($allResults, $offset, $perPage);
+
+        // Favourite-track match counts for this page only. Calendar is read
+        // from cache — never a fresh API call; the per-user sync warms it.
+        // If the cache is cold, the column degrades to "—".
+        $calendar = $this->apiClient->getCachedCalendar();
+        $viewData['favourite_tracks_available'] = $calendar !== [];
+        if ($calendar !== []) {
+            /** @var array<int, string> $trackNames */
+            $trackNames = $this->config['app']['tracks'] ?? [];
+            $pageRows = $this->recruitmentService->tagFavouriteTracks(
+                $pageRows,
+                $this->recruitmentService->seasonRaceTrackIds($calendar),
+                $trackNames,
+            );
+        }
+
+        $viewData['recruitment_results'] = $pageRows;
         $viewData['pagination'] = [
             'current'      => $currentPage,
             'total_pages'  => $totalPages,

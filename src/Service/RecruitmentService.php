@@ -56,6 +56,72 @@ class RecruitmentService
     }
 
     /**
+     * Race trackIds for the current and next season, pulled from a cached
+     * Calendar response. Staff-day events (eventType 'SD') reuse trackId 1,
+     * so we keep only races (eventType 'R'). Returns empty sets when the
+     * calendar isn't available — callers degrade gracefully.
+     *
+     * @param array<string, mixed> $calendar
+     * @return array{current: list<int>, next: list<int>}
+     */
+    public function seasonRaceTrackIds(array $calendar): array
+    {
+        return [
+            'current' => $this->raceTrackIds($calendar['events'] ?? []),
+            'next'    => $this->raceTrackIds($calendar['nextSeasonEvents'] ?? []),
+        ];
+    }
+
+    /**
+     * Tags each driver row with how many of their favourite tracks fall in
+     * the current/next season, plus the matching track names for the tooltip.
+     * Mutates and returns the rows. Cheap — meant for one page of results,
+     * not the whole market.
+     *
+     * @param list<array<string, mixed>> $drivers
+     * @param array{current: list<int>, next: list<int>} $seasonTracks
+     * @param array<int, string> $trackNames trackId => display name
+     * @return list<array<string, mixed>>
+     */
+    public function tagFavouriteTracks(array $drivers, array $seasonTracks, array $trackNames): array
+    {
+        foreach ($drivers as &$driver) {
+            $fav = array_map('intval', is_array($driver['FAV'] ?? null) ? $driver['FAV'] : []);
+
+            foreach (['current', 'next'] as $season) {
+                $matchIds = array_values(array_intersect($fav, $seasonTracks[$season]));
+                $driver['FAV_' . $season] = count($matchIds);
+                $driver['FAV_' . $season . '_names'] = array_values(array_filter(
+                    array_map(static fn(int $id): string => $trackNames[$id] ?? '', $matchIds),
+                ));
+            }
+        }
+        unset($driver);
+
+        return $drivers;
+    }
+
+    /**
+     * @param mixed $events
+     * @return list<int>
+     */
+    private function raceTrackIds(mixed $events): array
+    {
+        if (!is_array($events)) {
+            return [];
+        }
+
+        $ids = [];
+        foreach ($events as $event) {
+            if (is_array($event) && ($event['eventType'] ?? '') === 'R') {
+                $ids[] = (int) ($event['trackId'] ?? 0);
+            }
+        }
+
+        return array_values(array_unique(array_filter($ids, static fn(int $id): bool => $id > 0)));
+    }
+
+    /**
      * @param list<array<string, mixed>> $results
      * @return array{
      *   data: list<array<string, mixed>>,

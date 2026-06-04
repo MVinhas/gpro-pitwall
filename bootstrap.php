@@ -261,6 +261,7 @@ $container['controller.page'] = new PageController(
     $container['controller.strategy'],
     $container['controller.car_wear'],
     $container['service.data_mapper'],
+    $container['service.recruitment'],
     $container['twig'],
     $container['config']
 );

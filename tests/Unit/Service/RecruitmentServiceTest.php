@@ -180,4 +180,52 @@ final class RecruitmentServiceTest extends TestCase
         $out = $this->service()->analyze($this->market(['OFF' => 1]), 'Rookie', true);
         $this->assertSame([], $out);
     }
+
+    public function testSeasonRaceTrackIdsKeepsOnlyRacesAndDedupes(): void
+    {
+        $calendar = [
+            'events' => [
+                ['eventType' => 'SD', 'trackId' => '1'],   // staff day — ignored
+                ['eventType' => 'R',  'trackId' => '25'],
+                ['eventType' => 'R',  'trackId' => '10'],
+                ['eventType' => 'R',  'trackId' => '25'],  // dup — collapsed
+            ],
+            'nextSeasonEvents' => [
+                ['eventType' => 'R', 'trackId' => '34'],
+                ['eventType' => 'SD', 'trackId' => '1'],
+            ],
+        ];
+
+        $out = $this->service()->seasonRaceTrackIds($calendar);
+
+        $this->assertSame([25, 10], $out['current']);
+        $this->assertSame([34], $out['next']);
+    }
+
+    public function testSeasonRaceTrackIdsHandlesMissingCalendar(): void
+    {
+        $out = $this->service()->seasonRaceTrackIds([]);
+        $this->assertSame(['current' => [], 'next' => []], $out);
+    }
+
+    public function testTagFavouriteTracksCountsMatchesAndResolvesNames(): void
+    {
+        $drivers = [
+            ['NAME' => 'A', 'FAV' => [25, 10, 99]],
+            ['NAME' => 'B', 'FAV' => []],
+            ['NAME' => 'C'],  // no FAV key at all
+        ];
+        $seasonTracks = ['current' => [25, 10], 'next' => [34]];
+        $trackNames = [25 => 'Paul Ricard', 10 => 'Spa', 34 => 'Melbourne'];
+
+        $out = $this->service()->tagFavouriteTracks($drivers, $seasonTracks, $trackNames);
+
+        $this->assertSame(2, $out[0]['FAV_current']);
+        $this->assertSame(['Paul Ricard', 'Spa'], $out[0]['FAV_current_names']);
+        $this->assertSame(0, $out[0]['FAV_next']);
+
+        $this->assertSame(0, $out[1]['FAV_current']);
+        $this->assertSame(0, $out[2]['FAV_current']);
+        $this->assertSame([], $out[2]['FAV_next_names']);
+    }
 }

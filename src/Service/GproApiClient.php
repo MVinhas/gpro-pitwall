@@ -118,6 +118,20 @@ final class GproApiClient
         return $this->getCached('calendar', '/gb/backend/api/v2/Calendar', $this->ttlShort(), $forceRefresh);
     }
 
+    /**
+     * Returns the calendar only if it's already in cache — never spends an
+     * API call. Used by surfaces (e.g. Recruitment) that want the calendar
+     * opportunistically but must not trigger a fetch. The per-user sync
+     * already warms this key, so it's normally a hit.
+     *
+     * @return array<string, mixed>
+     */
+    public function getCachedCalendar(): array
+    {
+        $cached = $this->cache->get('calendar');
+        return is_array($cached) ? $cached : [];
+    }
+
     /** @return array<string, mixed> */
     public function getAllTracksPreview(bool $forceRefresh = false): array
     {
