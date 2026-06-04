@@ -22,6 +22,7 @@ return function (Router $router): void {
     // ========== CONTROL PANEL ==========
     $router->add('GET', '/control_panel', 'controller.control_panel', 'index');
     $router->add('POST', '/update_token', 'controller.control_panel', 'updateToken');
+    $router->add('POST', '/account/delete', 'controller.control_panel', 'deleteAccount');
 
     // ========== DEBUG ==========
     $router->add('GET', '/debug', 'controller.debug', 'index');
@@ -32,6 +33,7 @@ return function (Router $router): void {
     $router->add('POST', '/admin/users/toggle_admin', 'controller.admin_users', 'toggleAdmin');
     $router->add('POST', '/admin/users/resend_verification', 'controller.admin_users', 'resendVerification');
     $router->add('POST', '/admin/users/delete', 'controller.admin_users', 'delete');
+    $router->add('POST', '/admin/users/restore', 'controller.admin_users', 'restore');
 
     // ========== CALCULATIONS & ANALYSIS ==========
     // Baseline management

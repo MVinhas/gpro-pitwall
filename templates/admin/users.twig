@@ -41,11 +41,18 @@
                 <tbody class="divide-y divide-slate-200">
                     {% for u in users %}
                         {% set is_self = (u.id == admin_self_id) %}
-                        <tr class="hover:bg-slate-50">
+                        {% set is_deleted = u.deleted_at is not empty %}
+                        <tr class="hover:bg-slate-50 {{ is_deleted ? 'bg-red-50/40' : '' }}">
                             <td class="px-4 py-3 text-sm text-slate-500 tabular-nums">{{ u.id }}</td>
-                            <td class="px-4 py-3 text-sm font-medium text-slate-900">
+                            <td class="px-4 py-3 text-sm font-medium {{ is_deleted ? 'text-slate-400 line-through' : 'text-slate-900' }}">
                                 {{ u.username }}
-                                {% if is_self %}<span class="ml-1 text-xs text-slate-400">(you)</span>{% endif %}
+                                {% if is_self %}<span class="ml-1 text-xs text-slate-400 no-underline">(you)</span>{% endif %}
+                                {% if is_deleted %}
+                                    <span class="ml-1 inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 ring-1 ring-inset ring-red-600/20 no-underline align-middle"
+                                          title="Deleted {{ u.deleted_at }}">
+                                        Deleted {{ u.deleted_at|date("M j") }}
+                                    </span>
+                                {% endif %}
                             </td>
                             <td class="px-4 py-3 text-xs text-slate-400 font-mono">{{ u.email_hash|slice(0, 12) }}…</td>
                             <td class="px-4 py-3 text-center">
@@ -68,29 +75,23 @@
                                 {{ u.created_at|date("M j, Y") }}
                             </td>
                             <td class="px-4 py-3 text-right space-x-2 whitespace-nowrap">
-                                {% if not is_self %}
-                                    <form method="POST" action="/admin/users/toggle_admin" class="inline">
+                                {% if is_deleted %}
+                                    <form method="POST" action="/admin/users/restore" class="inline"
+                                          onsubmit="return confirm('Restore {{ u.username }}? They will be able to log in again.');">
                                         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                                         <input type="hidden" name="user_id" value="{{ u.id }}">
-                                        <button class="btn btn-sm btn-secondary" type="submit">
-                                            {{ u.is_admin ? 'Demote' : 'Promote' }}
-                                        </button>
+                                        <button class="btn btn-sm btn-secondary" type="submit">Restore</button>
                                     </form>
-                                {% endif %}
-                                {% if not u.verified_at %}
-                                    <form method="POST" action="/admin/users/resend_verification" class="inline">
-                                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                                        <input type="hidden" name="user_id" value="{{ u.id }}">
-                                        <button class="btn btn-sm btn-secondary" type="submit">Resend</button>
-                                    </form>
-                                {% endif %}
-                                {% if not is_self %}
-                                    <form method="POST" action="/admin/users/delete" class="inline"
-                                          onsubmit="return confirm('Soft-delete {{ u.username }}? They will no longer appear in this list.');">
-                                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                                        <input type="hidden" name="user_id" value="{{ u.id }}">
-                                        <button class="btn btn-sm btn-danger" type="submit">Delete</button>
-                                    </form>
+                                {% else %}
+                                    {% if not u.verified_at %}
+                                        <form method="POST" action="/admin/users/resend_verification" class="inline">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                            <input type="hidden" name="user_id" value="{{ u.id }}">
+                                            <button class="btn btn-sm btn-secondary" type="submit">Resend</button>
+                                        </form>
+                                    {% else %}
+                                        <span class="t-caption">—</span>
+                                    {% endif %}
                                 {% endif %}
                             </td>
                         </tr>

@@ -59,6 +59,20 @@ class UserRepository
         return $result ? $this->hydrate($result) : null;
     }
 
+    /**
+     * Like findById but also returns soft-deleted rows. Used by admin restore
+     * — a normal findById can't see a deleted user.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function findByIdIncludingDeleted(int $id): ?array
+    {
+        $stmt = $this->pdo->prepare("SELECT * FROM users WHERE id = :id LIMIT 1");
+        $stmt->execute(['id' => $id]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $result ? $this->hydrate($result) : null;
+    }
+
     public function findEncryptedEmailById(int $id): ?string
     {
         $stmt = $this->pdo->prepare(
@@ -142,14 +156,15 @@ class UserRepository
         $perPage = max(1, min(100, $perPage));
         $offset  = ($page - 1) * $perPage;
 
-        $totalStmt = $this->pdo->query("SELECT COUNT(*) FROM users WHERE deleted_at IS NULL");
+        $totalStmt = $this->pdo->query("SELECT COUNT(*) FROM users");
         $total = $totalStmt === false ? 0 : (int) $totalStmt->fetchColumn();
 
+        // Includes soft-deleted users so the admin can see and restore them;
+        // deleted_at distinguishes them in the view.
         $stmt = $this->pdo->prepare(
             "SELECT id, username, email_hash, is_admin, api_token,
-                    verified_at, last_synced_at, sync_status, created_at
+                    verified_at, last_synced_at, sync_status, created_at, deleted_at
              FROM users
-             WHERE deleted_at IS NULL
              ORDER BY id DESC
              LIMIT :limit OFFSET :offset"
         );
@@ -174,6 +189,14 @@ class UserRepository
             "UPDATE users SET deleted_at = :now WHERE id = :id AND deleted_at IS NULL"
         );
         $stmt->execute(['now' => date('Y-m-d H:i:s'), 'id' => $userId]);
+    }
+
+    public function restore(int $userId): void
+    {
+        $stmt = $this->pdo->prepare(
+            "UPDATE users SET deleted_at = NULL WHERE id = :id AND deleted_at IS NOT NULL"
+        );
+        $stmt->execute(['id' => $userId]);
     }
 
     public function countAll(): int

@@ -111,6 +111,46 @@ final class AdminUserServiceTest extends TestCase
         $this->service($users, $audit)->softDelete(1, 1);
     }
 
+    public function testRestoreClearsDeletionAndAudits(): void
+    {
+        $users = $this->createMock(UserRepository::class);
+        $users->method('findByIdIncludingDeleted')
+              ->willReturn(['id' => 5, 'username' => 'bob', 'deleted_at' => '2026-06-04 10:00:00']);
+        $users->expects($this->once())->method('restore')->with(5);
+
+        $audit = $this->createMock(AuditLogRepository::class);
+        $audit->expects($this->once())
+              ->method('record')
+              ->with(1, 'restore', 5, ['username' => 'bob']);
+
+        $this->service($users, $audit)->restore(1, 5);
+    }
+
+    public function testRestoreFailsWhenUserMissing(): void
+    {
+        $users = $this->createMock(UserRepository::class);
+        $users->method('findByIdIncludingDeleted')->willReturn(null);
+        $users->expects($this->never())->method('restore');
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('User not found');
+
+        $this->service($users, $this->createMock(AuditLogRepository::class))->restore(1, 99);
+    }
+
+    public function testRestoreFailsWhenUserNotDeleted(): void
+    {
+        $users = $this->createMock(UserRepository::class);
+        $users->method('findByIdIncludingDeleted')
+              ->willReturn(['id' => 5, 'username' => 'bob', 'deleted_at' => null]);
+        $users->expects($this->never())->method('restore');
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('not deleted');
+
+        $this->service($users, $this->createMock(AuditLogRepository::class))->restore(1, 5);
+    }
+
     public function testResendVerificationDelegatesToAuthLoginAndAudits(): void
     {
         $users = $this->createMock(UserRepository::class);
