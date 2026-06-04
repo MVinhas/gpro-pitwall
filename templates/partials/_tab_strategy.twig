@@ -18,17 +18,17 @@
                     <h3 class="t-section">Race Settings</h3>
                 </div>
                 <div class="p-4 space-y-3">
-                    <div>
-                        <label class="t-label block mb-1">Track Temp</label>
-                        <div class="form-input-group">
-                            <input type="number" name="temp" value="{{ strategy_results.inputs.temp ?? '' }}" placeholder="Auto" step="0.1" class="form-input">
+                    <div class="flex items-center justify-between gap-3">
+                        <label class="t-label">Track Temp</label>
+                        <div class="form-input-group w-28">
+                            <input type="number" name="temp" value="{{ strategy_results.inputs.temp ?? '' }}" placeholder="Auto" step="0.1" class="form-input-compact">
                             <span class="form-input-addon">°C</span>
                         </div>
                     </div>
-                    <div>
-                        <label class="t-label block mb-1">Humidity</label>
-                        <div class="form-input-group">
-                            <input type="number" name="humidity" value="{{ strategy_results.inputs.hum ?? '' }}" placeholder="Auto" class="form-input">
+                    <div class="flex items-center justify-between gap-3">
+                        <label class="t-label">Humidity</label>
+                        <div class="form-input-group w-28">
+                            <input type="number" name="humidity" value="{{ strategy_results.inputs.hum ?? '' }}" placeholder="Auto" class="form-input-compact">
                             <span class="form-input-addon">%</span>
                         </div>
                     </div>

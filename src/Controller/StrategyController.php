@@ -74,19 +74,15 @@ class StrategyController
             $weatherData = $this->api->getRaceSetup();
             $supplierId = (int)($office['tyreSupplierId'] ?? 0);
 
-            $tyreSuppliers = [
-                1 => 'Pipirelli',
-                9 => 'Avonn',
-                2 => 'Yokomama',
-                3 => 'Dunnolop',
-                8 => 'Contimental',
-                4 => 'Badyear',
-                7 => 'Hancock',
-                5 => 'Michelini',
-                6 => 'Bridgerock',
-            ];
-
-            $supplierName = $tyreSuppliers[$supplierId] ?? 'Pipirelli';
+            // The TyreSuppliers feed is the single source of truth for supplier
+            // name + durability — GPRO can re-tune both per season, so neither
+            // is hardcoded. If the feed is unavailable, supplier stays null and
+            // StrategyService falls back to its secrets snapshot.
+            $supplier = $this->api->findTyreSupplierById($supplierId);
+            $supplierName = (string)($supplier['name'] ?? 'Pipirelli');
+            $supplierDurability = isset($supplier['durability'])
+                ? (int)$supplier['durability']
+                : null;
 
 
             $driver = $this->mapper->mapDriver($pilotRaw);
@@ -224,7 +220,8 @@ class StrategyController
                 $staff,
                 $td,
                 $inputs,
-                $supplierName
+                $supplierName,
+                $supplierDurability
             );
 
             $setupWeatherInputs = [

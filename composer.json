@@ -1,7 +1,7 @@
 {
     "name": "mvinhas/gpro-pitwall",
     "description": "Race-weekend cockpit for GPRO managers — strategy, wear, training, recruitment.",
-    "version": "1.1.4",
+    "version": "1.1.7",
     "homepage": "https://gpro-pitwall.com",
     "type": "project",
     "license": "proprietary",
