@@ -1,4 +1,5 @@
 .env
+.deploy.env
 /data
 /config/secrets.php
 /vendor
