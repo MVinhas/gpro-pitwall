@@ -102,14 +102,16 @@
 
         {# Undo / Clear Buttons #}
         <div class="flex gap-3">
-             <form method="POST" action="/undo_last_pilot" class="flex-1">
+             <form method="POST" action="/undo_last_pilot" class="flex-1"
+                   onsubmit="return confirm('Delete the last pilot added to {{ active_division }}? This cannot be undone.');">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <input type="hidden" name="division" value="{{ active_division }}">
                 <button type="submit" class="w-full rounded-md bg-amber-100 px-3 py-2 text-sm font-semibold text-amber-700 shadow-sm hover:bg-amber-200 transition-colors">
                     Undo Last
                 </button>
             </form>
-            <form method="POST" action="/clear_stats" class="flex-1" onsubmit="return confirm('Are you absolutely sure you want to delete ALL data for this division?');">
+            <form method="POST" action="/clear_stats" class="flex-1"
+                  onsubmit="return confirm('Delete ALL {{ all_ideal_pilots[active_division].count }} pilot record(s) for {{ active_division }}? This cannot be undone.');">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <input type="hidden" name="division" value="{{ active_division }}">
                 <button type="submit" class="w-full rounded-md bg-red-100 px-3 py-2 text-sm font-semibold text-red-700 shadow-sm hover:bg-red-200 transition-colors">

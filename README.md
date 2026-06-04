@@ -42,6 +42,8 @@ Scores the full GPRO driver market against your division's ideal pilot. Rating i
 - Salary and fee don't count.
 - Floored at 0, capped at 100. `MIN_RATING = 50` filter so the result set stays bounded on a full 4–5k-driver market.
 
+**Favourite-track fit** — a compact `Fav` column flags how many of each candidate's favourite tracks are raced this season (`C·n`) and next season (`N·n`), green when matched, with the track names on hover. Computed from data already in hand — the market dump carries each driver's favourite tracks, and the season calendars come from the cache the per-user sync already warms — so it adds **no extra API call** and needs no per-driver lookup.
+
 ### Division Baseline / Division Differences *(admin-only)*
 Per-division ideal-pilot tables with OA caps (Rookie 85 / Amateur 110 / Pro 135 / Master 160 / Elite ∞), plus pairwise comparison insights across divisions.
 

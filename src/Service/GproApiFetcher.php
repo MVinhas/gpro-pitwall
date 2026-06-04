@@ -15,12 +15,14 @@ use RuntimeException;
 final class GproApiFetcher
 {
     private readonly string $baseUrl;
+    private readonly string $userAgent;
     private ?string $token = null;
 
     /** @param array<string, mixed> $config */
     public function __construct(array $config)
     {
         $this->baseUrl = rtrim((string) $config['base_url'], '/');
+        $this->userAgent = 'GPRO-Pitwall/' . ($config['version'] ?? '0.0.0');
     }
 
     public function setToken(string $token): void
@@ -41,7 +43,7 @@ final class GproApiFetcher
             CURLOPT_HTTPHEADER => [
                 "Authorization: Bearer {$this->token}",
                 'Accept: application/json',
-                'User-Agent: GPRO-Pitwall/1.0.5',
+                "User-Agent: {$this->userAgent}",
             ],
         ]);
 
@@ -83,7 +85,7 @@ final class GproApiFetcher
             CURLOPT_HTTPHEADER     => [
                 'Accept: application/json',
                 'Accept-Encoding: gzip',
-                'User-Agent: GPRO-Pitwall/1.0.5',
+                "User-Agent: {$this->userAgent}",
             ],
         ]);
         $raw = curl_exec($ch);

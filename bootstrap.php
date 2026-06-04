@@ -19,8 +19,11 @@ $container['config'] = [
 
 $container['config']['settings'] = $container['settings'];
 
+$container['version'] = \App\Support\Version::current();
+
 $container['config']['api'] = [
     'base_url' => $_ENV['GPRO_API_BASE_URL'] ?? 'https://gpro.net',
+    'version'  => $container['version'],
 ];
 
 use App\Database\Database;
@@ -60,6 +63,7 @@ $container['twig'] = new Environment($loader, [
 if ($container['settings']['is_dev']) {
     $container['twig']->addExtension(new \Twig\Extension\DebugExtension());
 }
+$container['twig']->addGlobal('app_version', $container['version']);
 
 use App\Repository\PilotRepository;
 use App\Repository\DivisionMetadataRepository;
@@ -257,6 +261,7 @@ $container['controller.page'] = new PageController(
     $container['controller.strategy'],
     $container['controller.car_wear'],
     $container['service.data_mapper'],
+    $container['service.recruitment'],
     $container['twig'],
     $container['config']
 );

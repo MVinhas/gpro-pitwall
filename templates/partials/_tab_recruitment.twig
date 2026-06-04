@@ -111,6 +111,14 @@
                         </span>
                     </div>
 
+                    {% if favourite_tracks_available %}
+                        <p class="t-caption mb-3">
+                            <span class="font-semibold">Fav</span> = favourite tracks on the calendar.
+                            <span class="font-semibold text-emerald-700">C·n</span> this season,
+                            <span class="font-semibold text-emerald-700">N·n</span> next season. Hover for track names.
+                        </p>
+                    {% endif %}
+
                     {# Helper Macro for Headers #}
                     {% macro sortLink(label, col, currentSort) %}
                         {% set newOrder = (currentSort.col == col and currentSort.order == 'desc') ? 'asc' : 'desc' %}
@@ -147,6 +155,13 @@
                                             </th>
                                         {% endfor %}
                                         
+                                        {% if favourite_tracks_available %}
+                                            <th scope="col" class="px-2 py-3.5 text-center text-sm font-semibold text-slate-900"
+                                                title="Favourite tracks racing this season (C) and next season (N)">
+                                                <span class="t-label">Fav</span>
+                                            </th>
+                                        {% endif %}
+
                                         <th scope="col" class="px-3 py-3.5 text-right text-sm font-semibold text-slate-900 cursor-pointer">
                                             {{ _self.sortLink('Salary', 'SAL', sort) }}
                                         </th>
@@ -183,6 +198,19 @@
                                             <td class="whitespace-nowrap px-1 py-4 text-center text-sm tabular-nums text-slate-500">{{ d.WEI }}</td>
                                             <td class="whitespace-nowrap px-1 py-4 text-center text-sm tabular-nums font-bold text-slate-500">{{ d.AGE }}</td>
 
+                                            {% if favourite_tracks_available %}
+                                                <td class="whitespace-nowrap px-2 py-4 text-center text-sm">
+                                                    <div class="inline-flex items-center gap-1">
+                                                        {% set curOn = d.FAV_current > 0 %}
+                                                        {% set nxtOn = d.FAV_next > 0 %}
+                                                        <span class="inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ring-1 ring-inset {{ curOn ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/20' : 'bg-slate-50 text-slate-400 ring-slate-200' }}"
+                                                              title="{{ curOn ? 'This season: ' ~ d.FAV_current_names|join(', ') : 'No favourite tracks this season' }}">C·{{ d.FAV_current }}</span>
+                                                        <span class="inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ring-1 ring-inset {{ nxtOn ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/20' : 'bg-slate-50 text-slate-400 ring-slate-200' }}"
+                                                              title="{{ nxtOn ? 'Next season: ' ~ d.FAV_next_names|join(', ') : 'No favourite tracks next season' }}">N·{{ d.FAV_next }}</span>
+                                                    </div>
+                                                </td>
+                                            {% endif %}
+
                                             <td class="whitespace-nowrap px-3 py-4 text-right text-sm tabular-nums text-slate-600">${{ d.SAL|number_format }}</td>
                                             <td class="whitespace-nowrap px-3 py-4 text-right text-sm tabular-nums text-slate-600">${{ d.FEE|number_format }}</td>
                                             
@@ -196,7 +224,7 @@
                                         </tr>
                                     {% else %}
                                         <tr>
-                                            <td colspan="16" class="px-6 py-10 text-center text-sm text-slate-500 bg-slate-50">
+                                            <td colspan="{{ favourite_tracks_available ? 17 : 16 }}" class="px-6 py-10 text-center text-sm text-slate-500 bg-slate-50">
                                                 No candidates found.
                                             </td>
                                         </tr>
