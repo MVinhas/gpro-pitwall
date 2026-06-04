@@ -17,8 +17,38 @@
         </div>
 
         {% if flash %}
-            <div class="bg-blue-50 border border-blue-200 text-blue-700 p-4 rounded mb-6 text-sm">
-                {{ flash }}
+            <div class="rounded-md bg-blue-50 border-l-4 border-blue-400 p-4 shadow-sm mb-6">
+                <p class="text-sm text-blue-800">{{ flash }}</p>
+            </div>
+        {% endif %}
+        {% if flash_error %}
+            <div class="rounded-md bg-red-50 border-l-4 border-red-400 p-4 shadow-sm mb-6">
+                <p class="text-sm text-red-800">{{ flash_error }}</p>
+            </div>
+        {% endif %}
+
+        {# Orientation: tells the user where to go. Changes with token state. #}
+        {% if has_token %}
+            <div class="rounded-md bg-emerald-50 border-l-4 border-emerald-400 p-4 shadow-sm mb-8">
+                <p class="text-sm font-bold text-emerald-800">You're connected.</p>
+                <p class="text-sm text-emerald-800 mt-1">
+                    Your data is syncing from GPRO. Head to the cockpit to plan
+                    your race weekend — strategy, car wear, training and recruitment
+                    are all in the top navigation.
+                </p>
+                <div class="mt-3">
+                    <a href="/?main_tab=Cockpit" class="btn btn-md btn-primary">
+                        Go to Race Weekend Cockpit →
+                    </a>
+                </div>
+            </div>
+        {% else %}
+            <div class="rounded-md bg-amber-50 border-l-4 border-amber-400 p-4 shadow-sm mb-8">
+                <p class="text-sm font-bold text-amber-800">One step left: add your API token.</p>
+                <p class="text-sm text-amber-800 mt-1">
+                    Paste your GPRO API token below to unlock the cockpit and every
+                    analysis tool. It takes a few seconds.
+                </p>
             </div>
         {% endif %}
 
@@ -65,6 +95,87 @@
                 </div>
             </div>
         </div>
+
+        {# Help #}
+        <div class="border-t border-slate-100 pt-6 mt-6">
+            <p class="text-xs text-slate-500">
+                Need help with your account? Contact us at
+                <a href="mailto:admin@gpro-pitwall.com" class="text-blue-600 underline">admin@gpro-pitwall.com</a>.
+            </p>
+        </div>
+
+        {# Danger zone — intentionally low-prominence, at the very bottom. #}
+        <details class="border-t border-slate-100 pt-6 mt-6 group">
+            <summary class="text-xs font-medium text-slate-500 cursor-pointer hover:text-red-600 transition-colors list-none">
+                <span class="inline-flex items-center gap-1">
+                    <span class="text-slate-400 group-open:rotate-90 transition-transform">▸</span>
+                    Delete my account
+                </span>
+            </summary>
+            <div class="mt-4 rounded-md border border-red-200 bg-red-50 p-4">
+                <p class="text-sm text-red-800">
+                    This deactivates your account and logs you out. You won't be able
+                    to log back in. This cannot be undone by you — contact an admin to
+                    restore it.
+                </p>
+                <button type="button"
+                        class="btn btn-sm btn-danger mt-3"
+                        data-delete-account-open>
+                    Delete account…
+                </button>
+            </div>
+        </details>
     </div>
 </div>
+
+{# Delete confirmation modal: must type exact username to enable the button. #}
+<div data-delete-account-modal
+     class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/40"
+     role="dialog" aria-modal="true" aria-labelledby="deleteAccountTitle">
+    <div class="bg-white rounded-xl shadow-xl border border-slate-200 max-w-sm w-full mx-4 p-5">
+        <h2 id="deleteAccountTitle" class="t-heading mb-2">Delete your account?</h2>
+        <p class="t-caption mb-4">
+            This cannot be undone. To confirm, type your username
+            <strong class="text-slate-700">{{ user.username }}</strong> below.
+        </p>
+        <form method="POST" action="/account/delete">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="text"
+                   name="confirm_username"
+                   autocomplete="off"
+                   placeholder="Type your username"
+                   class="form-input"
+                   data-delete-account-input
+                   data-expected="{{ user.username }}">
+            <div class="flex justify-end gap-2 mt-4">
+                <button type="button" class="btn btn-md btn-secondary" data-delete-account-cancel>Cancel</button>
+                <button type="submit" class="btn btn-md btn-danger" data-delete-account-confirm disabled>
+                    Delete account
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+(() => {
+    const modal = document.querySelector('[data-delete-account-modal]');
+    if (!modal) return;
+    const openBtn = document.querySelector('[data-delete-account-open]');
+    const cancel  = modal.querySelector('[data-delete-account-cancel]');
+    const input   = modal.querySelector('[data-delete-account-input]');
+    const confirm = modal.querySelector('[data-delete-account-confirm]');
+    const expected = input.getAttribute('data-expected') || '';
+
+    const show = () => { modal.classList.remove('hidden'); modal.classList.add('flex'); input.value = ''; confirm.disabled = true; input.focus(); };
+    const hide = () => { modal.classList.add('hidden'); modal.classList.remove('flex'); };
+
+    openBtn?.addEventListener('click', show);
+    cancel?.addEventListener('click', hide);
+    modal.addEventListener('click', (e) => { if (e.target === modal) hide(); });
+    // Enable the destructive button only on an exact username match. The
+    // server re-checks this against the session user's own username too.
+    input?.addEventListener('input', () => { confirm.disabled = (input.value !== expected); });
+})();
+</script>
 {% endblock %}

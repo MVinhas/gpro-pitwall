@@ -286,6 +286,7 @@ $container['controller.control_panel'] = new \App\Controller\ControlPanelControl
     $container['service.user_repo'],
     $container['twig'],
     $container['service.authorize'],
+    $container['service.auth_service'],
 );
 
 $container['controller.recruitment'] = new RecruitmentController(

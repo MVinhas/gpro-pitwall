@@ -77,6 +77,22 @@ final readonly class AdminUserController
         exit;
     }
 
+    public function restore(Request $request): void
+    {
+        $actor = $this->authorize->requireAdmin();
+        $targetId = (int) $request->post('user_id');
+
+        try {
+            $this->service->restore((int) $actor['id'], $targetId);
+            $_SESSION['flash'] = "User #{$targetId} restored.";
+        } catch (\Throwable $e) {
+            $_SESSION['flash_error'] = $e->getMessage();
+        }
+
+        header('Location: /admin/users');
+        exit;
+    }
+
     public function resendVerification(Request $request): void
     {
         $actor = $this->authorize->requireAdmin();

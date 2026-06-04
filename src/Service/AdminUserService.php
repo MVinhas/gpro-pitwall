@@ -69,6 +69,27 @@ final class AdminUserService
     }
 
     /**
+     * Restore a soft-deleted user: clears deleted_at so they can log in
+     * again. Looks the target up including deleted rows (a normal lookup
+     * can't see them).
+     */
+    public function restore(int $actorId, int $targetId): void
+    {
+        $target = $this->users->findByIdIncludingDeleted($targetId);
+        if ($target === null) {
+            throw new RuntimeException('User not found.');
+        }
+        if (empty($target['deleted_at'])) {
+            throw new RuntimeException('User is not deleted.');
+        }
+
+        $this->users->restore($targetId);
+        $this->audit->record($actorId, 'restore', $targetId, [
+            'username' => $target['username'] ?? null,
+        ]);
+    }
+
+    /**
      * Resends the email verification code for a user who hasn't completed
      * registration yet. Delegates to AuthService::login() — same flow as
      * the public login form, so the existing rate limit and code TTL
