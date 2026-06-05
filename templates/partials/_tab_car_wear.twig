@@ -28,9 +28,6 @@
                     <div class="mb-6 p-4 bg-slate-50 rounded-lg border border-slate-100">
                         <div class="flex items-baseline justify-between mb-3">
                             <h4 class="t-section">Driver Stats</h4>
-                            <span class="inline-flex items-center rounded-md bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
-                                Live Data
-                            </span>
                         </div>
                         {% if wear_inputs.driver is defined %}
                             <div class="grid grid-cols-3 gap-3">
@@ -53,7 +50,7 @@
                     </div>
 
                     <div class="mb-6">
-                        <label class="t-label block mb-2">Driver Risk</label>
+                        <label class="t-label block mb-2">Clear Track Risk</label>
                         <div class="flex items-center gap-4">
                             <input type="range" name="risk" min="0" max="100" value="{{ wear_inputs.risk ?? 0 }}"
                                    data-wear-risk-slider
