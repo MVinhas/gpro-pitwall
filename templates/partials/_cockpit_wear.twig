@@ -6,7 +6,7 @@
     <form method="GET" action="" class="space-y-2" data-cockpit-wear-form>
         <input type="hidden" name="main_tab" value="Cockpit">
         {% if active_track %}<input type="hidden" name="track" value="{{ active_track }}">{% endif %}
-        <label class="t-label block">Driver risk</label>
+        <label class="t-label block">Clear Track Risk</label>
         <div class="flex items-center gap-3">
             <input type="range" name="cockpit_risk" min="0" max="100" value="{{ cockpit_risk }}"
                    data-cockpit-risk-slider
