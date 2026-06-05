@@ -146,54 +146,71 @@
         </div>
     </main>
 
-    <footer class="py-6 text-center">
-        <div class="inline-flex items-center gap-2 text-xs text-slate-400">
-            <span>&copy; {{ "now"|date("Y") }} GPRO Pitwall {{ app_version }}</span>
-            <span class="opacity-50">•</span>
-            <a
-                href="https://github.com/MVinhas/gpro-pitwall"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="inline-flex items-center gap-1 font-medium text-slate-500
-                    hover:text-blue-600 transition"
-            >
-                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                    <path fill-rule="evenodd" clip-rule="evenodd"
-                        d="M12 .5C5.73.5.5 5.74.5 12.02c0 5.1 3.29 9.43 7.86 10.96.57.1.78-.25.78-.55
-                        0-.27-.01-.98-.02-1.93-3.2.7-3.88-1.55-3.88-1.55-.53-1.36-1.29-1.72-1.29-1.72
-                        -1.05-.72.08-.71.08-.71 1.16.08 1.77 1.2 1.77 1.2
-                        1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55
-                        -2.56-.29-5.26-1.29-5.26-5.75 0-1.27.46-2.31 1.2-3.13
-                        -.12-.3-.52-1.52.11-3.16 0 0 .97-.31 3.18 1.19
-                        .92-.26 1.9-.39 2.88-.39.98 0 1.96.13 2.88.39
-                        2.2-1.5 3.17-1.19 3.17-1.19.64 1.64.24 2.86.12 3.16
-                        .75.82 1.2 1.86 1.2 3.13 0 4.47-2.7 5.45-5.28 5.74
-                        .41.36.78 1.07.78 2.16 0 1.56-.01 2.82-.01 3.2
-                        0 .3.2.66.79.55 4.56-1.53 7.85-5.86 7.85-10.96
-                        C23.5 5.74 18.27.5 12 .5z"/>
-                </svg>
-                <span>View source on GitHub</span>
-            </a>
-            <span class="opacity-50">•</span>
-            <a
-                href="https://github.com/MVinhas/gpro-pitwall/issues"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="inline-flex items-center gap-1 font-medium text-slate-500
-                    hover:text-blue-600 transition"
-            >Report issue</a>
-            <span class="opacity-50">•</span>
-            <a
-                href="https://buymeacoffee.com/mvinhas"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="inline-flex items-center gap-1 font-medium text-amber-600
-                    hover:text-amber-700 transition"
-                title="If Pitwall saved your race weekend, buy me a coffee"
-            >
-                <span aria-hidden="true">☕</span>
-                <span>Buy me a coffee</span>
-            </a>
+    <footer class="px-4 py-6">
+        <div class="mx-auto flex max-w-7xl flex-col items-center gap-2 text-xs text-slate-400">
+            <div class="flex flex-wrap items-center justify-center gap-x-3 gap-y-2">
+                <span>&copy; {{ "now"|date("Y") }} GPRO Pitwall {{ app_version }}</span>
+                <span class="opacity-50" aria-hidden="true">•</span>
+                <a
+                    href="https://github.com/MVinhas/gpro-pitwall"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="inline-flex items-center gap-1 font-medium text-slate-500
+                        hover:text-blue-600 transition"
+                >
+                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <path fill-rule="evenodd" clip-rule="evenodd"
+                            d="M12 .5C5.73.5.5 5.74.5 12.02c0 5.1 3.29 9.43 7.86 10.96.57.1.78-.25.78-.55
+                            0-.27-.01-.98-.02-1.93-3.2.7-3.88-1.55-3.88-1.55-.53-1.36-1.29-1.72-1.29-1.72
+                            -1.05-.72.08-.71.08-.71 1.16.08 1.77 1.2 1.77 1.2
+                            1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55
+                            -2.56-.29-5.26-1.29-5.26-5.75 0-1.27.46-2.31 1.2-3.13
+                            -.12-.3-.52-1.52.11-3.16 0 0 .97-.31 3.18 1.19
+                            .92-.26 1.9-.39 2.88-.39.98 0 1.96.13 2.88.39
+                            2.2-1.5 3.17-1.19 3.17-1.19.64 1.64.24 2.86.12 3.16
+                            .75.82 1.2 1.86 1.2 3.13 0 4.47-2.7 5.45-5.28 5.74
+                            .41.36.78 1.07.78 2.16 0 1.56-.01 2.82-.01 3.2
+                            0 .3.2.66.79.55 4.56-1.53 7.85-5.86 7.85-10.96
+                            C23.5 5.74 18.27.5 12 .5z"/>
+                    </svg>
+                    <span>View source on GitHub</span>
+                </a>
+                <span class="opacity-50" aria-hidden="true">•</span>
+                <a
+                    href="https://github.com/MVinhas/gpro-pitwall/issues"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="inline-flex items-center gap-1 font-medium text-slate-500
+                        hover:text-blue-600 transition"
+                >Report issue</a>
+                <span class="opacity-50" aria-hidden="true">•</span>
+                <a
+                    href="mailto:admin@gpro-pitwall.com"
+                    class="inline-flex items-center gap-1 font-medium text-slate-500
+                        hover:text-blue-600 transition"
+                >Contact me</a>
+                <span class="opacity-50" aria-hidden="true">•</span>
+                <a
+                    href="https://buymeacoffee.com/mvinhas"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="inline-flex items-center gap-1 font-medium text-amber-600
+                        hover:text-amber-700 transition"
+                    title="If Pitwall saved your race weekend, buy me a coffee"
+                >
+                    <span aria-hidden="true">☕</span>
+                    <span>Buy me a coffee</span>
+                </a>
+            </div>
+            <p class="max-w-prose text-center text-slate-400">
+                GPRO Pitwall is an unofficial fan tool, not affiliated with or endorsed by
+                <a
+                    href="https://www.gpro.net"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="font-medium text-slate-500 hover:text-blue-600 transition"
+                >Grand Prix Racing Online</a>.
+            </p>
         </div>
     </footer>
 </div>
