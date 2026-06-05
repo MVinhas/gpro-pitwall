@@ -104,6 +104,20 @@ $container['service.token_repo'] = new \App\Repository\TokenRepository($containe
 
 $container['service.authorize'] = new \App\Security\Authorize($container['service.user_repo']);
 
+// Logged-in identity as Twig globals so layout-level features (e.g. the
+// Simple Analytics gate injected at build time) work on EVERY page, not just
+// the controllers that happen to pass `is_logged_in`/`user` in their render.
+$currentUserId = !empty($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : 0;
+$currentUser   = $currentUserId
+    ? $container['service.user_repo']->findById($currentUserId)
+    : null;
+if ($currentUserId && !$currentUser) {
+    session_destroy();
+    $currentUserId = 0;
+}
+$container['twig']->addGlobal('is_logged_in', $currentUser !== null);
+$container['twig']->addGlobal('user', $currentUser);
+
 $mailCfg = [
     'host'       => $_ENV['MAIL_HOST'] ?? 'localhost',
     'port'       => $_ENV['MAIL_PORT'] ?? 25,
