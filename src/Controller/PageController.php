@@ -153,6 +153,7 @@ class PageController
             'is_logged_in'    => $isLoggedIn,
             'user'            => $user,
             'can_submit'      => $isLoggedIn,
+            'billboard'       => $this->buildBillboard(),
         ];
 
         unset($_SESSION['flash']);
@@ -527,6 +528,38 @@ class PageController
      *
      * @param array<string, mixed> $menu
      */
+    /**
+     * Compact glance strip shown beside "Last sync" on every page.
+     *
+     * Cache-read-only: it pulls Menu + Office strictly from the already-warmed
+     * per-user cache and never triggers an API call. Returns null when nothing
+     * is cached yet (pre-first-sync) so the bar just shows "Last sync".
+     *
+     * @return array{cash:int,division:?string,next_track:?string,season:?int,race:?int}|null
+     */
+    private function buildBillboard(): ?array
+    {
+        $menu   = $this->apiClient->getCachedMenu();
+        $office = $this->apiClient->getCachedOfficeData();
+
+        if ($menu === [] && $office === []) {
+            return null;
+        }
+
+        $nextTrack = (string) ($office['trackName'] ?? '');
+        $season    = (int) ($office['seasonNb'] ?? 0);
+        $race      = (int) ($office['raceNb'] ?? 0);
+
+        return [
+            'cash'       => (int) ($menu['cash'] ?? 0),
+            'division'   => $this->divisionFromMenu($menu),
+            'next_track' => $nextTrack !== '' ? $nextTrack : null,
+            'season'     => $season > 0 ? $season : null,
+            'race'       => $race > 0 ? $race : null,
+        ];
+    }
+
+    /** @param array<string, mixed> $menu */
     private function divisionFromMenu(array $menu): ?string
     {
         $group = (string) ($menu['group'] ?? '');
