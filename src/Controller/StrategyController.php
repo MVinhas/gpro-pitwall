@@ -72,16 +72,24 @@ class StrategyController
     public function runCalc(Request $request): array
     {
         try {
+            $office = $this->api->getOfficeData();
             $trackProfile = $this->api->getNextRaceProfile();
 
-            // GPRO sets trackNotFoundNote between seasons, when no next race is
-            // scheduled. Bail early — a strategy on a phantom race is worse than
-            // none, and it's what surfaced the "re-seed tracks" error (issue #21).
-            if (!empty($trackProfile['trackNotFoundNote'])) {
+            // endOfSeason is the authoritative "no next race" signal. Bail only
+            // on that — a strategy on a phantom race is worse than none (#21).
+            //
+            // trackNotFoundNote alone is NOT reliable: GPRO sets it at the start
+            // of a new season (race 1) while the track + laps are already known
+            // but pre-race setup (incl. tyre supplier) isn't done yet. Treating
+            // it as end-of-season hid the real cause — a missing supplier —
+            // behind the wrong message. Only honour the note when there's also
+            // genuinely no scheduled race.
+            $endOfSeason = !empty($office['endOfSeason']);
+            $noRaceScheduled = (int)($office['raceNb'] ?? 0) === 0;
+            if ($endOfSeason || ($noRaceScheduled && !empty($trackProfile['trackNotFoundNote']))) {
                 return ['error' => self::END_OF_SEASON_MESSAGE];
             }
 
-            $office = $this->api->getOfficeData();
             $supplierId = (int)($office['tyreSupplierId'] ?? 0);
 
             // No supplier picked yet (id 0): don't silently assume Pipirelli —
