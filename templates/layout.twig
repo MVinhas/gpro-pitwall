@@ -105,16 +105,42 @@
     </header>
     {% if is_logged_in %}
     <div class="bg-slate-50 border-b border-slate-200">
-        <div class="mx-auto max-w-7xl px-4 py-2 text-sm text-slate-600 flex items-center gap-3">
-            {% if user.sync_status == 'running' %}
-                <span class="animate-spin">⏳</span>
-                <span>Syncing GPRO data…</span>
-            {% elseif user.sync_status == 'failed' %}
-                <span class="text-red-600">⚠ Sync failed</span>
-            {% elseif user.sync_status == 'deferred_low_budget' %}
-                <span class="text-amber-600">⏸ Sync paused — GPRO API budget low. It'll resume once your hourly allowance recovers.</span>
-            {% elseif user.last_synced_at %}
-                <span>Last sync: {{ user.last_synced_at|date("M j, H:i") }}</span>
+        <div class="mx-auto max-w-7xl px-4 py-2 text-sm text-slate-600 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+            <div class="flex items-center gap-3">
+                {% if user.sync_status == 'running' %}
+                    <span class="animate-spin">⏳</span>
+                    <span>Syncing GPRO data…</span>
+                {% elseif user.sync_status == 'failed' %}
+                    <span class="text-red-600">⚠ Sync failed</span>
+                {% elseif user.sync_status == 'deferred_low_budget' %}
+                    <span class="text-amber-600">⏸ Sync paused — GPRO API budget low. It'll resume once your hourly allowance recovers.</span>
+                {% elseif user.last_synced_at %}
+                    <span>Last sync: {{ user.last_synced_at|date("M j, H:i") }}</span>
+                {% endif %}
+            </div>
+
+            {% if billboard %}
+            <div class="flex items-center divide-x divide-slate-300 text-xs font-medium tabular-nums">
+                <span class="px-3 first:pl-0">
+                    <span class="text-slate-400">Cash</span>
+                    <span class="ml-1 text-slate-700">${{ billboard.cash|number_format(0, '.', ',') }}</span>
+                </span>
+                {% if billboard.division %}
+                <span class="px-3">
+                    <span class="text-slate-400">Division</span>
+                    <span class="ml-1 text-slate-700">{{ billboard.division }}</span>
+                </span>
+                {% endif %}
+                {% if billboard.next_track %}
+                <span class="px-3 last:pr-0">
+                    <span class="text-slate-400">⏭ Next</span>
+                    <span class="ml-1 text-slate-700">{{ billboard.next_track }}</span>
+                    {% if billboard.season and billboard.race %}
+                        <span class="ml-1 text-slate-400">S{{ billboard.season }} R{{ billboard.race }}</span>
+                    {% endif %}
+                </span>
+                {% endif %}
+            </div>
             {% endif %}
         </div>
     </div>

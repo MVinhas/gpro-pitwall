@@ -197,6 +197,31 @@ final class GproApiClient
         return is_array($cached) ? $cached : [];
     }
 
+    /**
+     * Returns Menu data only if already cached — never spends an API call.
+     * Used by the global billboard, which must render on every tab without
+     * triggering a fetch. The per-user sync warms this key.
+     *
+     * @return array<string, mixed>
+     */
+    public function getCachedMenu(): array
+    {
+        $cached = $this->cache->get($this->userKey('manager_menu'));
+        return is_array($cached) ? $cached : [];
+    }
+
+    /**
+     * Returns Office data only if already cached — never spends an API call.
+     * Same contract as getCachedMenu().
+     *
+     * @return array<string, mixed>
+     */
+    public function getCachedOfficeData(): array
+    {
+        $cached = $this->cache->get($this->userKey('office_data'));
+        return is_array($cached) ? $cached : [];
+    }
+
     /** @return array<string, mixed> */
     public function getAllTracksPreview(bool $forceRefresh = false): array
     {

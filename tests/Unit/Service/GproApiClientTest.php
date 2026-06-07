@@ -98,4 +98,58 @@ final class GproApiClientTest extends TestCase
         $a->setToken('token-a');
         $this->assertNotSame([], $a->getCachedCalendar(), 'A still reads its own calendar');
     }
+
+    public function testCachedMenuReturnsEmptyArrayOnMiss(): void
+    {
+        // No cache seeded: the read-only accessor must return [] and NOT fetch
+        // (the fetcher points at an unreachable host, so a fetch would fail).
+        $client = $this->client();
+        $client->setToken('token-a');
+
+        $this->assertSame([], $client->getCachedMenu());
+    }
+
+    public function testCachedMenuReturnsCachedPayload(): void
+    {
+        $key = 'u' . GproApiClient::scopeFor('token-a') . ':manager_menu';
+        $this->cache->set($key, ['cash' => 4213500, 'group' => 'Rookie - 39'], 3600);
+
+        $client = $this->client();
+        $client->setToken('token-a');
+
+        $menu = $client->getCachedMenu();
+        $this->assertSame(4213500, $menu['cash']);
+        $this->assertSame('Rookie - 39', $menu['group']);
+    }
+
+    public function testCachedMenuIsIsolatedAcrossUsers(): void
+    {
+        $aKey = 'u' . GproApiClient::scopeFor('token-a') . ':manager_menu';
+        $this->cache->set($aKey, ['cash' => 999], 3600);
+
+        $b = $this->client();
+        $b->setToken('token-b');
+        $this->assertSame([], $b->getCachedMenu(), 'B must not read A cached menu');
+    }
+
+    public function testCachedOfficeReturnsEmptyArrayOnMiss(): void
+    {
+        $client = $this->client();
+        $client->setToken('token-a');
+
+        $this->assertSame([], $client->getCachedOfficeData());
+    }
+
+    public function testCachedOfficeReturnsCachedPayload(): void
+    {
+        $key = 'u' . GproApiClient::scopeFor('token-a') . ':office_data';
+        $this->cache->set($key, ['trackName' => 'Mexico City', 'seasonNb' => 99, 'raceNb' => 11], 3600);
+
+        $client = $this->client();
+        $client->setToken('token-a');
+
+        $office = $client->getCachedOfficeData();
+        $this->assertSame('Mexico City', $office['trackName']);
+        $this->assertSame(99, $office['seasonNb']);
+    }
 }
