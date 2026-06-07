@@ -22,11 +22,14 @@ use Twig\Environment;
 use Twig\Loader\ArrayLoader;
 
 /**
- * Guards the two early-exit boundaries in runCalc():
- *  - end of season (GPRO sets trackNotFoundNote) — issue #21
+ * Guards the early-exit boundaries in runCalc():
+ *  - end of season (authoritative Office.endOfSeason flag) — issue #21
  *  - no tyre supplier selected (tyreSupplierId 0) — issue #22
+ *  - the trap between them: a new season's race 1 carries
+ *    trackNotFoundNote=true while a race IS scheduled and no supplier is
+ *    picked yet. That must surface NO_SUPPLIER, not END_OF_SEASON.
  *
- * Both must return a clear error instead of computing a strategy on a
+ * Each must return a clear error instead of computing a strategy on a
  * phantom race / a falsely-assumed Pipirelli supplier. The cache is seeded
  * so getNextRaceProfile()/getOfficeData() resolve without any HTTP.
  */
@@ -80,8 +83,22 @@ final class StrategyControllerTest extends TestCase
         );
     }
 
-    public function testEndOfSeasonReturnsFriendlyMessage(): void
+    public function testEndOfSeasonFlagReturnsFriendlyMessage(): void
     {
+        // Authoritative signal: Office.endOfSeason = 1, no race scheduled.
+        $this->seed('office_data', ['endOfSeason' => 1, 'raceNb' => 0]);
+        $this->seed('next_race_profile', ['trackNotFoundNote' => true, 'trackName' => 'Whatever']);
+
+        $result = $this->controller()->runCalc(new Request([], [], [], []));
+
+        $this->assertSame(StrategyController::END_OF_SEASON_MESSAGE, $result['error'] ?? null);
+    }
+
+    public function testNoRaceAndTrackNotFoundReturnsEndOfSeason(): void
+    {
+        // Genuine between-seasons gap: no race scheduled (raceNb 0) and the
+        // note set. Still end-of-season.
+        $this->seed('office_data', ['endOfSeason' => 0, 'raceNb' => 0]);
         $this->seed('next_race_profile', ['trackNotFoundNote' => true, 'trackName' => 'Whatever']);
 
         $result = $this->controller()->runCalc(new Request([], [], [], []));
@@ -92,7 +109,30 @@ final class StrategyControllerTest extends TestCase
     public function testNoSupplierSelectedReturnsChooseSupplierMessage(): void
     {
         $this->seed('next_race_profile', ['trackNotFoundNote' => false, 'trackName' => 'Imola', 'laps' => 50]);
-        $this->seed('office_data', ['tyreSupplierId' => 0]);
+        $this->seed('office_data', ['tyreSupplierId' => 0, 'raceNb' => 5]);
+
+        $result = $this->controller()->runCalc(new Request([], [], [], []));
+
+        $this->assertSame(StrategyController::NO_SUPPLIER_MESSAGE, $result['error'] ?? null);
+    }
+
+    public function testNewSeasonRace1NoSupplierShowsSupplierNotSeasonMessage(): void
+    {
+        // The reported bug: new season's race 1. GPRO sends
+        // trackNotFoundNote=true while a race IS scheduled (raceNb=1) and the
+        // supplier isn't chosen yet. Must surface NO_SUPPLIER, not END_OF_SEASON.
+        $this->seed('office_data', [
+            'endOfSeason'    => 0,
+            'raceNb'         => 1,
+            'seasonNb'       => 111,
+            'tyreSupplierId' => 0,
+            'trackName'      => 'Barcelona',
+        ]);
+        $this->seed('next_race_profile', [
+            'trackNotFoundNote' => true,
+            'trackName'         => 'Barcelona',
+            'laps'              => 65,
+        ]);
 
         $result = $this->controller()->runCalc(new Request([], [], [], []));
 
