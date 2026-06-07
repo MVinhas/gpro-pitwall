@@ -79,6 +79,13 @@ class CarWearController
     {
         try {
             $trackProfile = $this->api->getNextRaceProfile();
+
+            // Between seasons GPRO sets trackNotFoundNote and there is no next
+            // race to project wear for (issue #21).
+            if (!empty($trackProfile['trackNotFoundNote'])) {
+                return ['error' => StrategyController::END_OF_SEASON_MESSAGE];
+            }
+
             $office       = $this->api->getOfficeData();
             $carData      = $this->api->getCarData();
             $driver       = $this->mapper->mapDriver($this->api->getMyPilotDetails());
