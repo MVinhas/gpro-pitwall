@@ -70,7 +70,6 @@
                             class="-ml-px inline-flex items-center px-1.5 py-1 rounded-r-md text-xs ring-1 ring-inset hover:bg-slate-100 cursor-pointer {{ api_tone }}"
                             title="Refresh the counter (costs 1 API call)"
                             data-api-budget-refresh
-                            data-updated-at="{{ api_limit_updated_at ?? '' }}"
                             aria-label="Refresh API budget counter"
                         >
                             <span aria-hidden="true">↻</span>
@@ -232,9 +231,14 @@
             There is no free way to query it.
         </p>
         <p class="t-caption mb-4">
-            Counter was last updated
-            <strong data-api-budget-modal-age>—</strong>.
-            Unless you did data re-syncs and are afraid of reaching the limit, you can skip the refresh.
+            {% if user.last_synced_at %}
+                Your last data sync was
+                <strong>{{ user.last_synced_at|date("M j, H:i") }}</strong>.
+            {% else %}
+                You haven't synced any data yet.
+            {% endif %}
+            Each sync uses API calls, so the counter may be lower than shown.
+            Unless you've re-synced and are close to the limit, you can skip the refresh.
         </p>
         <div class="flex justify-end gap-2">
             <button type="button" class="btn btn-md btn-secondary" data-api-budget-cancel>Cancel</button>
@@ -254,20 +258,10 @@
     if (!refreshBtn || !modal) return;
     const cancelBtn = modal.querySelector('[data-api-budget-cancel]');
     const confirmBtn = modal.querySelector('[data-api-budget-confirm]');
-    const ageEl = modal.querySelector('[data-api-budget-modal-age]');
     const valueEl = document.querySelector('[data-api-budget-value]');
     const csrf = '{{ csrf_token }}';
 
-    function ageText() {
-        const ts = parseInt(refreshBtn.dataset.updatedAt || '0', 10);
-        if (!ts) return 'never';
-        const mins = Math.floor((Date.now() / 1000 - ts) / 60);
-        const time = new Date(ts * 1000).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
-        if (mins < 1) return 'just now (at ' + time + ')';
-        return mins + ' minute' + (mins === 1 ? '' : 's') + ' ago (at ' + time + ')';
-    }
     function open() {
-        ageEl.textContent = ageText();
         modal.classList.remove('hidden');
         modal.classList.add('flex');
     }
@@ -294,7 +288,6 @@
             const data = await res.json();
             if (data.success && typeof data.remaining === 'number') {
                 if (valueEl) valueEl.textContent = data.remaining.toLocaleString();
-                if (data.updated_at) refreshBtn.dataset.updatedAt = String(data.updated_at);
             }
         } catch (_) {
             // Network error — leave the badge as-is; the next page load will update.

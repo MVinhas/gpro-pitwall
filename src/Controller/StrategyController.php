@@ -15,6 +15,13 @@ use Twig\Environment;
 
 class StrategyController
 {
+    public const string END_OF_SEASON_MESSAGE =
+        'Season finished — no next race scheduled yet. Come back tomorrow!';
+
+    public const string NO_SUPPLIER_MESSAGE =
+        'No tyre supplier selected. Pick one in GPRO (Tyres office), '
+        . 're-sync, then race strategy will be available.';
+
     public function __construct(
         private readonly StrategyService $strategyService,
         private readonly GproApiClient $api,
@@ -66,13 +73,28 @@ class StrategyController
     {
         try {
             $trackProfile = $this->api->getNextRaceProfile();
+
+            // GPRO sets trackNotFoundNote between seasons, when no next race is
+            // scheduled. Bail early — a strategy on a phantom race is worse than
+            // none, and it's what surfaced the "re-seed tracks" error (issue #21).
+            if (!empty($trackProfile['trackNotFoundNote'])) {
+                return ['error' => self::END_OF_SEASON_MESSAGE];
+            }
+
             $office = $this->api->getOfficeData();
+            $supplierId = (int)($office['tyreSupplierId'] ?? 0);
+
+            // No supplier picked yet (id 0): don't silently assume Pipirelli —
+            // the wear/strategy would be wrong. Tell the user to choose one (#22).
+            if ($supplierId === 0) {
+                return ['error' => self::NO_SUPPLIER_MESSAGE];
+            }
+
             $pilotRaw = $this->api->getMyPilotDetails();
             $carRaw   = $this->api->getCarData();
             $staffRaw = $this->api->getStaffAndFacilities();
             $tdRaw    = $this->api->getTechnicalDirector();
             $weatherData = $this->api->getRaceSetup();
-            $supplierId = (int)($office['tyreSupplierId'] ?? 0);
 
             // The TyreSuppliers feed is the single source of truth for supplier
             // name + durability — GPRO can re-tune both per season, so neither
