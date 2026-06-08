@@ -62,6 +62,18 @@ try {
         throw $exception;
     }
 
+    // Never leak exception detail (paths, SQL, internals) to the client.
+    // Log the real cause server-side keyed by a short id the user can quote.
+    $errorId = bin2hex(random_bytes(4));
+    error_log(sprintf(
+        '[error] id=%s %s: %s @ %s:%d',
+        $errorId,
+        $exception::class,
+        $exception->getMessage(),
+        $exception->getFile(),
+        $exception->getLine(),
+    ));
+
     http_response_code(500);
-    echo "Application Error: " . $exception->getMessage();
+    echo 'Something went wrong on our end. Reference: ' . $errorId;
 }

@@ -30,6 +30,7 @@ final class PersistentLoginService
         private readonly CookieJar $cookies,
         private readonly bool $secure = true,
         private readonly int $lifetimeSeconds = 60 * 60 * 24 * 30,
+        private readonly ?SecurityLogger $securityLog = null,
     ) {
     }
 
@@ -77,6 +78,10 @@ final class PersistentLoginService
         if (!hash_equals((string) $row['validator_hash'], hash('sha256', $validator))) {
             $this->tokens->delete((int) $row['id']);
             $this->cookies->clear(self::COOKIE_NAME, self::COOKIE_PATH);
+            $this->securityLog?->event('token_theft_detected', [
+                'selector' => $selector,
+                'user_id'  => (int) $row['user_id'],
+            ]);
             return null;
         }
 

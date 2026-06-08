@@ -21,6 +21,7 @@ class AuthService
         private readonly string $appSecret,
         private readonly GproSyncService $syncService,
         private readonly PersistentLoginService $persistentLogin,
+        private readonly SecurityLogger $securityLog,
         private readonly int $codeTtlSeconds = 600,
         private readonly int $maxAttempts = 5,
         private readonly int $syncMinIntervalSeconds = 600
@@ -80,6 +81,7 @@ class AuthService
 
         $key = 'login_ip_' . md5($ip);
         if ($this->limiter->increment($key, 3600) > 10) {
+            $this->securityLog->event('login_rate_limited', ['ip' => $ip]);
             return [
                 'success' => false,
                 'error' => 'Too many attempts. Try again later.',
@@ -88,7 +90,9 @@ class AuthService
 
         $user = $this->users->findByUsername($username);
         if (!$user) {
-            // Prevent user enumeration
+            // Log internally for detection, but keep the response identical to a
+            // hit so the client can't enumerate usernames.
+            $this->securityLog->event('login_unknown_username', ['username' => $username, 'ip' => $ip]);
             return ['success' => true, 'user_id' => 0];
         }
 
@@ -129,6 +133,7 @@ class AuthService
                 hash_hmac('sha256', $code, $this->appSecret)
             )
         ) {
+            $this->securityLog->event('verify_code_failed', ['user_id' => $userId]);
             return false;
         }
 
@@ -169,6 +174,11 @@ class AuthService
         }
 
         $this->tokens->delete((int) $token['id']);
+
+        $this->securityLog->event('login_succeeded', [
+            'user_id'  => (int) $user['id'],
+            'remember' => $remember ? '1' : '0',
+        ]);
 
         return true;
     }

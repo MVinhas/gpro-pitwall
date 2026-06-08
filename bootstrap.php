@@ -101,6 +101,8 @@ $container['service.user_repo'] = new \App\Repository\UserRepository(
     $container['service.api_token_crypto'],
 );
 $container['service.token_repo'] = new \App\Repository\TokenRepository($container['db']);
+$container['service.security_log'] = new \App\Service\SecurityLogger();
+
 $container['service.persistent_token_repo'] =
     new \App\Repository\PersistentTokenRepository($container['db']);
 
@@ -112,6 +114,8 @@ $container['service.persistent_login'] = new \App\Service\PersistentLoginService
     $container['service.persistent_token_repo'],
     new \App\Service\PhpCookieJar(),
     $cookiesSecure,
+    60 * 60 * 24 * 30,
+    $container['service.security_log'],
 );
 
 $container['service.authorize'] = new \App\Security\Authorize($container['service.user_repo']);
@@ -191,6 +195,7 @@ $container['service.auth_service']  = new \App\Service\AuthService(
     $_ENV['APP_SECRET'],
     $container['service.gpro_sync'],
     $container['service.persistent_login'],
+    $container['service.security_log'],
     (int)$_ENV['VERIFICATION_CODE_TTL_SECONDS'] ?: 600,
     (int)$_ENV['VERIFICATION_MAX_ATTEMPTS'] ?: 5,
     (int) ($_ENV['SYNC_MIN_INTERVAL_SECONDS'] ?? 600),
