@@ -29,6 +29,7 @@ class DatabaseSeeder
         $this->createUsersTable();
         $this->createVerificationTokensTable();
         $this->createIndexVerificationUser();
+        $this->createPersistentTokensTable();
         $this->createAuditLogTable();
 
         $this->createPilotsTable();
@@ -222,6 +223,30 @@ class DatabaseSeeder
         ";
 
         $this->db->exec($sql);
+    }
+
+    private function createPersistentTokensTable(): void
+    {
+        $sql = "
+            CREATE TABLE IF NOT EXISTS persistent_tokens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                selector TEXT NOT NULL UNIQUE,
+                validator_hash TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (user_id)
+                    REFERENCES users(id)
+                    ON DELETE CASCADE
+            )
+        ";
+
+        $this->db->exec($sql);
+
+        $this->db->exec("
+            CREATE INDEX IF NOT EXISTS idx_persistent_tokens_selector
+            ON persistent_tokens(selector)
+        ");
     }
 
     private function createPilotsTable(): void

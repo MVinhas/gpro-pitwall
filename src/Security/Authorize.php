@@ -50,6 +50,27 @@ final readonly class Authorize
         return $user;
     }
 
+    /**
+     * Like requireAuth(), but additionally demands a *freshly authenticated*
+     * session — i.e. a code was entered this session, not a silent restore from
+     * a "remember me" token. Used to gate sensitive actions (account deletion,
+     * API-token change). When the session isn't fresh, redirect into the
+     * step-up flow, preserving where to return afterwards.
+     *
+     * @return array<string, mixed>
+     */
+    public function requireFreshAuth(string $returnTo): array
+    {
+        $user = $this->requireAuth();
+
+        if (($_SESSION['auth_fresh'] ?? false) !== true) {
+            $_SESSION['reauth_return_to'] = $returnTo;
+            $this->redirect('/reauth');
+        }
+
+        return $user;
+    }
+
     /** @return array<string, mixed> */
     public function requireAdmin(): array
     {
