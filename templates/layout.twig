@@ -53,7 +53,7 @@
                         : '' %}
                     {% set api_tip = (api_limit < 50)
                         ? 'Few API calls left this race weekend — avoid hard-refreshing data; the cache keeps recent answers warm for you.' ~ api_age
-                        : 'GPRO API calls remaining this hour.' ~ api_age %}
+                        : 'GPRO API calls remaining for this race.' ~ api_age %}
                     <span class="inline-flex items-center" data-api-budget-wrap>
                         <span
                             class="inline-flex items-center gap-1.5 rounded-l-md px-2.5 py-1 text-xs font-medium ring-1 ring-inset tabular-nums cursor-help {{ api_tone }}"

@@ -171,6 +171,14 @@ class PageController
                 $cockpitRisk = max(0, min(100, (int) $request->get('cockpit_risk', 0)));
                 $viewData['cockpit_risk'] = $cockpitRisk;
                 try {
+                    // No driver under contract: surface the friendly "hire a
+                    // pilot" notice (with a Recruitment Analyzer link) instead of
+                    // a raw "No driver under contract" exception further down.
+                    if (!$this->apiClient->hasPilot()) {
+                        $viewData['cockpit_error'] = StrategyController::NO_PILOT_MESSAGE;
+                        break;
+                    }
+
                     $raceSetup = $this->apiClient->getRaceSetup();
                     $carData   = $this->apiClient->getCarData();
                     $pilot     = $this->apiClient->getMyPilotDetails();
@@ -552,14 +560,19 @@ class PageController
 
         return [
             'cash'       => (int) ($menu['cash'] ?? 0),
-            'division'   => $this->divisionFromMenu($menu),
+            'division'   => $this->fullDivisionFromMenu($menu),
             'next_track' => $nextTrack !== '' ? $nextTrack : null,
             'season'     => $season > 0 ? $season : null,
             'race'       => $race > 0 ? $race : null,
         ];
     }
 
-    /** @param array<string, mixed> $menu */
+    /**
+     * The division tier only (e.g. "Pro"). Used to key division-wide data
+     * (ideal pilot, baselines) that is shared across every league of a tier.
+     *
+     * @param array<string, mixed> $menu
+     */
     private function divisionFromMenu(array $menu): ?string
     {
         $group = (string) ($menu['group'] ?? '');
@@ -568,6 +581,21 @@ class PageController
         }
         $first = trim(explode('-', $group, 2)[0]);
         return in_array($first, $this->config['app']['divisions'], true) ? $first : null;
+    }
+
+    /**
+     * The full league label for display (e.g. "Pro - 8"). Each tier has many
+     * leagues, so the billboard shows the whole group — but only once we've
+     * confirmed the tier prefix is a real division (guards against junk).
+     *
+     * @param array<string, mixed> $menu
+     */
+    private function fullDivisionFromMenu(array $menu): ?string
+    {
+        if ($this->divisionFromMenu($menu) === null) {
+            return null;
+        }
+        return trim((string) $menu['group']);
     }
 
     /** @param array<string, mixed> $pilot */

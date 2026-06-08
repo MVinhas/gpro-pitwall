@@ -22,6 +22,9 @@ class StrategyController
         'No tyre supplier selected. Pick one in GPRO (Tyres office), '
         . 're-sync, then race strategy will be available.';
 
+    public const string NO_PILOT_MESSAGE =
+        'No driver under contract. Hire a pilot in GPRO, then re-sync.';
+
     public function __construct(
         private readonly StrategyService $strategyService,
         private readonly GproApiClient $api,
@@ -96,6 +99,12 @@ class StrategyController
             // the wear/strategy would be wrong. Tell the user to choose one (#22).
             if ($supplierId === 0) {
                 return ['error' => self::NO_SUPPLIER_MESSAGE];
+            }
+
+            // Calendar + supplier present but no driver under contract: point the
+            // user at the Recruitment Analyzer (rendered as a special notice).
+            if (!$this->api->hasPilot()) {
+                return ['error' => self::NO_PILOT_MESSAGE];
             }
 
             $pilotRaw = $this->api->getMyPilotDetails();

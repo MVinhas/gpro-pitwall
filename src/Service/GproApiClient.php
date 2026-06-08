@@ -70,17 +70,30 @@ final class GproApiClient
         return $this->getCached('office_data', '/gb/backend/api/v2/office', $this->ttlShort(), $forceRefresh);
     }
 
+    /**
+     * Whether the account currently has a driver under contract. After a
+     * driver terminates (or is fired), GPRO returns driId as an empty string,
+     * so a plain isset() check isn't enough — treat empty/zero as "no pilot".
+     */
+    public function hasPilot(bool $forceRefresh = false): bool
+    {
+        $office = $this->getOfficeData($forceRefresh);
+        $driId = trim((string) ($office['driId'] ?? ''));
+        return $driId !== '' && $driId !== '0';
+    }
+
     /** @return array<string, mixed> */
     public function getMyPilotDetails(bool $forceRefresh = false): array
     {
         $office = $this->getOfficeData($forceRefresh);
-        if (!isset($office['driId'])) {
-            throw new RuntimeException('Driver ID missing from office data');
+        $driId = trim((string) ($office['driId'] ?? ''));
+        if ($driId === '' || $driId === '0') {
+            throw new RuntimeException('No driver under contract');
         }
 
         return $this->getCached(
-            'driver_profile_' . $office['driId'],
-            "/gb/backend/api/v2/DriProfile?id={$office['driId']}",
+            'driver_profile_' . $driId,
+            "/gb/backend/api/v2/DriProfile?id={$driId}",
             $this->ttlShort(),
             $forceRefresh
         );

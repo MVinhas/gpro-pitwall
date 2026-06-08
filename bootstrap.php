@@ -64,6 +64,7 @@ if ($container['settings']['is_dev']) {
     $container['twig']->addExtension(new \Twig\Extension\DebugExtension());
 }
 $container['twig']->addGlobal('app_version', $container['version']);
+$container['twig']->addGlobal('no_pilot_message', \App\Controller\StrategyController::NO_PILOT_MESSAGE);
 
 use App\Repository\PilotRepository;
 use App\Repository\DivisionMetadataRepository;

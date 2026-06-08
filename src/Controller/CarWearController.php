@@ -78,15 +78,27 @@ class CarWearController
     public function runCalc(int $risk): array
     {
         try {
+            $office       = $this->api->getOfficeData();
             $trackProfile = $this->api->getNextRaceProfile();
 
-            // Between seasons GPRO sets trackNotFoundNote and there is no next
-            // race to project wear for (issue #21).
-            if (!empty($trackProfile['trackNotFoundNote'])) {
+            // endOfSeason is the authoritative "no next race" signal — mirror
+            // StrategyController. trackNotFoundNote alone is NOT reliable: GPRO
+            // sets it at the start of a new season (race 1) while the track +
+            // laps are already known but pre-race setup isn't done. Treating it
+            // as end-of-season showed "Season finished" on a fresh season (#21,
+            // regression). Only honour the note when there's genuinely no race.
+            $endOfSeason     = !empty($office['endOfSeason']);
+            $noRaceScheduled = (int) ($office['raceNb'] ?? 0) === 0;
+            if ($endOfSeason || ($noRaceScheduled && !empty($trackProfile['trackNotFoundNote']))) {
                 return ['error' => StrategyController::END_OF_SEASON_MESSAGE];
             }
 
-            $office       = $this->api->getOfficeData();
+            // No driver under contract: wear can't be projected. Point the user
+            // at the Recruitment Analyzer (rendered as a special notice).
+            if (!$this->api->hasPilot()) {
+                return ['error' => StrategyController::NO_PILOT_MESSAGE];
+            }
+
             $carData      = $this->api->getCarData();
             $driver       = $this->mapper->mapDriver($this->api->getMyPilotDetails());
 

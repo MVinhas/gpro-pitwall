@@ -152,4 +152,35 @@ final class GproApiClientTest extends TestCase
         $this->assertSame('Mexico City', $office['trackName']);
         $this->assertSame(99, $office['seasonNb']);
     }
+
+    private function clientWithOffice(string $token, array $office): GproApiClient
+    {
+        $key = 'u' . GproApiClient::scopeFor($token) . ':office_data';
+        $this->cache->set($key, $office, 3600);
+        $client = $this->client();
+        $client->setToken($token);
+        return $client;
+    }
+
+    public function testHasPilotTrueWithDriverUnderContract(): void
+    {
+        // driId is a string in the GPRO feed.
+        $this->assertTrue($this->clientWithOffice('token-a', ['driId' => '30357'])->hasPilot());
+    }
+
+    public function testHasPilotFalseWhenDriIdEmpty(): void
+    {
+        // After a contract terminates GPRO returns an empty driId, not a missing key.
+        $this->assertFalse($this->clientWithOffice('token-a', ['driId' => ''])->hasPilot());
+    }
+
+    public function testHasPilotFalseWhenDriIdMissing(): void
+    {
+        $this->assertFalse($this->clientWithOffice('token-a', ['trackName' => 'x'])->hasPilot());
+    }
+
+    public function testHasPilotFalseWhenDriIdZero(): void
+    {
+        $this->assertFalse($this->clientWithOffice('token-a', ['driId' => '0'])->hasPilot());
+    }
 }

@@ -5,7 +5,9 @@
         <p class="t-caption">Your pre-qualifying decision board.</p>
     </div>
 
-    {% if cockpit_error %}
+    {% if cockpit_error == no_pilot_message %}
+        {% include 'partials/_no_pilot_notice.twig' %}
+    {% elseif cockpit_error %}
         <div class="rounded-md bg-red-50 border-l-4 border-red-400 p-4">
             <p class="text-sm font-bold text-red-800">Couldn't load cockpit data</p>
             <p class="text-sm text-red-700 mt-1">{{ cockpit_error }}</p>
