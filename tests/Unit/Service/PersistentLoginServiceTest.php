@@ -6,6 +6,7 @@ namespace App\Tests\Unit\Service;
 
 use App\Repository\PersistentTokenRepository;
 use App\Service\PersistentLoginService;
+use App\Service\SecurityLogger;
 use App\Tests\Support\ArrayCookieJar;
 use PDO;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -90,6 +91,28 @@ final class PersistentLoginServiceTest extends TestCase
         $this->assertNull($this->service->restore());
         // Theft response: the row is revoked, so even the legitimate cookie dies.
         $this->assertNull($this->repo->findBySelector($selector));
+    }
+
+    public function testTheftEmitsSecurityEvent(): void
+    {
+        $events = [];
+        $service = new PersistentLoginService(
+            $this->repo,
+            $this->jar,
+            secure: false,
+            securityLog: new SecurityLogger(function (string $l) use (&$events): void {
+                $events[] = $l;
+            }),
+        );
+
+        $service->issue(1);
+        $cookie = $this->jar->store[PersistentLoginService::COOKIE_NAME];
+        [$selector] = explode(':', $cookie, 2);
+        $this->jar->store[PersistentLoginService::COOKIE_NAME] = $selector . ':forged';
+
+        $this->assertNull($service->restore());
+        $this->assertCount(1, $events);
+        $this->assertStringContainsString('token_theft_detected', $events[0]);
     }
 
     public function testMalformedCookieIsIgnored(): void

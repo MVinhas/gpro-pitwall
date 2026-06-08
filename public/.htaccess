@@ -32,7 +32,18 @@
     Header always set X-Frame-Options "DENY"
     Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
     # HSTS only when the request actually came in over HTTPS — never on plain HTTP.
-    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains" "expr=%{HTTPS} == 'on'"
+    # TLS terminates at the host's proxy, so %{HTTPS} is often unset; trust the
+    # proxy's X-Forwarded-Proto as well, matching RequestContext::isHttps().
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains" "expr=%{HTTPS} == 'on' || %{HTTP:X-Forwarded-Proto} == 'https'"
+
+    # Content-Security-Policy. The high-value directives are locked down:
+    # default-src 'self', object-src 'none' (no plugins), base-uri 'self' (no
+    # <base> hijack), frame-ancestors 'none' (clickjacking — supersedes
+    # X-Frame-Options on modern browsers). script/style still allow 'unsafe-inline'
+    # because several templates embed inline <script>/<style>; tightening that to a
+    # per-request nonce is the planned next step. Allowed origins are exactly what
+    # the app loads: Google reCaptcha + Google Fonts.
+    Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.google.com https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-src https://www.google.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
 </IfModule>
 
 Options -Indexes

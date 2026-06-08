@@ -117,6 +117,7 @@ final class AuthServiceTest extends TestCase
         $this->auth = new AuthService(
             $userRepo, $tokenRepo, $mailer, $limiter, $captcha,
             $emailCrypto, $appSecret, $sync, $persistentLogin,
+            new \App\Service\SecurityLogger(static fn(string $l) => null),
         );
     }
 
