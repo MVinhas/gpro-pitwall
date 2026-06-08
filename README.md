@@ -50,6 +50,15 @@ Per-division ideal-pilot tables with OA caps (Rookie 85 / Amateur 110 / Pro 135 
 ### Admin user management *(admin-only)*
 `/admin/users` — paginated list, toggle admin flag (with self-demotion guard), resend verification, soft-delete. Every mutation is recorded in an append-only `audit_log` table. Audit panel shows the last 50 actions.
 
+### Authentication
+Passwordless: register/login with a one-time 6-digit code emailed to you (no passwords stored, ever). Login is rate-limited per IP; codes carry a TTL and a max-attempts cap. reCaptcha guards registration in prod.
+
+- **"Keep me signed in"** — opt-in persistent login backed by a selector+validator token (hashed at rest, rotated on every use for theft detection, rolling 30-day window). Survives the short PHP session and is revoked on logout.
+- **Step-up re-authentication** — sensitive actions (account deletion, API-token change) demand a fresh emailed code when the session was restored from a remember token rather than freshly verified.
+
+### No-driver prompt
+When your account has a calendar and tyre supplier but no pilot under contract, Cockpit / Race Strategy / Car Wear show a dedicated notice recommending the Recruitment Analyzer (with a direct link) instead of a cryptic error.
+
 ### Health endpoint
 `GET /healthz` returns JSON with per-check status (DB reachable + cache roundtrip). 200 when both green, 503 when either fails. Built for an external uptime probe.
 
@@ -62,7 +71,7 @@ Per-division ideal-pilot tables with OA caps (Rookie 85 / Amateur 110 / Pro 135 
 - **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile).
 - **SQLite** via PDO. Encrypted user emails (AES-256-GCM) and API tokens at rest.
 - **PHPMailer 7** for SMTP; in dev, writes `.eml` files to `var/mail/` instead.
-- **PHPUnit 11** — 139 tests, 383 assertions, all green at **PHPStan level 7**.
+- **PHPUnit 11** — 200 tests, 508 assertions, all green at **PHPStan level 7**.
 - **No framework.** Custom front controller + flat DI container in `bootstrap.php`. Routes in `config/routes.php`.
 
 ---
@@ -153,12 +162,18 @@ Source of truth is GitHub; deployment is a manual file copy to your host of choi
 
 ## Security posture
 
+Reviewed against the OWASP Top 10:2025.
+
 - CSRF token on every POST (validated in `public/index.php`).
 - Email + API token encrypted at rest via AES-256-GCM with domain-separated keys derived from `APP_SECRET` / `EMAIL_ENCRYPTION_KEY`.
 - `email_hash` (HMAC-SHA256) used for lookups so an attacker reading the DB can't enumerate users by email.
-- HSTS / X-Content-Type-Options / X-Frame-Options / Referrer-Policy headers set in `public/.htaccess`.
-- Session cookies HttpOnly + Secure (when HTTPS) + SameSite=Lax.
-- Login rate-limited per IP; verification codes have a TTL + max-attempts.
+- Security headers in `public/.htaccess`: Content-Security-Policy, HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy. HSTS + cookie Secure flag trust `X-Forwarded-Proto` so they still apply behind a TLS-terminating proxy.
+- Session cookies HttpOnly + Secure (when HTTPS) + SameSite=Lax. Persistent "remember me" tokens store only a hashed validator, rotate on use, and are revocable.
+- Login rate-limited per IP; verification codes have a TTL + max-attempts. Sensitive actions require step-up re-authentication.
+- Centralised authorisation gate (`requireAuth` / `requireAdmin` / `requireFreshAuth`); every mutating, admin, and debug route is gated server-side.
+- Security event logging (`SecurityLogger`) emits structured `[security]` lines for failed logins, rate-limit hits, and remember-token theft detection; admin mutations recorded in `audit_log`.
+- Prod never leaks exception detail to clients — errors are logged server-side under a short reference id and the user sees a generic message.
+- Prepared statements only (no string-concatenated SQL); Twig autoescaping on, no `|raw`.
 - Pre-commit + CI secret scan (`bin/check_no_secrets.sh`).
 - PHPStan level 7 + PHPUnit suite required to pass before merge.
 
