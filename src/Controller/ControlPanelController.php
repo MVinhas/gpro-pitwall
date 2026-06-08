@@ -37,7 +37,7 @@ class ControlPanelController
 
     public function updateToken(Request $request): void
     {
-        $user = $this->authorize->requireAuth();
+        $user = $this->authorize->requireFreshAuth('/control_panel');
 
         $token = trim((string)$request->post('api_token'));
 
@@ -66,7 +66,7 @@ class ControlPanelController
      */
     public function deleteAccount(Request $request): void
     {
-        $user = $this->authorize->requireAuth();
+        $user = $this->authorize->requireFreshAuth('/control_panel');
 
         $typed = trim((string) $request->post('confirm_username'));
         $ownUsername = (string) ($user['username'] ?? '');

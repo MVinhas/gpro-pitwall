@@ -3,12 +3,17 @@
 use App\Http\Request;
 use App\Http\Router;
 use App\Security\Csrf;
+use App\Support\RequestContext;
+
+require_once __DIR__ . '/../vendor/autoload.php';
 
 $lifetime = 60 * 60 * 24 * 7;
 session_set_cookie_params([
     'lifetime' => $lifetime,
     'path' => '/',
-    'secure' => isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on',
+    // Trust X-Forwarded-Proto: TLS terminates at the host's proxy, so $_SERVER['HTTPS']
+    // is often unset even on HTTPS. Without this the cookie ships without Secure.
+    'secure' => RequestContext::isHttps($_SERVER),
     'httponly' => true,
     'samesite' => 'Lax'
 ]);

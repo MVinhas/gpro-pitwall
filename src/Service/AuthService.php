@@ -20,6 +20,7 @@ class AuthService
         private readonly EmailCrypto $crypto,
         private readonly string $appSecret,
         private readonly GproSyncService $syncService,
+        private readonly PersistentLoginService $persistentLogin,
         private readonly int $codeTtlSeconds = 600,
         private readonly int $maxAttempts = 5,
         private readonly int $syncMinIntervalSeconds = 600
@@ -99,7 +100,7 @@ class AuthService
     /**
      * Verify Code and Finalize Login
      */
-    public function verifyCode(int $userId, string $code): bool
+    public function verifyCode(int $userId, string $code, bool $remember = false): bool
     {
         $user = $this->users->findById($userId);
         if (!$user) {
@@ -147,6 +148,13 @@ class AuthService
         $_SESSION['user_id'] = (int) $user['id'];
         $_SESSION['username'] = $user['username'];
         $_SESSION['sync_status'] = 'idle';
+        // A code was just entered: this session is freshly authenticated, which
+        // the step-up gate (requireFreshAuth) relies on.
+        $_SESSION['auth_fresh'] = true;
+
+        if ($remember) {
+            $this->persistentLogin->issue((int) $user['id']);
+        }
 
         if (empty($user['api_token'])) {
             $_SESSION['sync_status'] = 'needs_token';
@@ -165,10 +173,70 @@ class AuthService
         return true;
     }
 
+    /**
+     * Send a one-time code for step-up re-authentication (no new login session
+     * is created — the user is already logged in via a remembered token).
+     */
+    public function sendReauthCode(int $userId): bool
+    {
+        $user = $this->users->findById($userId);
+        if (!$user) {
+            return false;
+        }
+
+        $this->generateAndSendCode($user);
+        return true;
+    }
+
+    /**
+     * Validate a step-up code. On success the current session is promoted to
+     * "fresh" so the step-up gate lets the pending sensitive action through.
+     * Reuses the same one-time verification_tokens used at login.
+     */
+    public function verifyReauth(int $userId, string $code): bool
+    {
+        $token = $this->tokens->findLatestByUserId($userId);
+        if (!$token) {
+            return false;
+        }
+
+        if (new DateTimeImmutable() > new DateTimeImmutable($token['expires_at'])) {
+            return false;
+        }
+
+        if ($token['attempts'] >= $this->maxAttempts) {
+            $this->tokens->delete((int) $token['id']);
+            return false;
+        }
+
+        $this->tokens->incrementAttempts((int) $token['id']);
+
+        if (
+            !hash_equals(
+                $token['code_hmac'],
+                hash_hmac('sha256', $code, $this->appSecret)
+            )
+        ) {
+            return false;
+        }
+
+        $this->tokens->delete((int) $token['id']);
+        $_SESSION['auth_fresh'] = true;
+
+        return true;
+    }
+
     public function logout(): void
     {
         if (session_status() === PHP_SESSION_NONE) {
             session_start();
+        }
+
+        $userId = isset($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : 0;
+        if ($userId > 0) {
+            // Kill the persistent token + cookie so a logged-out browser can't
+            // be silently signed back in on the next request.
+            $this->persistentLogin->clearForUser($userId);
         }
 
         $_SESSION = [];
@@ -190,7 +258,9 @@ class AuthService
         }
 
         session_destroy();
-        session_regenerate_id(true);
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_regenerate_id(true);
+        }
     }
 
     /** @param array<string, mixed> $user */

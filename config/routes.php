@@ -9,11 +9,13 @@ return function (Router $router): void {
     $router->add('GET', '/login', 'controller.auth', 'showLogin');
     $router->add('GET', '/register', 'controller.auth', 'showRegister');
     $router->add('GET', '/verify', 'controller.auth', 'showVerify');
+    $router->add('GET', '/reauth', 'controller.auth', 'showReauth');
 
     // Handle authentication requests
     $router->add('POST', '/login_request', 'controller.auth', 'handleLoginRequest');
     $router->add('POST', '/register_request', 'controller.auth', 'handleRegister');
     $router->add('POST', '/login_verify', 'controller.auth', 'handleVerify');
+    $router->add('POST', '/reauth_verify', 'controller.auth', 'handleReauth');
     $router->add('POST', '/logout', 'controller.auth', 'logout');
 
     // ========== PUBLIC PAGES ==========

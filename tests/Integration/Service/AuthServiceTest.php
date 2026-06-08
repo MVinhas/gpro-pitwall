@@ -70,6 +70,16 @@ final class AuthServiceTest extends TestCase
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             )
         ");
+        $this->db->exec("
+            CREATE TABLE persistent_tokens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                selector TEXT NOT NULL UNIQUE,
+                validator_hash TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        ");
 
         $this->mailDir  = sys_get_temp_dir() . '/gpro-test-mail-' . bin2hex(random_bytes(4));
         $this->cacheDir = sys_get_temp_dir() . '/gpro-test-cache-' . bin2hex(random_bytes(4));
@@ -97,9 +107,16 @@ final class AuthServiceTest extends TestCase
         );
         $sync = new GproSyncService($apiClient, $userRepo, $cache);
 
+        $persistentRepo = new \App\Repository\PersistentTokenRepository($this->db);
+        $persistentLogin = new \App\Service\PersistentLoginService(
+            $persistentRepo,
+            new \App\Tests\Support\ArrayCookieJar(),
+            secure: false,
+        );
+
         $this->auth = new AuthService(
             $userRepo, $tokenRepo, $mailer, $limiter, $captcha,
-            $emailCrypto, $appSecret, $sync,
+            $emailCrypto, $appSecret, $sync, $persistentLogin,
         );
     }
 
@@ -144,6 +161,43 @@ final class AuthServiceTest extends TestCase
         $remaining = $this->db->query('SELECT COUNT(*) FROM verification_tokens')
             ?->fetchColumn();
         $this->assertSame(0, (int) $remaining);
+
+        // A freshly verified session is "fresh" (step-up gate passes).
+        $this->assertTrue($_SESSION['auth_fresh'] ?? false);
+    }
+
+    public function testVerifyWithoutRememberIssuesNoPersistentToken(): void
+    {
+        $result = $this->auth->register('noremember', 'nr@example.invalid', '', '127.0.0.1');
+        $this->assertTrue($this->auth->verifyCode($result['user_id'], $this->codeFromLatestEmail()));
+
+        $count = (int) $this->db->query('SELECT COUNT(*) FROM persistent_tokens')->fetchColumn();
+        $this->assertSame(0, $count);
+    }
+
+    public function testVerifyWithRememberIssuesPersistentToken(): void
+    {
+        $result = $this->auth->register('remember', 'rm@example.invalid', '', '127.0.0.1');
+        $this->assertTrue(
+            $this->auth->verifyCode($result['user_id'], $this->codeFromLatestEmail(), remember: true)
+        );
+
+        $row = $this->db->query('SELECT user_id, validator_hash FROM persistent_tokens')
+            ?->fetch(PDO::FETCH_ASSOC);
+        $this->assertIsArray($row);
+        $this->assertSame($result['user_id'], (int) $row['user_id']);
+        $this->assertNotEmpty($row['validator_hash']);
+    }
+
+    public function testLogoutClearsPersistentTokens(): void
+    {
+        $result = $this->auth->register('logout', 'lo@example.invalid', '', '127.0.0.1');
+        $this->auth->verifyCode($result['user_id'], $this->codeFromLatestEmail(), remember: true);
+        $this->assertSame(1, (int) $this->db->query('SELECT COUNT(*) FROM persistent_tokens')->fetchColumn());
+
+        $this->auth->logout();
+
+        $this->assertSame(0, (int) $this->db->query('SELECT COUNT(*) FROM persistent_tokens')->fetchColumn());
     }
 
     public function testWrongCodeIsRejectedAndDoesNotLogIn(): void

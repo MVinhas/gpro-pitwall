@@ -101,8 +101,39 @@ $container['service.user_repo'] = new \App\Repository\UserRepository(
     $container['service.api_token_crypto'],
 );
 $container['service.token_repo'] = new \App\Repository\TokenRepository($container['db']);
+$container['service.persistent_token_repo'] =
+    new \App\Repository\PersistentTokenRepository($container['db']);
+
+// Secure cookie flag: true whenever the request is HTTPS, and always in prod
+// (so a misconfigured proxy can never downgrade a long-lived remember cookie).
+$cookiesSecure = \App\Support\RequestContext::isHttps($_SERVER)
+    || !$container['settings']['is_dev'];
+$container['service.persistent_login'] = new \App\Service\PersistentLoginService(
+    $container['service.persistent_token_repo'],
+    new \App\Service\PhpCookieJar(),
+    $cookiesSecure,
+);
 
 $container['service.authorize'] = new \App\Security\Authorize($container['service.user_repo']);
+
+// "Keep me signed in": with no active session but a valid remember cookie,
+// silently re-establish the session before identity is resolved below.
+// Restored sessions are marked not-fresh so the step-up gate re-prompts before
+// sensitive actions.
+if (empty($_SESSION['user_id'])) {
+    $restoredUserId = $container['service.persistent_login']->restore();
+    if ($restoredUserId !== null) {
+        $restoredUser = $container['service.user_repo']->findById($restoredUserId);
+        if ($restoredUser !== null) {
+            if (session_status() === PHP_SESSION_ACTIVE) {
+                session_regenerate_id(true);
+            }
+            $_SESSION['user_id']    = $restoredUserId;
+            $_SESSION['username']   = $restoredUser['username'];
+            $_SESSION['auth_fresh'] = false;
+        }
+    }
+}
 
 // Logged-in identity as Twig globals so layout-level features (e.g. the
 // Simple Analytics gate injected at build time) work on EVERY page, not just
@@ -159,6 +190,7 @@ $container['service.auth_service']  = new \App\Service\AuthService(
     $container['service.email_crypto'],
     $_ENV['APP_SECRET'],
     $container['service.gpro_sync'],
+    $container['service.persistent_login'],
     (int)$_ENV['VERIFICATION_CODE_TTL_SECONDS'] ?: 600,
     (int)$_ENV['VERIFICATION_MAX_ATTEMPTS'] ?: 5,
     (int) ($_ENV['SYNC_MIN_INTERVAL_SECONDS'] ?? 600),

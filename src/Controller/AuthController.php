@@ -75,6 +75,7 @@ class AuthController
         }
 
         $_SESSION['auth_pending_user_id'] = $result['user_id'];
+        $_SESSION['auth_remember'] = $request->post('remember') === '1';
         $_SESSION['flash'] =
             'If the username exists, a code has been sent to the registered email.';
 
@@ -119,8 +120,10 @@ class AuthController
             exit;
         }
 
-        if ($this->auth->verifyCode($pendingUserId, $code)) {
-            unset($_SESSION['auth_pending_user_id']);
+        $remember = ($_SESSION['auth_remember'] ?? false) === true;
+
+        if ($this->auth->verifyCode($pendingUserId, $code, $remember)) {
+            unset($_SESSION['auth_pending_user_id'], $_SESSION['auth_remember']);
 
             if (($_SESSION['sync_status'] ?? '') === 'needs_token') {
                 $_SESSION['flash'] =
@@ -138,10 +141,74 @@ class AuthController
         exit;
     }
 
+    /**
+     * Step-up re-authentication page. Reached when a remembered (not-fresh)
+     * session tries a sensitive action. Sends a one-time code and renders the
+     * reauth form. Anonymous users are bounced to login.
+     */
+    public function showReauth(): void
+    {
+        $userId = (int) ($_SESSION['user_id'] ?? 0);
+        if ($userId === 0) {
+            header('Location: /login');
+            exit;
+        }
+
+        // Already fresh — nothing to step up; go back where they intended.
+        if (($_SESSION['auth_fresh'] ?? false) === true) {
+            header('Location: ' . $this->safeReturnTo());
+            exit;
+        }
+
+        $this->auth->sendReauthCode($userId);
+
+        echo $this->twig->render('auth/reauth.twig', [
+            'flash' => $_SESSION['flash'] ?? null,
+            'csrf_token' => $_SESSION['csrf_token'] ?? '',
+        ]);
+
+        unset($_SESSION['flash']);
+    }
+
+    public function handleReauth(Request $request): void
+    {
+        $userId = (int) ($_SESSION['user_id'] ?? 0);
+        if ($userId === 0) {
+            header('Location: /login');
+            exit;
+        }
+
+        $code = trim((string) $request->post('code'));
+
+        if ($this->auth->verifyReauth($userId, $code)) {
+            $returnTo = $this->safeReturnTo();
+            unset($_SESSION['reauth_return_to']);
+            header('Location: ' . $returnTo);
+            exit;
+        }
+
+        $_SESSION['flash'] = 'Invalid code or expired.';
+        header('Location: /reauth');
+        exit;
+    }
+
+    /**
+     * Only ever return to a same-site absolute path, never an attacker-supplied
+     * absolute URL (open-redirect guard).
+     */
+    private function safeReturnTo(): string
+    {
+        $target = (string) ($_SESSION['reauth_return_to'] ?? '/control_panel');
+        if ($target === '' || $target[0] !== '/' || str_starts_with($target, '//')) {
+            return '/control_panel';
+        }
+        return $target;
+    }
+
     public function logout(): void
     {
         $this->auth->logout();
-        unset($_SESSION['auth_pending_user_id']);
+        unset($_SESSION['auth_pending_user_id'], $_SESSION['auth_remember']);
 
         header('Location: /');
         exit;
