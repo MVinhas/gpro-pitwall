@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace App\Security;
 
+use App\Http\HttpException;
 use App\Repository\UserRepository;
 
 /**
  * Single authorisation gate. Controllers call requireAuth() / requireAdmin()
  * at the top of any handler that must not be reachable anonymously. Failures
- * short-circuit the request — they exit() after writing a redirect or a 403.
+ * short-circuit the request — they exit() on a redirect, or throw HttpException
+ * (caught by the front controller, which renders a styled error page) on a 403.
  *
  * The rules (mirrored in CLAUDE.md "Access tiers"):
  *   - Anonymous can hit public pages + auth forms only.
@@ -98,8 +100,6 @@ final readonly class Authorize
 
     private function forbid(): never
     {
-        http_response_code(403);
-        echo '403 Forbidden';
-        exit;
+        throw new HttpException(403);
     }
 }
