@@ -245,6 +245,27 @@ final class AuthServiceTest extends TestCase
         $this->assertStringContainsString('Username', $second['error']);
     }
 
+    public function testUsernameWithHtmlMetacharactersIsRejected(): void
+    {
+        foreach (['<svg/onload>', 'a"b', "a'b", 'a&b', 'a/b', 'a\\b', 'a=b', 'a<b', 'jean-luc', 'mr.x', 'a b c'] as $bad) {
+            $result = $this->auth->register($bad, 'x' . md5($bad) . '@example.invalid', '', '127.0.0.1');
+            $this->assertFalse($result['success'], "Expected rejection for username: {$bad}");
+            $this->assertStringContainsString('Username', $result['error']);
+        }
+
+        // No user rows and no codes were created for any rejected attempt.
+        $this->assertSame(0, (int) $this->db->query('SELECT COUNT(*) FROM users')->fetchColumn());
+        $this->assertSame(0, $this->codeSendCount());
+    }
+
+    public function testCleanUsernamesAreAccepted(): void
+    {
+        foreach (['alice', 'Bob_99', 'x__y', 'ABC123'] as $ok) {
+            $result = $this->auth->register($ok, 'x' . md5($ok) . '@example.invalid', '', '127.0.0.1');
+            $this->assertTrue($result['success'], "Expected acceptance for username: {$ok}");
+        }
+    }
+
     public function testLoginIsCappedPerAccountRegardlessOfIp(): void
     {
         // A registered user. register() itself sends one code (count = 1).
