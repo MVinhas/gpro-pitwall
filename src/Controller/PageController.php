@@ -123,7 +123,12 @@ class PageController
         }
 
         $trackNames = array_values($tracks);
-        $defaultTrack = $trackNames[0] ?? '';
+
+        // Default to the user's actual next-race track from the cached Office
+        // data, not a static first-in-list value (which always read "Buenos
+        // Aires"). Falls back to the first known track only pre-first-sync.
+        $office = $this->apiClient->getCachedOfficeData();
+        $defaultTrack = self::resolveDefaultTrack($trackNames, (string) ($office['trackName'] ?? ''));
 
         $activeTrack = $request->get('track', $defaultTrack);
 
@@ -536,6 +541,22 @@ class PageController
      *
      * @param array<string, mixed> $menu
      */
+    /**
+     * The track to pre-select when the URL carries no explicit `track`: the
+     * user's next-race track when it's a track we know, otherwise the first
+     * track in the list (pre-first-sync, or an unrecognised name).
+     *
+     * @param list<string> $trackNames
+     */
+    public static function resolveDefaultTrack(array $trackNames, string $nextTrack): string
+    {
+        if ($nextTrack !== '' && in_array($nextTrack, $trackNames, true)) {
+            return $nextTrack;
+        }
+
+        return $trackNames[0] ?? '';
+    }
+
     /**
      * Compact glance strip shown beside "Last sync" on every page.
      *
