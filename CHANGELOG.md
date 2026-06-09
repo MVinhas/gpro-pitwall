@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Each entry mirrors its annotated release tag.
 
+## [1.2.5] - 2026-06-09
+- Add **value range filters** to the Recruitment Analyzer: set inclusive minimum and/or maximum bounds per driver attribute (leave either blank for a one-sided range). Filters validate server-side, persist across sorting and pagination, and the result header shows the filtered count against the unfiltered total. (#42, thanks @HelderfV)
+
 ## [1.2.4] - 2026-06-09
 - Refine the Testing-tab car-wear `TESTING_WEAR_FACTOR` from 0.5 to **0.53**. A second real session (100 laps) independently best-fit 0.533, matching the original 30-lap calibration; the previous 0.5 ran ~6% low (the risky direction for wear). Totals now land near-exact.
 
