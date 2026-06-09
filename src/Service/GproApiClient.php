@@ -138,6 +138,18 @@ final class GproApiClient
     }
 
     /** @return array<string, mixed> */
+    public function getTesting(bool $forceRefresh = false): array
+    {
+        return $this->getCached(
+            'testing',
+            '/gb/backend/api/v2/Testing',
+            $this->ttlShort(),
+            $forceRefresh,
+            epoch: $this->raceWindow(),
+        );
+    }
+
+    /** @return array<string, mixed> */
     public function getStaffAndFacilities(bool $forceRefresh = false): array
     {
         return $this->getCached(

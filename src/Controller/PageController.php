@@ -24,6 +24,7 @@ use App\Service\TestingTargetsService;
 use App\Service\TrainingAdvisorService;
 use App\Controller\CarWearController;
 use App\Controller\StrategyController;
+use App\Controller\TestingController;
 use Twig\Environment;
 
 class PageController
@@ -47,6 +48,7 @@ class PageController
         private readonly TrainingAdvisorService $trainingAdvisor,
         private readonly StrategyController $strategyController,
         private readonly CarWearController $carWearController,
+        private readonly TestingController $testingController,
         private readonly GproDataMapper $mapper,
         private readonly RecruitmentService $recruitmentService,
         private readonly Environment $twig,
@@ -438,6 +440,18 @@ class PageController
 
                 $viewData['strategy_error'] = $_SESSION['strategy_error'] ?? $viewData['strategy_error'] ?? null;
                 unset($_SESSION['strategy_error']);
+                break;
+
+            case 'Testing':
+                // Read-only tab: build straight from the warmed cache on every
+                // open. No overrides, so no session round-trip like Strategy.
+                $this->apiClient->setToken($user['api_token']);
+                $result = $this->testingController->runCalc($request);
+                if (isset($result['error'])) {
+                    $viewData['testing_error'] = $result['error'];
+                } else {
+                    $viewData['testing_results'] = $result;
+                }
                 break;
         }
 

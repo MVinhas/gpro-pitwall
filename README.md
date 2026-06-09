@@ -30,6 +30,9 @@ Fuel + tyre + setup for every compound (Extra Soft / Soft / Medium / Hard / Rain
 ### Car Wear
 Per-part end-of-race wear forecast from your real driver attributes. Read-only driver stats pulled from the API (no manual entry). Risk slider. Per-part: level, start wear, estimated added wear, projected end wear (colour-coded by survival risk).
 
+### Testing
+Everything you need before a testing session, for the dedicated **testing track**. Shows the track's demands and your car's Power/Handling/Acceleration, the points distribution across Test / R&D / Engineering / **Car Character** (highlighted — it's what actually lands in the car), and the points gained per 5 laps for each testing priority (No special priority, Top speed, Cornering, Hairpins, Braking, Overtaking, Chicanes, Test car limits, Setup tuning). Includes the ideal setup for the testing track (same engine as Race Strategy) and a slider-driven (5–100 laps) projection of expected car wear that updates live. Read-only — testing weather and temperature come straight from GPRO.
+
 ### Training Planner
 Multi-program schedule — combine several programs in one shot, see the cumulative effect of every (program × count) combination with a sum-then-clamp model that respects the [0, 250] attribute bounds. Projected Overall Ability before/after for contract renegotiation context. Per-attribute delta chips and a full comparison table.
 
@@ -72,7 +75,7 @@ When your account has a calendar and tyre supplier but no pilot under contract, 
 - **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile).
 - **SQLite** via PDO. Encrypted user emails (AES-256-GCM) and API tokens at rest.
 - **PHPMailer 7** for SMTP; in dev, writes `.eml` files to `var/mail/` instead.
-- **PHPUnit 11** — 220 tests, 564 assertions, all green at **PHPStan level 7**.
+- **PHPUnit 11** — 225 tests, 573 assertions, all green at **PHPStan level 7**.
 - **No framework.** Custom front controller + flat DI container in `bootstrap.php`. Routes in `config/routes.php`.
 - **Timestamps are stored and served as UTC**, then localised per-visitor in the browser (`<time data-localtime>` + `Intl`), so each user sees their own timezone with no server-side config.
 

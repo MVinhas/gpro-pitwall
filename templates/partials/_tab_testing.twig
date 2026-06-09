@@ -1,0 +1,244 @@
+{% import "partials/_localtime.twig" as t %}
+
+{% if testing_error == no_pilot_message %}
+    {% include 'partials/_no_pilot_notice.twig' %}
+{% elseif testing_error %}
+    <div class="rounded-md bg-amber-50 border-l-4 border-amber-400 p-4 shadow-sm">
+        <p class="text-sm text-amber-800">
+            <span class="font-bold">Testing unavailable.</span> {{ testing_error }}
+        </p>
+    </div>
+{% elseif testing_results %}
+    {% set r = testing_results %}
+
+    <div class="mb-4 rounded-md bg-amber-50 border-l-4 border-amber-400 p-4 shadow-sm">
+        <p class="text-sm text-amber-800">
+            <span class="font-bold">Changed the car?</span>
+            Re-sync first — testing below uses your last-synced car data{% if user.last_synced_at %} (last sync: {{ t.localtime(user.last_synced_at, 'datetime') }}){% endif %}.
+        </p>
+    </div>
+
+    {# Row 1: track/car + points distribution (paired on desktop, stacked on mobile) #}
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 items-start">
+
+    {# ===== TRACK + CAR ===== #}
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="px-6 py-4 border-b border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-2">
+            <div>
+                <h3 class="t-heading">{{ r.track.name }}</h3>
+                <p class="t-caption">Testing track · Season {{ r.season }}, Race {{ r.race }}</p>
+            </div>
+            <div class="flex items-center gap-2 text-xs text-slate-600">
+                <span class="font-semibold">{{ r.weather.temp }}°C</span>
+                <span class="px-1.5 py-0.5 rounded {{ r.weather.label == 'Wet' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700' }}">{{ r.weather.label }}</span>
+                <span class="text-slate-400">·</span>
+                <span>{{ r.weather.hum }}% hum</span>
+            </div>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-slate-200">
+            <div class="p-5">
+                <p class="t-label mb-3">Track Demands</p>
+                <dl class="grid grid-cols-3 gap-3 text-center">
+                    {% for label, key in {'Power': 'power', 'Handling': 'handling', 'Accel': 'acceleration'} %}
+                        <div>
+                            <dt class="t-caption">{{ label }}</dt>
+                            <dd class="font-mono text-lg font-bold tabular-nums text-slate-800">{{ r.track[key]|round(1) }}</dd>
+                        </div>
+                    {% endfor %}
+                </dl>
+            </div>
+            <div class="p-5">
+                <p class="t-label mb-3">Your Car</p>
+                <dl class="grid grid-cols-3 gap-3 text-center">
+                    {% for label, key in {'Power': 'power', 'Handling': 'handling', 'Accel': 'acceleration'} %}
+                        <div>
+                            <dt class="t-caption">{{ label }}</dt>
+                            <dd class="font-mono text-lg font-bold tabular-nums text-slate-800">{{ r.car[key]|round(1) }}</dd>
+                        </div>
+                    {% endfor %}
+                </dl>
+            </div>
+        </div>
+    </div>
+
+    {# ===== POINTS DISTRIBUTION ===== #}
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="px-6 py-3 border-b border-slate-200 bg-slate-50">
+            <h3 class="t-section">Points Distribution</h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 text-sm">
+                <thead class="bg-white">
+                    <tr>
+                        <th class="px-6 py-3 text-left"><span class="t-label">Characteristic</span></th>
+                        <th class="px-4 py-3 text-center border-l border-slate-100"><span class="t-label">Test</span></th>
+                        <th class="px-4 py-3 text-center border-l border-slate-100"><span class="t-label">R&amp;D</span></th>
+                        <th class="px-4 py-3 text-center border-l border-slate-100"><span class="t-label">Engineering</span></th>
+                        <th class="px-4 py-3 text-center border-l border-blue-200 bg-blue-50"><span class="text-xs font-bold uppercase tracking-wide text-blue-800">Car Character</span></th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200">
+                    {% for label, key in {'Power': 'power', 'Handling': 'handling', 'Acceleration': 'acceleration'} %}
+                        <tr>
+                            <td class="px-6 py-3 font-bold text-slate-700">{{ label }}</td>
+                            <td class="px-4 py-3 text-center font-mono tabular-nums text-slate-600 border-l border-slate-100">{{ r.points.test[key]|round(1) }}</td>
+                            <td class="px-4 py-3 text-center font-mono tabular-nums text-slate-600 border-l border-slate-100">{{ r.points.rd[key]|round(1) }}</td>
+                            <td class="px-4 py-3 text-center font-mono tabular-nums text-slate-600 border-l border-slate-100">{{ r.points.eng[key]|round(1) }}</td>
+                            <td class="px-4 py-3 text-center font-mono text-lg font-bold tabular-nums text-blue-700 bg-blue-50 border-l border-blue-100">{{ r.points.car_character[key]|round(1) }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="px-6 py-3 border-t border-slate-100">
+            <p class="text-xs text-slate-500">Car Character is what actually lands in your car — points decay through Test → R&amp;D → Engineering before arriving.</p>
+        </div>
+    </div>
+
+    </div>{# /row 1 #}
+
+    {# Row 2: points-per-5-laps + ideal setup (paired on desktop, stacked on mobile) #}
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 items-start">
+
+    {# ===== POINTS PER 5 LAPS BY PRIORITY ===== #}
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="px-6 py-3 border-b border-slate-200 bg-slate-50">
+            <h3 class="t-section">Points Gained per 5 Laps</h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 text-sm">
+                <thead class="bg-white">
+                    <tr>
+                        <th class="px-6 py-3 text-left"><span class="t-label">Priority</span></th>
+                        <th class="px-4 py-3 text-center border-l border-slate-100"><span class="t-label">Power</span></th>
+                        <th class="px-4 py-3 text-center border-l border-slate-100"><span class="t-label">Handling</span></th>
+                        <th class="px-4 py-3 text-center border-l border-slate-100"><span class="t-label">Accel</span></th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200">
+                    {% for name, pts in r.priority_gains %}
+                        <tr class="hover:bg-slate-50">
+                            <td class="px-6 py-2.5 font-medium text-slate-700">{{ name }}</td>
+                            <td class="px-4 py-2.5 text-center font-mono tabular-nums text-slate-600 border-l border-slate-100">{{ pts.power }}</td>
+                            <td class="px-4 py-2.5 text-center font-mono tabular-nums text-slate-600 border-l border-slate-100">{{ pts.handling }}</td>
+                            <td class="px-4 py-2.5 text-center font-mono tabular-nums text-slate-600 border-l border-slate-100">{{ pts.acceleration }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {# ===== IDEAL SETUP ===== #}
+    {% if r.setup %}
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div class="px-6 py-3 border-b border-slate-200 bg-slate-50">
+                <h3 class="t-section">Ideal Setup</h3>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-slate-200 text-sm">
+                    <tbody class="divide-y divide-slate-200">
+                        {% for part in ['Front Wing', 'Rear Wing', 'Engine', 'Brakes', 'Gearbox', 'Suspension'] %}
+                            <tr>
+                                <td class="px-6 py-3 font-bold text-slate-700">{{ part }}</td>
+                                <td class="px-6 py-3 text-right font-mono text-lg font-bold tabular-nums text-blue-700">{{ r.setup[part] }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="px-6 py-3 border-t border-slate-100">
+                <p class="text-xs text-slate-500">Optimised for the testing track at {{ r.weather.temp }}°C ({{ r.weather.label }}). Values above 999 should be entered as 999 in GPRO.</p>
+            </div>
+        </div>
+    {% endif %}
+    </div>{# /row 2 #}
+
+    {# ===== EXPECTED WEAR (dynamic by laps) ===== #}
+    {% if r.wear %}
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-6" id="testing-wear">
+            <div class="px-6 py-4 border-b border-slate-200 bg-slate-50">
+                <div class="flex items-center justify-between gap-4 mb-1">
+                    <div class="flex items-center gap-2">
+                        <h3 class="t-section">Expected Car Wear</h3>
+                        <span class="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-600/20">Experimental</span>
+                    </div>
+                    <span class="text-sm text-slate-600">Testing laps: <span data-laps-value class="font-bold text-blue-600 tabular-nums">{{ r.default_laps }}</span></span>
+                </div>
+                <p class="text-xs text-slate-500 mb-3">The expected car wear is still being refined, the current values are the best estimates as of now. Expect improvements in the future.</p>
+                <input type="range" min="5" max="{{ r.max_laps }}" step="5" value="{{ r.default_laps }}"
+                       data-testing-laps
+                       class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer">
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-slate-200">
+                    <thead class="bg-slate-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left"><span class="t-label">Part</span></th>
+                            <th class="px-6 py-3 text-center"><span class="t-label">Current</span></th>
+                            <th class="px-6 py-3 text-center"><span class="t-label">Added</span></th>
+                            <th class="px-6 py-3 text-center"><span class="t-label">After Testing</span></th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-slate-200">
+                        {% for part, data in r.wear.parts %}
+                            <tr class="hover:bg-slate-50"
+                                data-wear-row
+                                data-start="{{ data.start }}"
+                                data-per-lap="{{ data.per_lap }}">
+                                <td class="px-6 py-3 whitespace-nowrap text-sm font-medium text-slate-900">{{ part }}</td>
+                                <td class="px-6 py-3 text-center text-sm tabular-nums text-slate-600">{{ data.start }}%</td>
+                                <td class="px-6 py-3 text-center text-sm font-medium tabular-nums text-blue-600" data-wear-added>—</td>
+                                <td class="px-6 py-3 text-center">
+                                    <span data-wear-end class="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium tabular-nums ring-1 ring-inset">—</span>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="px-6 py-3 border-t border-slate-100">
+                <p class="text-xs text-slate-500">Estimate — per-lap wear is this track's race wear, scaled by your driver and the lower testing wear rate (~half a race lap). Drag the slider to project a longer session.</p>
+            </div>
+        </div>
+
+        <script>
+        (() => {
+            const root = document.getElementById('testing-wear');
+            if (!root) return;
+            const slider = root.querySelector('[data-testing-laps]');
+            const lapsLabel = root.querySelector('[data-laps-value]');
+            const rows = root.querySelectorAll('[data-wear-row]');
+
+            const badge = (end) => {
+                if (end >= 90) return 'bg-red-50 text-red-700 ring-red-600/10';
+                if (end >= 50) return 'bg-yellow-50 text-yellow-800 ring-yellow-600/20';
+                return 'bg-green-50 text-green-700 ring-green-600/20';
+            };
+
+            const render = (laps) => {
+                lapsLabel.textContent = laps;
+                rows.forEach((row) => {
+                    const start = parseFloat(row.dataset.start) || 0;
+                    const perLap = parseFloat(row.dataset.perLap) || 0;
+                    const added = Math.round(perLap * laps * 10) / 10;
+                    const end = Math.round((start + added) * 10) / 10;
+                    row.querySelector('[data-wear-added]').textContent = '+' + added + '%';
+                    const endEl = row.querySelector('[data-wear-end]');
+                    endEl.textContent = end + '%';
+                    endEl.className = 'inline-flex items-center rounded-md px-2 py-1 text-xs font-medium tabular-nums ring-1 ring-inset ' + badge(end);
+                });
+            };
+
+            slider.addEventListener('input', (e) => render(parseInt(e.target.value, 10)));
+            render(parseInt(slider.value, 10));
+        })();
+        </script>
+    {% endif %}
+
+{% else %}
+    <div class="h-full flex flex-col items-center justify-center bg-slate-50 rounded-xl border border-dashed border-slate-200 p-12">
+        <p class="t-heading">Testing</p>
+        <p class="t-caption mt-1">No testing data yet — sync your account to load the testing track.</p>
+    </div>
+{% endif %}
