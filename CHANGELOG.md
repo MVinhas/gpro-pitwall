@@ -9,6 +9,10 @@ Each entry mirrors its annotated release tag.
 ## [1.1.27] - 2026-06-09
 - **Security:** server-side username whitelist (`[A-Za-z0-9_]`) at registration, mirroring the form's client pattern — attacker-controlled markup can't reach storage.
 
+## [1.1.26] - 2026-06-09
+- Login form remembers the last username on that browser (client-side, no server state).
+- Greet the signed-in user with "Hello, <username>" beside Last sync in the header.
+
 ## [1.1.25] - 2026-06-09
 - Add this CHANGELOG, backfilled from the release tags.
 
