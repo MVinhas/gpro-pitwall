@@ -14,15 +14,24 @@ class Database
 {
     private static ?PDO $instance = null;
 
+    /**
+     * Absolute path to the SQLite file. Single source of truth so callers
+     * (the connection here, the Debug page's filesize) never disagree — and
+     * never depend on the process CWD, which is the docroot under Apache/CGI.
+     */
+    public static function path(): string
+    {
+        $dbFile = $_ENV['DB_FILE'] ?? 'gpro_pilots.sqlite';
+        $projectRoot = realpath(__DIR__ . '/../../');
+
+        return $projectRoot . '/' . $dbFile;
+    }
+
     public static function getConnection(): PDO
     {
         if (self::$instance === null) {
             try {
-                $db_file = $_ENV['DB_FILE'] ?? 'gpro_pilots.sqlite';
-
-
-                $project_root = realpath(__DIR__ . '/../../');
-                $db_path = $project_root . '/' . $db_file;
+                $db_path = self::path();
 
                 self::$instance = new PDO("sqlite:" . $db_path);
                 self::$instance->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
