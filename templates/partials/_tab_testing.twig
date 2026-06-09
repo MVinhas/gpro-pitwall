@@ -158,10 +158,14 @@
     {% if r.wear %}
         <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-6" id="testing-wear">
             <div class="px-6 py-4 border-b border-slate-200 bg-slate-50">
-                <div class="flex items-center justify-between gap-4 mb-3">
-                    <h3 class="t-section">Expected Car Wear</h3>
+                <div class="flex items-center justify-between gap-4 mb-1">
+                    <div class="flex items-center gap-2">
+                        <h3 class="t-section">Expected Car Wear</h3>
+                        <span class="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-600/20">Experimental</span>
+                    </div>
                     <span class="text-sm text-slate-600">Testing laps: <span data-laps-value class="font-bold text-blue-600 tabular-nums">{{ r.default_laps }}</span></span>
                 </div>
+                <p class="text-xs text-slate-500 mb-3">The expected car wear is still being refined, the current values are the best estimates as of now. Expect improvements in the future.</p>
                 <input type="range" min="5" max="{{ r.max_laps }}" step="5" value="{{ r.default_laps }}"
                        data-testing-laps
                        class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer">
