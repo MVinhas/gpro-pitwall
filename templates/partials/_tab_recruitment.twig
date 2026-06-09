@@ -105,7 +105,7 @@
                     <div class="flex justify-between items-end mb-4">
                         <h3 class="t-heading">
                             Candidates (Found: {{ pagination.total_items }})
-                            {% if maximum_filters|length > 0 %}
+                            {% if range_filters|length > 0 %}
                                 <span class="t-caption font-medium">of {{ recruitment_unfiltered_total }}</span>
                             {% endif %}
                         </h3>
@@ -118,16 +118,16 @@
                         </span>
                     </div>
 
-                    {% set hasMaximumFilters = maximum_filters|length > 0 %}
-                    <details class="mb-4 rounded-lg border border-slate-200 bg-slate-50 group" {{ hasMaximumFilters ? 'open' : '' }}>
+                    {% set hasRangeFilters = range_filters|length > 0 %}
+                    <details class="mb-4 rounded-lg border border-slate-200 bg-slate-50 group" {{ hasRangeFilters ? 'open' : '' }}>
                         <summary class="flex items-center justify-between px-4 py-3 cursor-pointer list-none">
                             <span class="inline-flex items-center gap-2">
                                 <span class="text-slate-400 group-open:rotate-90 transition-transform">▸</span>
-                                <span class="text-sm font-medium text-slate-700">Maximum value filters</span>
+                                <span class="text-sm font-medium text-slate-700">Value range filters</span>
                             </span>
-                            {% if hasMaximumFilters %}
+                            {% if hasRangeFilters %}
                                 <span class="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
-                                    {{ maximum_filters|length }} active
+                                    {{ range_filters|length }} active {{ range_filters|length == 1 ? 'range' : 'ranges' }}
                                 </span>
                             {% endif %}
                         </summary>
@@ -139,21 +139,37 @@
                             <input type="hidden" name="order" value="{{ sort.order }}">
 
                             <p class="t-caption mb-3">
-                                Leave a field blank for no limit. Maximum values are inclusive.
+                                Leave either bound blank for a one-sided range. Minimum and maximum values are inclusive.
                             </p>
 
-                            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                                {% for field, label in maximum_filter_fields %}
-                                    <div>
-                                        <label for="max-{{ field }}" class="t-label block mb-1">{{ label }}</label>
-                                        <input type="number"
-                                               id="max-{{ field }}"
-                                               name="max_{{ field }}"
-                                               min="0"
-                                               step="1"
-                                               value="{{ maximum_filters[field] is defined ? maximum_filters[field] : '' }}"
-                                               placeholder="Any"
-                                               class="form-input">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                                {% for field, label in range_filter_fields %}
+                                    <div class="rounded-md border border-slate-200 p-3">
+                                        <span class="t-label block mb-2">{{ label }}</span>
+                                        <div class="grid grid-cols-2 gap-2">
+                                            <div>
+                                                <label for="min-{{ field }}" class="t-caption block mb-1">Minimum</label>
+                                                <input type="number"
+                                                       id="min-{{ field }}"
+                                                       name="min_{{ field }}"
+                                                       min="0"
+                                                       step="1"
+                                                       value="{{ range_filters[field].min is defined ? range_filters[field].min : '' }}"
+                                                       placeholder="No min"
+                                                       class="form-input">
+                                            </div>
+                                            <div>
+                                                <label for="max-{{ field }}" class="t-caption block mb-1">Maximum</label>
+                                                <input type="number"
+                                                       id="max-{{ field }}"
+                                                       name="max_{{ field }}"
+                                                       min="0"
+                                                       step="1"
+                                                       value="{{ range_filters[field].max is defined ? range_filters[field].max : '' }}"
+                                                       placeholder="No max"
+                                                       class="form-input">
+                                            </div>
+                                        </div>
                                     </div>
                                 {% endfor %}
                             </div>
@@ -175,15 +191,15 @@
                     {% endif %}
 
                     {# Helper Macro for Headers #}
-                    {% macro sortLink(label, col, currentSort, activeDivision, maximumFilterQuery) %}
+                    {% macro sortLink(label, col, currentSort, activeDivision, rangeFilterQuery) %}
                         {% set newOrder = (currentSort.col == col and currentSort.order == 'desc') ? 'asc' : 'desc' %}
                         {% set icon = '' %}
                         {% if currentSort.col == col %}
                             {% set icon = (currentSort.order == 'desc') ? ' ↓' : ' ↑' %}
                         {% endif %}
                         {% set href = '?main_tab=Recruitment%20Analyzer&division_tab=' ~ (activeDivision|url_encode) ~ '&page=1&sort=' ~ (col|url_encode) ~ '&order=' ~ (newOrder|url_encode) %}
-                        {% if maximumFilterQuery %}
-                            {% set href = href ~ '&' ~ maximumFilterQuery %}
+                        {% if rangeFilterQuery %}
+                            {% set href = href ~ '&' ~ rangeFilterQuery %}
                         {% endif %}
                         <a href="{{ href }}"
                            class="group inline-flex items-center hover:text-blue-600 transition-colors">
@@ -197,20 +213,20 @@
                                 <thead class="bg-slate-50">
                                     <tr>
                                         <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-slate-900 sm:pl-6 cursor-pointer">
-                                             {{ _self.sortLink('Rtg', 'rating', sort, active_division, maximum_filter_query) }}
+                                             {{ _self.sortLink('Rtg', 'rating', sort, active_division, range_filter_query) }}
                                         </th>
                                         <th scope="col" class="px-2 py-3.5 text-left text-sm font-semibold text-slate-900 cursor-pointer">
-                                            {{ _self.sortLink('Name', 'NAME', sort, active_division, maximum_filter_query) }}
+                                            {{ _self.sortLink('Name', 'NAME', sort, active_division, range_filter_query) }}
                                         </th>
                                         <th scope="col" class="px-2 py-3.5 text-center text-sm font-semibold text-slate-900 cursor-pointer">
-                                            {{ _self.sortLink('OA', 'OA', sort, active_division, maximum_filter_query) }}
+                                            {{ _self.sortLink('OA', 'OA', sort, active_division, range_filter_query) }}
                                         </th>
                                         
                                         {# Stats #}
                                         {% set stats = ['CON', 'TAL', 'AGG', 'EXP', 'TEI', 'STA', 'CHA', 'MOT', 'WEI', 'AGE'] %}
                                         {% for stat in stats %}
                                             <th scope="col" class="px-1 py-3.5 text-center cursor-pointer">
-                                                <span class="t-label">{{ _self.sortLink(stat|capitalize, stat, sort, active_division, maximum_filter_query) }}</span>
+                                                <span class="t-label">{{ _self.sortLink(stat|capitalize, stat, sort, active_division, range_filter_query) }}</span>
                                             </th>
                                         {% endfor %}
                                         
@@ -222,10 +238,10 @@
                                         {% endif %}
 
                                         <th scope="col" class="px-3 py-3.5 text-right text-sm font-semibold text-slate-900 cursor-pointer">
-                                            {{ _self.sortLink('Salary', 'SAL', sort, active_division, maximum_filter_query) }}
+                                            {{ _self.sortLink('Salary', 'SAL', sort, active_division, range_filter_query) }}
                                         </th>
                                         <th scope="col" class="px-3 py-3.5 text-right text-sm font-semibold text-slate-900 cursor-pointer">
-                                            {{ _self.sortLink('Fee', 'FEE', sort, active_division, maximum_filter_query) }}
+                                            {{ _self.sortLink('Fee', 'FEE', sort, active_division, range_filter_query) }}
                                         </th>
                                         <th scope="col" class="px-3 py-3.5 text-center text-sm font-semibold text-slate-900">Link</th>
                                     </tr>
@@ -296,8 +312,8 @@
                         {% if pagination.total_pages > 1 %}
                             <div class="bg-white px-4 py-3 flex items-center justify-between border-t border-slate-200 sm:px-6">
                                 {% set navigationParams = 'main_tab=Recruitment%20Analyzer&division_tab=' ~ (active_division|url_encode) ~ '&sort=' ~ (sort.col|url_encode) ~ '&order=' ~ (sort.order|url_encode) %}
-                                {% if maximum_filter_query %}
-                                    {% set navigationParams = navigationParams ~ '&' ~ maximum_filter_query %}
+                                {% if range_filter_query %}
+                                    {% set navigationParams = navigationParams ~ '&' ~ range_filter_query %}
                                 {% endif %}
                                 
                                 <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">

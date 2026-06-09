@@ -473,12 +473,13 @@ class PageController
         $allResults = $_SESSION['recruitment_results'];
         $unfilteredTotal = count($allResults);
 
-        $rawMaximumFilters = [];
-        foreach (RecruitmentService::MAX_FILTER_FIELDS as $field => $_label) {
-            $rawMaximumFilters[$field] = $request->get('max_' . $field);
+        $rawRangeFilters = [];
+        foreach (RecruitmentService::RANGE_FILTER_FIELDS as $field => $_label) {
+            $rawRangeFilters['min_' . $field] = $request->get('min_' . $field);
+            $rawRangeFilters['max_' . $field] = $request->get('max_' . $field);
         }
-        $maximumFilters = $this->recruitmentService->normalizeMaximumFilters($rawMaximumFilters);
-        $allResults = $this->recruitmentService->filterByMaximums($allResults, $maximumFilters);
+        $rangeFilters = $this->recruitmentService->normalizeRangeFilters($rawRangeFilters);
+        $allResults = $this->recruitmentService->filterByRanges($allResults, $rangeFilters);
 
         $sortCol   = (string) $request->get('sort', 'rating');
         $sortOrder = (string) $request->get('order', 'desc');
@@ -514,13 +515,15 @@ class PageController
             'col'   => $sortCol,
             'order' => $sortOrder,
         ];
-        $maximumFilterParams = [];
-        foreach ($maximumFilters as $field => $maximum) {
-            $maximumFilterParams['max_' . $field] = $maximum;
+        $rangeFilterParams = [];
+        foreach ($rangeFilters as $field => $range) {
+            foreach ($range as $bound => $value) {
+                $rangeFilterParams[$bound . '_' . $field] = $value;
+            }
         }
-        $viewData['maximum_filter_fields'] = RecruitmentService::MAX_FILTER_FIELDS;
-        $viewData['maximum_filters'] = $maximumFilters;
-        $viewData['maximum_filter_query'] = http_build_query($maximumFilterParams);
+        $viewData['range_filter_fields'] = RecruitmentService::RANGE_FILTER_FIELDS;
+        $viewData['range_filters'] = $rangeFilters;
+        $viewData['range_filter_query'] = http_build_query($rangeFilterParams);
         $viewData['recruitment_unfiltered_total'] = $unfilteredTotal;
     }
 

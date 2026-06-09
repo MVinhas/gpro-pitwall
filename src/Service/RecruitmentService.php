@@ -10,7 +10,7 @@ class RecruitmentService
     private const float MIN_RATING = 50.0;
 
     /** @var array<string, string> Market field => UI label. */
-    public const array MAX_FILTER_FIELDS = [
+    public const array RANGE_FILTER_FIELDS = [
         'OA'  => 'Overall Ability',
         'CON' => 'Concentration',
         'TAL' => 'Talent',
@@ -73,56 +73,84 @@ class RecruitmentService
     }
 
     /**
-     * Keeps only supported, non-negative numeric maximum filters.
+     * Keeps only supported, non-negative numeric range bounds.
      *
-     * @param array<string, mixed> $rawFilters keyed by market field
-     * @return array<string, int|float>
+     * @param array<string, mixed> $rawFilters keyed as min_FIELD/max_FIELD
+     * @return array<string, array{min?: int|float, max?: int|float}>
      */
-    public function normalizeMaximumFilters(array $rawFilters): array
+    public function normalizeRangeFilters(array $rawFilters): array
     {
         $filters = [];
 
-        foreach (self::MAX_FILTER_FIELDS as $field => $_label) {
-            $raw = $rawFilters[$field] ?? null;
-            if (!is_scalar($raw)) {
+        foreach (self::RANGE_FILTER_FIELDS as $field => $_label) {
+            $range = [];
+
+            foreach (['min', 'max'] as $bound) {
+                $raw = $rawFilters[$bound . '_' . $field] ?? null;
+                if (
+                    is_bool($raw)
+                    || !is_scalar($raw)
+                    || (is_float($raw) && !is_finite($raw))
+                ) {
+                    continue;
+                }
+
+                $value = trim((string) $raw);
+                if ($value === '' || !is_numeric($value)) {
+                    continue;
+                }
+
+                $number = (float) $value;
+                if (!is_finite($number) || $number < 0) {
+                    continue;
+                }
+
+                $range[$bound] = floor($number) === $number ? (int) $number : $number;
+            }
+
+            if (
+                isset($range['min'], $range['max'])
+                && $range['min'] > $range['max']
+            ) {
                 continue;
             }
 
-            $value = trim((string) $raw);
-            if ($value === '' || !is_numeric($value)) {
-                continue;
+            if ($range !== []) {
+                $filters[$field] = $range;
             }
-
-            $maximum = (float) $value;
-            if (!is_finite($maximum) || $maximum < 0) {
-                continue;
-            }
-
-            $filters[$field] = floor($maximum) === $maximum ? (int) $maximum : $maximum;
         }
 
         return $filters;
     }
 
     /**
-     * Applies inclusive maximums with AND semantics.
+     * Applies inclusive ranges with AND semantics.
      *
      * @param list<array<string, mixed>> $drivers
-     * @param array<string, int|float> $maximums keyed by market field
+     * @param array<string, array{min?: int|float, max?: int|float}> $ranges
      * @return list<array<string, mixed>>
      */
-    public function filterByMaximums(array $drivers, array $maximums): array
+    public function filterByRanges(array $drivers, array $ranges): array
     {
-        if ($maximums === []) {
+        if ($ranges === []) {
             return $drivers;
         }
 
         return array_values(array_filter(
             $drivers,
-            static function (array $driver) use ($maximums): bool {
-                foreach ($maximums as $field => $maximum) {
+            static function (array $driver) use ($ranges): bool {
+                foreach ($ranges as $field => $range) {
                     $value = $driver[$field] ?? null;
-                    if (!is_numeric($value) || (float) $value > $maximum) {
+                    if (!is_numeric($value)) {
+                        return false;
+                    }
+
+                    $number = (float) $value;
+                    if (
+                        !is_finite($number)
+                        || (isset($range['min']) && $number < $range['min'])
+                        || (isset($range['max']) && $number > $range['max'])
+                    ) {
                         return false;
                     }
                 }
