@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Each entry mirrors its annotated release tag.
 
+## [1.1.28] - 2026-06-09
+- Fix Debug → Database "Size: Not Found": resolve the SQLite path to an absolute path (single source of truth in `Database::path()`) so `filesize()` no longer depends on the process CWD.
+
 ## [1.1.27] - 2026-06-09
 - **Security:** server-side username whitelist (`[A-Za-z0-9_]`) at registration, mirroring the form's client pattern — attacker-controlled markup can't reach storage.
 

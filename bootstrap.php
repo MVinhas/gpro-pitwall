@@ -328,7 +328,7 @@ $container['controller.debug'] = new \App\Controller\DebugController(
     $container['service.user_repo'],
     $container['service.cache'],
     $container['twig'],
-    $container['settings']['db_file'],
+    Database::path(),
     $container['service.authorize'],
 );
 
