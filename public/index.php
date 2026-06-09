@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\HttpException;
 use App\Http\Request;
 use App\Http\Router;
 use App\Security\Csrf;
@@ -42,22 +43,38 @@ if (isset($_SESSION['user_id'])) {
 }
 
 
-if ($request->getMethod() === 'POST') {
-    $submittedToken = $request->post('csrf_token');
-    if (!$csrf->validate($submittedToken)) {
-        http_response_code(403);
-        die('403 Forbidden: Invalid CSRF Token');
-    }
-}
-
-
 $router = new Router();
 $routes = require_once __DIR__ . '/../config/routes.php';
 $routes($router);
 
+$renderError = static function (int $status, ?string $message = null, ?string $reference = null) use ($container): void {
+    $copy = [
+        403 => ['Access denied', "You don't have permission to view this page."],
+        404 => ['Page not found', "The page you're looking for doesn't exist or may have moved."],
+        500 => ['Something went wrong', 'An unexpected error occurred on our end. Please try again in a moment.'],
+    ];
+    [$title, $defaultMessage] = $copy[$status] ?? $copy[500];
+
+    http_response_code($status);
+    echo $container['twig']->render('error.twig', [
+        'status' => $status,
+        'title' => $title,
+        'message' => $message ?? $defaultMessage,
+        'reference' => $reference,
+    ]);
+};
+
 try {
+    if ($request->getMethod() === 'POST' && !$csrf->validate($request->post('csrf_token'))) {
+        throw new HttpException(403, 'Your session or form expired. Go back, reload the page, and try again.');
+    }
+
     $router->dispatch($request, $container);
-} catch (Exception $exception) {
+} catch (HttpException $exception) {
+    // Expected, developer-controlled errors (403/404). The message is safe to
+    // show — it never carries internal detail.
+    $renderError($exception->getStatusCode(), $exception->getMessage() ?: null);
+} catch (Throwable $exception) {
     if ($container['settings']['is_dev'] ?? false) {
         throw $exception;
     }
@@ -74,6 +91,5 @@ try {
         $exception->getLine(),
     ));
 
-    http_response_code(500);
-    echo 'Something went wrong on our end. Reference: ' . $errorId;
+    $renderError(500, null, $errorId);
 }

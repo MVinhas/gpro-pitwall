@@ -9,6 +9,9 @@ Each entry mirrors its annotated release tag.
 ## [1.1.31] - 2026-06-09
 - Fix the track selector defaulting to "Buenos Aires" (first in the config list) on every page. With no explicit `track` in the URL it now defaults to the user's actual next-race track from the cached Office data, falling back to the first known track only pre-first-sync.
 
+## [1.1.30] - 2026-06-09
+- Styled error pages (403/404/500) replacing the bare-text responses. The auth gate and router now throw a typed `HttpException` that the front controller renders through the normal layout; the 500 handler still hides internals behind a reference id.
+
 ## [1.1.29] - 2026-06-09
 - **Security:** stop interpolating the username into the admin restore form's inline `confirm()`; read it from a `data-` attribute so a legacy username containing quotes can't break out and execute in an admin session.
 
