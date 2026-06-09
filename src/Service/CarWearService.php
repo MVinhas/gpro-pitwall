@@ -148,4 +148,57 @@ class CarWearService
             'parts'      => $results,
         ];
     }
+
+    /**
+     * Per-lap car wear (%) for a testing session at the given track, per part,
+     * already folding in the driver wear multiplier.
+     *
+     * The wear_* columns hold full-race-distance wear, so we divide by the
+     * track's race lap count to get a per-lap rate. Testing has no clear-track
+     * risk knob, so the race formula's risk term is fixed at 0
+     * (levelFactor ** 0 == 1). Estimate: testing per-lap wear is taken as equal
+     * to race per-lap wear at the same track.
+     *
+     * @param array<string, mixed> $trackData
+     * @param array<string, mixed> $carData
+     * @param array<string, mixed> $driver
+     * @return array<string, mixed>
+     */
+    public function testingWearRates(array $trackData, array $carData, array $driver): array
+    {
+        $stmt = $this->db->prepare(
+            "SELECT * FROM tracks WHERE id = :id OR name = :name"
+        );
+        $stmt->execute([
+            ':id'   => $trackData['id'] ?? 0,
+            ':name' => $trackData['name'] ?? '',
+        ]);
+
+        $trackDb = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$trackDb) {
+            return ['error' => "Track not found: " . ($trackData['name'] ?? '')];
+        }
+
+        $raceLaps = max(1, (int) ($trackDb['laps'] ?? 1));
+        $driverFactor = $this->driverFactor($driver);
+
+        $parts = [];
+        foreach (self::PARTS_MAP as $label => $map) {
+            $trackBase = (float) ($trackDb[$map['db']] ?? 0.0);
+            $startWear = (int) ($carData[$map['wear']] ?? 0);
+            $perLap    = ($trackBase * $driverFactor) / $raceLaps;
+
+            $parts[$label] = [
+                'start'   => $startWear,
+                'per_lap' => round($perLap, 4),
+            ];
+        }
+
+        return [
+            'track_name' => $trackDb['name'],
+            'race_laps'  => $raceLaps,
+            'parts'      => $parts,
+        ];
+    }
 }
