@@ -7,6 +7,7 @@ namespace App\Tests\Unit\Service;
 use App\Service\IdealPilotService;
 use App\Service\RecruitmentService;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(RecruitmentService::class)]
@@ -179,6 +180,174 @@ final class RecruitmentServiceTest extends TestCase
     {
         $out = $this->service()->analyze($this->market(['OFF' => 1]), 'Rookie', true);
         $this->assertSame([], $out);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function rangeFilterFieldProvider(): iterable
+    {
+        foreach (array_keys(RecruitmentService::RANGE_FILTER_FIELDS) as $field) {
+            yield $field => [$field];
+        }
+    }
+
+    #[DataProvider('rangeFilterFieldProvider')]
+    public function testRangeFiltersAreInclusiveForEverySupportedField(string $field): void
+    {
+        $drivers = [
+            ['NAME' => 'Below minimum', $field => 99],
+            ['NAME' => 'At minimum', $field => 100],
+            ['NAME' => 'At maximum', $field => 200],
+            ['NAME' => 'Above maximum', $field => 201],
+        ];
+
+        $out = $this->service()->filterByRanges(
+            $drivers,
+            [$field => ['min' => 100, 'max' => 200]],
+        );
+
+        $this->assertSame([
+            ['NAME' => 'At minimum', $field => 100],
+            ['NAME' => 'At maximum', $field => 200],
+        ], $out);
+    }
+
+    public function testMinimumOnlyRangeFiltersValuesBelowTheMinimum(): void
+    {
+        $drivers = [
+            ['NAME' => 'Below', 'OA' => 79],
+            ['NAME' => 'At minimum', 'OA' => 80],
+            ['NAME' => 'Above', 'OA' => 81],
+        ];
+
+        $out = $this->service()->filterByRanges($drivers, ['OA' => ['min' => 80]]);
+
+        $this->assertSame([
+            ['NAME' => 'At minimum', 'OA' => 80],
+            ['NAME' => 'Above', 'OA' => 81],
+        ], $out);
+    }
+
+    public function testMaximumOnlyRangeFiltersValuesAboveTheMaximum(): void
+    {
+        $drivers = [
+            ['NAME' => 'Below', 'OA' => 79],
+            ['NAME' => 'At maximum', 'OA' => 80],
+            ['NAME' => 'Above', 'OA' => 81],
+        ];
+
+        $out = $this->service()->filterByRanges($drivers, ['OA' => ['max' => 80]]);
+
+        $this->assertSame([
+            ['NAME' => 'Below', 'OA' => 79],
+            ['NAME' => 'At maximum', 'OA' => 80],
+        ], $out);
+    }
+
+    public function testRangeFiltersUseAndSemanticsAcrossAttributes(): void
+    {
+        $drivers = [
+            ['NAME' => 'Matches', 'OA' => 80, 'AGE' => 25],
+            ['NAME' => 'OA too low', 'OA' => 79, 'AGE' => 25],
+            ['NAME' => 'OA too high', 'OA' => 91, 'AGE' => 25],
+            ['NAME' => 'Age too low', 'OA' => 80, 'AGE' => 19],
+            ['NAME' => 'Age too high', 'OA' => 80, 'AGE' => 31],
+        ];
+
+        $out = $this->service()->filterByRanges($drivers, [
+            'OA' => ['min' => 80, 'max' => 90],
+            'AGE' => ['min' => 20, 'max' => 30],
+        ]);
+
+        $this->assertSame([['NAME' => 'Matches', 'OA' => 80, 'AGE' => 25]], $out);
+    }
+
+    public function testRangeFilterNormalizationSupportsOneSidedAndCombinedRanges(): void
+    {
+        $out = $this->service()->normalizeRangeFilters([
+            'min_OA' => '60',
+            'max_OA' => '85',
+            'min_AGE' => '20',
+            'max_AGE' => '',
+            'min_SAL' => '',
+            'max_SAL' => '1000.5',
+        ]);
+
+        $this->assertSame([
+            'OA' => ['min' => 60, 'max' => 85],
+            'AGE' => ['min' => 20],
+            'SAL' => ['max' => 1000.5],
+        ], $out);
+    }
+
+    public function testRangeFilterNormalizationIgnoresInvalidBounds(): void
+    {
+        $out = $this->service()->normalizeRangeFilters([
+            'min_OA' => 'not-a-number',
+            'max_OA' => '85',
+            'min_CON' => '-1',
+            'max_CON' => '100',
+            'min_TAL' => '1e309',
+            'max_TAL' => true,
+            'min_AGE' => NAN,
+            'max_AGE' => INF,
+            'min_SAL' => '1000.5',
+            'max_FEE' => ['invalid'],
+            'min_UNKNOWN' => '10',
+        ]);
+
+        $this->assertSame([
+            'OA' => ['max' => 85],
+            'CON' => ['max' => 100],
+            'SAL' => ['min' => 1000.5],
+        ], $out);
+    }
+
+    public function testRangeFilterNormalizationIgnoresAttributeWhenMinimumExceedsMaximum(): void
+    {
+        $out = $this->service()->normalizeRangeFilters([
+            'min_OA' => '86',
+            'max_OA' => '85',
+            'min_AGE' => '20',
+            'max_AGE' => '30',
+        ]);
+
+        $this->assertSame(['AGE' => ['min' => 20, 'max' => 30]], $out);
+    }
+
+    public function testRangeFiltersRunBeforeSortingAndPagination(): void
+    {
+        $drivers = [
+            ['NAME' => 'Below range', 'OA' => 60, 'rating' => 100],
+            ['NAME' => 'Second', 'OA' => 80, 'rating' => 80],
+            ['NAME' => 'First', 'OA' => 70, 'rating' => 90],
+            ['NAME' => 'Above range', 'OA' => 90, 'rating' => 95],
+        ];
+
+        $filtered = $this->service()->filterByRanges(
+            $drivers,
+            ['OA' => ['min' => 70, 'max' => 80]],
+        );
+        $page = $this->service()->sortAndPaginate($filtered, 'rating', 'desc', 1, 1);
+
+        $this->assertSame('First', $page['data'][0]['NAME']);
+        $this->assertSame(2, $page['pagination']['total_items']);
+        $this->assertSame(2, $page['pagination']['total_pages']);
+    }
+
+    public function testRangeFiltersCanProduceAnEmptyResultPage(): void
+    {
+        $filtered = $this->service()->filterByRanges(
+            [['NAME' => 'Candidate', 'OA' => 60]],
+            ['OA' => ['min' => 70, 'max' => 80]],
+        );
+        $page = $this->service()->sortAndPaginate($filtered, 'rating', 'desc', 1, 20);
+
+        $this->assertSame([], $page['data']);
+        $this->assertSame(0, $page['pagination']['total_items']);
+        $this->assertSame(0, $page['pagination']['total_pages']);
+        $this->assertSame(1, $page['pagination']['current']);
     }
 
     public function testSeasonRaceTrackIdsKeepsOnlyRacesAndDedupes(): void

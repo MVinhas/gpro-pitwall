@@ -45,6 +45,8 @@ Scores the full GPRO driver market against your division's ideal pilot. Rating i
 - Salary and fee don't count.
 - Floored at 0, capped at 100. `MIN_RATING = 50` filter so the result set stays bounded on a full 4–5k-driver market.
 
+**Value range filters** — set inclusive minimum and/or maximum bounds for driver attributes, leaving either bound blank for a one-sided range. Active filters persist while sorting columns and moving between result pages.
+
 **Favourite-track fit** — a compact `Fav` column flags how many of each candidate's favourite tracks are raced this season (`C·n`) and next season (`N·n`), green when matched, with the track names on hover. Computed from data already in hand — the market dump carries each driver's favourite tracks, and the season calendars come from the cache the per-user sync already warms — so it adds **no extra API call** and needs no per-driver lookup.
 
 ### Division Baseline / Division Differences *(admin-only)*
@@ -75,7 +77,7 @@ When your account has a calendar and tyre supplier but no pilot under contract, 
 - **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile).
 - **SQLite** via PDO. Encrypted user emails (AES-256-GCM) and API tokens at rest.
 - **PHPMailer 7** for SMTP; in dev, writes `.eml` files to `var/mail/` instead.
-- **PHPUnit 11** — 225 tests, 573 assertions, all green at **PHPStan level 7**.
+- **PHPUnit 11** — 246 tests, 599 assertions, all green at **PHPStan level 7**.
 - **No framework.** Custom front controller + flat DI container in `bootstrap.php`. Routes in `config/routes.php`.
 - **Timestamps are stored and served as UTC**, then localised per-visitor in the browser (`<time data-localtime>` + `Intl`), so each user sees their own timezone with no server-side config.
 

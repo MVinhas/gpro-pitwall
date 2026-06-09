@@ -9,6 +9,23 @@ class RecruitmentService
     /** Score threshold below which a driver isn't worth showing. */
     private const float MIN_RATING = 50.0;
 
+    /** @var array<string, string> Market field => UI label. */
+    public const array RANGE_FILTER_FIELDS = [
+        'OA'  => 'Overall Ability',
+        'CON' => 'Concentration',
+        'TAL' => 'Talent',
+        'AGG' => 'Aggressiveness',
+        'EXP' => 'Experience',
+        'TEI' => 'Technical Insight',
+        'STA' => 'Stamina',
+        'CHA' => 'Charisma',
+        'MOT' => 'Motivation',
+        'WEI' => 'Weight',
+        'AGE' => 'Age',
+        'SAL' => 'Salary',
+        'FEE' => 'Fee',
+    ];
+
     /**
      * @param array<string, string> $csvMap
      * @param array<string, int>    $caps
@@ -53,6 +70,94 @@ class RecruitmentService
         }
 
         return $candidates;
+    }
+
+    /**
+     * Keeps only supported, non-negative numeric range bounds.
+     *
+     * @param array<string, mixed> $rawFilters keyed as min_FIELD/max_FIELD
+     * @return array<string, array{min?: int|float, max?: int|float}>
+     */
+    public function normalizeRangeFilters(array $rawFilters): array
+    {
+        $filters = [];
+
+        foreach (self::RANGE_FILTER_FIELDS as $field => $_label) {
+            $range = [];
+
+            foreach (['min', 'max'] as $bound) {
+                $raw = $rawFilters[$bound . '_' . $field] ?? null;
+                if (
+                    is_bool($raw)
+                    || !is_scalar($raw)
+                    || (is_float($raw) && !is_finite($raw))
+                ) {
+                    continue;
+                }
+
+                $value = trim((string) $raw);
+                if ($value === '' || !is_numeric($value)) {
+                    continue;
+                }
+
+                $number = (float) $value;
+                if (!is_finite($number) || $number < 0) {
+                    continue;
+                }
+
+                $range[$bound] = floor($number) === $number ? (int) $number : $number;
+            }
+
+            if (
+                isset($range['min'], $range['max'])
+                && $range['min'] > $range['max']
+            ) {
+                continue;
+            }
+
+            if ($range !== []) {
+                $filters[$field] = $range;
+            }
+        }
+
+        return $filters;
+    }
+
+    /**
+     * Applies inclusive ranges with AND semantics.
+     *
+     * @param list<array<string, mixed>> $drivers
+     * @param array<string, array{min?: int|float, max?: int|float}> $ranges
+     * @return list<array<string, mixed>>
+     */
+    public function filterByRanges(array $drivers, array $ranges): array
+    {
+        if ($ranges === []) {
+            return $drivers;
+        }
+
+        return array_values(array_filter(
+            $drivers,
+            static function (array $driver) use ($ranges): bool {
+                foreach ($ranges as $field => $range) {
+                    $value = $driver[$field] ?? null;
+                    if (!is_numeric($value)) {
+                        return false;
+                    }
+
+                    $number = (float) $value;
+                    if (
+                        !is_finite($number)
+                        || (isset($range['min']) && $number < $range['min'])
+                        || (isset($range['max']) && $number > $range['max'])
+                    ) {
+                        return false;
+                    }
+                }
+
+                return true;
+            },
+        ));
     }
 
     /**

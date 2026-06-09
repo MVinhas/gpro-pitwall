@@ -479,42 +479,34 @@ class PageController
             unset($_SESSION['recruitment_updated_at']);
         }
 
-        if (empty($_SESSION['recruitment_results'])) {
+        if (!isset($_SESSION['recruitment_results']) || !is_array($_SESSION['recruitment_results'])) {
             return;
         }
 
+        /** @var list<array<string, mixed>> $allResults */
         $allResults = $_SESSION['recruitment_results'];
+        $unfilteredTotal = count($allResults);
+
+        $rawRangeFilters = [];
+        foreach (RecruitmentService::RANGE_FILTER_FIELDS as $field => $_label) {
+            $rawRangeFilters['min_' . $field] = $request->get('min_' . $field);
+            $rawRangeFilters['max_' . $field] = $request->get('max_' . $field);
+        }
+        $rangeFilters = $this->recruitmentService->normalizeRangeFilters($rawRangeFilters);
+        $allResults = $this->recruitmentService->filterByRanges($allResults, $rangeFilters);
 
         $sortCol   = (string) $request->get('sort', 'rating');
         $sortOrder = (string) $request->get('order', 'desc');
-
-        usort($allResults, function ($a, $b) use ($sortCol, $sortOrder) {
-            $valA = $a[$sortCol] ?? 0;
-            $valB = $b[$sortCol] ?? 0;
-
-            if ($valA === $valB) {
-                return 0;
-            }
-
-            $cmp = is_numeric($valA) && is_numeric($valB)
-                ? ($valA < $valB ? -1 : 1)
-                : strcasecmp((string) $valA, (string) $valB);
-
-            return $sortOrder === 'desc' ? -$cmp : $cmp;
-        });
-
-        $totalItems  = count($allResults);
         $perPage     = (int) ($_ENV['PAGINATION_LIMIT'] ?? 20);
         $currentPage = max(1, (int) $request->get('page', 1));
-        $totalPages  = (int) ceil($totalItems / $perPage);
-
-        if ($currentPage > $totalPages && $totalPages > 0) {
-            $currentPage = $totalPages;
-        }
-
-        $offset = ($currentPage - 1) * $perPage;
-
-        $pageRows = array_slice($allResults, $offset, $perPage);
+        $resultPage = $this->recruitmentService->sortAndPaginate(
+            $allResults,
+            $sortCol,
+            $sortOrder,
+            $currentPage,
+            $perPage,
+        );
+        $pageRows = $resultPage['data'];
 
         // Favourite-track match counts for this page only. Calendar is read
         // from cache — never a fresh API call; the per-user sync warms it.
@@ -532,15 +524,21 @@ class PageController
         }
 
         $viewData['recruitment_results'] = $pageRows;
-        $viewData['pagination'] = [
-            'current'      => $currentPage,
-            'total_pages'  => $totalPages,
-            'total_items'  => $totalItems,
-        ];
+        $viewData['pagination'] = $resultPage['pagination'] + ['per_page' => $perPage];
         $viewData['sort'] = [
             'col'   => $sortCol,
             'order' => $sortOrder,
         ];
+        $rangeFilterParams = [];
+        foreach ($rangeFilters as $field => $range) {
+            foreach ($range as $bound => $value) {
+                $rangeFilterParams[$bound . '_' . $field] = $value;
+            }
+        }
+        $viewData['range_filter_fields'] = RecruitmentService::RANGE_FILTER_FIELDS;
+        $viewData['range_filters'] = $rangeFilters;
+        $viewData['range_filter_query'] = http_build_query($rangeFilterParams);
+        $viewData['recruitment_unfiltered_total'] = $unfilteredTotal;
     }
 
     /**
