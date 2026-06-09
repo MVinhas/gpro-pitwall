@@ -1,4 +1,5 @@
 {% extends "layout.twig" %}
+{% import "partials/_localtime.twig" as t %}
 
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 py-6 space-y-6">
@@ -50,7 +51,7 @@
                                 {% if is_deleted %}
                                     <span class="ml-1 inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 ring-1 ring-inset ring-red-600/20 no-underline align-middle"
                                           title="Deleted {{ u.deleted_at }}">
-                                        Deleted {{ u.deleted_at|date("M j") }}
+                                        Deleted {{ t.localtime(u.deleted_at, 'day') }}
                                     </span>
                                 {% endif %}
                             </td>
@@ -69,10 +70,10 @@
                                 {% if u.verified_at %}<span class="text-emerald-600">●</span>{% else %}<span class="text-amber-500">○</span>{% endif %}
                             </td>
                             <td class="px-4 py-3 text-xs text-slate-500 tabular-nums">
-                                {% if u.last_synced_at %}{{ u.last_synced_at|date("M j, H:i") }}{% else %}—{% endif %}
+                                {% if u.last_synced_at %}{{ t.localtime(u.last_synced_at, 'datetime') }}{% else %}—{% endif %}
                             </td>
                             <td class="px-4 py-3 text-xs text-slate-500 tabular-nums">
-                                {{ u.created_at|date("M j, Y") }}
+                                {{ t.localtime(u.created_at, 'date') }}
                             </td>
                             <td class="px-4 py-3 text-right space-x-2 whitespace-nowrap">
                                 {% if is_deleted %}

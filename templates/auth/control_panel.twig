@@ -1,4 +1,5 @@
 {% extends "layout.twig" %}
+{% import "partials/_localtime.twig" as t %}
 
 {% block content %}
 <div class="max-w-2xl mx-auto mt-10">
@@ -91,7 +92,7 @@
                 </div>
                 <div>
                     <span class="block text-slate-500">Member Since</span>
-                    <span class="font-medium">{{ user.created_at|date("M j, Y") }}</span>
+                    <span class="font-medium">{{ t.localtime(user.created_at, 'date') }}</span>
                 </div>
             </div>
         </div>

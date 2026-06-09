@@ -1,3 +1,4 @@
+{% import "partials/_localtime.twig" as t %}
 <!DOCTYPE html>
 <html lang="en" class="h-full bg-slate-100">
 <head>
@@ -115,7 +116,7 @@
                 {% elseif user.sync_status == 'deferred_low_budget' %}
                     <span class="text-amber-600">⏸ Sync paused — GPRO API budget low. It'll resume once your hourly allowance recovers.</span>
                 {% elseif user.last_synced_at %}
-                    <span>Last sync: {{ user.last_synced_at|date("M j, H:i") }}</span>
+                    <span>Last sync: {{ t.localtime(user.last_synced_at, 'datetime') }}</span>
                 {% endif %}
             </div>
 
@@ -259,7 +260,7 @@
         <p class="t-caption mb-4">
             {% if user.last_synced_at %}
                 Your last data sync was
-                <strong>{{ user.last_synced_at|date("M j, H:i") }}</strong>.
+                <strong>{{ t.localtime(user.last_synced_at, 'datetime') }}</strong>.
             {% else %}
                 You haven't synced any data yet.
             {% endif %}
@@ -375,6 +376,31 @@ document.addEventListener('submit', (e) => {
         }
     });
 }, true);
+</script>
+
+<script>
+// Local-time rendering: timestamps are stored and emitted as UTC. Rewrite every
+// <time data-localtime> into the visitor's own timezone via Intl, so a user in
+// any zone sees their local time. No-JS users keep the server-rendered UTC text.
+(() => {
+    const PRESETS = {
+        datetime: { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' },
+        date:     { month: 'short', day: 'numeric', year: 'numeric' },
+        day:      { month: 'short', day: 'numeric' },
+    };
+    document.querySelectorAll('time[data-localtime]').forEach((el) => {
+        const iso = el.getAttribute('datetime');
+        if (!iso) return;
+        const d = new Date(iso);
+        if (isNaN(d)) return;
+        const opts = PRESETS[el.dataset.localtime] || PRESETS.datetime;
+        try {
+            el.textContent = new Intl.DateTimeFormat(undefined, opts).format(d);
+        } catch (_) {
+            // Leave the UTC fallback in place if Intl formatting fails.
+        }
+    });
+})();
 </script>
 
 </body>
