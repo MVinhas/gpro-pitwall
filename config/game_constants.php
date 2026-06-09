@@ -10,6 +10,7 @@ return [
         'Cockpit',
         'Race Strategy',
         'Car Wear',
+        'Testing',
         'Training Planner',
         'Recruitment Analyzer',
         'Division Baseline',

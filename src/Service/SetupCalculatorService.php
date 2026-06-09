@@ -37,7 +37,9 @@ class SetupCalculatorService
             return [];
         }
 
-        $sessions = ['Q1', 'Q2', 'Race'];
+        // Sessions are driven by the caller's weather inputs: Race Strategy
+        // passes Q1/Q2/Race, the Testing tab passes a single 'Testing' session.
+        $sessions = array_keys($weatherInputs);
         $results = [];
 
 
