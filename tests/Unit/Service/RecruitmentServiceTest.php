@@ -7,6 +7,7 @@ namespace App\Tests\Unit\Service;
 use App\Service\IdealPilotService;
 use App\Service\RecruitmentService;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(RecruitmentService::class)]
@@ -179,6 +180,87 @@ final class RecruitmentServiceTest extends TestCase
     {
         $out = $this->service()->analyze($this->market(['OFF' => 1]), 'Rookie', true);
         $this->assertSame([], $out);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function maximumFilterFieldProvider(): iterable
+    {
+        foreach (array_keys(RecruitmentService::MAX_FILTER_FIELDS) as $field) {
+            yield $field => [$field];
+        }
+    }
+
+    #[DataProvider('maximumFilterFieldProvider')]
+    public function testMaximumFiltersAreInclusiveForEverySupportedField(string $field): void
+    {
+        $drivers = [
+            ['NAME' => 'At maximum', $field => 100],
+            ['NAME' => 'Above maximum', $field => 101],
+        ];
+
+        $out = $this->service()->filterByMaximums($drivers, [$field => 100]);
+
+        $this->assertSame([['NAME' => 'At maximum', $field => 100]], $out);
+    }
+
+    public function testMaximumFiltersUseAndSemantics(): void
+    {
+        $drivers = [
+            ['NAME' => 'Matches', 'OA' => 80, 'AGE' => 25],
+            ['NAME' => 'OA too high', 'OA' => 81, 'AGE' => 25],
+            ['NAME' => 'Age too high', 'OA' => 80, 'AGE' => 26],
+        ];
+
+        $out = $this->service()->filterByMaximums($drivers, ['OA' => 80, 'AGE' => 25]);
+
+        $this->assertSame([['NAME' => 'Matches', 'OA' => 80, 'AGE' => 25]], $out);
+    }
+
+    public function testMaximumFilterNormalizationIgnoresInvalidValues(): void
+    {
+        $out = $this->service()->normalizeMaximumFilters([
+            'OA' => '85',
+            'CON' => '',
+            'TAL' => 'not-a-number',
+            'AGE' => '-1',
+            'SAL' => '1000.5',
+            'FEE' => ['invalid'],
+            'UNKNOWN' => '10',
+        ]);
+
+        $this->assertSame(['OA' => 85, 'SAL' => 1000.5], $out);
+    }
+
+    public function testMaximumFiltersRunBeforeSortingAndPagination(): void
+    {
+        $drivers = [
+            ['NAME' => 'Filtered out', 'OA' => 90, 'rating' => 100],
+            ['NAME' => 'Second', 'OA' => 80, 'rating' => 80],
+            ['NAME' => 'First', 'OA' => 70, 'rating' => 90],
+        ];
+
+        $filtered = $this->service()->filterByMaximums($drivers, ['OA' => 80]);
+        $page = $this->service()->sortAndPaginate($filtered, 'rating', 'desc', 1, 1);
+
+        $this->assertSame('First', $page['data'][0]['NAME']);
+        $this->assertSame(2, $page['pagination']['total_items']);
+        $this->assertSame(2, $page['pagination']['total_pages']);
+    }
+
+    public function testMaximumFiltersCanProduceAnEmptyResultPage(): void
+    {
+        $filtered = $this->service()->filterByMaximums(
+            [['NAME' => 'Candidate', 'OA' => 60]],
+            ['OA' => 50],
+        );
+        $page = $this->service()->sortAndPaginate($filtered, 'rating', 'desc', 1, 20);
+
+        $this->assertSame([], $page['data']);
+        $this->assertSame(0, $page['pagination']['total_items']);
+        $this->assertSame(0, $page['pagination']['total_pages']);
+        $this->assertSame(1, $page['pagination']['current']);
     }
 
     public function testSeasonRaceTrackIdsKeepsOnlyRacesAndDedupes(): void

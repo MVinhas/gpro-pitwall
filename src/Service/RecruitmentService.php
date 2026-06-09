@@ -9,6 +9,23 @@ class RecruitmentService
     /** Score threshold below which a driver isn't worth showing. */
     private const float MIN_RATING = 50.0;
 
+    /** @var array<string, string> Market field => UI label. */
+    public const array MAX_FILTER_FIELDS = [
+        'OA'  => 'Overall Ability',
+        'CON' => 'Concentration',
+        'TAL' => 'Talent',
+        'AGG' => 'Aggressiveness',
+        'EXP' => 'Experience',
+        'TEI' => 'Technical Insight',
+        'STA' => 'Stamina',
+        'CHA' => 'Charisma',
+        'MOT' => 'Motivation',
+        'WEI' => 'Weight',
+        'AGE' => 'Age',
+        'SAL' => 'Salary',
+        'FEE' => 'Fee',
+    ];
+
     /**
      * @param array<string, string> $csvMap
      * @param array<string, int>    $caps
@@ -53,6 +70,66 @@ class RecruitmentService
         }
 
         return $candidates;
+    }
+
+    /**
+     * Keeps only supported, non-negative numeric maximum filters.
+     *
+     * @param array<string, mixed> $rawFilters keyed by market field
+     * @return array<string, int|float>
+     */
+    public function normalizeMaximumFilters(array $rawFilters): array
+    {
+        $filters = [];
+
+        foreach (self::MAX_FILTER_FIELDS as $field => $_label) {
+            $raw = $rawFilters[$field] ?? null;
+            if (!is_scalar($raw)) {
+                continue;
+            }
+
+            $value = trim((string) $raw);
+            if ($value === '' || !is_numeric($value)) {
+                continue;
+            }
+
+            $maximum = (float) $value;
+            if (!is_finite($maximum) || $maximum < 0) {
+                continue;
+            }
+
+            $filters[$field] = floor($maximum) === $maximum ? (int) $maximum : $maximum;
+        }
+
+        return $filters;
+    }
+
+    /**
+     * Applies inclusive maximums with AND semantics.
+     *
+     * @param list<array<string, mixed>> $drivers
+     * @param array<string, int|float> $maximums keyed by market field
+     * @return list<array<string, mixed>>
+     */
+    public function filterByMaximums(array $drivers, array $maximums): array
+    {
+        if ($maximums === []) {
+            return $drivers;
+        }
+
+        return array_values(array_filter(
+            $drivers,
+            static function (array $driver) use ($maximums): bool {
+                foreach ($maximums as $field => $maximum) {
+                    $value = $driver[$field] ?? null;
+                    if (!is_numeric($value) || (float) $value > $maximum) {
+                        return false;
+                    }
+                }
+
+                return true;
+            },
+        ));
     }
 
     /**

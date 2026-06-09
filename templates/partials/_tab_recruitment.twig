@@ -23,7 +23,7 @@
         <div class="bg-slate-50 px-6 py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center">
             <div>
                 <h2 class="t-heading">Recruitment Analyzer</h2>
-                <p class="t-caption">Upload a CSV to find the perfect driver for your budget.</p>
+                <p class="t-caption">Score the live GPRO driver market against your division's ideal pilot.</p>
             </div>
         </div>
 
@@ -104,12 +104,67 @@
                 <div class="mt-8">
                     <div class="flex justify-between items-end mb-4">
                         <h3 class="t-heading">
-                             Candidates (Found: {{ pagination.total_items }})
+                            Candidates (Found: {{ pagination.total_items }})
+                            {% if maximum_filters|length > 0 %}
+                                <span class="t-caption font-medium">of {{ recruitment_unfiltered_total }}</span>
+                            {% endif %}
                         </h3>
                         <span class="t-caption tabular-nums">
-                            Page {{ pagination.current }} of {{ pagination.total_pages }}
+                            {% if pagination.total_pages > 0 %}
+                                Page {{ pagination.current }} of {{ pagination.total_pages }}
+                            {% else %}
+                                No matching candidates
+                            {% endif %}
                         </span>
                     </div>
+
+                    {% set hasMaximumFilters = maximum_filters|length > 0 %}
+                    <details class="mb-4 rounded-lg border border-slate-200 bg-slate-50 group" {{ hasMaximumFilters ? 'open' : '' }}>
+                        <summary class="flex items-center justify-between px-4 py-3 cursor-pointer list-none">
+                            <span class="inline-flex items-center gap-2">
+                                <span class="text-slate-400 group-open:rotate-90 transition-transform">▸</span>
+                                <span class="text-sm font-medium text-slate-700">Maximum value filters</span>
+                            </span>
+                            {% if hasMaximumFilters %}
+                                <span class="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
+                                    {{ maximum_filters|length }} active
+                                </span>
+                            {% endif %}
+                        </summary>
+
+                        <form method="GET" action="/" class="border-t border-slate-200 bg-white px-4 py-4">
+                            <input type="hidden" name="main_tab" value="Recruitment Analyzer">
+                            <input type="hidden" name="division_tab" value="{{ active_division }}">
+                            <input type="hidden" name="sort" value="{{ sort.col }}">
+                            <input type="hidden" name="order" value="{{ sort.order }}">
+
+                            <p class="t-caption mb-3">
+                                Leave a field blank for no limit. Maximum values are inclusive.
+                            </p>
+
+                            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                                {% for field, label in maximum_filter_fields %}
+                                    <div>
+                                        <label for="max-{{ field }}" class="t-label block mb-1">{{ label }}</label>
+                                        <input type="number"
+                                               id="max-{{ field }}"
+                                               name="max_{{ field }}"
+                                               min="0"
+                                               step="1"
+                                               value="{{ maximum_filters[field] is defined ? maximum_filters[field] : '' }}"
+                                               placeholder="Any"
+                                               class="form-input">
+                                    </div>
+                                {% endfor %}
+                            </div>
+
+                            <div class="flex justify-end gap-3 border-t border-slate-100 mt-4 pt-4">
+                                {% set clearFilterHref = '?main_tab=Recruitment%20Analyzer&division_tab=' ~ (active_division|url_encode) ~ '&page=1&sort=' ~ (sort.col|url_encode) ~ '&order=' ~ (sort.order|url_encode) %}
+                                <a href="{{ clearFilterHref }}" class="btn btn-md btn-secondary">Clear Filters</a>
+                                <button type="submit" class="btn btn-md btn-primary">Apply Filters</button>
+                            </div>
+                        </form>
+                    </details>
 
                     {% if favourite_tracks_available %}
                         <p class="t-caption mb-3">
@@ -120,13 +175,17 @@
                     {% endif %}
 
                     {# Helper Macro for Headers #}
-                    {% macro sortLink(label, col, currentSort) %}
+                    {% macro sortLink(label, col, currentSort, activeDivision, maximumFilterQuery) %}
                         {% set newOrder = (currentSort.col == col and currentSort.order == 'desc') ? 'asc' : 'desc' %}
                         {% set icon = '' %}
                         {% if currentSort.col == col %}
                             {% set icon = (currentSort.order == 'desc') ? ' ↓' : ' ↑' %}
                         {% endif %}
-                        <a href="?main_tab=Recruitment Analyzer&page=1&sort={{ col }}&order={{ newOrder }}" 
+                        {% set href = '?main_tab=Recruitment%20Analyzer&division_tab=' ~ (activeDivision|url_encode) ~ '&page=1&sort=' ~ (col|url_encode) ~ '&order=' ~ (newOrder|url_encode) %}
+                        {% if maximumFilterQuery %}
+                            {% set href = href ~ '&' ~ maximumFilterQuery %}
+                        {% endif %}
+                        <a href="{{ href }}"
                            class="group inline-flex items-center hover:text-blue-600 transition-colors">
                              {{ label }}{{ icon }}
                         </a>
@@ -138,20 +197,20 @@
                                 <thead class="bg-slate-50">
                                     <tr>
                                         <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-slate-900 sm:pl-6 cursor-pointer">
-                                             {{ _self.sortLink('Rtg', 'rating', sort) }}
+                                             {{ _self.sortLink('Rtg', 'rating', sort, active_division, maximum_filter_query) }}
                                         </th>
                                         <th scope="col" class="px-2 py-3.5 text-left text-sm font-semibold text-slate-900 cursor-pointer">
-                                            {{ _self.sortLink('Name', 'NAME', sort) }}
+                                            {{ _self.sortLink('Name', 'NAME', sort, active_division, maximum_filter_query) }}
                                         </th>
                                         <th scope="col" class="px-2 py-3.5 text-center text-sm font-semibold text-slate-900 cursor-pointer">
-                                            {{ _self.sortLink('OA', 'OA', sort) }}
+                                            {{ _self.sortLink('OA', 'OA', sort, active_division, maximum_filter_query) }}
                                         </th>
                                         
                                         {# Stats #}
                                         {% set stats = ['CON', 'TAL', 'AGG', 'EXP', 'TEI', 'STA', 'CHA', 'MOT', 'WEI', 'AGE'] %}
                                         {% for stat in stats %}
                                             <th scope="col" class="px-1 py-3.5 text-center cursor-pointer">
-                                                <span class="t-label">{{ _self.sortLink(stat|capitalize, stat, sort) }}</span>
+                                                <span class="t-label">{{ _self.sortLink(stat|capitalize, stat, sort, active_division, maximum_filter_query) }}</span>
                                             </th>
                                         {% endfor %}
                                         
@@ -163,10 +222,10 @@
                                         {% endif %}
 
                                         <th scope="col" class="px-3 py-3.5 text-right text-sm font-semibold text-slate-900 cursor-pointer">
-                                            {{ _self.sortLink('Salary', 'SAL', sort) }}
+                                            {{ _self.sortLink('Salary', 'SAL', sort, active_division, maximum_filter_query) }}
                                         </th>
                                         <th scope="col" class="px-3 py-3.5 text-right text-sm font-semibold text-slate-900 cursor-pointer">
-                                            {{ _self.sortLink('Fee', 'FEE', sort) }}
+                                            {{ _self.sortLink('Fee', 'FEE', sort, active_division, maximum_filter_query) }}
                                         </th>
                                         <th scope="col" class="px-3 py-3.5 text-center text-sm font-semibold text-slate-900">Link</th>
                                     </tr>
@@ -236,32 +295,34 @@
                         {# Pagination Controls #}
                         {% if pagination.total_pages > 1 %}
                             <div class="bg-white px-4 py-3 flex items-center justify-between border-t border-slate-200 sm:px-6">
-                                {# Pass sort params in pagination links #}
-                                {% set sortParams = '&sort=' ~ sort.col ~ '&order=' ~ sort.order %}
+                                {% set navigationParams = 'main_tab=Recruitment%20Analyzer&division_tab=' ~ (active_division|url_encode) ~ '&sort=' ~ (sort.col|url_encode) ~ '&order=' ~ (sort.order|url_encode) %}
+                                {% if maximum_filter_query %}
+                                    {% set navigationParams = navigationParams ~ '&' ~ maximum_filter_query %}
+                                {% endif %}
                                 
                                 <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
                                     <div>
                                         <p class="text-sm text-slate-700 tabular-nums">
-                                            Showing <span class="font-medium">{{ (pagination.current - 1) * 20 + 1 }}</span> to <span class="font-medium">{{ min(pagination.current * 20, pagination.total_items) }}</span> of <span class="font-medium">{{ pagination.total_items }}</span> results
+                                            Showing <span class="font-medium">{{ (pagination.current - 1) * pagination.per_page + 1 }}</span> to <span class="font-medium">{{ min(pagination.current * pagination.per_page, pagination.total_items) }}</span> of <span class="font-medium">{{ pagination.total_items }}</span> results
                                         </p>
                                     </div>
                                     <div>
                                         <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
                                             {% if pagination.current > 1 %}
-                                                <a href="?main_tab=Recruitment Analyzer&page={{ pagination.current - 1 }}{{ sortParams }}" class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-slate-300 bg-white text-sm font-medium text-slate-500 hover:bg-slate-50">
+                                                <a href="?{{ navigationParams }}&page={{ pagination.current - 1 }}" class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-slate-300 bg-white text-sm font-medium text-slate-500 hover:bg-slate-50">
                                                      «
                                                 </a>
                                             {% endif %}
                                             
                                             {% for i in 1..pagination.total_pages %}
-                                                <a href="?main_tab=Recruitment Analyzer&page={{ i }}{{ sortParams }}" 
+                                                <a href="?{{ navigationParams }}&page={{ i }}"
                                                     class="relative inline-flex items-center px-4 py-2 border text-sm font-medium {{ i == pagination.current ? 'z-10 bg-blue-50 border-blue-500 text-blue-600' : 'bg-white border-slate-300 text-slate-500 hover:bg-slate-50' }}">
                                                     {{ i }}
                                                 </a>
                                             {% endfor %}
 
                                             {% if pagination.current < pagination.total_pages %}
-                                                <a href="?main_tab=Recruitment Analyzer&page={{ pagination.current + 1 }}{{ sortParams }}" class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-slate-300 bg-white text-sm font-medium text-slate-500 hover:bg-slate-50">
+                                                <a href="?{{ navigationParams }}&page={{ pagination.current + 1 }}" class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-slate-300 bg-white text-sm font-medium text-slate-500 hover:bg-slate-50">
                                                     »
                                                 </a>
                                             {% endif %}
