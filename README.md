@@ -71,7 +71,7 @@ When your account has a calendar and tyre supplier but no pilot under contract, 
 - **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile).
 - **SQLite** via PDO. Encrypted user emails (AES-256-GCM) and API tokens at rest.
 - **PHPMailer 7** for SMTP; in dev, writes `.eml` files to `var/mail/` instead.
-- **PHPUnit 11** — 210 tests, 526 assertions, all green at **PHPStan level 7**.
+- **PHPUnit 11** — 212 tests, 554 assertions, all green at **PHPStan level 7**.
 - **No framework.** Custom front controller + flat DI container in `bootstrap.php`. Routes in `config/routes.php`.
 - **Timestamps are stored and served as UTC**, then localised per-visitor in the browser (`<time data-localtime>` + `Intl`), so each user sees their own timezone with no server-side config.
 
@@ -174,7 +174,7 @@ Reviewed against the OWASP Top 10:2025.
 - Centralised authorisation gate (`requireAuth` / `requireAdmin` / `requireFreshAuth`); every mutating, admin, and debug route is gated server-side.
 - Security event logging (`SecurityLogger`) emits structured `[security]` lines for failed logins, rate-limit hits, and remember-token theft detection; admin mutations recorded in `audit_log`.
 - Prod never leaks exception detail to clients — errors are logged server-side under a short reference id and the user sees a generic message.
-- Prepared statements only (no string-concatenated SQL); Twig autoescaping on, no `|raw`.
+- Prepared statements only (no string-concatenated SQL); Twig autoescaping on, no `|raw`. Usernames are whitelisted at registration (`[A-Za-z0-9_]`, server-enforced) so attacker-controlled markup never reaches storage.
 - Pre-commit + CI secret scan (`bin/check_no_secrets.sh`).
 - PHPStan level 7 + PHPUnit suite required to pass before merge.
 

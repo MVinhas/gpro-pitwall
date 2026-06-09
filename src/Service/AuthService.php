@@ -54,6 +54,14 @@ class AuthService
             return ['success' => false, 'error' => 'Username must be 3–20 characters.'];
         }
 
+        // Whitelist mirrors the register form's client pattern (letters, digits,
+        // underscore). Excludes every HTML/JS metacharacter and avoids Unicode
+        // homoglyph/bidi spoofing, so stored XSS can't depend on a missed escape
+        // downstream. Server is the authority; the client pattern is only UX.
+        if (preg_match('/^[A-Za-z0-9_]+$/', $username) !== 1) {
+            return ['success' => false, 'error' => 'Username may only contain letters, numbers, and underscores.'];
+        }
+
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             return ['success' => false, 'error' => 'Invalid email address.'];
         }
