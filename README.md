@@ -55,6 +55,7 @@ Passwordless: register/login with a one-time 6-digit code emailed to you (no pas
 
 - **"Keep me signed in"** — opt-in persistent login backed by a selector+validator token (hashed at rest, rotated on every use for theft detection, rolling 30-day window). Survives the short PHP session and is revoked on logout.
 - **Step-up re-authentication** — sensitive actions (account deletion, API-token change) demand a fresh emailed code when the session was restored from a remember token rather than freshly verified.
+- **Username recall** — the login form remembers the last username used on that browser (client-side `localStorage`, same-origin, no server state), so persistent-login users who rarely type it don't have to remember it.
 
 ### No-driver prompt
 When your account has a calendar and tyre supplier but no pilot under contract, Cockpit / Race Strategy / Car Wear show a dedicated notice recommending the Recruitment Analyzer (with a direct link) instead of a cryptic error.
