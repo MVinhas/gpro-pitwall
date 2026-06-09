@@ -71,7 +71,7 @@ When your account has a calendar and tyre supplier but no pilot under contract, 
 - **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile).
 - **SQLite** via PDO. Encrypted user emails (AES-256-GCM) and API tokens at rest.
 - **PHPMailer 7** for SMTP; in dev, writes `.eml` files to `var/mail/` instead.
-- **PHPUnit 11** — 203 tests, 516 assertions, all green at **PHPStan level 7**.
+- **PHPUnit 11** — 210 tests, 526 assertions, all green at **PHPStan level 7**.
 - **No framework.** Custom front controller + flat DI container in `bootstrap.php`. Routes in `config/routes.php`.
 - **Timestamps are stored and served as UTC**, then localised per-visitor in the browser (`<time data-localtime>` + `Intl`), so each user sees their own timezone with no server-side config.
 
@@ -191,6 +191,7 @@ Request → public/index.php → Http\Router → Controller → Service → Repo
 - Controllers are thin. Logic lives in services. Services talk to repositories; repositories own SQL.
 - Cache adapters under `src/Cache/Adapter/` resolved by `src/Cache/CacheFactory`. Default driver `filesystem`.
 - `src/Service/GproApiFetcher` does raw HTTP. `src/Service/GproApiClient` composes it with cache + endpoint naming.
+- **Race-window cache keys.** Race-critical data (car wear, race setup, next-track profile) is namespaced by the current race window (`App\Support\RaceWindow`, computed from the clock against GPRO's weekly Tue/Fri schedule — no API call). The key rolls once per race weekend, so a stale read auto-refreshes a single endpoint at the boundary instead of serving last-window data within `CACHE_TTL_SHORT`. Schedule configurable via `GPRO_RACE_DAYS` / `GPRO_RACE_BOUNDARY_HOUR` / `GPRO_RACE_TZ`; empty `GPRO_RACE_DAYS` disables it.
 
 ---
 

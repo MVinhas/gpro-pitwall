@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Service;
 
 use App\Cache\CacheInterface;
+use App\Support\RaceWindow;
+use DateTimeImmutable;
 use RuntimeException;
 
 /**
@@ -107,19 +109,32 @@ final class GproApiClient
             '/gb/backend/api/v2/TrackProfile',
             $this->ttlShort(),
             $forceRefresh,
+            epoch: $this->raceWindow(),
         );
     }
 
     /** @return array<string, mixed> */
     public function getCarData(bool $forceRefresh = false): array
     {
-        return $this->getCached('car_data', '/gb/backend/api/v2/UpdateCar', $this->ttlShort(), $forceRefresh);
+        return $this->getCached(
+            'car_data',
+            '/gb/backend/api/v2/UpdateCar',
+            $this->ttlShort(),
+            $forceRefresh,
+            epoch: $this->raceWindow(),
+        );
     }
 
     /** @return array<string, mixed> */
     public function getRaceSetup(bool $forceRefresh = false): array
     {
-        return $this->getCached('race_setup', '/gb/backend/api/v2/RaceSetup', $this->ttlShort(), $forceRefresh);
+        return $this->getCached(
+            'race_setup',
+            '/gb/backend/api/v2/RaceSetup',
+            $this->ttlShort(),
+            $forceRefresh,
+            epoch: $this->raceWindow(),
+        );
     }
 
     /** @return array<string, mixed> */
@@ -314,9 +329,21 @@ final class GproApiClient
      *   payloads never leak across accounts.
      * @return array<string, mixed>
      */
-    private function getCached(string $key, string $endpoint, int $ttl, bool $force, bool $shared = false): array
-    {
+    private function getCached(
+        string $key,
+        string $endpoint,
+        int $ttl,
+        bool $force,
+        bool $shared = false,
+        string $epoch = '',
+    ): array {
         $key = $shared ? $key : $this->userKey($key);
+        // Race-critical endpoints pass a non-empty epoch so the key rolls when
+        // a new race weekend opens — a window miss triggers exactly one fresh
+        // fetch. Empty epoch (the default) keeps the plain TTL-only behaviour.
+        if ($epoch !== '') {
+            $key .= ':w' . $epoch;
+        }
         if (!$force) {
             $cached = $this->cache->get($key);
             if ($cached !== null) {
@@ -372,5 +399,26 @@ final class GproApiClient
     private function ttlShort(): int
     {
         return (int) ($_ENV['CACHE_TTL_SHORT'] ?? 259200);
+    }
+
+    /**
+     * Current race-window id used to namespace race-critical cache keys. Pure
+     * clock arithmetic against GPRO's fixed weekly schedule — no API call.
+     * Configurable via env (days, boundary hour, timezone); an empty
+     * GPRO_RACE_DAYS disables windowing and falls back to the plain TTL.
+     */
+    private function raceWindow(): string
+    {
+        $days = array_values(array_filter(
+            array_map('intval', explode(',', (string) ($_ENV['GPRO_RACE_DAYS'] ?? '2,5'))),
+            static fn (int $d): bool => $d >= 1 && $d <= 7,
+        ));
+
+        return RaceWindow::idFor(
+            new DateTimeImmutable('now'),
+            $days,
+            (int) ($_ENV['GPRO_RACE_BOUNDARY_HOUR'] ?? 0),
+            (string) ($_ENV['GPRO_RACE_TZ'] ?? 'Europe/London'),
+        );
     }
 }

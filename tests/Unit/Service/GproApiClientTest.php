@@ -7,6 +7,8 @@ namespace App\Tests\Unit\Service;
 use App\Cache\Adapter\FilesystemCache;
 use App\Service\GproApiClient;
 use App\Service\GproApiFetcher;
+use App\Support\RaceWindow;
+use DateTimeImmutable;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -182,5 +184,40 @@ final class GproApiClientTest extends TestCase
     public function testHasPilotFalseWhenDriIdZero(): void
     {
         $this->assertFalse($this->clientWithOffice('token-a', ['driId' => '0'])->hasPilot());
+    }
+
+    /**
+     * Race-critical data (car, setup, next-track profile) is namespaced by the
+     * current race window so it auto-rolls each race weekend. Proves the read
+     * resolves the windowed key, not the bare one. Default schedule (Tue/Fri,
+     * midnight UK) is pinned via env so client and test agree on the window.
+     */
+    public function testCarDataReadsFromTheRaceWindowedKey(): void
+    {
+        $prev = $_ENV['GPRO_RACE_DAYS'] ?? null;
+        $_ENV['GPRO_RACE_DAYS'] = '2,5';
+
+        try {
+            $window = RaceWindow::idFor(new DateTimeImmutable('now'), [2, 5], 0, 'Europe/London');
+            $windowedKey = 'u' . GproApiClient::scopeFor('token-a') . ':car_data:w' . $window;
+            $this->cache->set($windowedKey, ['carClass' => 7], 3600);
+
+            // The bare (un-windowed) key must be ignored — only the windowed
+            // one counts, otherwise stale pre-roll data would leak through.
+            $this->cache->set('u' . GproApiClient::scopeFor('token-a') . ':car_data', ['carClass' => 1], 3600);
+
+            $client = $this->client();
+            $client->setToken('token-a');
+
+            // Cache hit on the windowed key short-circuits before any HTTP
+            // (the fetcher points at an unreachable host).
+            $this->assertSame(7, $client->getCarData()['carClass']);
+        } finally {
+            if ($prev === null) {
+                unset($_ENV['GPRO_RACE_DAYS']);
+            } else {
+                $_ENV['GPRO_RACE_DAYS'] = $prev;
+            }
+        }
     }
 }

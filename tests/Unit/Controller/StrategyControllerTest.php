@@ -15,6 +15,8 @@ use App\Service\GproDataMapper;
 use App\Service\RaceWeatherService;
 use App\Service\SetupCalculatorService;
 use App\Service\StrategyService;
+use App\Support\RaceWindow;
+use DateTimeImmutable;
 use PDO;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -55,10 +57,18 @@ final class StrategyControllerTest extends TestCase
         @rmdir($this->cacheDir);
     }
 
+    /** Cache keys the client namespaces by race window — must match here. */
+    private const array RACE_WINDOWED = ['next_race_profile', 'car_data', 'race_setup'];
+
     /** @param array<string, mixed> $value */
     private function seed(string $key, array $value): void
     {
-        $this->cache->set('u' . GproApiClient::scopeFor(self::TOKEN) . ':' . $key, $value, 3600);
+        $cacheKey = 'u' . GproApiClient::scopeFor(self::TOKEN) . ':' . $key;
+        if (in_array($key, self::RACE_WINDOWED, true)) {
+            $window = RaceWindow::idFor(new DateTimeImmutable('now'), [2, 5], 0, 'Europe/London');
+            $cacheKey .= ':w' . $window;
+        }
+        $this->cache->set($cacheKey, $value, 3600);
     }
 
     private function controller(): StrategyController
