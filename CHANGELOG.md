@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Each entry mirrors its annotated release tag.
 
+## [1.2.2] - 2026-06-09
+- Fix Testing-tab car-wear projection reading ~2× too high. Testing laps wear the car at roughly half the per-lap rate of a race at the same track; `CarWearService::testingWearRates()` now applies a `TESTING_WEAR_FACTOR` (0.5), calibrated against a real 30-lap session where observed wear came in at a uniform ~0.53× of the unscaled estimate across all 11 parts. (Part level was ruled out: its wear factors span only ~1.6% end-to-end, far too small to explain the gap, and the game's model applies level only as a clear-track-risk modifier.)
+
 ## [1.2.1] - 2026-06-09
 - Fix the Testing tab not refreshing on re-sync: `GproSyncService` now force-warms the `GetTesting` feed alongside the other race-prep endpoints, so a manual sync updates the testing track, points, and setup instead of serving a stale cache entry until TTL.
 

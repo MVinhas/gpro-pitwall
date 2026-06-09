@@ -132,4 +132,50 @@ final class CarWearServiceTest extends TestCase
 
         $this->assertArrayHasKey('error', $result);
     }
+
+    public function testTestingWearRatesScaleFullRaceBaseByLapsDriverAndTestingFactor(): void
+    {
+        $db = new PDO('sqlite::memory:');
+        $db->exec(
+            "CREATE TABLE tracks (id INTEGER PRIMARY KEY, name TEXT,
+             laps INTEGER, wear_chassis REAL, wear_engine REAL, wear_fwing REAL,
+             wear_rwing REAL, wear_underbody REAL, wear_sidepod REAL,
+             wear_cooling REAL, wear_gearbox REAL, wear_brakes REAL,
+             wear_suspension REAL, wear_electronics REAL)"
+        );
+        // 100-lap track, engine full-race base 50. Empty driver → factor 1.
+        $db->exec(
+            "INSERT INTO tracks (id, name, laps, wear_chassis, wear_engine, wear_fwing,
+             wear_rwing, wear_underbody, wear_sidepod, wear_cooling, wear_gearbox,
+             wear_brakes, wear_suspension, wear_electronics)
+             VALUES (1, 'Testopolis', 100, 30, 50, 20, 20, 20, 20, 20, 30, 40, 20, 10)"
+        );
+
+        $result = $this->service($db)->testingWearRates(
+            ['id' => 0, 'name' => 'Testopolis'],
+            ['usaEngine' => 7],
+            [],
+        );
+
+        // per-lap engine = base(50) * driverFactor(1) * 0.5 / laps(100) = 0.25.
+        $this->assertEqualsWithDelta(0.25, $result['parts']['Engine']['per_lap'], 1e-9);
+        // A 30-lap session therefore adds 0.25 * 30 = 7.5%.
+        $this->assertEqualsWithDelta(7.5, $result['parts']['Engine']['per_lap'] * 30, 1e-9);
+        $this->assertSame(7, $result['parts']['Engine']['start']);
+        $this->assertSame(100, $result['race_laps']);
+    }
+
+    public function testTestingWearRatesReturnsErrorWhenTrackUnknown(): void
+    {
+        $db = new PDO('sqlite::memory:');
+        $db->exec("CREATE TABLE tracks (id INTEGER PRIMARY KEY, name TEXT, laps INTEGER)");
+
+        $result = $this->service($db)->testingWearRates(
+            ['id' => 0, 'name' => 'Nowhere'],
+            [],
+            [],
+        );
+
+        $this->assertArrayHasKey('error', $result);
+    }
 }

@@ -150,14 +150,23 @@ class CarWearService
     }
 
     /**
+     * Testing laps wear the car at roughly half the per-lap rate of a race at
+     * the same track. Calibrated against a real 30-lap session (2026-06): with
+     * the full-race base ÷ race-laps × driver factor already applied, observed
+     * wear came in at a uniform ~0.53× across all 11 parts — a single flat
+     * factor, independent of part level (the level factors span only ~1.6% end
+     * to end, so they can't account for it).
+     */
+    private const float TESTING_WEAR_FACTOR = 0.5;
+
+    /**
      * Per-lap car wear (%) for a testing session at the given track, per part,
-     * already folding in the driver wear multiplier.
+     * already folding in the driver wear multiplier and the testing factor.
      *
      * The wear_* columns hold full-race-distance wear, so we divide by the
-     * track's race lap count to get a per-lap rate. Testing has no clear-track
-     * risk knob, so the race formula's risk term is fixed at 0
-     * (levelFactor ** 0 == 1). Estimate: testing per-lap wear is taken as equal
-     * to race per-lap wear at the same track.
+     * track's race lap count to get a per-lap race rate, then scale by
+     * TESTING_WEAR_FACTOR. Testing has no clear-track risk, and part level only
+     * modulates risk-driven wear in the game's model, so neither enters here.
      *
      * @param array<string, mixed> $trackData
      * @param array<string, mixed> $carData
@@ -187,7 +196,7 @@ class CarWearService
         foreach (self::PARTS_MAP as $label => $map) {
             $trackBase = (float) ($trackDb[$map['db']] ?? 0.0);
             $startWear = (int) ($carData[$map['wear']] ?? 0);
-            $perLap    = ($trackBase * $driverFactor) / $raceLaps;
+            $perLap    = ($trackBase * $driverFactor * self::TESTING_WEAR_FACTOR) / $raceLaps;
 
             $parts[$label] = [
                 'start'   => $startWear,
