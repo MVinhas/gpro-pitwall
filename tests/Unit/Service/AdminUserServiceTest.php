@@ -151,7 +151,7 @@ final class AdminUserServiceTest extends TestCase
         $this->service($users, $this->createMock(AuditLogRepository::class))->restore(1, 5);
     }
 
-    public function testResendVerificationDelegatesToAuthLoginAndAudits(): void
+    public function testResendVerificationDelegatesToAuthResendCodeAndAudits(): void
     {
         $users = $this->createMock(UserRepository::class);
         $users->method('findById')->willReturn(['id' => 5, 'username' => 'carol']);
@@ -161,10 +161,12 @@ final class AdminUserServiceTest extends TestCase
               ->method('record')
               ->with(1, 'resend_verification', 5);
 
+        // Admin resend goes through resendCode (no captcha, but still capped),
+        // not the public login() flow.
         $auth = $this->createMock(AuthService::class);
         $auth->expects($this->once())
-             ->method('login')
-             ->with('carol', '10.0.0.5');
+             ->method('resendCode')
+             ->with(5);
 
         $this->service($users, $audit, $auth)
              ->resendVerification(actorId: 1, targetId: 5, ip: '10.0.0.5');

@@ -91,9 +91,9 @@ final class AdminUserService
 
     /**
      * Resends the email verification code for a user who hasn't completed
-     * registration yet. Delegates to AuthService::login() — same flow as
-     * the public login form, so the existing rate limit and code TTL
-     * apply transparently.
+     * registration yet. Delegates to AuthService::resendCode(), which skips the
+     * public captcha gate (the admin is already authorised) but still honours
+     * the per-account code cap and TTL.
      */
     public function resendVerification(int $actorId, int $targetId, string $ip): void
     {
@@ -102,12 +102,7 @@ final class AdminUserService
             throw new RuntimeException('User not found.');
         }
 
-        $username = (string) ($target['username'] ?? '');
-        if ($username === '') {
-            throw new RuntimeException('User has no username.');
-        }
-
-        $this->auth->login($username, $ip);
+        $this->auth->resendCode($targetId);
         $this->audit->record($actorId, 'resend_verification', $targetId);
     }
 

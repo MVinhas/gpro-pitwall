@@ -6,6 +6,11 @@ require_once __DIR__ . '/vendor/autoload.php';
 
 \App\Support\Env::load(__DIR__ . '/.env');
 
+// Timestamps are stored and rendered as UTC (SQLite datetime('now')). Pin
+// PHP's default timezone to UTC so those naive strings stay unambiguous on any
+// host. Per-visitor localisation happens client-side (see assets/js/localtime).
+date_default_timezone_set('UTC');
+
 $container = [];
 $container['settings'] = [
     'is_dev' => ($_ENV['IS_DEV'] ?? 'false') === 'true',
@@ -200,6 +205,7 @@ $container['service.auth_service']  = new \App\Service\AuthService(
     (int)$_ENV['VERIFICATION_CODE_TTL_SECONDS'] ?: 600,
     (int)$_ENV['VERIFICATION_MAX_ATTEMPTS'] ?: 5,
     (int) ($_ENV['SYNC_MIN_INTERVAL_SECONDS'] ?? 600),
+    (int) ($_ENV['MAX_CODES_PER_USER_PER_HOUR'] ?? 3),
 );
 $container['service.data_mapper'] = new GproDataMapper();
 

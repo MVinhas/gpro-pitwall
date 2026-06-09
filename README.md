@@ -71,7 +71,7 @@ When your account has a calendar and tyre supplier but no pilot under contract, 
 - **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile).
 - **SQLite** via PDO. Encrypted user emails (AES-256-GCM) and API tokens at rest.
 - **PHPMailer 7** for SMTP; in dev, writes `.eml` files to `var/mail/` instead.
-- **PHPUnit 11** — 200 tests, 508 assertions, all green at **PHPStan level 7**.
+- **PHPUnit 11** — 203 tests, 516 assertions, all green at **PHPStan level 7**.
 - **No framework.** Custom front controller + flat DI container in `bootstrap.php`. Routes in `config/routes.php`.
 
 ---
@@ -169,7 +169,7 @@ Reviewed against the OWASP Top 10:2025.
 - `email_hash` (HMAC-SHA256) used for lookups so an attacker reading the DB can't enumerate users by email.
 - Security headers in `public/.htaccess`: Content-Security-Policy, HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy. HSTS + cookie Secure flag trust `X-Forwarded-Proto` so they still apply behind a TLS-terminating proxy.
 - Session cookies HttpOnly + Secure (when HTTPS) + SameSite=Lax. Persistent "remember me" tokens store only a hashed validator, rotate on use, and are revocable.
-- Login rate-limited per IP; verification codes have a TTL + max-attempts. Sensitive actions require step-up re-authentication.
+- Login + registration are reCAPTCHA-gated and rate-limited per IP; verification codes have a TTL + max-attempts. A per-account code cap (`MAX_CODES_PER_USER_PER_HOUR`, default 3) bounds how many emails any one user can receive in an hour, so blind username-guessing on the login form can't spam real users regardless of source IP. A capped `/resend_code` link covers the rare missed-delivery case. Sensitive actions require step-up re-authentication.
 - Centralised authorisation gate (`requireAuth` / `requireAdmin` / `requireFreshAuth`); every mutating, admin, and debug route is gated server-side.
 - Security event logging (`SecurityLogger`) emits structured `[security]` lines for failed logins, rate-limit hits, and remember-token theft detection; admin mutations recorded in `audit_log`.
 - Prod never leaks exception detail to clients — errors are logged server-side under a short reference id and the user sees a generic message.

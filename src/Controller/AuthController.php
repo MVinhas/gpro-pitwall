@@ -24,6 +24,7 @@ class AuthController
         echo $this->twig->render('auth/login.twig', [
             'flash' => $_SESSION['flash'] ?? null,
             'csrf_token' => $_SESSION['csrf_token'] ?? '',
+            'recaptcha_site_key' => $this->recaptchaSiteKey,
         ]);
 
         unset($_SESSION['flash']);
@@ -64,9 +65,10 @@ class AuthController
         $this->redirectIfLoggedIn();
 
         $username = trim((string) $request->post('username'));
+        $token = (string) $request->post('g-recaptcha-response');
         $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
 
-        $result = $this->auth->login($username, $ip);
+        $result = $this->auth->login($username, $token, $ip);
 
         if (!$result['success']) {
             $_SESSION['flash'] = $result['error'];
@@ -137,6 +139,32 @@ class AuthController
         }
 
         $_SESSION['flash'] = 'Invalid code or expired.';
+        header('Location: /verify');
+        exit;
+    }
+
+    /**
+     * Resend the verification code for an in-progress login/registration. The
+     * target is the pending user id already in the session — never a value the
+     * client supplies — so this exposes no enumeration or targeting surface.
+     * The flash is generic and identical whether or not a send actually fired
+     * (the per-account cap may suppress it).
+     */
+    public function resendCode(): void
+    {
+        $this->redirectIfLoggedIn();
+
+        $pendingUserId = (int) ($_SESSION['auth_pending_user_id'] ?? 0);
+        if ($pendingUserId === 0) {
+            header('Location: /login');
+            exit;
+        }
+
+        $this->auth->resendCode($pendingUserId);
+
+        $_SESSION['flash'] =
+            'If your account is awaiting a code, a new one has been sent. '
+            . 'Check your inbox and spam folder.';
         header('Location: /verify');
         exit;
     }

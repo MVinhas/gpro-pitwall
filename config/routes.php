@@ -15,6 +15,7 @@ return function (Router $router): void {
     $router->add('POST', '/login_request', 'controller.auth', 'handleLoginRequest');
     $router->add('POST', '/register_request', 'controller.auth', 'handleRegister');
     $router->add('POST', '/login_verify', 'controller.auth', 'handleVerify');
+    $router->add('POST', '/resend_code', 'controller.auth', 'resendCode');
     $router->add('POST', '/reauth_verify', 'controller.auth', 'handleReauth');
     $router->add('POST', '/logout', 'controller.auth', 'logout');
 
