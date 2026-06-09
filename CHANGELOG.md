@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Each entry mirrors its annotated release tag.
 
+## [1.1.26] - 2026-06-09
+- Login form remembers the last username on that browser (client-side, no server state).
+- Greet the signed-in user with "Hello, <username>" beside Last sync in the header.
+
 ## [1.1.25] - 2026-06-09
 - Add this CHANGELOG, backfilled from the release tags.
 

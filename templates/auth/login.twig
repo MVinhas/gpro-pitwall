@@ -13,7 +13,7 @@
 
         <label class="block">
             <span class="text-sm font-medium text-slate-700">Username</span>
-            <input required type="text" name="username" class="form-input mt-1">
+            <input required type="text" name="username" id="login-username" autocomplete="username" class="form-input mt-1">
         </label>
 
         <label class="flex items-center gap-2 text-sm text-slate-700">
@@ -40,4 +40,27 @@
 {% if recaptcha_site_key %}
 <script src="https://www.google.com/recaptcha/api.js" async defer></script>
 {% endif %}
+
+<script>
+// Remember the last username on this browser so returning users (who rely on
+// persistent login tokens and may forget their username) don't have to recall it.
+// Low-sensitivity value, same-origin only; no server state.
+(() => {
+    const KEY = 'gpro.lastUsername';
+    const input = document.getElementById('login-username');
+    if (!input) return;
+    try {
+        if (!input.value) {
+            const saved = localStorage.getItem(KEY);
+            if (saved) input.value = saved;
+        }
+    } catch (_) { /* storage blocked — skip prefill */ }
+    input.form?.addEventListener('submit', () => {
+        try {
+            const v = input.value.trim();
+            if (v) localStorage.setItem(KEY, v);
+        } catch (_) { /* storage blocked — nothing to persist */ }
+    });
+})();
+</script>
 {% endblock %}
