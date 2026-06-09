@@ -1,0 +1,24 @@
+{% extends "layout.twig" %}
+
+{% block content %}
+<div class="mx-auto max-w-lg px-4 py-16 text-center">
+    <p class="text-7xl font-bold tabular-nums text-slate-300">{{ status }}</p>
+    <h1 class="mt-4 text-2xl font-bold text-slate-900">{{ title }}</h1>
+    <p class="mt-2 text-slate-600">{{ message }}</p>
+
+    {% if reference %}
+        <p class="mt-4 text-xs text-slate-500">
+            Reference: <span class="font-mono">{{ reference }}</span>
+        </p>
+    {% endif %}
+
+    <div class="mt-8 flex items-center justify-center gap-3">
+        {% if is_logged_in %}
+            <a href="/" class="btn btn-md btn-primary">Back to dashboard</a>
+        {% else %}
+            <a href="/" class="btn btn-md btn-primary">Back to home</a>
+            <a href="/login" class="btn btn-md btn-secondary">Log in</a>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

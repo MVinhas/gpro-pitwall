@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Each entry mirrors its annotated release tag.
 
+## [1.1.30] - 2026-06-09
+- Styled error pages (403/404/500) replacing the bare-text responses. The auth gate and router now throw a typed `HttpException` that the front controller renders through the normal layout; the 500 handler still hides internals behind a reference id.
+
 ## [1.1.29] - 2026-06-09
 - **Security:** stop interpolating the username into the admin restore form's inline `confirm()`; read it from a `data-` attribute so a legacy username containing quotes can't break out and execute in an admin session.
 
