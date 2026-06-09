@@ -78,7 +78,7 @@
                             <td class="px-4 py-3 text-right space-x-2 whitespace-nowrap">
                                 {% if is_deleted %}
                                     <form method="POST" action="/admin/users/restore" class="inline"
-                                          onsubmit="return confirm('Restore {{ u.username }}? They will be able to log in again.');">
+                                          data-confirm-restore="{{ u.username }}">
                                         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                                         <input type="hidden" name="user_id" value="{{ u.id }}">
                                         <button class="btn btn-sm btn-secondary" type="submit">Restore</button>
@@ -152,4 +152,18 @@
     </div>
 
 </div>
+
+<script>
+// Restore confirm: the username is read from a data attribute and passed to
+// confirm() as a plain string argument — never interpolated into inline JS —
+// so a legacy username containing quotes can't break out and execute.
+document.querySelectorAll('form[data-confirm-restore]').forEach((form) => {
+    form.addEventListener('submit', (e) => {
+        const name = form.dataset.confirmRestore;
+        if (!confirm('Restore ' + name + '? They will be able to log in again.')) {
+            e.preventDefault();
+        }
+    });
+});
+</script>
 {% endblock %}

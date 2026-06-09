@@ -175,7 +175,7 @@ Reviewed against the OWASP Top 10:2025.
 - Centralised authorisation gate (`requireAuth` / `requireAdmin` / `requireFreshAuth`); every mutating, admin, and debug route is gated server-side.
 - Security event logging (`SecurityLogger`) emits structured `[security]` lines for failed logins, rate-limit hits, and remember-token theft detection; admin mutations recorded in `audit_log`.
 - Prod never leaks exception detail to clients — errors are logged server-side under a short reference id and the user sees a generic message.
-- Prepared statements only (no string-concatenated SQL); Twig autoescaping on, no `|raw`. Usernames are whitelisted at registration (`[A-Za-z0-9_]`, server-enforced) so attacker-controlled markup never reaches storage.
+- Prepared statements only (no string-concatenated SQL). Output XSS defence is Twig autoescaping (on everywhere, no `|raw`); user data is never interpolated into inline JS/event-handler attributes. New registrations additionally whitelist the username (`[A-Za-z0-9_]`, server-enforced), narrowing what can be stored — though that gate is not retroactive, so autoescaping remains the guarantee for pre-existing rows.
 - Pre-commit + CI secret scan (`bin/check_no_secrets.sh`).
 - PHPStan level 7 + PHPUnit suite required to pass before merge.
 
