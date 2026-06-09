@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Each entry mirrors its annotated release tag.
 
+## [1.1.31] - 2026-06-09
+- Fix the track selector defaulting to "Buenos Aires" (first in the config list) on every page. With no explicit `track` in the URL it now defaults to the user's actual next-race track from the cached Office data, falling back to the first known track only pre-first-sync.
+
 ## [1.1.30] - 2026-06-09
 - Styled error pages (403/404/500) replacing the bare-text responses. The auth gate and router now throw a typed `HttpException` that the front controller renders through the normal layout; the 500 handler still hides internals behind a reference id.
 

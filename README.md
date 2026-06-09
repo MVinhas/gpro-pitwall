@@ -72,7 +72,7 @@ When your account has a calendar and tyre supplier but no pilot under contract, 
 - **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile).
 - **SQLite** via PDO. Encrypted user emails (AES-256-GCM) and API tokens at rest.
 - **PHPMailer 7** for SMTP; in dev, writes `.eml` files to `var/mail/` instead.
-- **PHPUnit 11** — 216 tests, 560 assertions, all green at **PHPStan level 7**.
+- **PHPUnit 11** — 220 tests, 564 assertions, all green at **PHPStan level 7**.
 - **No framework.** Custom front controller + flat DI container in `bootstrap.php`. Routes in `config/routes.php`.
 - **Timestamps are stored and served as UTC**, then localised per-visitor in the browser (`<time data-localtime>` + `Intl`), so each user sees their own timezone with no server-side config.
 
