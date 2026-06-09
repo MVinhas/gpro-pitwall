@@ -157,10 +157,10 @@ final class CarWearServiceTest extends TestCase
             [],
         );
 
-        // per-lap engine = base(50) * driverFactor(1) * 0.5 / laps(100) = 0.25.
-        $this->assertEqualsWithDelta(0.25, $result['parts']['Engine']['per_lap'], 1e-9);
-        // A 30-lap session therefore adds 0.25 * 30 = 7.5%.
-        $this->assertEqualsWithDelta(7.5, $result['parts']['Engine']['per_lap'] * 30, 1e-9);
+        // per-lap engine = base(50) * driverFactor(1) * 0.53 / laps(100) = 0.265.
+        $this->assertEqualsWithDelta(0.265, $result['parts']['Engine']['per_lap'], 1e-9);
+        // A 30-lap session therefore adds 0.265 * 30 = 7.95%.
+        $this->assertEqualsWithDelta(7.95, $result['parts']['Engine']['per_lap'] * 30, 1e-9);
         $this->assertSame(7, $result['parts']['Engine']['start']);
         $this->assertSame(100, $result['race_laps']);
     }

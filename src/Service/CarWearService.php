@@ -151,13 +151,13 @@ class CarWearService
 
     /**
      * Testing laps wear the car at roughly half the per-lap rate of a race at
-     * the same track. Calibrated against a real 30-lap session (2026-06): with
-     * the full-race base ÷ race-laps × driver factor already applied, observed
-     * wear came in at a uniform ~0.53× across all 11 parts — a single flat
-     * factor, independent of part level (the level factors span only ~1.6% end
-     * to end, so they can't account for it).
+     * the same track. With the full-race base ÷ race-laps × driver factor
+     * applied, the residual is a single flat factor, independent of part level
+     * (the level factors span only ~1.6% end to end, so they can't account for
+     * it). Calibrated against two real sessions (2026-06): a 30-lap and a
+     * 100-lap run both yield a best-fit factor of ~0.533.
      */
-    private const float TESTING_WEAR_FACTOR = 0.5;
+    private const float TESTING_WEAR_FACTOR = 0.53;
 
     /**
      * Per-lap car wear (%) for a testing session at the given track, per part,
