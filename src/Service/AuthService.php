@@ -24,7 +24,8 @@ class AuthService
         private readonly SecurityLogger $securityLog,
         private readonly int $codeTtlSeconds = 600,
         private readonly int $maxAttempts = 5,
-        private readonly int $syncMinIntervalSeconds = 600
+        private readonly int $syncMinIntervalSeconds = 600,
+        private readonly int $maxCodesPerUserPerHour = 3
     ) {
     }
 
@@ -75,9 +76,19 @@ class AuthService
      * Handles Existing User Login
      */
     /** @return array{success: true, user_id: int}|array{success: false, error: string} */
-    public function login(string $username, string $ip): array
+    public function login(string $username, string $captchaToken, string $ip): array
     {
         $username = trim($username);
+
+        // Captcha first: makes blind username-guessing non-automatable, so an
+        // attacker can't script the login form to ping whichever real users
+        // happen to match their guesses.
+        if (!$this->captcha->verify($captchaToken, $ip)) {
+            return [
+                'success' => false,
+                'error' => 'Security check failed. Please refresh and try again.',
+            ];
+        }
 
         $key = 'login_ip_' . md5($ip);
         if ($this->limiter->increment($key, 3600) > 10) {
@@ -99,6 +110,23 @@ class AuthService
         $this->generateAndSendCode($user);
 
         return ['success' => true, 'user_id' => $user['id']];
+    }
+
+    /**
+     * Re-send a code for a login/registration already in progress (the user is
+     * sitting on /verify). Bounded by the same per-account cap as the first
+     * send, so the resend link can't become a flood vector. The caller only
+     * ever knows a pending user id from its own session, so there's no
+     * enumeration surface here.
+     */
+    public function resendCode(int $userId): bool
+    {
+        $user = $this->users->findById($userId);
+        if (!$user) {
+            return false;
+        }
+
+        return $this->generateAndSendCode($user);
     }
 
     /**
@@ -273,9 +301,24 @@ class AuthService
         }
     }
 
-    /** @param array<string, mixed> $user */
-    private function generateAndSendCode(array $user): void
+    /**
+     * Generates a one-time code and emails it — unless this account has already
+     * hit its per-hour code cap. The cap is keyed on the resolved user id (not
+     * IP, not the submitted username), so a real user can't be emailed more
+     * than $maxCodesPerUserPerHour times an hour no matter how many IPs an
+     * attacker rotates through while guessing usernames. Returns false when the
+     * cap suppressed the send; callers keep their response generic regardless.
+     *
+     * @param array<string, mixed> $user
+     */
+    private function generateAndSendCode(array $user): bool
     {
+        $capKey = 'login_code_user_' . (int) $user['id'];
+        if ($this->limiter->increment($capKey, 3600) > $this->maxCodesPerUserPerHour) {
+            $this->securityLog->event('login_code_capped', ['user_id' => (int) $user['id']]);
+            return false;
+        }
+
         $this->tokens->deleteExpired(
             (new DateTimeImmutable())->format('Y-m-d H:i:s')
         );
@@ -291,6 +334,8 @@ class AuthService
 
         $email = $this->getDecryptedEmail((int) $user['id']);
         $this->mailer->sendVerificationCode($email, $code);
+
+        return true;
     }
 
     /**

@@ -245,6 +245,96 @@ final class AuthServiceTest extends TestCase
         $this->assertStringContainsString('Username', $second['error']);
     }
 
+    public function testLoginIsCappedPerAccountRegardlessOfIp(): void
+    {
+        // A registered user. register() itself sends one code (count = 1).
+        $reg = $this->auth->register('mallory', 'mallory@example.invalid', '', '127.0.0.1');
+        $this->assertTrue($reg['success']);
+
+        // The cap is 3 codes/hour per account. register() already burned one,
+        // so two more logins succeed in sending, the rest are suppressed even
+        // though each comes from a different IP (the targeting is the username,
+        // not the source address).
+        $this->auth->login('mallory', '', '10.0.0.1');
+        $this->auth->login('mallory', '', '10.0.0.2');
+        $this->auth->login('mallory', '', '10.0.0.3');
+        $this->auth->login('mallory', '', '10.0.0.4');
+
+        // 1 (register) + 2 (logins under cap) = 3 codes stored. The 4th and 5th
+        // sends were suppressed by the per-account cap. Token rows are the
+        // reliable send counter (the .eml filename is second-resolution and
+        // would collide within a single test).
+        $this->assertSame(3, $this->codeSendCount());
+    }
+
+    public function testLoginRejectedWhenCaptchaFails(): void
+    {
+        // A captcha that always fails (non-empty secret, so isDev bypass is off
+        // and an empty token is rejected).
+        $auth = $this->authWithFailingCaptcha();
+
+        $result = $auth->login('whoever', '', '127.0.0.1');
+
+        $this->assertFalse($result['success']);
+        $this->assertStringContainsString('Security check', $result['error']);
+        // No code stored — the send is downstream of the captcha gate.
+        $this->assertSame(0, $this->codeSendCount());
+    }
+
+    public function testResendCodeRidesTheSamePerAccountCap(): void
+    {
+        // register() sends one (count = 1). Resending twice reaches the cap of
+        // 3; the third resend is suppressed.
+        $reg = $this->auth->register('rena', 'rena@example.invalid', '', '127.0.0.1');
+        $userId = $reg['user_id'];
+
+        $this->assertTrue($this->auth->resendCode($userId));   // 2
+        $this->assertTrue($this->auth->resendCode($userId));   // 3
+        $this->assertFalse($this->auth->resendCode($userId));  // capped
+
+        $this->assertSame(3, $this->codeSendCount());
+    }
+
+    private function codeSendCount(): int
+    {
+        return (int) $this->db->query('SELECT COUNT(*) FROM verification_tokens')->fetchColumn();
+    }
+
+    private function authWithFailingCaptcha(): AuthService
+    {
+        $appSecret = 'integration-test-secret-do-not-use-in-prod';
+        $emailCrypto    = new EmailCrypto($appSecret);
+        $apiTokenCrypto = new ApiTokenCrypto($appSecret);
+        $userRepo       = new UserRepository($this->db, $emailCrypto, $apiTokenCrypto);
+        $tokenRepo      = new TokenRepository($this->db);
+        $cache          = new FilesystemCache($this->cacheDir);
+        $limiter        = new RateLimiterService($cache);
+        // Non-empty secret + not-dev → verify() rejects the empty token without
+        // ever reaching Google (token === '' short-circuits to false).
+        $captcha        = new ReCaptchaService(secretKey: 'x', isDev: false);
+        $mailer         = new EmailService([
+            'host' => 'localhost', 'port' => 25,
+            'from' => 'test@example.invalid', 'from_name' => 'GPRO Test',
+            'is_dev' => true, 'mail_dir' => $this->mailDir,
+        ]);
+        $apiClient = new \App\Service\GproApiClient(
+            new \App\Service\GproApiFetcher(['base_url' => 'http://127.0.0.1:9']),
+            $cache,
+        );
+        $sync = new GproSyncService($apiClient, $userRepo, $cache);
+        $persistentLogin = new \App\Service\PersistentLoginService(
+            new \App\Repository\PersistentTokenRepository($this->db),
+            new \App\Tests\Support\ArrayCookieJar(),
+            secure: false,
+        );
+
+        return new AuthService(
+            $userRepo, $tokenRepo, $mailer, $limiter, $captcha,
+            $emailCrypto, $appSecret, $sync, $persistentLogin,
+            new \App\Service\SecurityLogger(static fn(string $l) => null),
+        );
+    }
+
     /**
      * Scan the freshly-written .eml in mailDir for the subject's leading
      * 6-digit verification code.

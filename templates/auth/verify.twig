@@ -80,8 +80,15 @@
             {% endif %}
         </form>
 
-        <div class="mt-6 text-center">
-            <a href="/login" class="text-xs text-slate-400 hover:text-slate-600">
+        <div class="mt-6 text-center space-y-2">
+            <form method="POST" action="/resend_code" data-disable-on-submit>
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button type="submit" data-busy-text="Sending…"
+                        class="text-xs text-blue-600 hover:underline">
+                    Didn't get the code? Resend it
+                </button>
+            </form>
+            <a href="/login" class="block text-xs text-slate-400 hover:text-slate-600">
                 Start over / Use different account
             </a>
         </div>
