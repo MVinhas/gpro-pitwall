@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Each entry mirrors its annotated release tag.
 
+## [1.2.1] - 2026-06-09
+- Fix the Testing tab not refreshing on re-sync: `GproSyncService` now force-warms the `GetTesting` feed alongside the other race-prep endpoints, so a manual sync updates the testing track, points, and setup instead of serving a stale cache entry until TTL.
+
 ## [1.2.0] - 2026-06-09
 - New **Testing** tab: shows the current testing track and its demands, the car's points distribution across Test / R&D / Engineering / **Car Character** (highlighted), the points gained per 5 laps for each testing priority, the ideal setup for the testing track (Front/Rear Wing, Engine, Brakes, Gearbox, Suspension), and a slider-driven (5–100 laps) projection of expected car wear. Backed by the GPRO `GetTesting` feed; reuses the Race Strategy setup engine and the car-wear model.
 

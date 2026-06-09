@@ -77,6 +77,7 @@ final class GproSyncService
             $this->apiClient->getCarData($force);
             $this->apiClient->getNextRaceProfile($force);
             $this->apiClient->getRaceSetup($force);
+            $this->apiClient->getTesting($force);
             $this->apiClient->getStaffAndFacilities($force);
             $this->apiClient->getTechnicalDirector($force);
             $this->apiClient->getTyreSuppliers($force);
