@@ -1,0 +1,16 @@
+{#
+  localtime(value, preset)
+
+  Renders a UTC timestamp (stored as SQLite datetime('now')) as a <time>
+  element that client-side JS rewrites into the visitor's own timezone.
+
+  - value:  a stored UTC datetime string (e.g. "2026-06-09 07:51:00").
+  - preset: 'datetime' (M j, H:i) | 'date' (M j, Y) | 'day' (M j).
+
+  The visible text is a server-rendered UTC fallback, so it stays correct and
+  readable when JS is disabled. localtime.js (in layout.twig) localises it.
+#}
+{% macro localtime(value, preset = 'datetime') %}
+{%- set fmt = {'datetime': 'M j, H:i', 'date': 'M j, Y', 'day': 'M j'} -%}
+<time datetime="{{ value|date('c') }}" data-localtime="{{ preset }}">{{ value|date(fmt[preset] ?? fmt.datetime) }}{% if preset == 'datetime' %} UTC{% endif %}</time>
+{%- endmacro %}

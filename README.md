@@ -73,6 +73,7 @@ When your account has a calendar and tyre supplier but no pilot under contract, 
 - **PHPMailer 7** for SMTP; in dev, writes `.eml` files to `var/mail/` instead.
 - **PHPUnit 11** — 203 tests, 516 assertions, all green at **PHPStan level 7**.
 - **No framework.** Custom front controller + flat DI container in `bootstrap.php`. Routes in `config/routes.php`.
+- **Timestamps are stored and served as UTC**, then localised per-visitor in the browser (`<time data-localtime>` + `Intl`), so each user sees their own timezone with no server-side config.
 
 ---
 
