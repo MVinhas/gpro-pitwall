@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /verify
+Disallow: /reauth
+Disallow: /control_panel
+Disallow: /debug
+Disallow: /admin/
+Disallow: /healthz
+
+Sitemap: https://gpro-pitwall.com/sitemap.xml

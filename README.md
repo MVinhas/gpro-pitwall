@@ -68,6 +68,9 @@ When your account has a calendar and tyre supplier but no pilot under contract, 
 ### Health endpoint
 `GET /healthz` returns JSON with per-check status (DB reachable + cache roundtrip). 200 when both green, 503 when either fails. Built for an external uptime probe.
 
+### SEO & sharing
+Per-page titles, meta descriptions and canonical URLs via Twig blocks (override `APP_PUBLIC_URL` to change the canonical origin); Open Graph + Twitter cards with a generated 1200×630 `og-image.png`; `WebApplication` JSON-LD on the landing page; `robots.txt` + `sitemap.xml` in the docroot; private pages (verify, reauth, control panel, admin, debug, errors) carry `noindex`. Static assets ship with immutable year-long cache headers; the stylesheet is cache-busted per release via `?v={version}`.
+
 ---
 
 ## Tech stack
@@ -77,7 +80,7 @@ When your account has a calendar and tyre supplier but no pilot under contract, 
 - **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile).
 - **SQLite** via PDO. Encrypted user emails (AES-256-GCM) and API tokens at rest.
 - **PHPMailer 7** for SMTP; in dev, writes `.eml` files to `var/mail/` instead.
-- **PHPUnit 11** — 246 tests, 599 assertions, all green at **PHPStan level 7**.
+- **PHPUnit 11** — 252 tests, 613 assertions, all green at **PHPStan level 7**.
 - **No framework.** Custom front controller + flat DI container in `bootstrap.php`. Routes in `config/routes.php`.
 - **Timestamps are stored and served as UTC**, then localised per-visitor in the browser (`<time data-localtime>` + `Intl`), so each user sees their own timezone with no server-side config.
 
