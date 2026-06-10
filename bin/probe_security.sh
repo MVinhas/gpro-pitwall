@@ -3,9 +3,19 @@
 # sensitive paths return 403/404 (or otherwise don't serve content), and that
 # the user-facing surface (/ and /healthz) returns 200.
 #
+# WAF-friendly by design: shared-host firewalls (Hetzner / cPanel) fingerprint
+# scanners by burst rate, fixed cadence, request order and the curl UA — and
+# ban the source IP. So every request here is spaced by a base delay plus
+# random jitter, the probe order is shuffled per run, and each request carries
+# a rotating real-browser User-Agent. Expect a full run to take ~2–3 minutes.
+#
 # Usage:
 #   bin/probe_security.sh https://pitwall.your-domain.tld
 #   PROBE_URL=https://... bin/probe_security.sh
+#
+# Tunables (seconds):
+#   PROBE_DELAY   base pause before every request   (default 3)
+#   PROBE_JITTER  extra random pause, 0..JITTER     (default 4)
 #
 # Exit code: 0 if every assertion passes, 1 otherwise.
 
@@ -26,10 +36,31 @@ RESET='\033[0m'
 fails=0
 checks=0
 
-# Pause between probes so shared-host WAFs (Hetzner / cPanel / etc.) don't
-# fingerprint the burst as a scanner and ban the running IP. ~400ms × ~25
-# checks = a 10-second probe instead of a 2-second one.
-PROBE_DELAY="${PROBE_DELAY:-0.4}"
+PROBE_DELAY="${PROBE_DELAY:-3}"
+PROBE_JITTER="${PROBE_JITTER:-4}"
+
+# Plausible, current desktop browser UAs. One is picked at random per request
+# so the probe doesn't announce itself as curl 25 times in a row.
+USER_AGENTS=(
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.4 Safari/605.1.15"
+    "Mozilla/5.0 (X11; Linux x86_64; rv:139.0) Gecko/20100101 Firefox/139.0"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:139.0) Gecko/20100101 Firefox/139.0"
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+)
+
+random_ua() {
+    printf '%s' "${USER_AGENTS[RANDOM % ${#USER_AGENTS[@]}]}"
+}
+
+# Base delay + uniform random jitter. $RANDOM re-rolls per call, so no two
+# gaps look alike and the cadence can't be fingerprinted.
+pace() {
+    local delay
+    delay="$(awk -v base="$PROBE_DELAY" -v jit="$PROBE_JITTER" -v r="$RANDOM" \
+        'BEGIN { printf "%.2f", base + (r / 32767) * jit }')"
+    sleep "$delay"
+}
 
 # A leak check passes when the path is NOT served (status 4xx / 5xx).
 # 200 OR a redirect into a login flow that returns content of the file = FAIL.
@@ -37,10 +68,12 @@ leak_must_fail() {
     local path="$1"
     local description="$2"
     checks=$((checks + 1))
-    sleep "$PROBE_DELAY"
+    pace
 
     local response
-    response="$(curl -sS -o /dev/null -w "%{http_code} %{size_download}" -L --max-redirs 2 "${URL}${path}" 2>/dev/null || echo "000 0")"
+    response="$(curl -sS -o /dev/null -A "$(random_ua)" \
+        -w "%{http_code} %{size_download}" -L --max-redirs 2 \
+        "${URL}${path}" 2>/dev/null || echo "000 0")"
     local code="${response%% *}"
     local size="${response##* }"
 
@@ -60,10 +93,11 @@ surface_must_pass() {
     local path="$1"
     local description="$2"
     checks=$((checks + 1))
-    sleep "$PROBE_DELAY"
+    pace
 
     local code
-    code="$(curl -sS -o /dev/null -w "%{http_code}" "${URL}${path}" 2>/dev/null || echo "000")"
+    code="$(curl -sS -o /dev/null -A "$(random_ua)" -w "%{http_code}" \
+        "${URL}${path}" 2>/dev/null || echo "000")"
 
     if [[ "$code" == "200" ]]; then
         printf "  ${GREEN}PASS${RESET}  %-40s 200\n" "$path"
@@ -77,8 +111,10 @@ surface_must_pass() {
 # JSON-content check on /healthz — exists, returns 200, says status=ok.
 healthz_must_be_ok() {
     checks=$((checks + 1))
+    pace
+
     local body
-    body="$(curl -sS --max-time 5 "${URL}/healthz" 2>/dev/null || true)"
+    body="$(curl -sS --max-time 5 -A "$(random_ua)" "${URL}/healthz" 2>/dev/null || true)"
 
     if echo "$body" | grep -q '"status":"ok"'; then
         printf "  ${GREEN}PASS${RESET}  %-40s status=ok\n" "/healthz"
@@ -88,59 +124,84 @@ healthz_must_be_ok() {
     fi
 }
 
-# HSTS / nosniff headers should be present on the landing page.
-header_must_be_set() {
-    local header="$1"
-    checks=$((checks + 1))
+# Security headers on /: ONE request, grepped four times — four identical
+# HEAD requests in a row is exactly the pattern a WAF flags.
+check_security_headers() {
+    pace
+    local headers
+    headers="$(curl -sSI -A "$(random_ua)" "${URL}/" 2>/dev/null || true)"
 
-    if curl -sSI "${URL}/" 2>/dev/null | grep -qi "^${header}:"; then
-        printf "  ${GREEN}PASS${RESET}  %-40s present\n" "header: ${header}"
-    else
-        printf "  ${YELLOW}WARN${RESET}  %-40s missing (security header)\n" "header: ${header}"
-        # Headers are graceful-degradation, not blockers — count as a warn but
-        # don't fail the script. Tighten this later if you want them strict.
-    fi
+    local header
+    for header in \
+        "Strict-Transport-Security" \
+        "X-Content-Type-Options" \
+        "X-Frame-Options" \
+        "Referrer-Policy"; do
+        checks=$((checks + 1))
+        if grep -qi "^${header}:" <<<"$headers"; then
+            printf "  ${GREEN}PASS${RESET}  %-40s present\n" "header: ${header}"
+        else
+            printf "  ${YELLOW}WARN${RESET}  %-40s missing (security header)\n" "header: ${header}"
+            # Headers are graceful-degradation, not blockers — count as a warn
+            # but don't fail the script.
+        fi
+    done
 }
 
-echo "▶ probing ${URL}"
+echo "▶ probing ${URL} (paced: ${PROBE_DELAY}s + 0–${PROBE_JITTER}s jitter per request)"
 echo
 
-echo "Sensitive paths (must be blocked):"
-leak_must_fail "/.env"                            "secrets — APP_SECRET, SMTP password"
-leak_must_fail "/.env.example"                    "placeholder file; still shouldn't be served"
-leak_must_fail "/config/secrets.php"              "game formulas"
-leak_must_fail "/gpro_pilots.sqlite"              "user data (emails + tokens, encrypted)"
-leak_must_fail "/bootstrap.php"                   "PHP bootstrap; outside docroot"
-leak_must_fail "/composer.json"                   "dep listing"
-leak_must_fail "/composer.lock"                   "exact dep versions"
-leak_must_fail "/CLAUDE.md"                       "project context (should be excluded from bundle)"
-leak_must_fail "/TODO.md"                         "project backlog (should be excluded from bundle)"
-leak_must_fail "/gpro-public-api.yml"             "private OpenAPI spec"
-leak_must_fail "/src/Service/AuthService.php"     "PHP source — outside docroot"
-leak_must_fail "/src/"                            "src/ directory listing"
-leak_must_fail "/var/cache/"                      "cache directory listing"
-leak_must_fail "/var/log/"                        "log directory listing"
-leak_must_fail "/var/mail/"                       "dev-only mail directory listing"
-leak_must_fail "/var/"                            "writable runtime dir"
-leak_must_fail "/.git/HEAD"                       "git directory accidentally SFTP'd"
-leak_must_fail "/bin/db_browser.php"              "CLI-only debug tool"
-leak_must_fail "/bin/seed_tracks.php"             "CLI seeder"
-leak_must_fail "/data/tracks.csv"                 "tracks fixture"
+# Sensitive paths, "path|description". The list is shuffled per run so the
+# probe never walks the same sequence twice.
+leak_checks=(
+    "/.env|secrets — APP_SECRET, SMTP password"
+    "/.env.example|placeholder file; still shouldn't be served"
+    "/.deploy.env|SFTP deploy credentials"
+    "/config/secrets.php|game formulas"
+    "/gpro_pilots.sqlite|user data (emails + tokens, encrypted)"
+    "/bootstrap.php|PHP bootstrap; outside docroot"
+    "/composer.json|dep listing"
+    "/composer.lock|exact dep versions"
+    "/CLAUDE.md|project context (should be excluded from bundle)"
+    "/TODO.md|project backlog (should be excluded from bundle)"
+    "/gpro-public-api.yml|private OpenAPI spec"
+    "/src/Service/AuthService.php|PHP source — outside docroot"
+    "/src/|src/ directory listing"
+    "/var/cache/|cache directory listing"
+    "/var/log/|log directory listing"
+    "/var/mail/|dev-only mail directory listing"
+    "/var/|writable runtime dir"
+    "/.git/HEAD|git directory accidentally SFTP'd"
+    "/bin/db_browser.php|CLI-only debug tool"
+    "/bin/seed_tracks.php|CLI seeder"
+    "/data/tracks.csv|tracks fixture"
+)
+
+echo "Sensitive paths (must be blocked; order shuffled):"
+while IFS='|' read -r path description; do
+    leak_must_fail "$path" "$description"
+done < <(printf '%s\n' "${leak_checks[@]}" | shuf)
+
+# Public surface, also shuffled.
+surface_checks=(
+    "/|anonymous landing page"
+    "/login|login form"
+    "/register|register form"
+    "/assets/app.css|compiled tailwind"
+    "/robots.txt|crawler policy"
+    "/sitemap.xml|sitemap"
+)
 
 echo
-echo "Public surface (must serve 200):"
-surface_must_pass "/"                              "anonymous landing page"
-surface_must_pass "/login"                         "login form"
-surface_must_pass "/register"                      "register form"
-surface_must_pass "/assets/app.css"                "compiled tailwind"
+echo "Public surface (must serve 200; order shuffled):"
+while IFS='|' read -r path description; do
+    surface_must_pass "$path" "$description"
+done < <(printf '%s\n' "${surface_checks[@]}" | shuf)
 healthz_must_be_ok
 
 echo
 echo "Security headers on /:"
-header_must_be_set "Strict-Transport-Security"
-header_must_be_set "X-Content-Type-Options"
-header_must_be_set "X-Frame-Options"
-header_must_be_set "Referrer-Policy"
+check_security_headers
 
 echo
 if [[ "$fails" -eq 0 ]]; then

@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Each entry mirrors its annotated release tag.
 
+## [1.3.1] - 2026-06-10
+- Add `.env.example` (every key the app reads, with safe defaults; sensitive values intentionally blank) and `.deploy.env.example` (SFTP deploy template) — both were referenced by the docs and deploy tooling but missing from the repo.
+- `bin/probe_security.sh` is now WAF-friendly: every request is paced by a base delay plus random jitter (`PROBE_DELAY`/`PROBE_JITTER`, default 3s + 0–4s), the probe order is shuffled per run, each request carries a rotating real-browser User-Agent, and the four header checks share a single request — so shared-host firewalls no longer fingerprint the probe as a scanner and ban the source IP. Also probes `/.deploy.env`, `/robots.txt` and `/sitemap.xml`.
+- Docs: README no longer references the non-existent `bin/dev_mail_tail.php` and the unused `EMAIL_ENCRYPTION_KEY` (both AES keys derive from `APP_SECRET`).
+
 ## [1.3.0] - 2026-06-10
 - SEO pass benchmarked against comparable GPRO tooling sites (none has structured data, social cards or substantial indexable copy):
   - Per-page `<title>` / meta description / canonical URL via Twig blocks; private pages (verify, reauth, control panel, admin, debug, errors) now `noindex`.
