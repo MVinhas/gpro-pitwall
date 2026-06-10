@@ -362,6 +362,20 @@ $container['controller.baseline'] = new BaselineController(
     $container['service.authorize'],
 );
 
+$container['service.contact'] = new \App\Service\ContactService(
+    $container['service.email_service'],
+    $container['service.rate_limiter'],
+    $container['service.user_repo'],
+    $container['service.email_crypto'],
+    $container['service.security_log'],
+);
+
+$container['controller.contact'] = new \App\Controller\ContactController(
+    $container['service.contact'],
+    $container['service.authorize'],
+    $container['twig'],
+);
+
 $container['controller.control_panel'] = new \App\Controller\ControlPanelController(
     $container['service.user_repo'],
     $container['twig'],

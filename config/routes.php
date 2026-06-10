@@ -22,6 +22,10 @@ return function (Router $router): void {
     // ========== PUBLIC PAGES ==========
     $router->add('GET', '/', 'controller.page', 'index');
 
+    // ========== CONTACT (logged-in only) ==========
+    $router->add('GET', '/contact', 'controller.contact', 'show');
+    $router->add('POST', '/contact', 'controller.contact', 'submit');
+
     // ========== CONTROL PANEL ==========
     $router->add('GET', '/control_panel', 'controller.control_panel', 'index');
     $router->add('POST', '/update_token', 'controller.control_panel', 'updateToken');

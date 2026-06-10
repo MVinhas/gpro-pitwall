@@ -113,7 +113,8 @@
 .form-input,
 .form-input-compact,
 .form-input-sm,
-.form-select {
+.form-select,
+.form-textarea {
     @apply h-9 rounded-md border-0 px-3 text-sm text-slate-900
            bg-white ring-1 ring-inset ring-slate-300
            placeholder:text-slate-400 transition-[box-shadow]
@@ -121,6 +122,9 @@
            hover:ring-slate-400;
 }
 .form-input         { @apply block w-full; }
+/* Multi-line variant: the pinned h-9 would collapse a textarea to one thin
+   line, so height comes from the rows attribute instead. */
+.form-textarea      { @apply block w-full h-auto min-h-24 py-2 resize-y; }
 .form-input-compact { @apply block w-24 max-w-full tabular-nums; }
 .form-input-sm      { @apply block w-16 text-center tabular-nums; }
 
@@ -155,6 +159,7 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
 .form-input-compact:disabled,
 .form-input-sm:disabled,
 .form-select:disabled,
+.form-textarea:disabled,
 .form-input[readonly],
 .form-input-compact[readonly],
 .form-input-sm[readonly] {

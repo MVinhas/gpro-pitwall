@@ -55,12 +55,17 @@ Per-division ideal-pilot tables with OA caps (Rookie 85 / Amateur 110 / Pro 135 
 ### Admin user management *(admin-only)*
 `/admin/users` — paginated list, toggle admin flag (with self-demotion guard), resend verification, soft-delete. Every mutation is recorded in an append-only `audit_log` table. Audit panel shows the last 50 actions.
 
+The `/debug` telemetry page shows registered users, **active users** (at least one successful GPRO data sync in the last 30 days — a better activity signal than raw registrations, since players pause and return), tokens set, API budget, runtime info and masked environment.
+
 ### Authentication
 Passwordless: register/login with a one-time 6-digit code emailed to you (no passwords stored, ever). Login is rate-limited per IP; codes carry a TTL and a max-attempts cap. reCaptcha guards registration in prod.
 
 - **"Keep me signed in"** — opt-in persistent login backed by a selector+validator token (hashed at rest, rotated on every use for theft detection, rolling 30-day window). Survives the short PHP session and is revoked on logout.
 - **Step-up re-authentication** — sensitive actions (account deletion, API-token change) demand a fresh emailed code when the session was restored from a remember token rather than freshly verified.
 - **Username recall** — the login form remembers the last username used on that browser (client-side `localStorage`, same-origin, no server state), so persistent-login users who rarely type it don't have to remember it.
+
+### Feedback & contact
+Logged-in users get an in-app **Send Feedback** form (`/contact`, linked from the footer): pick a subject (Feature Request, Technical Issue, General Question, Bug Report, Account / Data Issue, Other), write the message, send. It's delivered by email with Reply-To set to the sender's account address, so answering is one click. The form sits behind authentication + CSRF and a per-user rate limit (5 messages/hour, security-logged) — deliberately no CAPTCHA, since every sender is a verified account. An inline privacy note states the address is used only to reply — never for marketing or newsletters — and anonymous contact stays possible via the plain `mailto:` link (which anonymous visitors keep in the footer).
 
 ### No-driver prompt
 When your account has a calendar and tyre supplier but no pilot under contract, Cockpit / Race Strategy / Car Wear show a dedicated notice recommending the Recruitment Analyzer (with a direct link) instead of a cryptic error.
@@ -75,12 +80,12 @@ Per-page titles, meta descriptions and canonical URLs via Twig blocks (override 
 
 ## Tech stack
 
-- **PHP 8.5** (composer requires `>=8.3`; deploy targets 8.5).
+- **PHP 8.5** (composer requires `>=8.5`).
 - **Twig 3** templates.
 - **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile).
 - **SQLite** via PDO. Encrypted user emails (AES-256-GCM) and API tokens at rest.
 - **PHPMailer 7** for SMTP; in dev, writes `.eml` files to `var/mail/` instead.
-- **PHPUnit 11** — 252 tests, 613 assertions, all green at **PHPStan level 7**.
+- **PHPUnit 13** — 263 tests, 656 assertions, all green at **PHPStan level 7**. Twig templates linted by a native `bin/twig_lint.php` (Twig's own tokenizer/parser — no third-party linter).
 - **No framework.** Custom front controller + flat DI container in `bootstrap.php`. Routes in `config/routes.php`.
 - **Timestamps are stored and served as UTC**, then localised per-visitor in the browser (`<time data-localtime>` + `Intl`), so each user sees their own timezone with no server-side config.
 
@@ -135,7 +140,7 @@ bin/build_tailwind.sh --watch          # Rebuild on every save
 bin/build_release.sh                   # Assemble dist/gpro-pitwall/ for deploy
 bin/build_release.sh --tar             # Also produce dist/gpro-pitwall.tar.gz
 bin/seed_tracks.php                    # Initialise SQLite + seed tracks (one-shot)
-bin/dev_mail_tail.php                  # Tail var/mail/ in dev
+bin/twig_lint.php                      # Native Twig syntax lint (also via composer twig-lint)
 bin/db_browser.php                     # Local SQLite viewer (CLI only — never served)
 bin/check_no_secrets.sh                # Pre-commit secret scan
 bin/probe_security.sh <url>            # Post-deploy leak probe (must exit 0)
@@ -181,6 +186,7 @@ Reviewed against the OWASP Top 10:2025.
 - Session cookies HttpOnly + Secure (when HTTPS) + SameSite=Lax. Persistent "remember me" tokens store only a hashed validator, rotate on use, and are revocable.
 - Login + registration are reCAPTCHA-gated and rate-limited per IP; verification codes have a TTL + max-attempts. A per-account code cap (`MAX_CODES_PER_USER_PER_HOUR`, default 3) bounds how many emails any one user can receive in an hour, so blind username-guessing on the login form can't spam real users regardless of source IP. A capped `/resend_code` link covers the rare missed-delivery case. Sensitive actions require step-up re-authentication.
 - Centralised authorisation gate (`requireAuth` / `requireAdmin` / `requireFreshAuth`); every mutating, admin, and debug route is gated server-side.
+- The contact form is authenticated-only with a whitelisted subject list (no user text ever reaches an email header), an HTML-escaped body, and a per-user rate limit (5/hour) that emits a `[security]` event when hit — layered controls that make a CAPTCHA unnecessary there.
 - Security event logging (`SecurityLogger`) emits structured `[security]` lines for failed logins, rate-limit hits, and remember-token theft detection; admin mutations recorded in `audit_log`.
 - Prod never leaks exception detail to clients — errors are logged server-side under a short reference id and the user sees a generic message.
 - Outbound GPRO API calls are bounded by connect + total curl timeouts so a hung upstream can't pin a PHP worker. The filesystem cache deserializes with `allowed_classes => false`, so a tampered cache file degrades to a miss rather than a PHP object-injection vector.
