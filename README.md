@@ -98,18 +98,17 @@ bin/build_tailwind.sh            # compile public/assets/app.css
 php -S localhost:8000 -t public  # dev server
 ```
 
-In dev (`IS_DEV=true`), `EmailService` writes outgoing mail to `var/mail/*.eml` instead of hitting SMTP. Tail with:
+In dev (`IS_DEV=true`), `EmailService` writes outgoing mail to `var/mail/*.eml` instead of hitting SMTP — open the newest file to read the verification code:
 
 ```bash
-php bin/dev_mail_tail.php
+ls -t var/mail/*.eml | head -1 | xargs cat
 ```
 
 ### `.env` keys you must set
 
 | Key | Notes |
 |---|---|
-| `APP_SECRET` | 64-hex random; HMAC root for email hashes + verification codes |
-| `EMAIL_ENCRYPTION_KEY` | 64-hex random; AES key for email + API-token storage |
+| `APP_SECRET` | 64-hex random; root secret — HMAC for email hashes + verification codes, and derivation root for the AES-256-GCM keys (email + API-token storage) |
 | `IS_DEV` | `true` in dev, `false` in prod |
 | `CACHE_DRIVER` | `filesystem` (default; zero infra), `apcu`, `redis`, or `none` |
 | `MAIL_HOST` / `MAIL_PORT` / `MAIL_USER` / `MAIL_PASS` | SMTP credentials in prod |
@@ -166,7 +165,7 @@ Source of truth is GitHub; deployment is a manual file copy to your host of choi
    ```bash
    bin/probe_security.sh https://gpro-pitwall.com
    ```
-   It must exit 0. Twenty sensitive paths must return 4xx; five public surfaces must return 200; four security headers must be present on `/`.
+   It must exit 0. Twenty-one sensitive paths must return 4xx; seven public surfaces must return 200; four security headers must be present on `/`. Requests are paced with random jitter, shuffled per run, and carry rotating browser User-Agents so shared-host WAFs don't ban the probing IP — expect a run to take ~2–3 minutes (tune with `PROBE_DELAY` / `PROBE_JITTER`).
 
 ---
 
