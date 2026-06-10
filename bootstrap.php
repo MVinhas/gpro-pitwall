@@ -156,8 +156,15 @@ if ($currentUserId && !$currentUser) {
     session_destroy();
     $currentUserId = 0;
 }
+// Redact the decrypted API token before exposing the user as a Twig global:
+// no template needs it, and keeping it out of the global means a future
+// {{ user.api_token }} can't accidentally leak the secret into HTML.
+$currentUserSafe = $currentUser;
+if (is_array($currentUserSafe)) {
+    unset($currentUserSafe['api_token']);
+}
 $container['twig']->addGlobal('is_logged_in', $currentUser !== null);
-$container['twig']->addGlobal('user', $currentUser);
+$container['twig']->addGlobal('user', $currentUserSafe);
 
 $mailCfg = [
     'host'       => $_ENV['MAIL_HOST'] ?? 'localhost',

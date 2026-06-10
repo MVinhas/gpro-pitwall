@@ -34,7 +34,9 @@ class StrategyService
         string $supplierName = 'Pipirelli',
         ?int $supplierDurability = null
     ): array {
-        $trackId = $trackData['id'];
+        // TrackProfile (next-race feed) carries no id — only the cockpit path
+        // injects id => 0. Default to 0 so the name match still resolves the row.
+        $trackId = $trackData['id'] ?? 0;
         $stmt = $this->db->prepare("SELECT * FROM tracks WHERE id = :id OR name = :name");
         $stmt->execute([':id' => $trackId, ':name' => $trackData['name'] ?? '']);
 

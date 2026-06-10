@@ -172,7 +172,8 @@ Source of truth is GitHub; deployment is a manual file copy to your host of choi
 Reviewed against the OWASP Top 10:2025.
 
 - CSRF token on every POST (validated in `public/index.php`).
-- Email + API token encrypted at rest via AES-256-GCM with domain-separated keys derived from `APP_SECRET` / `EMAIL_ENCRYPTION_KEY`.
+- Email + API token encrypted at rest via AES-256-GCM with domain-separated keys derived from `APP_SECRET` / `EMAIL_ENCRYPTION_KEY`. The decrypted API token is never sent back to the browser — the Control Panel shows only a masked last-4 hint and the field accepts a new value (blank = unchanged); the token is also stripped from the shared Twig `user` global. This protects against DB-file exfiltration; note the encryption key lives in `.env` on the same host, so it is not a defence against an attacker with arbitrary file-read on the server.
+- Login keeps full control-flow parity between known and unknown usernames: an unknown username produces a decoy pending state that routes to `/verify` identically to a real account (and can never verify), so neither the response body nor the redirect reveals whether a username exists.
 - `email_hash` (HMAC-SHA256) used for lookups so an attacker reading the DB can't enumerate users by email.
 - Security headers in `public/.htaccess`: Content-Security-Policy, HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy. HSTS + cookie Secure flag trust `X-Forwarded-Proto` so they still apply behind a TLS-terminating proxy.
 - Session cookies HttpOnly + Secure (when HTTPS) + SameSite=Lax. Persistent "remember me" tokens store only a hashed validator, rotate on use, and are revocable.
@@ -180,6 +181,7 @@ Reviewed against the OWASP Top 10:2025.
 - Centralised authorisation gate (`requireAuth` / `requireAdmin` / `requireFreshAuth`); every mutating, admin, and debug route is gated server-side.
 - Security event logging (`SecurityLogger`) emits structured `[security]` lines for failed logins, rate-limit hits, and remember-token theft detection; admin mutations recorded in `audit_log`.
 - Prod never leaks exception detail to clients — errors are logged server-side under a short reference id and the user sees a generic message.
+- Outbound GPRO API calls are bounded by connect + total curl timeouts so a hung upstream can't pin a PHP worker. The filesystem cache deserializes with `allowed_classes => false`, so a tampered cache file degrades to a miss rather than a PHP object-injection vector.
 - Prepared statements only (no string-concatenated SQL). Output XSS defence is Twig autoescaping (on everywhere, no `|raw`); user data is never interpolated into inline JS/event-handler attributes. New registrations additionally whitelist the username (`[A-Za-z0-9_]`, server-enforced), narrowing what can be stored — though that gate is not retroactive, so autoescaping remains the guarantee for pre-existing rows.
 - Pre-commit + CI secret scan (`bin/check_no_secrets.sh`).
 - PHPStan level 7 + PHPUnit suite required to pass before merge.

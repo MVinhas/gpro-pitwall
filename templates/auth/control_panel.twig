@@ -61,16 +61,28 @@
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
                 <div>
-                    <label class="t-label block mb-1">Your API Token</label>
+                    <label class="t-label block mb-1">
+                        {{ has_token ? 'Replace API Token' : 'Your API Token' }}
+                    </label>
+                    {% if has_token %}
+                        <p class="mb-2 inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
+                            <span aria-hidden="true">●</span>
+                            Token saved — ending <span class="font-mono">…{{ token_hint }}</span>
+                        </p>
+                    {% endif %}
                     <input type="text"
                            name="api_token"
-                           value="{{ user.api_token }}"
-                           placeholder="eyJ0eXAiOiJKV1QiLCAiYW..."
+                           value=""
+                           autocomplete="off"
+                           spellcheck="false"
+                           placeholder="{{ has_token ? 'Paste a new token to replace it' : 'eyJ0eXAiOiJKV1QiLCAiYW...' }}"
                            class="form-input font-mono">
                     <p class="mt-2 text-xs text-slate-500">
                         1. Go to <a href="https://app.gpro.net/apiaccess" target="_blank" rel="noopener noreferrer" class="text-blue-600 underline">app.gpro.net/apiaccess</a><br>
                         2. Generate a new API token if you don't have one<br>
                         3. Copy the token and paste it here
+                        {% if has_token %}<br>{% endif %}
+                        {% if has_token %}<span class="text-slate-400">Leave blank to keep your current token.</span>{% endif %}
                     </p>
                 </div>
 

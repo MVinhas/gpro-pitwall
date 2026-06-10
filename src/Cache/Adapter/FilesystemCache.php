@@ -33,7 +33,10 @@ final class FilesystemCache implements CacheInterface
             return $default;
         }
 
-        $entry = @unserialize($raw, ['allowed_classes' => true]);
+        // Cached payloads are only scalars/arrays — never objects. Refusing to
+        // instantiate classes turns a tampered/poisoned cache file into a plain
+        // miss instead of a PHP object-injection gadget chain.
+        $entry = @unserialize($raw, ['allowed_classes' => false]);
         if (!is_array($entry) || !array_key_exists('value', $entry)) {
             return $default;
         }
