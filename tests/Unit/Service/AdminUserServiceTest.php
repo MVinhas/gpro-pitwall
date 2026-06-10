@@ -23,7 +23,7 @@ final class AdminUserServiceTest extends TestCase
         return new AdminUserService(
             $users,
             $audit,
-            $auth ?? $this->createMock(AuthService::class),
+            $auth ?? $this->createStub(AuthService::class),
         );
     }
 
@@ -75,7 +75,7 @@ final class AdminUserServiceTest extends TestCase
         $users->method('findById')->willReturn(null);
         $users->expects($this->never())->method('updateAdmin');
 
-        $audit = $this->createMock(AuditLogRepository::class);
+        $audit = $this->createStub(AuditLogRepository::class);
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('User not found');
@@ -135,7 +135,7 @@ final class AdminUserServiceTest extends TestCase
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('User not found');
 
-        $this->service($users, $this->createMock(AuditLogRepository::class))->restore(1, 99);
+        $this->service($users, $this->createStub(AuditLogRepository::class))->restore(1, 99);
     }
 
     public function testRestoreFailsWhenUserNotDeleted(): void
@@ -148,12 +148,12 @@ final class AdminUserServiceTest extends TestCase
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('not deleted');
 
-        $this->service($users, $this->createMock(AuditLogRepository::class))->restore(1, 5);
+        $this->service($users, $this->createStub(AuditLogRepository::class))->restore(1, 5);
     }
 
     public function testResendVerificationDelegatesToAuthResendCodeAndAudits(): void
     {
-        $users = $this->createMock(UserRepository::class);
+        $users = $this->createStub(UserRepository::class);
         $users->method('findById')->willReturn(['id' => 5, 'username' => 'carol']);
 
         $audit = $this->createMock(AuditLogRepository::class);
@@ -174,10 +174,10 @@ final class AdminUserServiceTest extends TestCase
 
     public function testResendVerificationFailsWhenUserMissing(): void
     {
-        $users = $this->createMock(UserRepository::class);
+        $users = $this->createStub(UserRepository::class);
         $users->method('findById')->willReturn(null);
 
-        $audit = $this->createMock(AuditLogRepository::class);
+        $audit = $this->createStub(AuditLogRepository::class);
         $auth = $this->createMock(AuthService::class);
         $auth->expects($this->never())->method('login');
 

@@ -205,6 +205,23 @@ class UserRepository
         return $stmt === false ? 0 : (int) $stmt->fetchColumn();
     }
 
+    /**
+     * "Active user" telemetry definition: at least one successful data sync
+     * within the last N days. last_synced_at is set by markSynced() in UTC,
+     * matching SQLite's datetime('now').
+     */
+    public function countActiveSince(int $days): int
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT COUNT(*) FROM users
+             WHERE deleted_at IS NULL
+               AND last_synced_at IS NOT NULL
+               AND last_synced_at >= datetime('now', :cutoff)"
+        );
+        $stmt->execute(['cutoff' => sprintf('-%d days', max(0, $days))]);
+        return (int) $stmt->fetchColumn();
+    }
+
     public function countWithApiToken(): int
     {
         $stmt = $this->pdo->query(

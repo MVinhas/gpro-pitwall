@@ -39,13 +39,22 @@
     {% endif %}
 
     {# Top Metrics Grid #}
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         {# User Metrics #}
         <div class="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
             <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Total Users</h3>
             <div class="mt-2 flex items-baseline gap-2">
                 <span class="text-2xl font-bold text-slate-800">{{ user_stats.total }}</span>
                 <span class="text-xs text-slate-400">Registered</span>
+            </div>
+        </div>
+
+        <div class="bg-white p-4 rounded-lg border border-slate-200 shadow-sm cursor-help"
+             title="A user counts as active if they completed at least one successful GPRO data sync in the last 30 days.">
+            <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Active Users</h3>
+            <div class="mt-2 flex items-baseline gap-2">
+                <span class="text-2xl font-bold text-blue-600">{{ user_stats.active }}</span>
+                <span class="text-xs text-slate-400">Synced ≤ 30 days</span>
             </div>
         </div>
 

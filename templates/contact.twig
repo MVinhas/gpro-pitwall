@@ -1,0 +1,92 @@
+{% extends "layout.twig" %}
+
+{% block title %}Send Feedback — GPRO Pitwall{% endblock %}
+{% block robots %}<meta name="robots" content="noindex,nofollow">{% endblock %}
+{% block canonical_path %}/contact{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto mt-10">
+    <div class="bg-white rounded-lg shadow-sm border border-slate-200 p-8">
+
+        <div class="border-b border-slate-100 pb-6 mb-6">
+            <h1 class="t-display">Send Feedback</h1>
+            <p class="t-caption mt-1">
+                Feature requests, bug reports, questions — straight to the developer.
+            </p>
+        </div>
+
+        {% if flash %}
+            <div class="notice notice-success mb-6">
+                {{ flash }}
+            </div>
+        {% endif %}
+        {% if flash_error %}
+            <div class="notice notice-error mb-6">
+                {{ flash_error }}
+            </div>
+        {% endif %}
+
+        <form method="POST" action="/contact" class="space-y-4" data-disable-on-submit>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+            <div>
+                <label for="contact-subject" class="t-label block mb-1">Subject</label>
+                <select id="contact-subject" name="subject" class="form-select" required>
+                    {% for subject in subjects %}
+                        <option value="{{ subject }}"
+                                {{ old and old.subject == subject ? 'selected' }}>{{ subject }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div>
+                <label for="contact-message" class="t-label block mb-1">Message</label>
+                <textarea id="contact-message"
+                          name="message"
+                          rows="8"
+                          required
+                          maxlength="{{ max_message_length }}"
+                          placeholder="What's on your mind?"
+                          class="form-textarea">{{ old ? old.message }}</textarea>
+                <p class="mt-1 text-xs text-slate-500">Up to {{ max_message_length|number_format }} characters.</p>
+            </div>
+
+            <div class="flex justify-end">
+                <button type="submit" class="btn btn-md btn-primary" data-busy-text="Sending…">
+                    Send message
+                </button>
+            </div>
+        </form>
+
+        <div class="notice notice-info mt-6">
+            <p class="font-bold">Your privacy</p>
+            <p class="mt-1">
+                Your email address is stored encrypted in this app, but sending a message
+                delivers it — together with your address, so a reply can reach you — to the
+                developer by email. Your address is used only to answer your message, never
+                for marketing, promotions, newsletters or anything similar.
+            </p>
+            <p class="mt-1">
+                Prefer to stay anonymous? Email
+                <a href="mailto:admin@gpro-pitwall.com" class="font-medium underline">admin@gpro-pitwall.com</a>
+                directly from any address you like.
+            </p>
+        </div>
+
+        <div class="border-t border-slate-100 pt-6 mt-6 text-center">
+            <p class="text-xs text-slate-500">
+                No message — just want to support the project?
+                <a
+                    href="https://buymeacoffee.com/mvinhas"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="inline-flex items-center gap-1 font-medium text-amber-600 hover:text-amber-700 transition"
+                >
+                    <span aria-hidden="true">☕</span>
+                    <span>Buy me a coffee</span>
+                </a>
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Each entry mirrors its annotated release tag.
 
+## [1.4.0] - 2026-06-10
+- In-app contact form (`/contact`, "Send feedback" in the footer) for logged-in users: whitelisted subject dropdown + message, delivered by email with Reply-To set to the sender's account address. Guarded by authentication, CSRF and a per-user rate limit (5/hour, security-logged) — no CAPTCHA, every sender is a verified account. Inline privacy note (address used only to reply, never marketing/newsletters) with an anonymous `mailto:` alternative, plus a subtle Buy Me a Coffee link. Anonymous visitors keep the plain `mailto:` footer link. Anti-double-submit via the shared `data-disable-on-submit` guard.
+- Debug page: new **Active Users** telemetry card — users with at least one successful GPRO data sync in the last 30 days (tooltip carries the definition). Counted next to (not instead of) total registrations.
+- Footer: the two GitHub links are grouped under one icon; "Report issue" renamed to "Open GitHub Issue".
+- New `.form-textarea` component class — the shared input look without the pinned `h-9`, which collapsed textareas to a single line.
+- Dependencies: PHP `>=8.5`, PHPMailer `^7.1`, PHPUnit 13.2, PHPStan 2.2.2, PHP_CodeSniffer 4.0, symfony/var-dumper `^8.1`. Removed `rector/rector` (one-shot tool, not part of the check pipeline) and the abandoned `sserbin/twig-linter` (its `symfony/console ^5.4||^6.1` pin blocked var-dumper 8.x) — replaced by a native `bin/twig_lint.php` built on Twig's own tokenizer/parser.
+- Tests: PHPUnit 13 migration (`createStub()` for expectation-less mocks) and new ContactService + active-user-count suites — 263 tests, 656 assertions.
+
 ## [1.3.1] - 2026-06-10
 - Add `.env.example` (every key the app reads, with safe defaults; sensitive values intentionally blank) and `.deploy.env.example` (SFTP deploy template) — both were referenced by the docs and deploy tooling but missing from the repo.
 - `bin/probe_security.sh` is now WAF-friendly: every request is paced by a base delay plus random jitter (`PROBE_DELAY`/`PROBE_JITTER`, default 3s + 0–4s), the probe order is shuffled per run, each request carries a rotating real-browser User-Agent, and the four header checks share a single request — so shared-host firewalls no longer fingerprint the probe as a scanner and ban the source IP. Also probes `/.deploy.env`, `/robots.txt` and `/sitemap.xml`.

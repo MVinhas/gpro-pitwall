@@ -50,6 +50,41 @@ class EmailService
         return $this->send($toEmail, $subject, $body, $altBody);
     }
 
+    /**
+     * Contact-form message from a logged-in user to the site admin. The
+     * subject comes from ContactService's fixed whitelist (never free text),
+     * so headers carry no user-controlled content beyond the validated
+     * Reply-To address. The message body is HTML-escaped before embedding.
+     */
+    public function sendContactMessage(
+        string $replyToEmail,
+        string $username,
+        string $subject,
+        string $message
+    ): bool {
+        $safeUsername = str_replace(["\r", "\n"], ' ', $username);
+        $fullSubject = "[Pitwall] {$subject} — {$safeUsername}";
+
+        $escapedMessage = nl2br(htmlspecialchars($message, ENT_QUOTES, 'UTF-8'));
+        $escapedUsername = htmlspecialchars($safeUsername, ENT_QUOTES, 'UTF-8');
+        $escapedEmail = htmlspecialchars($replyToEmail, ENT_QUOTES, 'UTF-8');
+
+        $body = <<<HTML
+<!DOCTYPE html>
+<html>
+<body style="font-family: -apple-system, sans-serif; color: #374151; line-height: 1.6;">
+    <p><strong>From:</strong> {$escapedUsername} &lt;{$escapedEmail}&gt;<br>
+       <strong>Subject:</strong> {$subject}</p>
+    <hr style="border: none; border-top: 1px solid #e5e7eb;">
+    <p>{$escapedMessage}</p>
+</body>
+</html>
+HTML;
+        $alt = "From: {$safeUsername} <{$replyToEmail}>\nSubject: {$subject}\n\n{$message}";
+
+        return $this->send($this->config['from'], $fullSubject, $body, $alt, $replyToEmail, $safeUsername);
+    }
+
     private function createMailer(): PHPMailer
     {
         $mail = new PHPMailer(true);
@@ -87,16 +122,25 @@ class EmailService
     }
 
 
-    private function send(string $to, string $subject, string $body, string $alt): bool
-    {
+    private function send(
+        string $to,
+        string $subject,
+        string $body,
+        string $alt,
+        ?string $replyTo = null,
+        string $replyToName = ''
+    ): bool {
         if ($this->isDev()) {
-            return $this->writeDevEml($to, $subject, $body, $alt);
+            return $this->writeDevEml($to, $subject, $body, $alt, $replyTo);
         }
 
         $mail = $this->createMailer();
 
         try {
             $mail->addAddress($to);
+            if ($replyTo !== null) {
+                $mail->addReplyTo($replyTo, $replyToName);
+            }
             $mail->isHTML(true);
 
             $mail->Subject = $subject;
@@ -118,8 +162,13 @@ class EmailService
      * Used in dev so the verification code is readable without external infra.
      * Filename: {YYYYmmddHHiiss}-{to-slug}.eml — sortable and human-scannable.
      */
-    private function writeDevEml(string $to, string $subject, string $htmlBody, string $altBody): bool
-    {
+    private function writeDevEml(
+        string $to,
+        string $subject,
+        string $htmlBody,
+        string $altBody,
+        ?string $replyTo = null
+    ): bool {
         $dir = $this->config['mail_dir'] ?? 'var/mail';
         if (!is_dir($dir) && !mkdir($dir, 0750, true) && !is_dir($dir)) {
             error_log('[EmailService dev] cannot create ' . $dir);
@@ -131,8 +180,13 @@ class EmailService
         $fromName = $this->config['from_name'];
         $date = date('r');
 
+        $replyToHeader = $replyTo !== null
+            ? 'Reply-To: ' . str_replace(["\r", "\n"], '', $replyTo) . "\r\n"
+            : '';
+
         $eml = "From: {$fromName} <{$fromAddr}>\r\n"
              . "To: {$to}\r\n"
+             . $replyToHeader
              . "Subject: {$subject}\r\n"
              . "Date: {$date}\r\n"
              . "MIME-Version: 1.0\r\n"

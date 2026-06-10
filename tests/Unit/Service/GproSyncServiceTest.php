@@ -89,7 +89,7 @@ final class GproSyncServiceTest extends TestCase
         // fails against the unreachable host, which is fine — it still ran).
         $this->cache->set(GproApiClient::budgetKeyForToken('tok'), 50, 3600);
 
-        $users = $this->createMock(UserRepository::class);
+        $users = $this->createStub(UserRepository::class);
         $statuses = [];
         $users->method('updateSyncStatus')
             ->willReturnCallback(function (int $id, string $status) use (&$statuses): void {
@@ -108,7 +108,7 @@ final class GproSyncServiceTest extends TestCase
     public function testFirstEverSyncProceedsWhenBudgetUnknown(): void
     {
         // No API_LIMIT_KEY in cache → null → allow (it's how we learn the budget).
-        $users = $this->createMock(UserRepository::class);
+        $users = $this->createStub(UserRepository::class);
         $statuses = [];
         $users->method('updateSyncStatus')
             ->willReturnCallback(function (int $id, string $status) use (&$statuses): void {
@@ -123,7 +123,7 @@ final class GproSyncServiceTest extends TestCase
 
     public function testLockIsReleasedAfterRun(): void
     {
-        $users = $this->createMock(UserRepository::class);
+        $users = $this->createStub(UserRepository::class);
 
         $svc = new GproSyncService($this->apiClient(), $users, $this->cache);
         $svc->trySyncForUser(['id' => 7, 'api_token' => 'tok']);
@@ -138,7 +138,7 @@ final class GproSyncServiceTest extends TestCase
 
     public function testRunSetsRunningThenFailsOnUnreachableApi(): void
     {
-        $users = $this->createMock(UserRepository::class);
+        $users = $this->createStub(UserRepository::class);
         $statuses = [];
         $users->method('updateSyncStatus')
             ->willReturnCallback(function (int $id, string $status) use (&$statuses): void {
