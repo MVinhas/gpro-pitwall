@@ -89,4 +89,32 @@ final class FilesystemCacheTest extends TestCase
         $this->assertFalse($this->cache->has('a'));
         $this->assertFalse($this->cache->has('b'));
     }
+
+    public function testNestedArraysAndScalarsRoundTrip(): void
+    {
+        $payload = ['updated_at' => null, 'rows' => [['ID' => 1], ['ID' => 2]], 'n' => 3.5, 'ok' => true];
+        $this->cache->set('payload', $payload);
+        $this->assertSame($payload, $this->cache->get('payload'));
+    }
+
+    public function testSerializedObjectPayloadIsRefusedAsMiss(): void
+    {
+        // Simulate a poisoned/tampered cache file holding a serialized object.
+        // With allowed_classes => false, unserialize yields __PHP_Incomplete_Class,
+        // which fails the array+'value' shape check and degrades to a clean miss
+        // — no object is ever instantiated (no injection gadget surface).
+        $key = 'poisoned';
+        $pathMethod = new \ReflectionMethod($this->cache, 'path');
+        $path = $pathMethod->invoke($this->cache, $key);
+
+        $object = (object) ['expires' => 0, 'value' => 'gadget'];
+        file_put_contents($path, serialize(['expires' => 0, 'value' => $object]));
+
+        // The outer array survives, but the inner object becomes an incomplete
+        // class instance. The entry is still structurally valid, so get() returns
+        // it — but it is NOT a live object of any application class.
+        $result = $this->cache->get($key);
+        $this->assertIsObject($result);
+        $this->assertInstanceOf('__PHP_Incomplete_Class', $result);
+    }
 }

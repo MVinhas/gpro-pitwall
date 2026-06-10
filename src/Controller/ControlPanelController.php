@@ -24,10 +24,18 @@ class ControlPanelController
     {
         $user = $this->authorize->requireAuth();
 
+        // Never send the decrypted token to the browser. Show only the last 4
+        // characters as a recognition hint; the field stays empty and only a
+        // freshly typed value replaces it.
+        $token = (string) ($user['api_token'] ?? '');
+        $hasToken = $token !== '';
+        unset($user['api_token']);
+
         echo $this->twig->render('auth/control_panel.twig', [
             'user' => $user,
             'is_logged_in' => true,
-            'has_token' => !empty($user['api_token']),
+            'has_token' => $hasToken,
+            'token_hint' => $hasToken ? substr($token, -4) : null,
             'flash' => $_SESSION['flash'] ?? null,
             'flash_error' => $_SESSION['flash_error'] ?? null,
             'csrf_token' => $_SESSION['csrf_token'] ?? ''
@@ -40,6 +48,14 @@ class ControlPanelController
         $user = $this->authorize->requireFreshAuth('/control_panel');
 
         $token = trim((string)$request->post('api_token'));
+
+        // The field is never pre-filled with the existing token, so a blank
+        // submit means "leave it as is" rather than "clear it" — don't error.
+        if ($token === '' && !empty($user['api_token'])) {
+            $_SESSION['flash'] = "API token unchanged.";
+            header('Location: /control_panel');
+            exit;
+        }
 
         if (strlen($token) < 10) {
             $_SESSION['flash'] = "Token looks too short.";

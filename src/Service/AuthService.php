@@ -11,6 +11,16 @@ use DateTimeImmutable;
 
 class AuthService
 {
+    /**
+     * Returned as the pending user id when login() is given a username that
+     * doesn't exist. It keeps the post-login control flow identical to a real
+     * account (the controller still routes to /verify) while guaranteeing the
+     * code can never verify — findById() on a negative id always misses. This
+     * closes the redirect-based username oracle: a wrong-but-real username and
+     * an unknown one now land on the same page.
+     */
+    public const int DECOY_PENDING_USER_ID = -1;
+
     public function __construct(
         private readonly UserRepository $users,
         private readonly TokenRepository $tokens,
@@ -110,9 +120,12 @@ class AuthService
         $user = $this->users->findByUsername($username);
         if (!$user) {
             // Log internally for detection, but keep the response identical to a
-            // hit so the client can't enumerate usernames.
+            // hit so the client can't enumerate usernames. The decoy pending id
+            // makes the *redirect* identical too (both go to /verify) — without
+            // it, an unknown username bounced to /login while a real one stayed
+            // on /verify, which is itself an enumeration oracle.
             $this->securityLog->event('login_unknown_username', ['username' => $username, 'ip' => $ip]);
-            return ['success' => true, 'user_id' => 0];
+            return ['success' => true, 'user_id' => self::DECOY_PENDING_USER_ID];
         }
 
         $this->generateAndSendCode($user);

@@ -288,6 +288,23 @@ final class AuthServiceTest extends TestCase
         $this->assertSame(3, $this->codeSendCount());
     }
 
+    public function testLoginWithUnknownUsernameReturnsDecoyPendingState(): void
+    {
+        // No such user. The response must look like a hit (success + non-zero
+        // pending id) so the controller still routes to /verify — closing the
+        // redirect-based enumeration oracle — but no code is ever sent.
+        $result = $this->auth->login('ghost', '', '127.0.0.1');
+
+        $this->assertTrue($result['success']);
+        $this->assertSame(AuthService::DECOY_PENDING_USER_ID, $result['user_id']);
+        $this->assertNotSame(0, $result['user_id'], 'decoy id must be truthy so /verify renders');
+        $this->assertSame(0, $this->codeSendCount(), 'no code may be sent for an unknown username');
+
+        // The decoy id can never verify, regardless of the code supplied.
+        $this->assertFalse($this->auth->verifyCode($result['user_id'], '000000'));
+        $this->assertArrayNotHasKey('user_id', $_SESSION);
+    }
+
     public function testLoginRejectedWhenCaptchaFails(): void
     {
         // A captcha that always fails (non-empty secret, so isDev bypass is off

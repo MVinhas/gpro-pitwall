@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Each entry mirrors its annotated release tag.
 
+## [1.2.8] - 2026-06-10
+- **Security:** Login no longer leaks whether a username exists. An unknown username now produces a decoy pending state that routes to `/verify` identically to a real account (and can never verify), closing the redirect-based enumeration oracle — the response body was already generic.
+- **Security:** The Control Panel never sends the decrypted GPRO API token to the browser. It shows a masked last-4 hint with an empty replace field (blank submit = unchanged); the token is also stripped from the shared Twig `user` global as defence-in-depth.
+- **Security:** Filesystem cache deserializes with `allowed_classes => false`, so a tampered/poisoned cache file degrades to a miss instead of a potential PHP object-injection gadget.
+- **Security:** Outbound GPRO API calls now set connect + total curl timeouts (5s/15s for v2 endpoints, 5s/30s for the market dump) so a hung upstream can't pin a PHP worker indefinitely.
+- Performance: per-request DB migration is gated on SQLite's `user_version` — a warm database skips the full DDL + table-info scans + legacy-token re-encryption pass and does a single PRAGMA read instead.
+- Fix: `StrategyService` no longer raises an "Undefined array key id" warning when fed the next-race TrackProfile (which carries no id); it falls back to a name match.
+
 ## [1.2.7] - 2026-06-10
 - UX/UI consistency pass across every template. New shared `.notice`/`.notice-{info,warn,error,success}` left-accent banner classes replace the ad-hoc flash/error styles on the auth pages, admin pages, and all analysis tabs; raw-utility buttons converted to the `.btn` component classes (plus new `.btn-soft-warn`/`.btn-soft-danger` variants for Undo/Clear); headings aligned to the `t-*` type tokens; yellow/green badge palettes unified to amber/emerald.
 - Fix: the landing page now renders flash messages — the "account deleted" confirmation was silently dropped before.

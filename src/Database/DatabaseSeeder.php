@@ -10,6 +10,13 @@ use App\Security\ApiTokenCrypto;
 class DatabaseSeeder
 {
     /**
+     * Bump this whenever a migration/seed step is added or changed below. The
+     * boot path calls migrate() on every request; this version is the gate that
+     * lets a warm database skip the entire DDL + scan + legacy-encryption pass.
+     */
+    private const int SCHEMA_VERSION = 1;
+
+    /**
      * @param array<string, string> $statsSchema
      * @param list<string>          $divisions
      * @param array<string, mixed>  $secrets
@@ -25,6 +32,15 @@ class DatabaseSeeder
 
     public function migrate(): void
     {
+        // migrate() runs on every request (see bootstrap.php). Skip the whole
+        // sequence once the DB is at the current schema version — turns ~15 DDL
+        // statements, the PRAGMA table_info scans, and the per-user legacy-token
+        // re-encryption into a single cheap PRAGMA read on the hot path.
+        $stmt = $this->db->query('PRAGMA user_version');
+        $current = $stmt === false ? 0 : (int) $stmt->fetchColumn();
+        if ($current >= self::SCHEMA_VERSION) {
+            return;
+        }
 
         $this->createUsersTable();
         $this->createVerificationTokensTable();
@@ -48,6 +64,10 @@ class DatabaseSeeder
 
         $this->applyUserMigrations();
         $this->encryptLegacyApiTokens();
+
+        // Stamp the schema version last: if any step above throws, the version
+        // stays behind and the next boot retries the full migrate.
+        $this->db->exec('PRAGMA user_version = ' . self::SCHEMA_VERSION);
     }
 
     /**

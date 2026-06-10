@@ -40,6 +40,11 @@ final class GproApiFetcher
         $ch = curl_init($this->baseUrl . $endpoint);
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
+            // Bound both phases so a slow/hung GPRO endpoint can't pin a PHP
+            // worker indefinitely — on shared hosting a few stuck requests is
+            // an outage.
+            CURLOPT_CONNECTTIMEOUT => 5,
+            CURLOPT_TIMEOUT => 15,
             CURLOPT_HTTPHEADER => [
                 "Authorization: Bearer {$this->token}",
                 'Accept: application/json',
@@ -82,6 +87,10 @@ final class GproApiFetcher
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_ENCODING       => '',
+            // The market dump is larger than the v2 endpoints, so allow a longer
+            // transfer budget — but still bound it.
+            CURLOPT_CONNECTTIMEOUT => 5,
+            CURLOPT_TIMEOUT        => 30,
             CURLOPT_HTTPHEADER     => [
                 'Accept: application/json',
                 'Accept-Encoding: gzip',
