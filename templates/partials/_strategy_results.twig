@@ -35,7 +35,7 @@
         </div>
 
         {# FUEL CARD #}
-        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex justify-between items-center">
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-wrap justify-between items-center gap-4">
             <div>
                 <h4 class="t-section">Fuel Required</h4>
                 <p class="t-caption">Consumption: {{ strategy_results.fuel.l_per_lap }} L/lap</p>
@@ -116,10 +116,10 @@
                 <table class="min-w-full divide-y divide-slate-200 text-sm">
                     <thead>
                         <tr class="bg-white">
-                            <th class="px-4 py-2 w-1/4"></th>
+                            <th class="px-4 py-3 text-left align-bottom"><span class="t-label">Part</span></th>
 
                             {# Q1 Column — API-derived, read-only #}
-                            <th class="px-4 py-3 text-center border-l border-slate-200">
+                            <th class="px-4 py-3 text-center border-l border-slate-200 w-36">
                                 <span class="block font-bold text-slate-700 mb-1">Qualifying 1</span>
                                 <div class="flex justify-center gap-2 items-center text-xs text-slate-600">
                                     <span class="font-semibold">{{ strategy_results.weather_inputs.Q1.temp }}°C</span>
@@ -132,7 +132,7 @@
                             </th>
 
                             {# Q2 Column — API-derived, read-only #}
-                            <th class="px-4 py-3 text-center border-l border-slate-200">
+                            <th class="px-4 py-3 text-center border-l border-slate-200 w-36">
                                 <span class="block font-bold text-slate-700 mb-1">Qualifying 2</span>
                                 <div class="flex justify-center gap-2 items-center text-xs text-slate-600">
                                     <span class="font-semibold">{{ strategy_results.weather_inputs.Q2.temp }}°C</span>
@@ -145,7 +145,7 @@
                             </th>
 
                             {# Race Column — weather is the only knob; changing it re-runs the calc #}
-                            <th class="px-4 py-3 text-center border-l border-slate-200 bg-blue-50">
+                            <th class="px-4 py-3 text-center border-l border-slate-200 bg-blue-50 w-48">
                                 <span class="block font-bold text-blue-800 mb-1">Race</span>
                                 <div class="flex justify-center gap-2 items-center">
                                     <span class="text-xs font-bold px-2">{{ strategy_results.inputs.temp }}°C</span>
@@ -161,11 +161,11 @@
                     </thead>
                     <tbody class="divide-y divide-slate-200">
                         {% for part in ['Front Wing', 'Rear Wing', 'Engine', 'Brakes', 'Gearbox', 'Suspension'] %}
-                            <tr>
-                                <td class="px-4 py-3 font-bold text-slate-700 pl-6">{{ part }}</td>
-                                <td class="px-4 py-3 text-center font-mono text-lg tabular-nums border-l border-slate-100">{{ strategy_results.setups.Q1[part] }}</td>
-                                <td class="px-4 py-3 text-center font-mono text-lg tabular-nums border-l border-slate-100">{{ strategy_results.setups.Q2[part] }}</td>
-                                <td class="px-4 py-3 text-center font-mono text-lg font-bold tabular-nums text-blue-700 bg-blue-50 border-l border-blue-100">
+                            <tr class="hover:bg-slate-50">
+                                <td class="px-4 py-2.5 font-bold text-slate-700 pl-6">{{ part }}</td>
+                                <td class="px-4 py-2.5 text-center font-mono tabular-nums text-slate-600 border-l border-slate-100">{{ strategy_results.setups.Q1[part] }}</td>
+                                <td class="px-4 py-2.5 text-center font-mono tabular-nums text-slate-600 border-l border-slate-100">{{ strategy_results.setups.Q2[part] }}</td>
+                                <td class="px-4 py-2.5 text-center font-mono text-base font-bold tabular-nums text-blue-700 bg-blue-50 border-l border-blue-100">
                                     {{ strategy_results.setups.Race[part] }}
                                 </td>
                             </tr>
@@ -173,21 +173,10 @@
                     </tbody>
                 </table>
             </div>
-        </div>
-
-        <div class="rounded-md bg-blue-50 p-4 border-l-4 border-blue-400 shadow-sm">
-            <div class="flex">
-                <div class="flex-shrink-0">
-                    <svg class="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
-                    </svg>
-                </div>
-                <div class="ml-3">
-                    <p class="text-sm text-blue-700 font-bold">Info regarding setup</p>
-                    <p class="text-sm text-blue-700 font-medium">
-                        If any value is above 999, just put 999. We decided not to clamp the value just in case your driver complains - that way you know why.
-                    </p>
-                </div>
+            <div class="px-6 py-3 border-t border-slate-100">
+                <p class="text-xs text-slate-500">
+                    Values above 999 should be entered as 999 in GPRO — we don't clamp them, so if your driver complains you know why.
+                </p>
             </div>
         </div>
 

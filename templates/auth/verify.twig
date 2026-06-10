@@ -3,10 +3,10 @@
 {% block content %}
 <div class="max-w-md mx-auto mt-10">
 
-    <h1 class="text-2xl font-bold mb-4">Check your email</h1>
+    <h1 class="t-display mb-4">Check your email</h1>
 
     {% if flash %}
-        <div class="bg-yellow-100 border border-yellow-200 text-yellow-800 p-3 rounded mb-4 text-sm">
+        <div class="notice notice-warn mb-4">
             {{ flash }}
         </div>
     {% endif %}
@@ -15,12 +15,12 @@
        SYNC FEEDBACK (AFTER VERIFY)
        ============================ #}
     {% if sync_status is defined and sync_status == 'running' %}
-        <div class="mb-4 bg-blue-50 border border-blue-200 text-blue-800 p-3 rounded text-sm flex items-center gap-2">
+        <div class="notice notice-info mb-4 flex items-center gap-2">
             <span class="animate-spin">⏳</span>
             <span>Syncing your profile data from GPRO…</span>
         </div>
     {% elseif sync_status is defined and sync_status == 'failed' %}
-        <div class="mb-4 bg-red-50 border border-red-200 text-red-800 p-3 rounded text-sm">
+        <div class="notice notice-error mb-4">
             GPRO sync failed. You can still continue and retry later.
         </div>
     {% endif %}
@@ -61,9 +61,7 @@
                 <button
                     type="button"
                     disabled
-                    class="w-full px-4 py-2 rounded bg-slate-300 text-slate-500
-                           font-medium cursor-not-allowed flex items-center
-                           justify-center gap-2"
+                    class="btn btn-md btn-disabled w-full"
                 >
                     <span class="animate-spin">⏳</span>
                     Syncing your profile data…
@@ -72,8 +70,7 @@
                 <button
                     type="submit"
                     data-busy-text="Verifying…"
-                    class="w-full px-4 py-2 rounded bg-blue-600 hover:bg-blue-700
-                           text-white font-medium transition-colors"
+                    class="btn btn-md btn-primary w-full"
                 >
                     Verify
                 </button>

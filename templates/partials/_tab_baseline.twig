@@ -75,8 +75,7 @@
                         {% endfor %}
                     </div>
 
-                    <button type="submit" 
-                            class="mt-4 w-full rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 transition-all">
+                    <button type="submit" class="btn btn-md btn-primary mt-4 w-full">
                         Add to Database
                     </button>
                 </form>
@@ -95,7 +94,7 @@
                     <input type="hidden" name="division" value="{{ active_division }}">
                     {# FIX: Added px-3 for padding #}
                     <input type="number" name="season_number" value="{{ division_metadata.season }}" class="form-input-sm">
-                    <button type="submit" class="rounded-md bg-white px-2.5 py-1.5 text-sm font-semibold text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 hover:bg-slate-50">Set</button>
+                    <button type="submit" class="btn btn-sm btn-secondary">Set</button>
                 </form>
             </div>
         </div>
@@ -106,7 +105,7 @@
                    onsubmit="return confirm('Delete the last pilot added to {{ active_division }}? This cannot be undone.');">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <input type="hidden" name="division" value="{{ active_division }}">
-                <button type="submit" class="w-full rounded-md bg-amber-100 px-3 py-2 text-sm font-semibold text-amber-700 shadow-sm hover:bg-amber-200 transition-colors">
+                <button type="submit" class="btn btn-md btn-soft-warn w-full shadow-sm">
                     Undo Last
                 </button>
             </form>
@@ -114,7 +113,7 @@
                   onsubmit="return confirm('Delete ALL {{ all_ideal_pilots[active_division].count }} pilot record(s) for {{ active_division }}? This cannot be undone.');">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <input type="hidden" name="division" value="{{ active_division }}">
-                <button type="submit" class="w-full rounded-md bg-red-100 px-3 py-2 text-sm font-semibold text-red-700 shadow-sm hover:bg-red-200 transition-colors">
+                <button type="submit" class="btn btn-md btn-soft-danger w-full shadow-sm">
                     Clear All
                 </button>
             </form>

@@ -2,10 +2,10 @@
 
 {% block content %}
 <div class="max-w-md mx-auto mt-10">
-    <h1 class="text-2xl font-bold mb-4">Sign in</h1>
-    
+    <h1 class="t-display mb-4">Sign in</h1>
+
     {% if flash %}
-        <div class="bg-yellow-100 border border-yellow-200 text-yellow-800 p-3 rounded mb-4 text-sm">{{ flash }}</div>
+        <div class="notice notice-warn mb-4">{{ flash }}</div>
     {% endif %}
 
     <form method="POST" action="/login_request" data-disable-on-submit class="space-y-4 bg-white p-6 rounded shadow-sm border border-slate-200">
@@ -27,7 +27,7 @@
             <div class="g-recaptcha" data-sitekey="{{ recaptcha_site_key }}"></div>
         {% endif %}
 
-        <button type="submit" data-busy-text="Sending code…" class="w-full px-4 py-2 rounded bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors">
+        <button type="submit" data-busy-text="Sending code…" class="btn btn-md btn-primary w-full">
             Continue
         </button>
 

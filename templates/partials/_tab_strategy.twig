@@ -21,14 +21,14 @@
                 <div class="p-4 space-y-3">
                     <div class="flex items-center justify-between gap-3">
                         <label class="t-label">Track Temp</label>
-                        <div class="form-input-group w-28">
+                        <div class="form-input-group w-24">
                             <input type="number" name="temp" value="{{ strategy_results.inputs.temp ?? '' }}" placeholder="Auto" step="0.1" class="form-input-compact">
                             <span class="form-input-addon">°C</span>
                         </div>
                     </div>
                     <div class="flex items-center justify-between gap-3">
                         <label class="t-label">Humidity</label>
-                        <div class="form-input-group w-28">
+                        <div class="form-input-group w-24">
                             <input type="number" name="humidity" value="{{ strategy_results.inputs.hum ?? '' }}" placeholder="Auto" class="form-input-compact">
                             <span class="form-input-addon">%</span>
                         </div>
@@ -73,7 +73,7 @@
                 <div class="px-4 py-3 border-b border-slate-200 bg-slate-50">
                     <h3 class="t-section">Driver</h3>
                 </div>
-                <div class="p-4 grid grid-cols-2 gap-3">
+                <div class="p-4 space-y-3">
                     {% set d = strategy_results.stats.driver %}
                     {% for field, label in {
                         'd_conc': 'Concentration',
@@ -91,8 +91,8 @@
                             'd_tech': 'technical_insight',
                             'd_wgt':  'weight'
                         }[field] %}
-                        <div>
-                            <label class="t-label block mb-1">{{ label }}</label>
+                        <div class="flex items-center justify-between gap-3">
+                            <label class="t-label">{{ label }}</label>
                             <input type="number" name="{{ field }}" value="{{ d[key] }}" class="form-input-sm">
                         </div>
                     {% endfor %}
@@ -107,12 +107,12 @@
                 <div class="p-4 space-y-5">
                     {# Car #}
                     <div>
-                        <p class="t-label mb-2">Car Levels</p>
-                        <div class="grid grid-cols-3 gap-3">
-                            {% for field, label in { 'c_eng': 'Engine', 'c_susp': 'Susp', 'c_elec': 'Elec' } %}
+                        <p class="t-section mb-2">Car Levels</p>
+                        <div class="space-y-3">
+                            {% for field, label in { 'c_eng': 'Engine', 'c_susp': 'Suspension', 'c_elec': 'Electronics' } %}
                                 {% set key = { 'c_eng': 'lvlEngine', 'c_susp': 'lvlSusp', 'c_elec': 'lvlElectronics' }[field] %}
-                                <div>
-                                    <label class="t-label block mb-1">{{ label }}</label>
+                                <div class="flex items-center justify-between gap-3">
+                                    <label class="t-label">{{ label }}</label>
                                     <input type="number" name="{{ field }}" value="{{ strategy_results.stats.car[key] }}" class="form-input-sm">
                                 </div>
                             {% endfor %}
@@ -121,14 +121,14 @@
 
                     {# Staff #}
                     <div>
-                        <p class="t-label mb-2">Staff</p>
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="t-label block mb-1">Concentration</label>
+                        <p class="t-section mb-2">Staff</p>
+                        <div class="space-y-3">
+                            <div class="flex items-center justify-between gap-3">
+                                <label class="t-label">Concentration</label>
                                 <input type="number" name="s_conc" value="{{ strategy_results.stats.staff.concentration }}" class="form-input-sm">
                             </div>
-                            <div>
-                                <label class="t-label block mb-1">Stress</label>
+                            <div class="flex items-center justify-between gap-3">
+                                <label class="t-label">Stress Handling</label>
                                 <input type="number" name="s_stress" value="{{ strategy_results.stats.staff.stressHandling }}" class="form-input-sm">
                             </div>
                         </div>
@@ -136,14 +136,14 @@
 
                     {# TD #}
                     <div>
-                        <p class="t-label mb-2">Tech Director</p>
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="t-label block mb-1">Experience</label>
+                        <p class="t-section mb-2">Tech Director</p>
+                        <div class="space-y-3">
+                            <div class="flex items-center justify-between gap-3">
+                                <label class="t-label">Experience</label>
                                 <input type="number" name="td_exp" value="{{ strategy_results.stats.td.experience }}" class="form-input-sm">
                             </div>
-                            <div>
-                                <label class="t-label block mb-1">Pit Coord</label>
+                            <div class="flex items-center justify-between gap-3">
+                                <label class="t-label">Pit Coordination</label>
                                 <input type="number" name="td_pit" value="{{ strategy_results.stats.td.pitCoordination }}" class="form-input-sm">
                             </div>
                         </div>

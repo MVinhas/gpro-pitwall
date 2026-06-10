@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Each entry mirrors its annotated release tag.
 
+## [1.2.7] - 2026-06-10
+- UX/UI consistency pass across every template. New shared `.notice`/`.notice-{info,warn,error,success}` left-accent banner classes replace the ad-hoc flash/error styles on the auth pages, admin pages, and all analysis tabs; raw-utility buttons converted to the `.btn` component classes (plus new `.btn-soft-warn`/`.btn-soft-danger` variants for Undo/Clear); headings aligned to the `t-*` type tokens; yellow/green badge palettes unified to amber/emerald.
+- Fix: the landing page now renders flash messages — the "account deleted" confirmation was silently dropped before.
+- Fix: define the `fade-in` animation referenced by the tab container (was a no-op class), with `prefers-reduced-motion` respected.
+- Recruitment Analyzer pagination: windowed page list (1 … current±2 … last) instead of one link per page, and visible Previous/Next controls on mobile (there were none below the `sm` breakpoint).
+- Race Strategy: compact sidebar — driver/car/staff/TD inputs are now aligned label-left rows matching Race Settings, native number spinners removed app-wide, narrower numeric boxes; Car Setup table tightened (fixed session-column widths, denser rows) with the "enter 999" note folded into the card footer.
+- Testing tab: restructured into two flowing columns so cards stack flush — no more vertical gap between Track and Points Gained per 5 Laps.
+- Mobile nav select now uses the shared `.form-select` style; external GPRO links gained `rel="noopener noreferrer"`.
+
 ## [1.2.6] - 2026-06-09
 - Bump CI actions off the deprecated Node.js 20 runtime: `actions/checkout@v4` → `v6`, `actions/cache@v4` → `v5`. GitHub forces Node 24 on these actions from 2026-06-16; this clears the deprecation warning ahead of that. No app or runtime behaviour change.
 

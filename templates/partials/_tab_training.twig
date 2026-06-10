@@ -9,7 +9,7 @@
 
             <div class="p-6">
                 {% if training_error %}
-                    <div class="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700 border border-red-200">
+                    <div class="mb-4 notice notice-error">
                         {{ training_error }}
                     </div>
                 {% endif %}
@@ -83,7 +83,7 @@
         {% if training_results %}
             <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                 <div class="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
-                    <h3 class="text-lg font-semibold text-slate-800">Projected Results</h3>
+                    <h3 class="t-heading">Projected Results</h3>
                     <span class="inline-flex items-center rounded-md bg-blue-100 px-2 py-1 text-xs font-medium text-blue-700">
                         {{ training_results.program }}
                     </span>
@@ -118,7 +118,7 @@
                                     {% set endVal = training_results.end[key] %}
                                     {% set diff = endVal - startVal %}
                                     {% if diff != 0 %}
-                                        <span class="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset {{ diff > 0 ? 'bg-green-50 text-green-700 ring-green-600/20' : 'bg-red-50 text-red-700 ring-red-600/20' }}">
+                                        <span class="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset {{ diff > 0 ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/20' : 'bg-red-50 text-red-700 ring-red-600/20' }}">
                                             {{ key|capitalize }}: {{ diff > 0 ? '+' : '' }}{{ diff }}
                                         </span>
                                     {% endif %}

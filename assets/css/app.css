@@ -45,6 +45,36 @@
     @apply bg-slate-300 text-slate-500 cursor-not-allowed;
 }
 
+/* Soft destructive variants — low-emphasis warning/danger actions that sit
+   beside data (Undo, Clear) rather than primary destructive CTAs. */
+.btn-soft-warn {
+    @apply bg-amber-100 text-amber-700
+           hover:bg-amber-200
+           focus:ring-amber-400;
+}
+
+.btn-soft-danger {
+    @apply bg-red-100 text-red-700
+           hover:bg-red-200
+           focus:ring-red-400;
+}
+
+/* =========================
+   NOTICE BANNERS
+   The left-accent-bar idiom: info = blue, caution/stale-data = amber,
+   error = red, success/confirmation = emerald. Lead with a bold short
+   clause, then one concise sentence.
+========================= */
+
+.notice {
+    @apply rounded-md border-l-4 p-4 shadow-sm text-sm;
+}
+
+.notice-info    { @apply bg-blue-50 border-blue-400 text-blue-800; }
+.notice-warn    { @apply bg-amber-50 border-amber-400 text-amber-800; }
+.notice-error   { @apply bg-red-50 border-red-400 text-red-800; }
+.notice-success { @apply bg-emerald-50 border-emerald-400 text-emerald-800; }
+
 /*
  * Type tokens — keep usage consistent across all tabs.
  * Section headers are colour-neutral on purpose: colour is reserved for
@@ -75,8 +105,14 @@
            hover:ring-slate-400;
 }
 .form-input         { @apply block w-full; }
-.form-input-compact { @apply block w-28 max-w-full tabular-nums; }
-.form-input-sm      { @apply block w-20 text-left tabular-nums; }
+.form-input-compact { @apply block w-24 max-w-full tabular-nums; }
+.form-input-sm      { @apply block w-16 text-center tabular-nums; }
+
+/* Native number spinners off — they bloat 2–3 digit boxes and look uneven
+   across browsers. Values are typed; mobile gets the numeric keyboard. */
+input[type="number"] { appearance: textfield; -moz-appearance: textfield; }
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 
 /* Native select arrow off; draw our own chevron so it matches the inputs
    and stays consistent across browsers. Room on the right for the icon. */
@@ -107,6 +143,17 @@
 .form-input-compact[readonly],
 .form-input-sm[readonly] {
     @apply bg-slate-50 text-slate-500 cursor-not-allowed;
+}
+
+/* Tab-content entrance. Referenced by index.twig's #main-content-tabs. */
+.fade-in { animation: fade-in 0.25s ease-out; }
+@keyframes fade-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .fade-in { animation: none; }
 }
 
 ::-webkit-scrollbar { width: 8px; height: 8px; }
