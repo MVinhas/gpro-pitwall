@@ -15,6 +15,7 @@ Each entry mirrors its annotated release tag.
 - Landing page promoted-up: keyword-front-loaded hero, "Up and running in two minutes" steps, section headings over the feature grid, a five-question FAQ (real long-tail copy none of the competitor sites has), and a closing CTA band.
 - New brand mark: original logo in the GPRO palette (steel-navy gradient, yellow speed swoosh, white P) across `logo.svg`, `favicon.svg`, regenerated multi-size `favicon.ico`, and the OG card.
 - Performance: static assets now ship `Cache-Control: public, max-age=31536000, immutable`; the stylesheet is cache-busted per release via `?v={version}`.
+- Brand palette: the Tailwind `blue-*` scale is re-anchored to a GPRO steel-blue ramp (logo navy at `blue-900`), so every button, link, active tab, focus ring and info banner adopts the GPRO-flavoured blue with no template changes. Semantic colours (amber caution, red error, emerald success) are untouched.
 
 ## [1.2.8] - 2026-06-10
 - **Security:** Login no longer leaks whether a username exists. An unknown username now produces a decoy pending state that routes to `/verify` identically to a real account (and can never verify), closing the redirect-based enumeration oracle — the response body was already generic.
