@@ -1,5 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="GPRO Pitwall">
-  <rect width="64" height="64" rx="12" fill="#2563eb"/>
+  <defs>
+    <linearGradient id="pw-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#142f4d"/>
+      <stop offset="1" stop-color="#2f6fae"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="12" fill="url(#pw-bg)"/>
+  <path d="M6 55 C 26 60 44 52 58 32" fill="none" stroke="#ffd200" stroke-width="4.5" stroke-linecap="round"/>
   <path fill="#ffffff" fill-rule="evenodd"
         d="M18 14 H38 A12 12 0 0 1 38 38 H28 V50 H18 Z
            M28 22 V30 H38 A4 4 0 0 0 38 22 Z"/>

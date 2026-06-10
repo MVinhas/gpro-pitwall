@@ -69,6 +69,12 @@ if ($container['settings']['is_dev']) {
     $container['twig']->addExtension(new \Twig\Extension\DebugExtension());
 }
 $container['twig']->addGlobal('app_version', $container['version']);
+// Canonical origin for SEO tags (rel=canonical, og:url, og:image). Override
+// with APP_PUBLIC_URL when serving from a different domain (e.g. staging).
+$container['twig']->addGlobal(
+    'canonical_host',
+    rtrim($_ENV['APP_PUBLIC_URL'] ?? 'https://gpro-pitwall.com', '/'),
+);
 $container['twig']->addGlobal('no_pilot_message', \App\Controller\StrategyController::NO_PILOT_MESSAGE);
 
 use App\Repository\PilotRepository;

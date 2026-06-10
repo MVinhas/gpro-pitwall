@@ -1,5 +1,36 @@
 {% extends "layout.twig" %}
 
+{% block structured_data %}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "GPRO Pitwall",
+    "url": "{{ canonical_host }}/",
+    "description": "Free strategy tool for Grand Prix Racing Online (GPRO): race strategy planner, setup calculator, car wear analysis, fuel and tyre forecasts, training planner and driver market analyzer.",
+    "applicationCategory": "SportsApplication",
+    "operatingSystem": "Web",
+    "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "EUR"
+    },
+    "featureList": [
+        "Race strategy planner",
+        "Setup calculator",
+        "Car wear analysis and calculator",
+        "Fuel consumption forecast",
+        "Tyre wear projection",
+        "Training planner",
+        "Recruitment analyzer (driver market)",
+        "Sponsor negotiation answers",
+        "Weather analysis and forecast"
+    ],
+    "image": "{{ canonical_host }}/assets/og-image.png"
+}
+</script>
+{% endblock %}
+
 {% block content %}
 <div class="max-w-5xl mx-auto px-4">
 
@@ -14,17 +45,14 @@
             Free to use — no tier, no paywall
         </span>
         <h1 class="mt-5 text-4xl sm:text-5xl font-bold text-slate-900 tracking-tight">
-            <span class="text-blue-600">GPRO</span> Pitwall — setup calculator,
-            race strategy planner &amp; car wear analysis
+            The race-weekend cockpit for
+            <span class="text-blue-600">Grand Prix Racing Online</span>
         </h1>
         <p class="mt-4 text-lg text-slate-600 max-w-3xl mx-auto">
-            The free strategy tool for
-            <strong>Grand Prix Racing Online (GPRO)</strong> managers.
-            Race strategy planner, setup calculator, car wear analysis,
-            fuel consumption forecast, tyre wear projection, training
-            planner, recruitment analyzer, sponsor negotiation answers
-            and weather analysis — every strategic decision for your race
-            weekend in one cockpit.
+            GPRO Pitwall reads your own GPRO data and answers the question every
+            manager asks twice a week: <strong>what should I do for this race?</strong>
+            Race strategy, setup calculator, car wear forecast, training and
+            recruitment — one screen, in race-prep order.
         </p>
         <div class="mt-8 flex flex-wrap gap-3 justify-center">
             <a href="/register" class="btn btn-lg btn-primary">
@@ -41,8 +69,100 @@
         </p>
     </section>
 
+    {# HOW IT WORKS #}
+    <section class="mb-12">
+        <h2 class="t-display text-center mb-6">Up and running in two minutes</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm text-center">
+                <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-white text-sm font-bold">1</span>
+                <h3 class="t-heading mt-3">Register free</h3>
+                <p class="t-caption mt-1">
+                    Username + email code. No password to remember, nothing to pay.
+                </p>
+            </div>
+            <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm text-center">
+                <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-white text-sm font-bold">2</span>
+                <h3 class="t-heading mt-3">Paste your GPRO API token</h3>
+                <p class="t-caption mt-1">
+                    Pitwall syncs your driver, car, weather and sponsors from the
+                    official GPRO API. Encrypted at rest, never shared.
+                </p>
+            </div>
+            <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm text-center">
+                <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-white text-sm font-bold">3</span>
+                <h3 class="t-heading mt-3">Open the cockpit</h3>
+                <p class="t-caption mt-1">
+                    Push call, setup numbers, fuel load, tyre pick, wear risks and
+                    sponsor answers — ready before qualifying.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    {# WHAT IT DOES — feature cards, keyword-rich descriptions #}
+    <section class="mb-12">
+        <h2 class="t-display text-center mb-6">Every strategic GPRO decision, covered</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+                <h3 class="t-heading">Race-weekend Cockpit</h3>
+                <p class="t-caption mt-1">
+                    Single-screen aggregate: PHA match, weather analysis,
+                    sponsor negotiation answers, training picks, testing
+                    projection and car wear — race-prep order, every
+                    strategic GPRO decision in one place.
+                </p>
+            </div>
+            <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+                <h3 class="t-heading">Race Strategy Planner</h3>
+                <p class="t-caption mt-1">
+                    Full race strategy planner with setup calculator: fuel
+                    consumption, tyre wear projection per compound (Extra
+                    Soft, Soft, Medium, Hard, Rain), pit-stop count and
+                    boost-lap planning. Live risk slider re-runs the
+                    projection without a page reload.
+                </p>
+            </div>
+            <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+                <h3 class="t-heading">Car Wear Analysis &amp; Calculator</h3>
+                <p class="t-caption mt-1">
+                    Per-part end-of-race car wear forecast from your real
+                    driver attributes — plus a ranked list of swap options
+                    that fit your cash and your group's car-level range.
+                    Live driver-risk slider updates the projection instantly.
+                </p>
+            </div>
+            <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+                <h3 class="t-heading">Training Planner</h3>
+                <p class="t-caption mt-1">
+                    Multi-program training planner: combine sessions in one
+                    shot, see projected Overall Ability and per-attribute
+                    deltas, catch the motivation hit before it ruins the
+                    cycle.
+                </p>
+            </div>
+            <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+                <h3 class="t-heading">Recruitment Analyzer</h3>
+                <p class="t-caption mt-1">
+                    Driver-market analyzer: scores the entire GPRO driver
+                    pool against your division's ideal pilot, and flags how
+                    many of each candidate's favourite tracks are raced this
+                    season and next.
+                </p>
+            </div>
+            <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+                <h3 class="t-heading">Sponsors &amp; Weather</h3>
+                <p class="t-caption mt-1">
+                    Sponsor negotiation answers tailored to each ongoing
+                    proposal plus weather analysis and forecast for Q1, Q2
+                    and race start — so you know whether to push, conserve
+                    or pack rain tyres.
+                </p>
+            </div>
+        </div>
+    </section>
+
     {# KEYWORD STRIP — explicit feature list for crawlers and skimmers #}
-    <section class="bg-white rounded-xl border border-slate-200 p-5 mb-10 text-center">
+    <section class="bg-white rounded-xl border border-slate-200 p-5 mb-12 text-center">
         <p class="t-section mb-2">What's inside</p>
         <p class="text-sm text-slate-600 leading-relaxed">
             Race strategy planner ·
@@ -59,65 +179,6 @@
             Boost-lap planning ·
             Testing projection
         </p>
-    </section>
-
-    {# WHAT IT DOES — feature cards, keyword-rich descriptions #}
-    <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-12">
-        <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-            <h3 class="t-heading">Race-weekend Cockpit</h3>
-            <p class="t-caption mt-1">
-                Single-screen aggregate: PHA match, weather analysis,
-                sponsor negotiation answers, training picks, testing
-                projection and car wear — race-prep order, every
-                strategic GPRO decision in one place.
-            </p>
-        </div>
-        <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-            <h3 class="t-heading">Race Strategy Planner</h3>
-            <p class="t-caption mt-1">
-                Full race strategy planner with setup calculator: fuel
-                consumption, tyre wear projection per compound (Extra
-                Soft, Soft, Medium, Hard, Rain), pit-stop count and
-                boost-lap planning. Live risk slider re-runs the
-                projection without a page reload.
-            </p>
-        </div>
-        <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-            <h3 class="t-heading">Car Wear Analysis &amp; Calculator</h3>
-            <p class="t-caption mt-1">
-                Per-part end-of-race car wear forecast from your real
-                driver attributes — plus a ranked list of swap options
-                that fit your cash and your group's car-level range.
-                Live driver-risk slider updates the projection instantly.
-            </p>
-        </div>
-        <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-            <h3 class="t-heading">Training Planner</h3>
-            <p class="t-caption mt-1">
-                Multi-program training planner: combine sessions in one
-                shot, see projected Overall Ability and per-attribute
-                deltas, catch the motivation hit before it ruins the
-                cycle.
-            </p>
-        </div>
-        <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-            <h3 class="t-heading">Recruitment Analyzer</h3>
-            <p class="t-caption mt-1">
-                Driver-market analyzer: scores the entire GPRO driver
-                pool against your division's ideal pilot, and flags how
-                many of each candidate's favourite tracks are raced this
-                season and next.
-            </p>
-        </div>
-        <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-            <h3 class="t-heading">Sponsors &amp; Weather</h3>
-            <p class="t-caption mt-1">
-                Sponsor negotiation answers tailored to each ongoing
-                proposal plus weather analysis and forecast for Q1, Q2
-                and race start — so you know whether to push, conserve
-                or pack rain tyres.
-            </p>
-        </div>
     </section>
 
     {# PRIVACY + SUPPORT #}
@@ -150,6 +211,89 @@
                     </a>
                 </div>
             </div>
+        </div>
+    </section>
+
+    {# FAQ — real answers; also the long-tail search surface #}
+    <section class="mb-12">
+        <h2 class="t-display text-center mb-6">Frequently asked questions</h2>
+        <div class="space-y-3 max-w-3xl mx-auto">
+            <details class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm group">
+                <summary class="cursor-pointer list-none flex items-center justify-between">
+                    <h3 class="t-heading">Is GPRO Pitwall really free?</h3>
+                    <span class="text-slate-400 group-open:rotate-90 transition-transform" aria-hidden="true">▸</span>
+                </summary>
+                <p class="t-caption mt-3">
+                    Yes — every feature is available to every registered user. There is
+                    no premium tier, no locked tools and no trial period. The project is
+                    supported only by voluntary Buy&nbsp;Me&nbsp;a&nbsp;Coffee donations.
+                </p>
+            </details>
+            <details class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm group">
+                <summary class="cursor-pointer list-none flex items-center justify-between">
+                    <h3 class="t-heading">How does the GPRO setup calculator work?</h3>
+                    <span class="text-slate-400 group-open:rotate-90 transition-transform" aria-hidden="true">▸</span>
+                </summary>
+                <p class="t-caption mt-3">
+                    Pitwall combines your synced driver attributes, car part levels and
+                    the official weather forecast to compute wing, engine, brake,
+                    gearbox and suspension settings for Q1, Q2 and the race — no manual
+                    copying of values from GPRO pages.
+                </p>
+            </details>
+            <details class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm group">
+                <summary class="cursor-pointer list-none flex items-center justify-between">
+                    <h3 class="t-heading">Do I need my GPRO API token?</h3>
+                    <span class="text-slate-400 group-open:rotate-90 transition-transform" aria-hidden="true">▸</span>
+                </summary>
+                <p class="t-caption mt-3">
+                    Yes. The token lets Pitwall read your own driver, car, weather and
+                    sponsor data from the official GPRO API — read-only, scoped to your
+                    account. Generate it at app.gpro.net/apiaccess and paste it once;
+                    it is stored encrypted (AES-256-GCM) and never shown again.
+                </p>
+            </details>
+            <details class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm group">
+                <summary class="cursor-pointer list-none flex items-center justify-between">
+                    <h3 class="t-heading">How accurate are the fuel and tyre forecasts?</h3>
+                    <span class="text-slate-400 group-open:rotate-90 transition-transform" aria-hidden="true">▸</span>
+                </summary>
+                <p class="t-caption mt-3">
+                    Projections use per-track wear and consumption characteristics plus
+                    your actual driver and car data, and are continuously calibrated
+                    against real race results. Forecasts always show their inputs so you
+                    can sanity-check the assumptions before qualifying.
+                </p>
+            </details>
+            <details class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm group">
+                <summary class="cursor-pointer list-none flex items-center justify-between">
+                    <h3 class="t-heading">Is GPRO Pitwall affiliated with GPRO?</h3>
+                    <span class="text-slate-400 group-open:rotate-90 transition-transform" aria-hidden="true">▸</span>
+                </summary>
+                <p class="t-caption mt-3">
+                    No. Pitwall is an unofficial, open-source fan tool built by a GPRO
+                    player. It only uses the public GPRO API with your own token and is
+                    not affiliated with or endorsed by Grand Prix Racing Online.
+                </p>
+            </details>
+        </div>
+    </section>
+
+    {# FINAL CTA — brand navy + yellow accent (the GPRO-flavoured identity
+       lives on brand surfaces like this; in-app screens keep the slate/blue
+       palette where amber/red/emerald carry meaning). #}
+    <section class="text-center rounded-xl bg-gradient-to-br from-[#142f4d] to-[#1d4570] px-6 py-10 mb-12 border-b-4 border-[#ffd200]">
+        <h2 class="text-2xl font-bold text-white">
+            Tuesday and Friday races come fast.
+        </h2>
+        <p class="mt-2 text-slate-300 max-w-xl mx-auto text-sm">
+            Have your strategy, setup and wear plan ready before qualifying —
+            free, every race.
+        </p>
+        <div class="mt-6">
+            <a href="/register" class="btn btn-lg btn-primary">
+                Start using GPRO Pitwall
+            </a>
         </div>
     </section>
 

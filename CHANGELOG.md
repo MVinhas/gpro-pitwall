@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Each entry mirrors its annotated release tag.
 
+## [1.3.0] - 2026-06-10
+- SEO pass benchmarked against comparable GPRO tooling sites (none has structured data, social cards or substantial indexable copy):
+  - Per-page `<title>` / meta description / canonical URL via Twig blocks; private pages (verify, reauth, control panel, admin, debug, errors) now `noindex`.
+  - Open Graph + Twitter cards with a generated 1200×630 `assets/og-image.png` (SVG og:images are ignored by most crawlers); `WebApplication` JSON-LD with free-offer markup on the landing page.
+  - `robots.txt` + `sitemap.xml` in the docroot (shipped automatically by `build_release.sh`'s `public/` copy).
+  - Canonical origin configurable via `APP_PUBLIC_URL` (defaults to `https://gpro-pitwall.com`).
+- Landing page promoted-up: keyword-front-loaded hero, "Up and running in two minutes" steps, section headings over the feature grid, a five-question FAQ (real long-tail copy none of the competitor sites has), and a closing CTA band.
+- New brand mark: original logo in the GPRO palette (steel-navy gradient, yellow speed swoosh, white P) across `logo.svg`, `favicon.svg`, regenerated multi-size `favicon.ico`, and the OG card.
+- Performance: static assets now ship `Cache-Control: public, max-age=31536000, immutable`; the stylesheet is cache-busted per release via `?v={version}`.
+- Brand palette: the Tailwind `blue-*` scale is re-anchored to a GPRO steel-blue ramp (logo navy at `blue-900`), so every button, link, active tab, focus ring and info banner adopts the GPRO-flavoured blue with no template changes. Semantic colours (amber caution, red error, emerald success) are untouched.
+
 ## [1.2.8] - 2026-06-10
 - **Security:** Login no longer leaks whether a username exists. An unknown username now produces a decoy pending state that routes to `/verify` identically to a real account (and can never verify), closing the redirect-based enumeration oracle — the response body was already generic.
 - **Security:** The Control Panel never sends the decrypted GPRO API token to the browser. It shows a masked last-4 hint with an empty replace field (blank submit = unchanged); the token is also stripped from the shared Twig `user` global as defence-in-depth.
