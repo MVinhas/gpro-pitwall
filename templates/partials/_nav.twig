@@ -17,7 +17,7 @@
     <div class="md:hidden">
         {# Mobile Dropdown fallback #}
         <label for="tabs" class="sr-only">Select a tab</label>
-        <select id="tabs" name="tabs" class="block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500" onchange="window.location.href=this.value">
+        <select id="tabs" name="tabs" class="form-select" onchange="window.location.href=this.value">
             {% for section in main_sections %}
                 <option value="{{ _self.tab_href(section, active_division, active_track, division_tabs) }}" {{ section == active_main_tab ? 'selected' : '' }}>
                     {{ section }}

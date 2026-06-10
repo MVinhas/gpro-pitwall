@@ -18,8 +18,12 @@
         </p>
     </div>
 
-    {# Row 1: track/car + points distribution (paired on desktop, stacked on mobile) #}
+    {# Two flowing columns (single grid, no shared row heights, so cards stack
+       flush): left = track facts + per-priority gains, right = points
+       distribution + ideal setup. Stacked in that order on mobile. #}
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 items-start">
+
+    <div class="space-y-6">
 
     {# ===== TRACK + CAR ===== #}
     <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
@@ -61,45 +65,6 @@
         </div>
     </div>
 
-    {# ===== POINTS DISTRIBUTION ===== #}
-    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div class="px-6 py-3 border-b border-slate-200 bg-slate-50">
-            <h3 class="t-section">Points Distribution</h3>
-        </div>
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-slate-200 text-sm">
-                <thead class="bg-white">
-                    <tr>
-                        <th class="px-6 py-3 text-left"><span class="t-label">Characteristic</span></th>
-                        <th class="px-4 py-3 text-center border-l border-slate-100"><span class="t-label">Test</span></th>
-                        <th class="px-4 py-3 text-center border-l border-slate-100"><span class="t-label">R&amp;D</span></th>
-                        <th class="px-4 py-3 text-center border-l border-slate-100"><span class="t-label">Engineering</span></th>
-                        <th class="px-4 py-3 text-center border-l border-blue-200 bg-blue-50"><span class="text-xs font-bold uppercase tracking-wide text-blue-800">Car Character</span></th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-200">
-                    {% for label, key in {'Power': 'power', 'Handling': 'handling', 'Acceleration': 'acceleration'} %}
-                        <tr>
-                            <td class="px-6 py-3 font-bold text-slate-700">{{ label }}</td>
-                            <td class="px-4 py-3 text-center font-mono tabular-nums text-slate-600 border-l border-slate-100">{{ r.points.test[key]|round(1) }}</td>
-                            <td class="px-4 py-3 text-center font-mono tabular-nums text-slate-600 border-l border-slate-100">{{ r.points.rd[key]|round(1) }}</td>
-                            <td class="px-4 py-3 text-center font-mono tabular-nums text-slate-600 border-l border-slate-100">{{ r.points.eng[key]|round(1) }}</td>
-                            <td class="px-4 py-3 text-center font-mono text-lg font-bold tabular-nums text-blue-700 bg-blue-50 border-l border-blue-100">{{ r.points.car_character[key]|round(1) }}</td>
-                        </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        <div class="px-6 py-3 border-t border-slate-100">
-            <p class="text-xs text-slate-500">Car Character is what actually lands in your car — points decay through Test → R&amp;D → Engineering before arriving.</p>
-        </div>
-    </div>
-
-    </div>{# /row 1 #}
-
-    {# Row 2: points-per-5-laps + ideal setup (paired on desktop, stacked on mobile) #}
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 items-start">
-
     {# ===== POINTS PER 5 LAPS BY PRIORITY ===== #}
     <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div class="px-6 py-3 border-b border-slate-200 bg-slate-50">
@@ -129,6 +94,44 @@
         </div>
     </div>
 
+    </div>{# /left column #}
+
+    <div class="space-y-6">
+
+    {# ===== POINTS DISTRIBUTION ===== #}
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="px-6 py-3 border-b border-slate-200 bg-slate-50">
+            <h3 class="t-section">Points Distribution</h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 text-sm">
+                <thead class="bg-white">
+                    <tr>
+                        <th class="px-6 py-3 text-left"><span class="t-label">Characteristic</span></th>
+                        <th class="px-4 py-3 text-center border-l border-slate-100"><span class="t-label">Test</span></th>
+                        <th class="px-4 py-3 text-center border-l border-slate-100"><span class="t-label">R&amp;D</span></th>
+                        <th class="px-4 py-3 text-center border-l border-slate-100"><span class="t-label">Engineering</span></th>
+                        <th class="px-4 py-3 text-center border-l border-blue-200 bg-blue-50"><span class="text-xs font-bold uppercase tracking-wide text-blue-800">Car Character</span></th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200">
+                    {% for label, key in {'Power': 'power', 'Handling': 'handling', 'Acceleration': 'acceleration'} %}
+                        <tr>
+                            <td class="px-6 py-3 font-bold text-slate-700">{{ label }}</td>
+                            <td class="px-4 py-3 text-center font-mono tabular-nums text-slate-600 border-l border-slate-100">{{ r.points.test[key]|round(1) }}</td>
+                            <td class="px-4 py-3 text-center font-mono tabular-nums text-slate-600 border-l border-slate-100">{{ r.points.rd[key]|round(1) }}</td>
+                            <td class="px-4 py-3 text-center font-mono tabular-nums text-slate-600 border-l border-slate-100">{{ r.points.eng[key]|round(1) }}</td>
+                            <td class="px-4 py-3 text-center font-mono text-base font-bold tabular-nums text-blue-700 bg-blue-50 border-l border-blue-100">{{ r.points.car_character[key]|round(1) }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="px-6 py-3 border-t border-slate-100">
+            <p class="text-xs text-slate-500">Car Character is what actually lands in your car — points decay through Test → R&amp;D → Engineering before arriving.</p>
+        </div>
+    </div>
+
     {# ===== IDEAL SETUP ===== #}
     {% if r.setup %}
         <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
@@ -139,9 +142,9 @@
                 <table class="min-w-full divide-y divide-slate-200 text-sm">
                     <tbody class="divide-y divide-slate-200">
                         {% for part in ['Front Wing', 'Rear Wing', 'Engine', 'Brakes', 'Gearbox', 'Suspension'] %}
-                            <tr>
-                                <td class="px-6 py-3 font-bold text-slate-700">{{ part }}</td>
-                                <td class="px-6 py-3 text-right font-mono text-lg font-bold tabular-nums text-blue-700">{{ r.setup[part] }}</td>
+                            <tr class="hover:bg-slate-50">
+                                <td class="px-6 py-2.5 font-bold text-slate-700">{{ part }}</td>
+                                <td class="px-6 py-2.5 text-right font-mono text-base font-bold tabular-nums text-blue-700">{{ r.setup[part] }}</td>
                             </tr>
                         {% endfor %}
                     </tbody>
@@ -152,7 +155,10 @@
             </div>
         </div>
     {% endif %}
-    </div>{# /row 2 #}
+
+    </div>{# /right column #}
+
+    </div>{# /two-column grid #}
 
     {# ===== EXPECTED WEAR (dynamic by laps) ===== #}
     {% if r.wear %}
@@ -212,8 +218,8 @@
 
             const badge = (end) => {
                 if (end >= 90) return 'bg-red-50 text-red-700 ring-red-600/10';
-                if (end >= 50) return 'bg-yellow-50 text-yellow-800 ring-yellow-600/20';
-                return 'bg-green-50 text-green-700 ring-green-600/20';
+                if (end >= 50) return 'bg-amber-50 text-amber-800 ring-amber-600/20';
+                return 'bg-emerald-50 text-emerald-700 ring-emerald-600/20';
             };
 
             const render = (laps) => {

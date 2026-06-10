@@ -19,7 +19,7 @@
                 {% if wear_error == no_pilot_message %}
                     <div class="mb-4">{% include 'partials/_no_pilot_notice.twig' %}</div>
                 {% elseif wear_error %}
-                    <div class="mb-4 p-3 bg-red-50 text-red-700 text-sm rounded border border-red-200">
+                    <div class="mb-4 notice notice-error">
                         {{ wear_error }}
                     </div>
                 {% endif %}

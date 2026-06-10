@@ -1,7 +1,7 @@
 <div class="space-y-6">
     <div class="text-center">
-        <h2 class="text-2xl font-bold text-slate-900">Division Differences</h2>
-        <p class="text-slate-500 mt-1">Analyze the jump in requirements between levels.</p>
+        <h2 class="t-display">Division Differences</h2>
+        <p class="t-caption mt-1">Analyze the jump in requirements between levels.</p>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -24,7 +24,7 @@
                                     <div class="flex items-center gap-3">
                                         <span class="text-xs text-slate-400">{{ info.lower }} → {{ info.higher }}</span>
                                         <span class="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset 
-                                            {{ info.diff > 0 ? 'bg-green-50 text-green-700 ring-green-600/20' : 'bg-slate-50 text-slate-600 ring-slate-500/10' }}">
+                                            {{ info.diff > 0 ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/20' : 'bg-slate-50 text-slate-600 ring-slate-500/10' }}">
                                             {{ info.diff > 0 ? '+' : '' }}{{ info.diff }}
                                         </span>
                                     </div>

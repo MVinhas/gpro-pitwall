@@ -3,6 +3,10 @@
 {% block content %}
 <div class="max-w-5xl mx-auto px-4">
 
+    {% if flash %}
+        <div class="notice notice-info mt-6">{{ flash }}</div>
+    {% endif %}
+
     {# HERO #}
     <section class="text-center pt-10 pb-12">
         <span class="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-600/20">

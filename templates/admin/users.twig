@@ -13,12 +13,12 @@
     </div>
 
     {% if flash %}
-        <div class="rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 p-3 text-sm">
+        <div class="notice notice-success">
             {{ flash }}
         </div>
     {% endif %}
     {% if flash_error %}
-        <div class="rounded-md bg-red-50 border border-red-200 text-red-700 p-3 text-sm">
+        <div class="notice notice-error">
             {{ flash_error }}
         </div>
     {% endif %}

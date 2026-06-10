@@ -1,6 +1,6 @@
 <div class="space-y-6">
     {# Notification Banner #}
-    <div class="rounded-md bg-blue-50 p-4 border-l-4 border-blue-400 shadow-sm">
+    <div class="notice notice-info">
         <div class="flex">
             <div class="flex-shrink-0">
                 <svg class="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -8,11 +8,11 @@
                 </svg>
             </div>
             <div class="ml-3">
-                <p class="text-sm text-blue-700 font-medium">
+                <p class="font-bold">
                     Driver decisions happen on Mondays and Thursdays at 18:00 (Europe/Lisbon).
                 </p>
-                <p class="text-sm text-blue-700 font-medium">
-                    Offer rises incrementally starting on Mondays and Thursdays at 10:00 (Europe/Lisbon)
+                <p class="mt-1">
+                    Offers rise incrementally starting on Mondays and Thursdays at 10:00 (Europe/Lisbon).
                 </p>
             </div>
         </div>
@@ -82,7 +82,7 @@
                                 <a href="/register" class="underline hover:text-amber-800">register</a>
                                 to analyze recruitment data.
                             </p>
-                            <button type="button" disabled class="w-full rounded-md bg-slate-300 px-4 py-2 text-sm font-semibold text-white cursor-not-allowed">
+                            <button type="button" disabled class="btn btn-md btn-disabled w-full">
                                 Analyze Candidates (Locked)
                             </button>
                         </div>
@@ -92,13 +92,9 @@
 
             {# Results Section #}
             {% if recruitment_error %}
-                <div class="mt-6 rounded-md bg-red-50 p-4 border border-red-200">
-                    <div class="flex">
-                        <div class="ml-3">
-                            <h3 class="text-sm font-medium text-red-800">Analysis Failed</h3>
-                            <div class="mt-2 text-sm text-red-700">{{ recruitment_error }}</div>
-                        </div>
-                    </div>
+                <div class="mt-6 notice notice-error">
+                    <p class="font-bold">Analysis failed.</p>
+                    <p class="mt-1">{{ recruitment_error }}</p>
                 </div>
             {% elseif recruitment_results is defined %}
                 <div class="mt-8">
@@ -291,7 +287,7 @@
                                             
                                             <td class="whitespace-nowrap px-3 py-4 text-center text-sm">
                                                 {% if d.ID > 0 %}
-                                                    <a href="https://gpro.net/gb/DriverProfile.asp?ID={{ d.ID }}" target="_blank" class="text-blue-600 hover:text-blue-800 transition-colors text-lg" title="Open GPRO Profile">🔗</a>
+                                                    <a href="https://gpro.net/gb/DriverProfile.asp?ID={{ d.ID }}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 transition-colors text-lg" title="Open GPRO Profile">🔗</a>
                                                 {% else %}
                                                     <span class="text-slate-300">-</span>
                                                 {% endif %}
@@ -316,6 +312,21 @@
                                     {% set navigationParams = navigationParams ~ '&' ~ range_filter_query %}
                                 {% endif %}
                                 
+                                {# Mobile: prev/next only. #}
+                                <div class="flex flex-1 items-center justify-between sm:hidden">
+                                    {% if pagination.current > 1 %}
+                                        <a href="?{{ navigationParams }}&page={{ pagination.current - 1 }}" class="btn btn-md btn-secondary">Previous</a>
+                                    {% else %}
+                                        <span></span>
+                                    {% endif %}
+                                    <span class="text-sm text-slate-700 tabular-nums">Page {{ pagination.current }} / {{ pagination.total_pages }}</span>
+                                    {% if pagination.current < pagination.total_pages %}
+                                        <a href="?{{ navigationParams }}&page={{ pagination.current + 1 }}" class="btn btn-md btn-secondary">Next</a>
+                                    {% else %}
+                                        <span></span>
+                                    {% endif %}
+                                </div>
+
                                 <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
                                     <div>
                                         <p class="text-sm text-slate-700 tabular-nums">
@@ -325,20 +336,36 @@
                                     <div>
                                         <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
                                             {% if pagination.current > 1 %}
-                                                <a href="?{{ navigationParams }}&page={{ pagination.current - 1 }}" class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-slate-300 bg-white text-sm font-medium text-slate-500 hover:bg-slate-50">
+                                                <a href="?{{ navigationParams }}&page={{ pagination.current - 1 }}" aria-label="Previous page" class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-slate-300 bg-white text-sm font-medium text-slate-500 hover:bg-slate-50">
                                                      «
                                                 </a>
                                             {% endif %}
-                                            
-                                            {% for i in 1..pagination.total_pages %}
+
+                                            {# Windowed page list: 1 … current±2 … last. Keeps the bar
+                                               usable when the market yields hundreds of pages. #}
+                                            {% set window = 2 %}
+                                            {% set win_start = max(2, pagination.current - window) %}
+                                            {% set win_end = min(pagination.total_pages - 1, pagination.current + window) %}
+                                            {% set pages = [1] %}
+                                            {% if win_start <= win_end %}
+                                                {% set pages = pages|merge(win_start..win_end) %}
+                                            {% endif %}
+                                            {% if pagination.total_pages > 1 %}
+                                                {% set pages = pages|merge([pagination.total_pages]) %}
+                                            {% endif %}
+                                            {% for i in pages %}
+                                                {% if not loop.first and i > pages[loop.index0 - 1] + 1 %}
+                                                    <span class="relative inline-flex items-center px-3 py-2 border border-slate-300 bg-white text-sm text-slate-400 select-none">…</span>
+                                                {% endif %}
                                                 <a href="?{{ navigationParams }}&page={{ i }}"
+                                                    {% if i == pagination.current %}aria-current="page"{% endif %}
                                                     class="relative inline-flex items-center px-4 py-2 border text-sm font-medium {{ i == pagination.current ? 'z-10 bg-blue-50 border-blue-500 text-blue-600' : 'bg-white border-slate-300 text-slate-500 hover:bg-slate-50' }}">
                                                     {{ i }}
                                                 </a>
                                             {% endfor %}
 
                                             {% if pagination.current < pagination.total_pages %}
-                                                <a href="?{{ navigationParams }}&page={{ pagination.current + 1 }}" class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-slate-300 bg-white text-sm font-medium text-slate-500 hover:bg-slate-50">
+                                                <a href="?{{ navigationParams }}&page={{ pagination.current + 1 }}" aria-label="Next page" class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-slate-300 bg-white text-sm font-medium text-slate-500 hover:bg-slate-50">
                                                     »
                                                 </a>
                                             {% endif %}
