@@ -14,7 +14,7 @@ class DatabaseSeeder
      * boot path calls migrate() on every request; this version is the gate that
      * lets a warm database skip the entire DDL + scan + legacy-encryption pass.
      */
-    private const int SCHEMA_VERSION = 2;
+    private const int SCHEMA_VERSION = 3;
 
     /**
      * @param array<string, string> $statsSchema
@@ -60,6 +60,7 @@ class DatabaseSeeder
         $this->seedTrainings();
         $this->seedCarPartCoefficients();
         $this->seedGameConstants();
+        $this->seedTracksFromCsv();
 
 
         $this->applyUserMigrations();
@@ -77,6 +78,107 @@ class DatabaseSeeder
     private function dropDeprecatedTables(): void
     {
         $this->db->exec('DROP TABLE IF EXISTS track_risks');
+    }
+
+    /**
+     * (Re)seed the tracks table from data/tracks.csv. Runs inside migrate()
+     * because prod is SFTP-only shared hosting — there is no shell to run
+     * bin/seed_tracks.php, so the first request after a deploy must do it.
+     * Idempotent (INSERT OR REPLACE); a missing CSV is a silent no-op so
+     * tests and CI (where data/ is gitignored) keep working.
+     *
+     * @return int number of tracks written
+     */
+    public function seedTracksFromCsv(?string $csvPath = null): int
+    {
+        $csvPath ??= dirname(__DIR__, 2) . '/data/tracks.csv';
+        if (!is_file($csvPath)) {
+            return 0;
+        }
+
+        $handle = fopen($csvPath, 'r');
+        if ($handle === false) {
+            return 0;
+        }
+
+        // Row 0 is the sheet title, row 1 the column headers.
+        fgetcsv($handle, 0, ';', '"', '');
+        fgetcsv($handle, 0, ';', '"', '');
+
+        $stmt = $this->db->prepare("
+            INSERT OR REPLACE INTO tracks (
+                id, name, lap_length, laps, distance, avg_speed, corners, pit_time,
+                base_wings, base_engine, base_brakes, base_gear, base_suspension,
+                fuel_consumption, tyre_wear, wing_split, fuel_per_lap, fuel_per_lap_wet, tyre_wear_factor,
+                wear_chassis, wear_engine, wear_fwing, wear_rwing, wear_underbody, wear_sidepod,
+                wear_cooling, wear_gearbox, wear_brakes, wear_suspension, wear_electronics,
+                boost_dry, boost_wet, overtaking, grip
+            ) VALUES (
+                :id, :name, :lap_length, :laps, :distance, :avg_speed, :corners, :pit_time,
+                :base_wings, :base_engine, :base_brakes, :base_gear, :base_suspension,
+                :fuel_consumption, :tyre_wear, :wing_split, :fuel_per_lap, :fuel_per_lap_wet, :tyre_wear_factor,
+                :wear_chassis, :wear_engine, :wear_fwing, :wear_rwing, :wear_underbody, :wear_sidepod,
+                :wear_cooling, :wear_gearbox, :wear_brakes, :wear_suspension, :wear_electronics,
+                :boost_dry, :boost_wet, :overtaking, :grip
+            )
+        ");
+
+        $n = static fn(?string $val): float => (float) str_replace(',', '.', $val ?? '0');
+
+        $count = 0;
+        while (($row = fgetcsv($handle, 0, ';', '"', '')) !== false) {
+            if (empty($row[0])) {
+                continue;
+            }
+
+            $stmt->execute([
+                ':id' => $count + 1,
+                ':name' => trim($row[0]),
+                ':lap_length' => $n($row[6] ?? null),
+                ':laps' => (int) $n($row[7] ?? null),
+                ':distance' => $n($row[8] ?? null),
+                ':avg_speed' => $n($row[12] ?? null),
+                ':corners' => (int) $n($row[14] ?? null),
+                ':pit_time' => $n($row[15] ?? null),
+
+                ':base_wings' => $n($row[18] ?? null),
+                ':base_engine' => $n($row[19] ?? null),
+                ':base_brakes' => $n($row[20] ?? null),
+                ':base_gear' => $n($row[21] ?? null),
+                ':base_suspension' => $n($row[22] ?? null),
+
+                ':fuel_consumption' => trim($row[4] ?? ''),
+                ':tyre_wear' => trim($row[5] ?? ''),
+                ':wing_split' => $n($row[24] ?? null),
+                ':fuel_per_lap' => $n($row[26] ?? null),
+                ':fuel_per_lap_wet' => $n($row[27] ?? null),
+                ':tyre_wear_factor' => $n($row[29] ?? null),
+
+                ':wear_chassis' => $n($row[31] ?? null),
+                ':wear_engine' => $n($row[32] ?? null),
+                ':wear_fwing' => $n($row[33] ?? null),
+                ':wear_rwing' => $n($row[34] ?? null),
+                ':wear_underbody' => $n($row[35] ?? null),
+                ':wear_sidepod' => $n($row[36] ?? null),
+                ':wear_cooling' => $n($row[37] ?? null),
+                ':wear_gearbox' => $n($row[38] ?? null),
+                ':wear_brakes' => $n($row[39] ?? null),
+                ':wear_suspension' => $n($row[40] ?? null),
+                ':wear_electronics' => $n($row[41] ?? null),
+
+                // Boost-lap fuel coefficients (Tracks sheet cols AR/AS).
+                ':boost_dry' => $n($row[43] ?? null),
+                ':boost_wet' => $n($row[44] ?? null),
+
+                ':overtaking' => trim($row[2] ?? ''),
+                ':grip' => trim($row[16] ?? ''),
+            ]);
+            $count++;
+        }
+
+        fclose($handle);
+
+        return $count;
     }
 
     /**

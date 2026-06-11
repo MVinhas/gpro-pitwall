@@ -39,14 +39,14 @@ $container['db'] = Database::getConnection();
 
 $container['service.api_token_crypto'] = new ApiTokenCrypto($_ENV['APP_SECRET']);
 
-$seeder = new DatabaseSeeder(
+$container['db.seeder'] = new DatabaseSeeder(
     $container['db'],
     $container['config']['app']['stats_schema'],
     $container['config']['app']['divisions'],
     $container['config']['secrets'],
     $container['service.api_token_crypto'],
 );
-$seeder->migrate();
+$container['db.seeder']->migrate();
 
 use App\Cache\CacheFactory;
 

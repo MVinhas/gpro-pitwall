@@ -58,6 +58,45 @@ final class DatabaseSeederTest extends TestCase
         $this->assertFalse($exists, 'gated migrate must not recreate the dropped table');
     }
 
+    public function testSeedTracksFromCsvPopulatesOvertakingAndGrip(): void
+    {
+        $db = new PDO('sqlite::memory:');
+        $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $seeder = $this->makeSeeder($db);
+        $seeder->migrate();
+
+        // Minimal sheet: title row, header row, one track row with the
+        // columns the importer reads (semicolon-separated, index 0..44).
+        $row = array_fill(0, 45, '0');
+        $row[0] = 'Testring';
+        $row[2] = 'Hard';
+        $row[4] = 'High';
+        $row[5] = 'Medium';
+        $row[16] = 'Very Low';
+
+        $csv = tempnam(sys_get_temp_dir(), 'tracks');
+        file_put_contents($csv, "Track List\nName;Downforce;Overtaking\n" . implode(';', $row) . "\n");
+
+        $count = $seeder->seedTracksFromCsv($csv);
+        unlink($csv);
+
+        $this->assertSame(1, $count);
+        $track = $db->query("SELECT overtaking, grip FROM tracks WHERE name = 'Testring'")
+            ->fetch(PDO::FETCH_ASSOC);
+        $this->assertSame('Hard', $track['overtaking']);
+        $this->assertSame('Very Low', $track['grip']);
+    }
+
+    public function testSeedTracksFromMissingCsvIsANoOp(): void
+    {
+        $db = new PDO('sqlite::memory:');
+        $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $seeder = $this->makeSeeder($db);
+        $seeder->migrate();
+
+        $this->assertSame(0, $seeder->seedTracksFromCsv('/nonexistent/tracks.csv'));
+    }
+
     public function testMigrateRerunsWhenVersionIsBehind(): void
     {
         $db = new PDO('sqlite::memory:');
