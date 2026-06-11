@@ -264,6 +264,7 @@ use App\Controller\StrategyController;
 use App\Controller\AuthController;
 
 $container['service.race_weather'] = new \App\Service\RaceWeatherService();
+$container['service.risk_advisor'] = new \App\Service\RiskAdvisorService();
 
 $container['controller.strategy'] = new StrategyController(
     $container['service.strategy'],
@@ -272,6 +273,7 @@ $container['controller.strategy'] = new StrategyController(
     $container['service.setup_calculator'],
     $container['service.authorize'],
     $container['service.race_weather'],
+    $container['service.risk_advisor'],
     $container['twig'],
 );
 

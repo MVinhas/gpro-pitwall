@@ -2,6 +2,8 @@
 
 Race-weekend cockpit for [Grand Prix Racing Online](https://www.gpro.net) managers. Pulls your own GPRO data via the public API and turns it into the answers you actually need before qualifying: what to train, what to swap, what to set, what to bet on weather.
 
+**New: Pitwall AI.** Your strategy screen now talks back. A race engineer that reads your driver, the track and the forecast, then tells you — in plain words — exactly how hard to attack and how hard to defend, and when to take the strategy with fewer pit stops. No other GPRO tool does this.
+
 **Live:** [gpro-pitwall.com](https://gpro-pitwall.com)
 **Contact:** admin@gpro-pitwall.com
 **Source:** [github.com/MVinhas/gpro-pitwall](https://github.com/MVinhas/gpro-pitwall)
@@ -25,7 +27,26 @@ One screen, in race-prep order:
 - **"Set your race strategy" handoff** — one click to the Strategy tab pre-populated.
 
 ### Race Strategy
-Fuel + tyre + setup for every compound (Extra Soft / Soft / Medium / Hard / Rain). Live risk slider; the calc auto-runs on first visit so you don't need to click Calculate. Best-compound highlighted; per-compound breakdown of lost time (pits / fuel / tyre-compound difference). Setup table for Q1, Q2 and race with weather-aware tyre choices.
+Fuel + tyre + setup for every compound (Extra Soft / Soft / Medium / Hard / Rain). Live risk slider; the calc auto-runs on first visit so you don't need to click Calculate. Best-compound highlighted; per-compound breakdown of lost time (pits / fuel / tyre-compound difference). Setup table for Q1, Q2 and race with weather-aware tyre choices. The track's overtaking rating (Very Easy → Very Hard) shows as a colour-coded badge next to the fuel figures.
+
+### Pitwall AI — your race engineer ⭐
+The headline feature of the Strategy tab. Pitwall AI suggests your **overtake and defend risk dials (0–100)** for the next race and explains its reasoning in plain advisor prose — like having a race engineer on the pit wall who has already done the homework:
+
+> *"Overtaking at Barcelona is hard, so I'd push overtake up to 60 to make moves stick — and since the track already makes you hard to pass, 35 on defence is plenty. Grip here is low — sliding cars punish ambition, so I've shaved both numbers."*
+
+What it weighs, every single race:
+
+- **Track overtaking rating** — hard passing means overtake risk pays and the track defends for free; easy passing flips the money to defence.
+- **The driver** — concentration, experience, talent and motivation, weighted on GPRO's full 0–250 skill scale. Concentration and experience carry dry races; **talent takes the wheel in the wet**.
+- **Aggressiveness, both edges** — aggression backed by experience buys extra attacking pace; aggression beyond it is the mistake trap and gets trimmed.
+- **The forecast** — wet or rain-threatened races pull both dials down, scaled by talent.
+- **Track grip** — low-grip circuits punish ambition; both numbers get shaved.
+- **Tyre wear** — very-high-wear tracks cost you the rubber you'd push on.
+- **Stamina on long races** — 300 km+ with a tired driver is not where you gamble.
+
+It also drops a **pit-count tie-breaker**: when two strategies are close on paper, it tells you whether this track rewards fewer stops (track position is gold where passing is hard) or makes the extra stop affordable (clean air and fresh rubber where passing is easy) — and it stays quiet about stop counts when rain is likely, because a wet race rewrites the plan anyway.
+
+Honest by design: it's a transparent heuristic built from the game's own attribute semantics, not a reverse-engineered formula — and it says so right in the box.
 
 ### Car Wear
 Per-part end-of-race wear forecast from your real driver attributes. Read-only driver stats pulled from the API (no manual entry). Risk slider. Per-part: level, start wear, estimated added wear, projected end wear (colour-coded by survival risk).
@@ -85,7 +106,7 @@ Per-page titles, meta descriptions and canonical URLs via Twig blocks (override 
 - **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile).
 - **SQLite** via PDO. Encrypted user emails (AES-256-GCM) and API tokens at rest.
 - **PHPMailer 7** for SMTP; in dev, writes `.eml` files to `var/mail/` instead.
-- **PHPUnit 13** — 263 tests, 656 assertions, all green at **PHPStan level 7**. Twig templates linted by a native `bin/twig_lint.php` (Twig's own tokenizer/parser — no third-party linter).
+- **PHPUnit 13** — 282 tests, 711 assertions, all green at **PHPStan level 7**. Twig templates linted by a native `bin/twig_lint.php` (Twig's own tokenizer/parser — no third-party linter).
 - **No framework.** Custom front controller + flat DI container in `bootstrap.php`. Routes in `config/routes.php`.
 - **Timestamps are stored and served as UTC**, then localised per-visitor in the browser (`<time data-localtime>` + `Intl`), so each user sees their own timezone with no server-side config.
 

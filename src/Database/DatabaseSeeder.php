@@ -14,7 +14,7 @@ class DatabaseSeeder
      * boot path calls migrate() on every request; this version is the gate that
      * lets a warm database skip the entire DDL + scan + legacy-encryption pass.
      */
-    private const int SCHEMA_VERSION = 1;
+    private const int SCHEMA_VERSION = 2;
 
     /**
      * @param array<string, string> $statsSchema
@@ -341,7 +341,9 @@ class DatabaseSeeder
                 wear_suspension INTEGER,
                 wear_electronics INTEGER,
                 boost_dry REAL,
-                boost_wet REAL
+                boost_wet REAL,
+                overtaking TEXT,
+                grip TEXT
             )
         ";
 
@@ -360,9 +362,10 @@ class DatabaseSeeder
         $cols = $stmt === false ? [] : $stmt->fetchAll(PDO::FETCH_ASSOC);
         $existing = array_column($cols, 'name');
 
-        foreach (['boost_dry', 'boost_wet'] as $col) {
+        $added = ['boost_dry' => 'REAL', 'boost_wet' => 'REAL', 'overtaking' => 'TEXT', 'grip' => 'TEXT'];
+        foreach ($added as $col => $type) {
             if (!in_array($col, $existing, true)) {
-                $this->db->exec("ALTER TABLE tracks ADD COLUMN {$col} REAL");
+                $this->db->exec("ALTER TABLE tracks ADD COLUMN {$col} {$type}");
             }
         }
     }

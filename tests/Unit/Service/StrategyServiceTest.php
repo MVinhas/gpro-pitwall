@@ -78,12 +78,13 @@ final class StrategyServiceTest extends TestCase
                 tyre_wear_factor REAL,
                 pit_time REAL,
                 corners INTEGER,
-                lap_length REAL
+                lap_length REAL,
+                overtaking TEXT
             )"
         );
         $db->exec(
             "INSERT INTO tracks VALUES
-             (1, 'Imola', 50, 250.0, 2.0, 2.5, 'Medium', 100.0, 22.0, 12, 5.0)"
+             (1, 'Imola', 50, 250.0, 2.0, 2.5, 'Medium', 100.0, 22.0, 12, 5.0, 'Hard')"
         );
         return $db;
     }
@@ -134,6 +135,21 @@ final class StrategyServiceTest extends TestCase
             ['Extra Soft', 'Soft', 'Medium', 'Hard', 'Rain'],
             array_keys($result['tyres']),
         );
+    }
+
+    public function testResultExposesTrackOvertakingRating(): void
+    {
+        $result = $this->service()->calculateStrategy(
+            ['id' => 1, 'name' => 'Imola'],
+            ['lvlEngine' => 1, 'lvlElectronics' => 1, 'lvlSusp' => 1],
+            ['concentration' => 50, 'aggressiveness' => 50, 'experience' => 50,
+             'technical_insight' => 50, 'weight' => 75],
+            ['concentration' => 0, 'stressHandling' => 0],
+            ['id' => 0, 'ownTD' => 0, 'experience' => 0, 'pitCoordination' => 0],
+            $this->inputs(),
+        );
+
+        $this->assertSame('Hard', $result['overtaking']);
     }
 
     public function testEveryCompoundCarriesTheExpectedResultShape(): void
