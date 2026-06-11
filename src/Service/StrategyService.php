@@ -285,6 +285,10 @@ class StrategyService
 
         return [
             'track' => $trackDb['name'],
+            'overtaking' => $trackDb['overtaking'] ?? null,
+            'track_grip' => $trackDb['grip'] ?? null,
+            'track_tyre_wear' => $trackDb['tyre_wear'] ?? null,
+            'track_distance' => (float)($trackDb['distance'] ?? 0),
             'fuel' => [
                 'dry' => ceil($totalFuelDry),
                 'wet' => ceil($totalFuelWet),

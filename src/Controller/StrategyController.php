@@ -11,6 +11,7 @@ use App\Service\SetupCalculatorService;
 use App\Service\GproApiClient;
 use App\Service\GproDataMapper;
 use App\Service\RaceWeatherService;
+use App\Service\RiskAdvisorService;
 use Twig\Environment;
 
 class StrategyController
@@ -32,6 +33,7 @@ class StrategyController
         private readonly SetupCalculatorService $setupService,
         private readonly Authorize $authorize,
         private readonly RaceWeatherService $weather,
+        private readonly RiskAdvisorService $riskAdvisor,
         private readonly Environment $twig,
     ) {
     }
@@ -287,6 +289,19 @@ class StrategyController
 
             $strategyResults['setups'] = $setupResults;
             $strategyResults['weather_inputs'] = $setupWeatherInputs;
+
+            $strategyResults['risk_advice'] = $this->riskAdvisor->suggest(
+                $driver,
+                [
+                    'name'       => $strategyResults['track'] ?? null,
+                    'overtaking' => $strategyResults['overtaking'] ?? null,
+                    'grip'       => $strategyResults['track_grip'] ?? null,
+                    'tyre_wear'  => $strategyResults['track_tyre_wear'] ?? null,
+                    'distance'   => (float)($strategyResults['track_distance'] ?? 0),
+                ],
+                $setupWeatherInputs['Race']['weather'] === 'Wet',
+                $rain['race_rain_avg'],
+            );
 
             $strategyResults['season'] = $office['seasonNb'] ?? '?';
             $strategyResults['race'] = $office['raceNb'] ?? '?';
