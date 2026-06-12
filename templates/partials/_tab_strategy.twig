@@ -173,6 +173,23 @@
 
     let pending = null;
 
+    // The fragment swap re-renders the Race Engineer accordion with its
+    // server-side default (open), so a collapsed state would be lost on
+    // every slider change. Remember the user's choice for the session.
+    const RE_KEY = 'raceEngineerOpen';
+    const applyAccordionState = () => {
+        const d = card.querySelector('#race-engineer');
+        const saved = sessionStorage.getItem(RE_KEY);
+        if (d && saved !== null) d.open = saved === '1';
+    };
+    // <details> toggle events don't bubble — listen in the capture phase.
+    document.addEventListener('toggle', (e) => {
+        if (e.target.id === 'race-engineer') {
+            sessionStorage.setItem(RE_KEY, e.target.open ? '1' : '0');
+        }
+    }, true);
+    applyAccordionState();
+
     // Live slider value labels (dragging updates the number without server roundtrip).
     document.addEventListener('input', (e) => {
         if (!e.target.matches('[data-slider-live]')) return;
@@ -195,6 +212,7 @@
             });
             if (!res.ok) return;
             card.innerHTML = await res.text();
+            applyAccordionState();
         } catch (err) {
             if (err.name !== 'AbortError') console.error(err);
         }

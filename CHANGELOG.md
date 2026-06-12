@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Each entry mirrors its annotated release tag.
 
+## [1.5.2] - 2026-06-12
+- Race Strategy: the Race Engineer accordion no longer re-opens when a slider or select re-runs the calculation — the collapsed/expanded choice is remembered for the session (sessionStorage) and reapplied after every fragment swap.
+
 ## [1.5.1] - 2026-06-12
 - Pitwall AI is now **"Advice from the Race Engineer"** — the AI branding is dropped across the app, landing page and README, and the sparkles icon is replaced by a race-engineer headset.
 - Race Engineer: now covers the rest of the race-setup form. Suggests the three **boost-lap** start laps placed where pace converts into something (early while the field is packed on easy-passing tracks, the in-laps before each stop to overcut through the pit cycle, the final laps to bring it home), pit-window aware via the best strategy's stint plan, with a rain caution and a reminder that boosts burn extra fuel.
