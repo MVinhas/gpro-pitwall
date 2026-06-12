@@ -303,4 +303,124 @@ final class RiskAdvisorServiceTest extends TestCase
         $this->assertStringNotContainsString('composure', strtolower($weak['phrase']));
         $this->assertStringNotContainsString('composure', strtolower($strong['phrase']));
     }
+
+    public function testVeryEasyTrackPointsAtClearTrackRisk(): void
+    {
+        $r = $this->service()->suggest($this->driver(), $this->track(['overtaking' => 'Very Easy']), false, 10.0);
+
+        $this->assertStringContainsString('clear-track risk', $r['phrase']);
+    }
+
+    public function testEnergyTipOnlyOnLongRaces(): void
+    {
+        $short = $this->service()->suggest($this->driver(), $this->track(['distance' => 250.0]), false, 10.0);
+        $long = $this->service()->suggest($this->driver(), $this->track(['distance' => 330.0]), false, 10.0);
+
+        $this->assertNull($short['energy_tip']);
+        $this->assertStringContainsString('clear-track risks', (string)$long['energy_tip']);
+        $this->assertStringContainsString('330', (string)$long['energy_tip']);
+    }
+
+    public function testStartApproachScalesWithDriverAndTrack(): void
+    {
+        $elite = $this->service()->suggest(
+            $this->driver([
+                'concentration' => 216, 'experience' => 160,
+                'talent' => 150, 'motivation' => 180, 'aggressiveness' => 120,
+            ]),
+            $this->track(['overtaking' => 'Hard']),
+            false,
+            10.0,
+        );
+        $rookieWet = $this->service()->suggest(
+            $this->driver(['concentration' => 30, 'experience' => 30, 'talent' => 30, 'motivation' => 30]),
+            $this->track(),
+            true,
+            80.0,
+        );
+
+        $this->assertSame('Force his way to the front', $elite['settings']['start_approach']);
+        $this->assertSame('Avoid trouble', $rookieWet['settings']['start_approach']);
+    }
+
+    public function testProblemPitThresholdTracksPitLaneLength(): void
+    {
+        $shortLane = $this->service()->suggest(
+            $this->driver(),
+            $this->track(['pit_lane_loss' => 10.0]),
+            false,
+            10.0,
+        );
+        $longLane = $this->service()->suggest(
+            $this->driver(),
+            $this->track(['pit_lane_loss' => 45.0]),
+            false,
+            10.0,
+        );
+        $unknownLane = $this->service()->suggest($this->driver(), $this->track(), false, 10.0);
+
+        $this->assertSame(6, $shortLane['settings']['problem_pit_laps']);
+        $this->assertSame(12, $longLane['settings']['problem_pit_laps']);
+        $this->assertSame(8, $unknownLane['settings']['problem_pit_laps']);
+    }
+
+    public function testBoostLapsTargetInLapsOnHardTracks(): void
+    {
+        $r = $this->service()->suggestBoostLaps(60, 2, 'Hard', false, 10.0);
+
+        // Stints of 20 laps → stops after laps 20 and 40: boost the in-laps
+        // (18-20, 38-40) and keep the last set for the final laps (58-60).
+        $this->assertSame([18, 38, 58], $r['laps']);
+        $this->assertStringContainsString('in-laps', $r['note']);
+    }
+
+    public function testBoostLapsFrontLoadOnEasyTracks(): void
+    {
+        $r = $this->service()->suggestBoostLaps(60, 2, 'Easy', false, 10.0);
+
+        $this->assertSame([2, 18, 38], $r['laps']);
+        $this->assertStringContainsString('early', $r['note']);
+    }
+
+    public function testBoostLapsSpreadWhenNoStops(): void
+    {
+        $r = $this->service()->suggestBoostLaps(60, 0, 'Normal', false, 10.0);
+
+        $this->assertSame([2, 30, 58], $r['laps']);
+    }
+
+    public function testBoostLapsNeverOverlapAndStayInRange(): void
+    {
+        foreach ([[44, 1, 'Very Hard'], [70, 3, 'Very Easy'], [26, 2, 'Normal']] as [$laps, $stops, $rating]) {
+            $r = $this->service()->suggestBoostLaps($laps, $stops, $rating, false, 10.0);
+
+            $this->assertCount(3, $r['laps']);
+            $sorted = $r['laps'];
+            sort($sorted);
+            $this->assertSame($sorted, $r['laps']);
+            foreach ($r['laps'] as $i => $lap) {
+                $this->assertGreaterThanOrEqual(1, $lap);
+                $this->assertLessThanOrEqual($laps - 2, $lap);
+                if ($i > 0) {
+                    $this->assertGreaterThanOrEqual(3, $lap - $r['laps'][$i - 1]);
+                }
+            }
+        }
+    }
+
+    public function testBoostLapsWarnWhenRainIsLikely(): void
+    {
+        $dry = $this->service()->suggestBoostLaps(60, 2, 'Hard', false, 10.0);
+        $threat = $this->service()->suggestBoostLaps(60, 2, 'Hard', false, 45.0);
+
+        $this->assertStringNotContainsString('dry-plan', $dry['note']);
+        $this->assertStringContainsString('dry-plan', $threat['note']);
+    }
+
+    public function testBoostLapsBailOnVeryShortRaces(): void
+    {
+        $r = $this->service()->suggestBoostLaps(10, 1, 'Normal', false, 10.0);
+
+        $this->assertSame([], $r['laps']);
+    }
 }

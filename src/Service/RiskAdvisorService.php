@@ -16,7 +16,8 @@ namespace App\Service;
  * raise the cost of pushing.
  *
  * Driver energy is deliberately not an input — it only affects clear-track
- * risk, which this advisor doesn't cover.
+ * risk, which this advisor doesn't cover. Long races still get a static
+ * reminder that clear-track risk drives energy drain.
  *
  * Track downforce and suspension are deliberately not inputs: downforce is
  * collinear with the overtaking rating (slow twisty tracks score high on
@@ -64,11 +65,19 @@ class RiskAdvisorService
     private const int MIN_RISK = 5;
     private const int MAX_RISK = 70;
 
+    /** Lap-time loss with a solvable car problem (s/lap) — official tutorial says 3-6. */
+    private const float PROBLEM_LAP_LOSS = 4.5;
+
+    /** Repair time assumed on top of pit-lane transit for a problem stop (s). */
+    private const float PROBLEM_REPAIR_TIME = 15.0;
+
     /**
      * @param array<string, mixed> $driver mapped driver attributes (0-250 scales)
      * @param array{name?: ?string, overtaking?: ?string, grip?: ?string,
-     *               tyre_wear?: ?string, distance?: float} $track
-     * @return array{overtake: int, defend: int, phrase: string, tip: ?string}
+     *               tyre_wear?: ?string, distance?: float, pit_lane_loss?: float} $track
+     * @return array{overtake: int, defend: int, phrase: string, tip: ?string,
+     *               energy_tip: ?string,
+     *               settings: array{start_approach: string, problem_pit_laps: int}}
      */
     public function suggest(array $driver, array $track, bool $raceWet, float $rainAvg): array
     {
@@ -131,7 +140,134 @@ class RiskAdvisorService
                 $driver,
             ),
             'tip' => $this->strategyTip($rating, $raceWet, $rainAvg),
+            'energy_tip' => $longRace
+                ? sprintf(
+                    'At %.0f km this is a long race — mind your clear-track risks: they drive energy '
+                    . 'drain, and a driver who hits 0%% energy crawls home at a slow, no-risk pace.',
+                    $distanceKm,
+                )
+                : null,
+            'settings' => [
+                'start_approach' => $this->startApproach($rating, $composure, $aggCovered, $raceWet, $n('talent')),
+                'problem_pit_laps' => $this->problemPitLaps((float)($track['pit_lane_loss'] ?? 0)),
+            ],
         ];
+    }
+
+    /**
+     * Suggests the three boost-set start laps for the chosen strategy. Boost
+     * pays where pace converts into something: passing chances in a pack
+     * (the official tutorial's example), track position through the pit cycle
+     * (boosted in-laps = the overcut), or gap defence in the final laps.
+     * Sets run 3 laps each and overlapping sets are wasted.
+     *
+     * @return array{laps: array<int>, note: string}
+     */
+    public function suggestBoostLaps(
+        int $raceLaps,
+        int $stops,
+        ?string $overtaking,
+        bool $raceWet,
+        float $rainAvg,
+    ): array {
+        if ($raceLaps < 12) {
+            return ['laps' => [], 'note' => 'Too few laps to plan boost sets — place them by feel.'];
+        }
+
+        $rating = isset(self::OVERTAKE_BASE[$overtaking ?? '']) ? (string)$overtaking : 'Normal';
+        $easyPassing = in_array($rating, ['Very Easy', 'Easy'], true);
+        $stintLen = intdiv($raceLaps, max(1, $stops + 1));
+
+        // Priority order: easy passing cashes pace early while the field is
+        // packed; otherwise in-laps first (overcut), then the final laps,
+        // then early/mid-race as fillers.
+        $candidates = [];
+        if ($easyPassing) {
+            $candidates[] = 2;
+        }
+        for ($i = 1; $i <= $stops; $i++) {
+            $candidates[] = $i * $stintLen - 2;
+        }
+        $candidates[] = $raceLaps - 2;
+        if (!$easyPassing) {
+            $candidates[] = 2;
+        }
+        $candidates[] = intdiv($raceLaps, 2);
+
+        $laps = [];
+        foreach ($candidates as $lap) {
+            $lap = max(1, min($raceLaps - 2, $lap));
+            foreach ($laps as $taken) {
+                if (abs($taken - $lap) < 3) {
+                    continue 2;
+                }
+            }
+            $laps[] = $lap;
+            if (count($laps) === 3) {
+                break;
+            }
+        }
+        sort($laps);
+
+        $note = $easyPassing
+            ? 'One set early while the field is still packed — passing is cheap here, so pace turns '
+                . 'straight into positions — then boost into the pit windows.'
+            : ($stops > 0
+                ? 'Boost the in-laps before the stops to jump the cars around you through the pit '
+                    . 'cycle; any spare set defends the final laps.'
+                : 'No stops to play with, so spread the sets — one early, one mid-race, one to bring it home.');
+
+        if ($raceWet || $rainAvg >= self::RAIN_WATCH_THRESHOLD) {
+            $note .= ' Rain could move the pit laps — treat these as dry-plan numbers.';
+        }
+
+        $note .= ' Boosts burn extra fuel: set Boost stints in the form so the fuel columns include it.';
+
+        return ['laps' => $laps, 'note' => $note];
+    }
+
+    /**
+     * Maps driver control + track context to GPRO's four start options. The
+     * official tutorial warns start risk stacks with race risks, so the
+     * suggestion steps down when composure is thin or the start is wet.
+     */
+    private function startApproach(
+        string $rating,
+        float $composure,
+        float $aggCovered,
+        bool $raceWet,
+        float $talentN,
+    ): string {
+        $score = $composure + 0.15 * $aggCovered;
+
+        // Hard passing makes grid position durable — the start is where it's won.
+        $score += match ($rating) {
+            'Hard', 'Very Hard' => 10.0,
+            'Normal' => 5.0,
+            default => 0.0,
+        };
+
+        if ($raceWet && $talentN < 70) {
+            $score -= 15.0;
+        }
+
+        return match (true) {
+            $score >= 75 => 'Force his way to the front',
+            $score >= 55 => 'Overtake where possible',
+            $score >= 35 => 'Maintain his position',
+            default => 'Avoid trouble',
+        };
+    }
+
+    /**
+     * Break-even threshold for "pit on a solvable problem": a repair stop
+     * costs pit-lane transit + repair, a limping car loses 3-6 s every lap.
+     */
+    private function problemPitLaps(float $pitLaneLoss): int
+    {
+        $stopCost = ($pitLaneLoss > 0 ? $pitLaneLoss : 20.0) + self::PROBLEM_REPAIR_TIME;
+
+        return (int) max(5, min(12, ceil($stopCost / self::PROBLEM_LAP_LOSS)));
     }
 
     /** Snap to a multiple of 5 inside the sane band — risks are coarse dials. */
@@ -181,7 +317,15 @@ class RiskAdvisorService
         $track = $trackName !== '' ? $trackName : 'this track';
 
         $lead = match ($rating) {
-            'Very Easy', 'Easy' => sprintf(
+            'Very Easy' => sprintf(
+                'Passing at %s comes cheap, so I\'d keep overtake modest at %d and put the '
+                . 'effort into defending at %d. And remember these dials only act in traffic — '
+                . 'on a track this open, the lap time lives in your clear-track risk.',
+                $track,
+                $overtake,
+                $defend,
+            ),
+            'Easy' => sprintf(
                 'Passing at %s comes cheap, so I\'d keep overtake modest at %d and put the '
                 . 'effort into defending at %d — your position is what\'s under threat here.',
                 $track,

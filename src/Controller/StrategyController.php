@@ -290,16 +290,19 @@ class StrategyController
             $strategyResults['setups'] = $setupResults;
             $strategyResults['weather_inputs'] = $setupWeatherInputs;
 
+            $raceIsWet = $setupWeatherInputs['Race']['weather'] === 'Wet';
+
             $strategyResults['risk_advice'] = $this->riskAdvisor->suggest(
                 $driver,
                 [
-                    'name'       => $strategyResults['track'] ?? null,
-                    'overtaking' => $strategyResults['overtaking'] ?? null,
-                    'grip'       => $strategyResults['track_grip'] ?? null,
-                    'tyre_wear'  => $strategyResults['track_tyre_wear'] ?? null,
-                    'distance'   => (float)($strategyResults['track_distance'] ?? 0),
+                    'name'          => $strategyResults['track'] ?? null,
+                    'overtaking'    => $strategyResults['overtaking'] ?? null,
+                    'grip'          => $strategyResults['track_grip'] ?? null,
+                    'tyre_wear'     => $strategyResults['track_tyre_wear'] ?? null,
+                    'distance'      => (float)($strategyResults['track_distance'] ?? 0),
+                    'pit_lane_loss' => (float)($strategyResults['track_pit_time'] ?? 0),
                 ],
-                $setupWeatherInputs['Race']['weather'] === 'Wet',
+                $raceIsWet,
                 $rain['race_rain_avg'],
             );
 
@@ -308,6 +311,15 @@ class StrategyController
             $strategyResults['best_compound'] = $this->pickBestCompound(
                 $strategyResults['tyres'] ?? [],
                 $rain['race_start_wet'],
+            );
+
+            $bestTyre = $strategyResults['tyres'][$strategyResults['best_compound']] ?? null;
+            $strategyResults['risk_advice']['boost'] = $this->riskAdvisor->suggestBoostLaps(
+                (int)$inputs['laps'],
+                (int)($bestTyre['stops'] ?? 0),
+                $strategyResults['overtaking'] ?? null,
+                $raceIsWet,
+                $rain['race_rain_avg'],
             );
 
             return $strategyResults;

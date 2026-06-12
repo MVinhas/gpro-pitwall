@@ -13,7 +13,72 @@
         <form method="POST" action="/calculate_strategy" id="stratForm">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
-            {# CARD 1: RACE SETTINGS #}
+            {# CARD 1: DRIVER — informative, from the last sync #}
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-4">
+                <div class="px-4 py-2 border-b border-slate-200 bg-slate-50 flex items-baseline justify-between">
+                    <h3 class="t-section">Driver</h3>
+                    <span class="text-[10px] text-slate-400">from last sync</span>
+                </div>
+                {% set d = strategy_results.stats.driver %}
+                <div class="px-4 py-3 grid grid-cols-2 gap-x-8 gap-y-1 text-xs">
+                    {% for key, label in {
+                        'concentration':     'Concentration',
+                        'talent':            'Talent',
+                        'aggressiveness':    'Aggressiveness',
+                        'experience':        'Experience',
+                        'technical_insight': 'Tech Insight',
+                        'weight':            'Weight'
+                    } %}
+                        <span class="flex justify-between gap-2">
+                            <span class="text-slate-400">{{ label }}</span>
+                            <span class="font-semibold text-slate-700 tabular-nums">{{ d[key] }}</span>
+                        </span>
+                    {% endfor %}
+                </div>
+            </div>
+
+            {# CARD 2: TEAM — informative, from the last sync #}
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-4">
+                <div class="px-4 py-2 border-b border-slate-200 bg-slate-50 flex items-baseline justify-between">
+                    <h3 class="t-section">Team</h3>
+                    <span class="text-[10px] text-slate-400">from last sync</span>
+                </div>
+                <div class="px-4 py-3 space-y-1 text-xs">
+                    <p class="t-label">Car Levels</p>
+                    <div class="grid grid-cols-2 gap-x-8 gap-y-1">
+                        {% for key, label in { 'lvlEngine': 'Engine', 'lvlSusp': 'Suspension', 'lvlElectronics': 'Electronics' } %}
+                            <span class="flex justify-between gap-2">
+                                <span class="text-slate-400">{{ label }}</span>
+                                <span class="font-semibold text-slate-700 tabular-nums">{{ strategy_results.stats.car[key] }}</span>
+                            </span>
+                        {% endfor %}
+                    </div>
+                    <p class="t-label pt-2">Staff</p>
+                    <div class="grid grid-cols-2 gap-x-8 gap-y-1">
+                        <span class="flex justify-between gap-2">
+                            <span class="text-slate-400">Concentration</span>
+                            <span class="font-semibold text-slate-700 tabular-nums">{{ strategy_results.stats.staff.concentration }}</span>
+                        </span>
+                        <span class="flex justify-between gap-2">
+                            <span class="text-slate-400">Stress Handling</span>
+                            <span class="font-semibold text-slate-700 tabular-nums">{{ strategy_results.stats.staff.stressHandling }}</span>
+                        </span>
+                    </div>
+                    <p class="t-label pt-2">Tech Director</p>
+                    <div class="grid grid-cols-2 gap-x-8 gap-y-1">
+                        <span class="flex justify-between gap-2">
+                            <span class="text-slate-400">Experience</span>
+                            <span class="font-semibold text-slate-700 tabular-nums">{{ strategy_results.stats.td.experience }}</span>
+                        </span>
+                        <span class="flex justify-between gap-2">
+                            <span class="text-slate-400">Pit Coordination</span>
+                            <span class="font-semibold text-slate-700 tabular-nums">{{ strategy_results.stats.td.pitCoordination }}</span>
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            {# CARD 3: RACE SETTINGS #}
             <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-4">
                 <div class="px-4 py-3 border-b border-slate-200 bg-slate-50">
                     <h3 class="t-section">Race Settings</h3>
@@ -64,89 +129,6 @@
                             <option value="2" {{ bs == 2 ? 'selected' }}>2 stints (6 boost laps)</option>
                             <option value="3" {{ bs == 3 ? 'selected' }}>3 stints (9 boost laps)</option>
                         </select>
-                    </div>
-                </div>
-            </div>
-
-            {# CARD 2: DRIVER ATTRIBUTES #}
-            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-4">
-                <div class="px-4 py-3 border-b border-slate-200 bg-slate-50">
-                    <h3 class="t-section">Driver</h3>
-                </div>
-                <div class="p-4 space-y-3">
-                    {% set d = strategy_results.stats.driver %}
-                    {% for field, label in {
-                        'd_conc': 'Concentration',
-                        'd_tal':  'Talent',
-                        'd_agg':  'Aggressiveness',
-                        'd_exp':  'Experience',
-                        'd_tech': 'Tech Insight',
-                        'd_wgt':  'Weight'
-                    } %}
-                        {% set key = {
-                            'd_conc': 'concentration',
-                            'd_tal':  'talent',
-                            'd_agg':  'aggressiveness',
-                            'd_exp':  'experience',
-                            'd_tech': 'technical_insight',
-                            'd_wgt':  'weight'
-                        }[field] %}
-                        <div class="flex items-center justify-between gap-3">
-                            <label class="t-label">{{ label }}</label>
-                            <input type="number" name="{{ field }}" value="{{ d[key] }}" class="form-input-sm">
-                        </div>
-                    {% endfor %}
-                </div>
-            </div>
-
-            {# CARD 3: TEAM #}
-            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-4">
-                <div class="px-4 py-3 border-b border-slate-200 bg-slate-50">
-                    <h3 class="t-section">Team</h3>
-                </div>
-                <div class="p-4 space-y-5">
-                    {# Car #}
-                    <div>
-                        <p class="t-section mb-2">Car Levels</p>
-                        <div class="space-y-3">
-                            {% for field, label in { 'c_eng': 'Engine', 'c_susp': 'Suspension', 'c_elec': 'Electronics' } %}
-                                {% set key = { 'c_eng': 'lvlEngine', 'c_susp': 'lvlSusp', 'c_elec': 'lvlElectronics' }[field] %}
-                                <div class="flex items-center justify-between gap-3">
-                                    <label class="t-label">{{ label }}</label>
-                                    <input type="number" name="{{ field }}" value="{{ strategy_results.stats.car[key] }}" class="form-input-sm">
-                                </div>
-                            {% endfor %}
-                        </div>
-                    </div>
-
-                    {# Staff #}
-                    <div>
-                        <p class="t-section mb-2">Staff</p>
-                        <div class="space-y-3">
-                            <div class="flex items-center justify-between gap-3">
-                                <label class="t-label">Concentration</label>
-                                <input type="number" name="s_conc" value="{{ strategy_results.stats.staff.concentration }}" class="form-input-sm">
-                            </div>
-                            <div class="flex items-center justify-between gap-3">
-                                <label class="t-label">Stress Handling</label>
-                                <input type="number" name="s_stress" value="{{ strategy_results.stats.staff.stressHandling }}" class="form-input-sm">
-                            </div>
-                        </div>
-                    </div>
-
-                    {# TD #}
-                    <div>
-                        <p class="t-section mb-2">Tech Director</p>
-                        <div class="space-y-3">
-                            <div class="flex items-center justify-between gap-3">
-                                <label class="t-label">Experience</label>
-                                <input type="number" name="td_exp" value="{{ strategy_results.stats.td.experience }}" class="form-input-sm">
-                            </div>
-                            <div class="flex items-center justify-between gap-3">
-                                <label class="t-label">Pit Coordination</label>
-                                <input type="number" name="td_pit" value="{{ strategy_results.stats.td.pitCoordination }}" class="form-input-sm">
-                            </div>
-                        </div>
                     </div>
                 </div>
             </div>
