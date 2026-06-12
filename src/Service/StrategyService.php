@@ -289,6 +289,7 @@ class StrategyService
             'track_grip' => $trackDb['grip'] ?? null,
             'track_tyre_wear' => $trackDb['tyre_wear'] ?? null,
             'track_distance' => (float)($trackDb['distance'] ?? 0),
+            'track_pit_time' => (float)($trackDb['pit_time'] ?? 0),
             'fuel' => [
                 'dry' => ceil($totalFuelDry),
                 'wet' => ceil($totalFuelWet),

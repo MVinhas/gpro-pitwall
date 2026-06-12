@@ -2,7 +2,7 @@
 
 Race-weekend cockpit for [Grand Prix Racing Online](https://www.gpro.net) managers. Pulls your own GPRO data via the public API and turns it into the answers you actually need before qualifying: what to train, what to swap, what to set, what to bet on weather.
 
-**New: Pitwall AI.** Your strategy screen now talks back. A race engineer that reads your driver, the track and the forecast, then tells you — in plain words — exactly how hard to attack and how hard to defend, and when to take the strategy with fewer pit stops. No other GPRO tool does this.
+**New: Advice from the Race Engineer.** Your strategy screen now talks back. A race engineer that reads your driver, the track and the forecast, then tells you — in plain words — exactly how hard to attack and how hard to defend, where to place your boost laps, and when to take the strategy with fewer pit stops. No other GPRO tool does this.
 
 **Live:** [gpro-pitwall.com](https://gpro-pitwall.com)
 **Contact:** admin@gpro-pitwall.com
@@ -27,10 +27,10 @@ One screen, in race-prep order:
 - **"Set your race strategy" handoff** — one click to the Strategy tab pre-populated.
 
 ### Race Strategy
-Fuel + tyre + setup for every compound (Extra Soft / Soft / Medium / Hard / Rain). Live risk slider; the calc auto-runs on first visit so you don't need to click Calculate. Best-compound highlighted; per-compound breakdown of lost time (pits / fuel / tyre-compound difference). Setup table for Q1, Q2 and race with weather-aware tyre choices. The track's overtaking rating (Very Easy → Very Hard) shows as a colour-coded badge next to the fuel figures.
+Fuel + tyre + setup for every compound (Extra Soft / Soft / Medium / Hard / Rain). Live risk slider; the calc auto-runs on first visit so you don't need to click Calculate. Best-compound highlighted; per-compound breakdown of lost time (pits / fuel / tyre-compound difference). Setup table for Q1, Q2 and race with weather-aware tyre choices. Fuel figures and the track's overtaking rating (Very Easy → Very Hard, colour-coded) sit in a slim billboard strip above the results.
 
-### Pitwall AI — your race engineer ⭐
-The headline feature of the Strategy tab. Pitwall AI suggests your **overtake and defend risk dials (0–100)** for the next race and explains its reasoning in plain advisor prose — like having a race engineer on the pit wall who has already done the homework:
+### Advice from the Race Engineer ⭐
+The headline feature of the Strategy tab. The race engineer suggests your **overtake and defend risk dials (0–100)** for the next race and explains its reasoning in plain advisor prose — like having a real engineer on the pit wall who has already done the homework:
 
 > *"Overtaking at Barcelona is hard, so I'd push overtake up to 60 to make moves stick — and since the track already makes you hard to pass, 35 on defence is plenty. Grip here is low — sliding cars punish ambition, so I've shaved both numbers."*
 
@@ -45,6 +45,13 @@ What it weighs, every single race:
 - **Stamina on long races** — 300 km+ with a tired driver is not where you gamble.
 
 It also drops a **pit-count tie-breaker**: when two strategies are close on paper, it tells you whether this track rewards fewer stops (track position is gold where passing is hard) or makes the extra stop affordable (clean air and fresh rubber where passing is easy) — and it stays quiet about stop counts when rain is likely, because a wet race rewrites the plan anyway.
+
+And it now covers the rest of the race-setup form:
+
+- **Boost laps** — the three boost-set start laps, placed where pace converts into something: early while the field is packed (easy passing), the in-laps before each stop to overcut through the pit cycle, or the final laps to bring it home. Pit-window aware via the best strategy's stint plan.
+- **Race start approach** — one of GPRO's four options, scaled to the driver's control and stepped down for wet starts; the official tutorial warns start risk stacks with race risks.
+- **Technical-problem policy** — pit on a solvable problem only if more than N laps remain, with N derived from this track's pit-lane time against the 3–6 s/lap a limping car loses.
+- **Long-race energy reminder** — at 300 km+ it flags that clear-track risks drive energy drain, and a driver at 0% crawls home with no risks at all.
 
 Honest by design: it's a transparent heuristic built from the game's own attribute semantics, not a reverse-engineered formula — and it says so right in the box.
 
@@ -106,7 +113,7 @@ Per-page titles, meta descriptions and canonical URLs via Twig blocks (override 
 - **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile).
 - **SQLite** via PDO. Encrypted user emails (AES-256-GCM) and API tokens at rest.
 - **PHPMailer 7** for SMTP; in dev, writes `.eml` files to `var/mail/` instead.
-- **PHPUnit 13** — 282 tests, 711 assertions, all green at **PHPStan level 7**. Twig templates linted by a native `bin/twig_lint.php` (Twig's own tokenizer/parser — no third-party linter).
+- **PHPUnit 13** — 294 tests, 786 assertions, all green at **PHPStan level 7**. Twig templates linted by a native `bin/twig_lint.php` (Twig's own tokenizer/parser — no third-party linter).
 - **No framework.** Custom front controller + flat DI container in `bootstrap.php`. Routes in `config/routes.php`.
 - **Timestamps are stored and served as UTC**, then localised per-visitor in the browser (`<time data-localtime>` + `Intl`), so each user sees their own timezone with no server-side config.
 
