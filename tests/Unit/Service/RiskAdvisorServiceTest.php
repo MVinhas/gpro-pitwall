@@ -311,14 +311,62 @@ final class RiskAdvisorServiceTest extends TestCase
         $this->assertStringContainsString('clear-track risk', $r['phrase']);
     }
 
-    public function testEnergyTipOnlyOnLongRaces(): void
+    public function testDistanceTipAlwaysPresentAcrossTiers(): void
     {
-        $short = $this->service()->suggest($this->driver(), $this->track(['distance' => 250.0]), false, 10.0);
-        $long = $this->service()->suggest($this->driver(), $this->track(['distance' => 330.0]), false, 10.0);
+        foreach ([238.6, 301.0, 321.8] as $km) {
+            $r = $this->service()->suggest($this->driver(), $this->track(['distance' => $km]), false, 10.0);
 
-        $this->assertNull($short['energy_tip']);
-        $this->assertStringContainsString('clear-track risks', (string)$long['energy_tip']);
-        $this->assertStringContainsString('330', (string)$long['energy_tip']);
+            $this->assertNotEmpty($r['distance_tip']);
+            $this->assertStringContainsString('clear-track risk', $r['distance_tip']);
+            $this->assertStringContainsString('boost lap', $r['distance_tip']);
+            $this->assertStringContainsString(sprintf('%.0f km', $km), $r['distance_tip']);
+        }
+    }
+
+    public function testShortRaceTipFlagsLowerEnergyDrain(): void
+    {
+        $r = $this->service()->suggest($this->driver(), $this->track(['distance' => 250.0]), false, 10.0);
+
+        $this->assertStringContainsString('short', strtolower($r['distance_tip']));
+        $this->assertStringContainsString('less driver energy', $r['distance_tip']);
+        $this->assertStringContainsString('higher clear-track risk', $r['distance_tip']);
+    }
+
+    public function testNormalRaceTipIsBalanced(): void
+    {
+        $r = $this->service()->suggest($this->driver(), $this->track(['distance' => 306.0]), false, 10.0);
+
+        $this->assertStringContainsString('a normal one', $r['distance_tip']);
+        $this->assertStringNotContainsString('a short one', $r['distance_tip']);
+        $this->assertStringNotContainsString('a long one', $r['distance_tip']);
+    }
+
+    public function testLongRaceTipWarnsOnEnergyAndStamina(): void
+    {
+        $weak = $this->service()->suggest(
+            $this->driver(['stamina' => 100]),
+            $this->track(['distance' => 320.0]),
+            false,
+            10.0,
+        );
+        $strong = $this->service()->suggest(
+            $this->driver(['stamina' => 220]),
+            $this->track(['distance' => 320.0]),
+            false,
+            10.0,
+        );
+
+        $this->assertStringContainsString('long', strtolower($weak['distance_tip']));
+        $this->assertStringContainsString('drains more driver energy', $weak['distance_tip']);
+        $this->assertStringContainsString('Stamina at 100', $weak['distance_tip']);
+        $this->assertStringNotContainsString('Stamina at 220', $strong['distance_tip']);
+    }
+
+    public function testDistanceTipEmptyWhenDistanceUnknown(): void
+    {
+        $r = $this->service()->suggest($this->driver(), $this->track(['distance' => 0.0]), false, 10.0);
+
+        $this->assertSame('', $r['distance_tip']);
     }
 
     public function testStartApproachScalesWithDriverAndTrack(): void

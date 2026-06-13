@@ -42,7 +42,7 @@ What it weighs, every single race:
 - **The forecast** — wet or rain-threatened races pull both dials down, scaled by talent.
 - **Track grip** — low-grip circuits punish ambition; both numbers get shaved.
 - **Tyre wear** — very-high-wear tracks cost you the rubber you'd push on.
-- **Stamina on long races** — 300 km+ with a tired driver is not where you gamble.
+- **Stamina on long races** — a 310 km+ race with a tired driver is not where you gamble.
 
 It also drops a **pit-count tie-breaker**: when two strategies are close on paper, it tells you whether this track rewards fewer stops (track position is gold where passing is hard) or makes the extra stop affordable (clean air and fresh rubber where passing is easy) — and it stays quiet about stop counts when rain is likely, because a wet race rewrites the plan anyway.
 
@@ -51,7 +51,7 @@ And it now covers the rest of the race-setup form:
 - **Boost laps** — the three boost-set start laps, placed where pace converts into something: early while the field is packed (easy passing), the in-laps before each stop to overcut through the pit cycle, or the final laps to bring it home. Pit-window aware via the best strategy's stint plan.
 - **Race start approach** — one of GPRO's four options, scaled to the driver's control and stepped down for wet starts; the official tutorial warns start risk stacks with race risks.
 - **Technical-problem policy** — pit on a solvable problem only if more than N laps remain, with N derived from this track's pit-lane time against the 3–6 s/lap a limping car loses.
-- **Long-race energy reminder** — at 300 km+ it flags that clear-track risks drive energy drain, and a driver at 0% crawls home with no risks at all.
+- **Race-distance note** — always on. It places the race against the field average (~301 km across all 64 tracks) and sorts it into short / normal / long (bands set at the mean ± half a standard deviation: under 293 km, 293–310 km, over 310 km). A shorter race spends less driver energy, so you can carry higher clear-track risk and place boost laps freely; a longer one bleeds energy, so both want trimming — more so when stamina is thin.
 
 Honest by design: it's a transparent heuristic built from the game's own attribute semantics, not a reverse-engineered formula — and it says so right in the box.
 
@@ -113,7 +113,7 @@ Per-page titles, meta descriptions and canonical URLs via Twig blocks (override 
 - **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile).
 - **SQLite** via PDO. Encrypted user emails (AES-256-GCM) and API tokens at rest.
 - **PHPMailer 7** for SMTP; in dev, writes `.eml` files to `var/mail/` instead.
-- **PHPUnit 13** — 294 tests, 786 assertions, all green at **PHPStan level 7**. Twig templates linted by a native `bin/twig_lint.php` (Twig's own tokenizer/parser — no third-party linter).
+- **PHPUnit 13** — 298 tests, 806 assertions, all green at **PHPStan level 7**. Twig templates linted by a native `bin/twig_lint.php` (Twig's own tokenizer/parser — no third-party linter).
 - **No framework.** Custom front controller + flat DI container in `bootstrap.php`. Routes in `config/routes.php`.
 - **Timestamps are stored and served as UTC**, then localised per-visitor in the browser (`<time data-localtime>` + `Intl`), so each user sees their own timezone with no server-side config.
 

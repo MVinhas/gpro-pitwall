@@ -59,8 +59,19 @@ class RiskAdvisorService
     /** Rain probability (%) from which a dry forecast still warrants caution. */
     private const float RAIN_WATCH_THRESHOLD = 30.0;
 
-    /** Race distance (km) from which stamina starts to matter. */
-    private const float LONG_RACE_KM = 300.0;
+    /**
+     * Race-distance tiers, in km. Derived from the 64 seeded tracks: the field
+     * mean is ~301 km with a standard deviation of ~17 km. Bands are mean ±
+     * 0.5·SD, so "normal" is the broad 293-310 km cluster (~45 tracks), "short"
+     * is the sub-293 tail (~9 tracks, down to Fiorano 238.6) and "long" is the
+     * 310+ tail (~10 tracks, up to Indianapolis Oval 321.8). A shorter race
+     * drains less driver energy, so clear-track risk and boost laps run harder.
+     */
+    private const float SHORT_RACE_KM = 293.0;
+    private const float LONG_RACE_KM = 310.0;
+
+    /** Field-average race distance (km) across the seeded tracks. */
+    private const float AVG_RACE_KM = 301.0;
 
     private const int MIN_RISK = 5;
     private const int MAX_RISK = 70;
@@ -76,7 +87,7 @@ class RiskAdvisorService
      * @param array{name?: ?string, overtaking?: ?string, grip?: ?string,
      *               tyre_wear?: ?string, distance?: float, pit_lane_loss?: float} $track
      * @return array{overtake: int, defend: int, phrase: string, tip: ?string,
-     *               energy_tip: ?string,
+     *               distance_tip: string,
      *               settings: array{start_approach: string, problem_pit_laps: int}}
      */
     public function suggest(array $driver, array $track, bool $raceWet, float $rainAvg): array
@@ -140,13 +151,7 @@ class RiskAdvisorService
                 $driver,
             ),
             'tip' => $this->strategyTip($rating, $raceWet, $rainAvg),
-            'energy_tip' => $longRace
-                ? sprintf(
-                    'At %.0f km this is a long race — mind your clear-track risks: they drive energy '
-                    . 'drain, and a driver who hits 0%% energy crawls home at a slow, no-risk pace.',
-                    $distanceKm,
-                )
-                : null,
+            'distance_tip' => $this->distanceTip($distanceKm, (float)($driver['stamina'] ?? 0)),
             'settings' => [
                 'start_approach' => $this->startApproach($rating, $composure, $aggCovered, $raceWet, $n('talent')),
                 'problem_pit_laps' => $this->problemPitLaps((float)($track['pit_lane_loss'] ?? 0)),
@@ -295,6 +300,50 @@ class RiskAdvisorService
             default => 'If two strategies are within a few seconds, prefer the one with fewer stops — '
                 . 'track position still breaks ties.',
         };
+    }
+
+    /**
+     * Always-on note placing the race against the field-average distance and
+     * explaining what that means for energy drain. A shorter race spends less
+     * driver energy, so clear-track risk and boost laps can be pushed harder;
+     * a longer one bleeds energy, so both want trimming — more so when stamina
+     * is thin. Distance is fuel/tyre planning, but energy is the lever it moves.
+     */
+    private function distanceTip(float $distanceKm, float $stamina): string
+    {
+        if ($distanceKm <= 0) {
+            return '';
+        }
+
+        $vsAvg = sprintf('%.0f km against a field average near %.0f km', $distanceKm, self::AVG_RACE_KM);
+
+        if ($distanceKm < self::SHORT_RACE_KM) {
+            return sprintf(
+                'Race distance: a short one at %s. It spends less driver energy, so you can carry '
+                . 'higher clear-track risk for the extra pace and place your boost laps freely — '
+                . 'energy will still be there to convert it.',
+                $vsAvg,
+            );
+        }
+
+        if ($distanceKm > self::LONG_RACE_KM) {
+            $staminaNote = $stamina / self::ATTRIBUTE_SCALE < 60
+                ? sprintf(' Stamina at %.0f fades late, so lean conservative.', $stamina)
+                : '';
+
+            return sprintf(
+                'Race distance: a long one at %s. It drains more driver energy, so keep clear-track '
+                . 'risk in check and budget your boost laps — a driver who runs flat crawls home.%s',
+                $vsAvg,
+                $staminaNote,
+            );
+        }
+
+        return sprintf(
+            'Race distance: a normal one at %s. Energy drain is middling — set clear-track risk and '
+            . 'boost laps to your usual balance, then adjust if stamina is short.',
+            $vsAvg,
+        );
     }
 
     /**
