@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Each entry mirrors its annotated release tag.
 
+## [1.5.3] - 2026-06-13
+- Race Strategy: the Race Engineer now always shows a race-distance note. It places the race against the field average (~301 km across all 64 tracks) and sorts it into short / normal / long — bands set at the mean ± half a standard deviation (under 293 km, 293–310 km, over 310 km). A shorter race drains less driver energy, so it advises carrying higher clear-track risk and placing boost laps freely; a longer race bleeds energy, so it advises trimming both, more so when stamina is thin. Replaces the previous long-race-only energy reminder.
+
 ## [1.5.2] - 2026-06-12
 - Race Strategy: the Race Engineer accordion no longer re-opens when a slider or select re-runs the calculation — the collapsed/expanded choice is remembered for the session (sessionStorage) and reapplied after every fragment swap.
 
