@@ -311,9 +311,9 @@ final class RiskAdvisorServiceTest extends TestCase
         $this->assertStringContainsString('clear-track risk', $r['phrase']);
     }
 
-    public function testDistanceTipAlwaysPresentAcrossTiers(): void
+    public function testDistanceTipPresentOnlyForShortAndLongRaces(): void
     {
-        foreach ([238.6, 301.0, 321.8] as $km) {
+        foreach ([238.6, 321.8] as $km) {
             $r = $this->service()->suggest($this->driver(), $this->track(['distance' => $km]), false, 10.0);
 
             $this->assertNotEmpty($r['distance_tip']);
@@ -326,7 +326,7 @@ final class RiskAdvisorServiceTest extends TestCase
     {
         // Managers don't need the kilometres or the field average — the note
         // must read as plain advice, never quoting a distance figure.
-        foreach ([238.6, 301.0, 321.8] as $km) {
+        foreach ([238.6, 321.8] as $km) {
             $r = $this->service()->suggest($this->driver(), $this->track(['distance' => $km]), false, 10.0);
 
             $this->assertDoesNotMatchRegularExpression('/\d/', $r['distance_tip']);
@@ -342,13 +342,11 @@ final class RiskAdvisorServiceTest extends TestCase
         $this->assertStringContainsString('higher clear-track risk', $r['distance_tip']);
     }
 
-    public function testNormalRaceTipIsBalanced(): void
+    public function testNormalRaceShowsNoDistanceTip(): void
     {
         $r = $this->service()->suggest($this->driver(), $this->track(['distance' => 306.0]), false, 10.0);
 
-        $this->assertStringContainsString('normal-length race', $r['distance_tip']);
-        $this->assertStringNotContainsString('short race', $r['distance_tip']);
-        $this->assertStringNotContainsString('long race', $r['distance_tip']);
+        $this->assertSame('', $r['distance_tip']);
     }
 
     public function testLongRaceTipWarnsOnEnergyAndStamina(): void

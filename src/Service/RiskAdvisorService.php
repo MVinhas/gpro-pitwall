@@ -300,13 +300,13 @@ class RiskAdvisorService
     }
 
     /**
-     * Always-on, narrative note on how long this race runs and what that means
-     * for driver energy. Managers don't need the kilometres or the field
-     * average — just whether this is a short, normal or long haul. A short race
-     * spends less energy, so clear-track risk and boost laps can be pushed
-     * harder; a long one bleeds energy, so both want trimming, more so when
-     * stamina is thin. Distance is fuel/tyre planning, but energy is the lever
-     * it moves.
+     * Narrative note on how long this race runs and what that means for driver
+     * energy — but only when the distance is worth flagging. Normal-length
+     * races say nothing (empty string, hidden by the template); only the short
+     * and long tails get a note. Managers don't need the kilometres or the
+     * field average. A short race spends less energy, so clear-track risk and
+     * boost laps can be pushed harder; a long one bleeds energy, so both want
+     * trimming, more so when stamina is thin.
      */
     private function distanceTip(float $distanceKm, float $stamina): string
     {
@@ -330,8 +330,7 @@ class RiskAdvisorService
                 . 'crawls home.' . $staminaNote;
         }
 
-        return 'This is a normal-length race, so energy drain is nothing unusual. Set clear-track risk '
-            . 'and boost laps to your usual balance, and only ease off if this driver is short on stamina.';
+        return '';
     }
 
     /**

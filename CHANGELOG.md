@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Each entry mirrors its annotated release tag.
 
+## [1.5.5] - 2026-06-13
+- Race Strategy: the Race Engineer's race-distance note now only appears for short and long races. Normal-length races (the bulk of the field) show nothing — the note added no signal there. Short and long advice is unchanged.
+
 ## [1.5.4] - 2026-06-13
 - Race Strategy: reworded the Race Engineer's race-distance note to read narratively instead of analytically. It no longer quotes the race length or the field average — it just tells the manager whether this is a short, normal or long race and what that means for driver energy (carry more clear-track risk and boost freely on a short one; trim both on a long one, more so when stamina is thin). The short/normal/long tiers are unchanged under the hood.
 
