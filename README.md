@@ -51,7 +51,7 @@ And it now covers the rest of the race-setup form:
 - **Boost laps** — the three boost-set start laps, placed where pace converts into something: early while the field is packed (easy passing), the in-laps before each stop to overcut through the pit cycle, or the final laps to bring it home. Pit-window aware via the best strategy's stint plan.
 - **Race start approach** — one of GPRO's four options, scaled to the driver's control and stepped down for wet starts; the official tutorial warns start risk stacks with race risks.
 - **Technical-problem policy** — pit on a solvable problem only if more than N laps remain, with N derived from this track's pit-lane time against the 3–6 s/lap a limping car loses.
-- **Race-distance note** — always on. It places the race against the field average (~301 km across all 64 tracks) and sorts it into short / normal / long (bands set at the mean ± half a standard deviation: under 293 km, 293–310 km, over 310 km). A shorter race spends less driver energy, so you can carry higher clear-track risk and place boost laps freely; a longer one bleeds energy, so both want trimming — more so when stamina is thin.
+- **Race-distance note** — always on, and written like an engineer talking, not a stats readout: it tells you in plain words whether this is a short, normal or long race (no kilometres, no averages quoted) and what that means for energy. Short race → spends less driver energy, so carry higher clear-track risk and place boost laps freely; long race → bleeds energy, so trim both, more so when stamina is thin. Under the hood the tiers come from the 64 seeded tracks (field mean ~301 km, bands at the mean ± half a standard deviation), but the manager only ever sees the verdict.
 
 Honest by design: it's a transparent heuristic built from the game's own attribute semantics, not a reverse-engineered formula — and it says so right in the box.
 
@@ -113,7 +113,7 @@ Per-page titles, meta descriptions and canonical URLs via Twig blocks (override 
 - **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile).
 - **SQLite** via PDO. Encrypted user emails (AES-256-GCM) and API tokens at rest.
 - **PHPMailer 7** for SMTP; in dev, writes `.eml` files to `var/mail/` instead.
-- **PHPUnit 13** — 298 tests, 806 assertions, all green at **PHPStan level 7**. Twig templates linted by a native `bin/twig_lint.php` (Twig's own tokenizer/parser — no third-party linter).
+- **PHPUnit 13** — 299 tests, 806 assertions, all green at **PHPStan level 7**. Twig templates linted by a native `bin/twig_lint.php` (Twig's own tokenizer/parser — no third-party linter).
 - **No framework.** Custom front controller + flat DI container in `bootstrap.php`. Routes in `config/routes.php`.
 - **Timestamps are stored and served as UTC**, then localised per-visitor in the browser (`<time data-localtime>` + `Intl`), so each user sees their own timezone with no server-side config.
 

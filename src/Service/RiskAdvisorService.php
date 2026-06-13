@@ -70,9 +70,6 @@ class RiskAdvisorService
     private const float SHORT_RACE_KM = 293.0;
     private const float LONG_RACE_KM = 310.0;
 
-    /** Field-average race distance (km) across the seeded tracks. */
-    private const float AVG_RACE_KM = 301.0;
-
     private const int MIN_RISK = 5;
     private const int MAX_RISK = 70;
 
@@ -303,11 +300,13 @@ class RiskAdvisorService
     }
 
     /**
-     * Always-on note placing the race against the field-average distance and
-     * explaining what that means for energy drain. A shorter race spends less
-     * driver energy, so clear-track risk and boost laps can be pushed harder;
-     * a longer one bleeds energy, so both want trimming — more so when stamina
-     * is thin. Distance is fuel/tyre planning, but energy is the lever it moves.
+     * Always-on, narrative note on how long this race runs and what that means
+     * for driver energy. Managers don't need the kilometres or the field
+     * average — just whether this is a short, normal or long haul. A short race
+     * spends less energy, so clear-track risk and boost laps can be pushed
+     * harder; a long one bleeds energy, so both want trimming, more so when
+     * stamina is thin. Distance is fuel/tyre planning, but energy is the lever
+     * it moves.
      */
     private function distanceTip(float $distanceKm, float $stamina): string
     {
@@ -315,35 +314,24 @@ class RiskAdvisorService
             return '';
         }
 
-        $vsAvg = sprintf('%.0f km against a field average near %.0f km', $distanceKm, self::AVG_RACE_KM);
-
         if ($distanceKm < self::SHORT_RACE_KM) {
-            return sprintf(
-                'Race distance: a short one at %s. It spends less driver energy, so you can carry '
-                . 'higher clear-track risk for the extra pace and place your boost laps freely — '
-                . 'energy will still be there to convert it.',
-                $vsAvg,
-            );
+            return 'This is a short race, well under the usual length, so it spends less driver energy. '
+                . 'You can carry higher clear-track risk for the extra pace and place your boost laps '
+                . 'freely — there\'ll still be energy left to convert it.';
         }
 
         if ($distanceKm > self::LONG_RACE_KM) {
             $staminaNote = $stamina / self::ATTRIBUTE_SCALE < 60
-                ? sprintf(' Stamina at %.0f fades late, so lean conservative.', $stamina)
+                ? ' And with this driver\'s stamina, he\'ll fade late — lean conservative.'
                 : '';
 
-            return sprintf(
-                'Race distance: a long one at %s. It drains more driver energy, so keep clear-track '
-                . 'risk in check and budget your boost laps — a driver who runs flat crawls home.%s',
-                $vsAvg,
-                $staminaNote,
-            );
+            return 'This is a long race, well over the usual length, so it drains more driver energy. '
+                . 'Keep clear-track risk in check and budget your boost laps — a driver who runs flat '
+                . 'crawls home.' . $staminaNote;
         }
 
-        return sprintf(
-            'Race distance: a normal one at %s. Energy drain is middling — set clear-track risk and '
-            . 'boost laps to your usual balance, then adjust if stamina is short.',
-            $vsAvg,
-        );
+        return 'This is a normal-length race, so energy drain is nothing unusual. Set clear-track risk '
+            . 'and boost laps to your usual balance, and only ease off if this driver is short on stamina.';
     }
 
     /**
