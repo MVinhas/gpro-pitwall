@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Each entry mirrors its annotated release tag.
 
+## [1.5.6] - 2026-06-14
+- Race Weekend Pitwall: the Car Wear cockpit card gains a collapsible "PHA contribution per part" reference table. It lists each car part's Power/Handling/Acceleration contribution per level so managers can manually calculate the PHA shift of a part swap when forcing a track-car match.
+
 ## [1.5.5] - 2026-06-13
 - Race Strategy: the Race Engineer's race-distance note now only appears for short and long races. Normal-length races (the bulk of the field) show nothing — the note added no signal there. Short and long advice is unchanged.
 
