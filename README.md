@@ -23,7 +23,7 @@ One screen, in race-prep order:
 - **Weather call** — Q1 / Q2 / race-start dry/wet assessment.
 - **Sponsors** — ongoing negotiation list with per-negotiation characteristics and the recommended answer for each of the five negotiation questions.
 - **Training picks** — gap-closer recommendations weighted against the division ideal.
-- **Car wear panel** — per-part end-of-race wear projection with a live risk slider that re-runs without a page reload, plus a ranked list of swap options for every flagged part (filtered by your group's car-level band from `MoneyLevels` and your live cash from `Menu`).
+- **Car wear panel** — per-part end-of-race wear projection with a live risk slider that re-runs without a page reload, plus a ranked list of swap options for every flagged part (filtered by your group's car-level band from `MoneyLevels` and your live cash from `Menu`). Includes a collapsible PHA-contribution reference table (each part's Power/Handling/Acceleration value per level) for manually working out the PHA shift of a swap when forcing a track-car match.
 - **"Set your race strategy" handoff** — one click to the Strategy tab pre-populated.
 
 ### Race Strategy

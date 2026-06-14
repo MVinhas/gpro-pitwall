@@ -141,4 +141,49 @@
         Move the slider to model different driver-risk levels. The Car Wear tab
         gives the full breakdown.
     </p>
+
+    <details class="group rounded-lg border border-slate-200">
+        <summary class="flex cursor-pointer select-none list-none items-center justify-between px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 hover:bg-slate-50">
+            PHA contribution per part
+            <svg class="h-4 w-4 shrink-0 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+            </svg>
+        </summary>
+        <div class="border-t border-slate-200 px-4 pb-4 pt-3 space-y-3">
+            <p class="t-caption pt-1">Use this to manually calculate PHA shifts when swapping parts. Each number is the contribution per level — multiply by the level change to get the delta.</p>
+            <table class="w-full text-xs">
+                <thead>
+                    <tr class="border-b border-slate-200">
+                        <th class="pb-1.5 text-left font-semibold text-slate-600">Part</th>
+                        <th class="pb-1.5 text-center font-semibold text-blue-600">P</th>
+                        <th class="pb-1.5 text-center font-semibold text-amber-600">H</th>
+                        <th class="pb-1.5 text-center font-semibold text-emerald-600">A</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% set pha_table = [
+                        { part: 'Engine',     p: 6, h: 0, a: 2 },
+                        { part: 'Gearbox',    p: 3, h: 1, a: 5 },
+                        { part: 'Front Wing', p: 1, h: 3, a: 0 },
+                        { part: 'Rear Wing',  p: 0, h: 2, a: 3 },
+                        { part: 'Electronics',p: 2, h: 0, a: 2 },
+                        { part: 'Chassis',    p: 1, h: 2, a: 2 },
+                        { part: 'Suspension', p: 0, h: 2, a: 2 },
+                        { part: 'Brakes',     p: 0, h: 2, a: 0 },
+                        { part: 'Cooling',    p: 2, h: 0, a: 0 },
+                        { part: 'Sidepods',   p: 1, h: 1, a: 0 },
+                        { part: 'Underbody',  p: 0, h: 1, a: 1 },
+                    ] %}
+                    {% for row in pha_table %}
+                        <tr>
+                            <td class="py-1.5 text-slate-700">{{ row.part }}</td>
+                            <td class="py-1.5 text-center {{ row.p > 0 ? 'font-semibold text-blue-600' : 'text-slate-300' }}">{{ row.p > 0 ? row.p : '—' }}</td>
+                            <td class="py-1.5 text-center {{ row.h > 0 ? 'font-semibold text-amber-600' : 'text-slate-300' }}">{{ row.h > 0 ? row.h : '—' }}</td>
+                            <td class="py-1.5 text-center {{ row.a > 0 ? 'font-semibold text-emerald-600' : 'text-slate-300' }}">{{ row.a > 0 ? row.a : '—' }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </details>
 </div>
