@@ -19,7 +19,7 @@ final class GproApiFetcher
     private ?string $token = null;
 
     /** @param array<string, mixed> $config */
-    public function __construct(array $config)
+    public function __construct(array $config, private readonly ?GproApiThrottle $throttle = null)
     {
         $this->baseUrl = rtrim((string) $config['base_url'], '/');
         $this->userAgent = 'GPRO-Pitwall/' . ($config['version'] ?? '0.0.0');
@@ -36,6 +36,8 @@ final class GproApiFetcher
         if (empty($this->token)) {
             throw new RuntimeException('GPRO API token not set for current user');
         }
+
+        $this->throttle?->acquire();
 
         $ch = curl_init($this->baseUrl . $endpoint);
         curl_setopt_array($ch, [
@@ -82,6 +84,8 @@ final class GproApiFetcher
      */
     public function fetchMarketFile(string $market): array
     {
+        $this->throttle?->acquire();
+
         $url = $this->baseUrl . "/GetMarketFile.asp?market={$market}&type=json";
         $ch = curl_init($url);
         curl_setopt_array($ch, [

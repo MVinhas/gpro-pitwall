@@ -12,6 +12,20 @@ Free for every registered user. No tier, no paywall. Voluntary support via [Buy 
 
 ---
 
+## A note on FOBY
+
+GPRO is, by tradition, a **Find Out By Yourself** game — much of the reward comes from analysing your own data and drawing your own conclusions (fuel consumption, tyre wear, which driver stats matter, and so on). Pitwall can hand you answers the community took years to work out, and that convenience can short-circuit the discovery if you let it.
+
+The tool is built to respect that culture rather than erase it:
+
+- It's a **second opinion, not a substitute** for your own analysis.
+- Every screen **shows its inputs and reasoning** instead of hiding them, so you learn the *why*, not just the *what* — the Race Engineer advice is a transparent heuristic, not a reverse-engineered black box.
+- The actual game formulas stay private (git-ignored `config/secrets.php`); nothing here redistributes GPRO's mechanics.
+
+If working things out from scratch is the part you enjoy, do that first — then use Pitwall to check your thinking.
+
+---
+
 ## Features
 
 ### Cockpit (the race-weekend spine)
@@ -113,7 +127,7 @@ Per-page titles, meta descriptions and canonical URLs via Twig blocks (override 
 - **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile).
 - **SQLite** via PDO. Encrypted user emails (AES-256-GCM) and API tokens at rest.
 - **PHPMailer 7** for SMTP; in dev, writes `.eml` files to `var/mail/` instead.
-- **PHPUnit 13** — 299 tests, 800 assertions, all green at **PHPStan level 7**. Twig templates linted by a native `bin/twig_lint.php` (Twig's own tokenizer/parser — no third-party linter).
+- **PHPUnit 13** — 305 tests, 814 assertions, all green at **PHPStan level 7**. Twig templates linted by a native `bin/twig_lint.php` (Twig's own tokenizer/parser — no third-party linter).
 - **No framework.** Custom front controller + flat DI container in `bootstrap.php`. Routes in `config/routes.php`.
 - **Timestamps are stored and served as UTC**, then localised per-visitor in the browser (`<time data-localtime>` + `Intl`), so each user sees their own timezone with no server-side config.
 
@@ -149,6 +163,9 @@ ls -t var/mail/*.eml | head -1 | xargs cat
 | `MAIL_FROM_NAME` | Defaults to `GPRO Pitwall` |
 | `RECAPTCHA_SITE_KEY` / `RECAPTCHA_SECRET_KEY` | Required in prod; bypassed when `IS_DEV=true` |
 | `SYNC_SAFETY_MARGIN` | Default 20. The sync defers when `apiRequestsRemaining < calls + margin` |
+| `GPRO_API_RATE` | Outbound API calls/sec allowed from this host (token-bucket refill). Default 4. `0` disables the throttle |
+| `GPRO_API_BURST` | Token-bucket capacity — how many calls may go out back-to-back before pacing kicks in. Default 8 |
+| `GPRO_API_MAX_BLOCK_MS` | Upper bound on how long a single call waits for a token before proceeding anyway. Default 2000 |
 
 Generate random keys with `openssl rand -hex 32`.
 
@@ -235,6 +252,7 @@ Request → public/index.php → Http\Router → Controller → Service → Repo
 - Controllers are thin. Logic lives in services. Services talk to repositories; repositories own SQL.
 - Cache adapters under `src/Cache/Adapter/` resolved by `src/Cache/CacheFactory`. Default driver `filesystem`.
 - `src/Service/GproApiFetcher` does raw HTTP. `src/Service/GproApiClient` composes it with cache + endpoint naming.
+- **Server-wide outbound throttle.** Every Pitwall instance calls the GPRO API from one host IP, so `src/Service/GproApiThrottle` caps the *aggregate* outbound rate — a token bucket shared across all PHP workers via a single `flock`'d state file in `var/cache/`. Cache hits never reach it; only real fetches do. Under a burst (many users syncing at once) it spaces calls by sleeping a bounded amount (`GPRO_API_MAX_BLOCK_MS`), never throws, and degrades to "slightly slower" rather than a failed page. Defaults: `GPRO_API_RATE=4`/s, `GPRO_API_BURST=8`; set `GPRO_API_RATE=0` to disable. This is the per-IP courtesy limit that complements the existing per-token budget guard (`SYNC_SAFETY_MARGIN`).
 - **Race-window cache keys.** Race-critical data (car wear, race setup, next-track profile) is namespaced by the current race window (`App\Support\RaceWindow`, computed from the clock against GPRO's weekly Tue/Fri schedule — no API call). The key rolls once per race weekend, so a stale read auto-refreshes a single endpoint at the boundary instead of serving last-window data within `CACHE_TTL_SHORT`. Schedule configurable via `GPRO_RACE_DAYS` / `GPRO_RACE_BOUNDARY_HOUR` / `GPRO_RACE_TZ`; empty `GPRO_RACE_DAYS` disables it.
 
 ---

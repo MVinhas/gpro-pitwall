@@ -193,7 +193,19 @@ $container['service.recaptcha'] = new \App\Service\ReCaptchaService(
 
 
 
-$container['service.api_fetcher'] = new \App\Service\GproApiFetcher($container['config']['api']);
+// Server-wide outbound throttle: all GPRO calls leave from one host IP, so cap
+// the aggregate rate (token bucket shared across workers via an flock'd file in
+// var/cache) regardless of how many users sync at once. Disable with GPRO_API_RATE=0.
+$container['service.api_throttle'] = new \App\Service\GproApiThrottle(
+    __DIR__ . '/var/cache/gpro_api_throttle.json',
+    (float) ($_ENV['GPRO_API_RATE'] ?? 4.0),
+    (float) ($_ENV['GPRO_API_BURST'] ?? 8.0),
+    (int) ($_ENV['GPRO_API_MAX_BLOCK_MS'] ?? 2000),
+);
+$container['service.api_fetcher'] = new \App\Service\GproApiFetcher(
+    $container['config']['api'],
+    $container['service.api_throttle'],
+);
 $container['service.api_client'] = new GproApiClient(
     $container['service.api_fetcher'],
     $container['service.cache']
