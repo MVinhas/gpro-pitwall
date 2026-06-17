@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Each entry mirrors its annotated release tag.
 
+## [1.5.7] - 2026-06-17
+- Server-wide outbound API throttle: all GPRO calls leave from one host IP, so a shared token bucket (flock'd state file in `var/cache/`, shared across PHP workers) now caps the aggregate outbound rate. Cache hits are unaffected; under a sync burst, calls are paced by a bounded sleep rather than failing. Configurable via `GPRO_API_RATE` / `GPRO_API_BURST` / `GPRO_API_MAX_BLOCK_MS` (rate 0 disables).
+- FOBY note added to the README and landing page (section + FAQ entry): GPRO's "Find Out By Yourself" culture is acknowledged, framing Pitwall as a transparent second opinion rather than a replacement for the manager's own analysis.
+
 ## [1.5.6] - 2026-06-14
 - Race Weekend Pitwall: the Car Wear cockpit card gains a collapsible "PHA contribution per part" reference table. It lists each car part's Power/Handling/Acceleration contribution per level so managers can manually calculate the PHA shift of a part swap when forcing a track-car match.
 
