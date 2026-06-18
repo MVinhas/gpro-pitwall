@@ -47,7 +47,7 @@ class AuthController
     {
         $this->redirectIfLoggedIn();
 
-        if (empty($_SESSION['auth_pending_user_id'])) {
+        if (empty($_SESSION['auth_pending_user_id']) && empty($_SESSION['auth_pending_registration_id'])) {
             header('Location: /login');
             exit;
         }
@@ -102,9 +102,9 @@ class AuthController
             exit;
         }
 
-        $_SESSION['auth_pending_user_id'] = $result['user_id'];
+        $_SESSION['auth_pending_registration_id'] = $result['registration_id'];
         $_SESSION['flash'] =
-            'Account created! Please check your email for the verification code.';
+            'Almost there — check your email for the verification code to finish creating your account.';
 
         header('Location: /verify');
         exit;
@@ -115,31 +115,53 @@ class AuthController
         $this->redirectIfLoggedIn();
 
         $code = trim((string) $request->post('code'));
-        $pendingUserId = (int) ($_SESSION['auth_pending_user_id'] ?? 0);
+        $remember = ($_SESSION['auth_remember'] ?? false) === true;
 
+        // Registration verification (pending row → real account) and login
+        // verification (existing user) share this one page. The session key set
+        // upstream decides which path runs.
+        if (isset($_SESSION['auth_pending_registration_id'])) {
+            $registrationId = (int) $_SESSION['auth_pending_registration_id'];
+            if ($this->auth->verifyRegistration($registrationId, $code, $remember)['success']) {
+                unset($_SESSION['auth_pending_registration_id'], $_SESSION['auth_remember']);
+                $this->redirectAfterVerify();
+            }
+
+            $_SESSION['flash'] = 'Invalid code or expired.';
+            header('Location: /verify');
+            exit;
+        }
+
+        $pendingUserId = (int) ($_SESSION['auth_pending_user_id'] ?? 0);
         if ($pendingUserId === 0) {
             header('Location: /login');
             exit;
         }
 
-        $remember = ($_SESSION['auth_remember'] ?? false) === true;
-
         if ($this->auth->verifyCode($pendingUserId, $code, $remember)) {
             unset($_SESSION['auth_pending_user_id'], $_SESSION['auth_remember']);
-
-            if (($_SESSION['sync_status'] ?? '') === 'needs_token') {
-                $_SESSION['flash'] =
-                    'To continue, please add your GPRO API token to sync your data.';
-                header('Location: /control_panel');
-                exit;
-            }
-
-            header('Location: /');
-            exit;
+            $this->redirectAfterVerify();
         }
 
         $_SESSION['flash'] = 'Invalid code or expired.';
         header('Location: /verify');
+        exit;
+    }
+
+    /**
+     * Post-verification routing, identical for a completed registration and a
+     * login: a freshly verified user with no API token is steered to add one.
+     */
+    private function redirectAfterVerify(): never
+    {
+        if (($_SESSION['sync_status'] ?? '') === 'needs_token') {
+            $_SESSION['flash'] =
+                'To continue, please add your GPRO API token to sync your data.';
+            header('Location: /control_panel');
+            exit;
+        }
+
+        header('Location: /');
         exit;
     }
 
@@ -154,13 +176,16 @@ class AuthController
     {
         $this->redirectIfLoggedIn();
 
-        $pendingUserId = (int) ($_SESSION['auth_pending_user_id'] ?? 0);
-        if ($pendingUserId === 0) {
-            header('Location: /login');
-            exit;
+        if (isset($_SESSION['auth_pending_registration_id'])) {
+            $this->auth->resendRegistrationCode((int) $_SESSION['auth_pending_registration_id']);
+        } else {
+            $pendingUserId = (int) ($_SESSION['auth_pending_user_id'] ?? 0);
+            if ($pendingUserId === 0) {
+                header('Location: /login');
+                exit;
+            }
+            $this->auth->resendCode($pendingUserId);
         }
-
-        $this->auth->resendCode($pendingUserId);
 
         $_SESSION['flash'] =
             'If your account is awaiting a code, a new one has been sent. '
@@ -236,7 +261,11 @@ class AuthController
     public function logout(): void
     {
         $this->auth->logout();
-        unset($_SESSION['auth_pending_user_id'], $_SESSION['auth_remember']);
+        unset(
+            $_SESSION['auth_pending_user_id'],
+            $_SESSION['auth_pending_registration_id'],
+            $_SESSION['auth_remember']
+        );
 
         header('Location: /');
         exit;

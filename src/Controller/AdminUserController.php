@@ -26,6 +26,8 @@ final readonly class AdminUserController
         $perPage = 25;
         $result = $this->service->paginate($page, $perPage);
 
+        $windowDays = (int) $request->get('days', 30);
+
         echo $this->twig->render('admin/users.twig', [
             'is_logged_in' => true,
             'user'         => $admin,
@@ -35,6 +37,8 @@ final readonly class AdminUserController
             'page'         => $page,
             'per_page'     => $perPage,
             'total_pages'  => max(1, (int) ceil($result['total'] / $perPage)),
+            'stats'        => $this->service->stats($windowDays),
+            'trend_windows' => AdminUserService::TREND_WINDOWS,
             'audit'        => $this->service->recentAudit(50),
             'flash'        => $_SESSION['flash'] ?? null,
             'flash_error'  => $_SESSION['flash_error'] ?? null,

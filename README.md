@@ -95,12 +95,14 @@ Scores the full GPRO driver market against your division's ideal pilot. Rating i
 Per-division ideal-pilot tables with OA caps (Rookie 85 / Amateur 110 / Pro 135 / Master 160 / Elite ∞), plus pairwise comparison insights across divisions.
 
 ### Admin user management *(admin-only)*
-`/admin/users` — paginated list, toggle admin flag (with self-demotion guard), resend verification, soft-delete. Every mutation is recorded in an append-only `audit_log` table. Audit panel shows the last 50 actions.
+`/admin/users` — paginated, click-to-sort user list with summary cards (registered / active / new-signup / API-linked counts) and period-over-period **growth trends** over a selectable 7/30/90-day window, so an admin can see at a glance whether the app is growing. Toggle admin flag (with self-demotion guard), soft-delete/restore. Every mutation is recorded in an append-only `audit_log` table; the audit panel shows the last 50 actions.
 
 The `/debug` telemetry page shows registered users, **active users** (at least one successful GPRO data sync in the last 30 days — a better activity signal than raw registrations, since players pause and return), tokens set, API budget, runtime info and masked environment.
 
 ### Authentication
 Passwordless: register/login with a one-time 6-digit code emailed to you (no passwords stored, ever). Login is rate-limited per IP; codes carry a TTL and a max-attempts cap. reCaptcha guards registration in prod.
+
+- **Verified-only account namespace** — a new registration is held in a `pending_registrations` table and only becomes a real `users` row once its code is verified. An unverified or bounced sign-up can never squat a username/email; when two people race for the same name, whoever verifies email control first wins (resolved at the promotion INSERT). The registration form reveals nothing about whether an email already has an account.
 
 - **"Keep me signed in"** — opt-in persistent login backed by a selector+validator token (hashed at rest, rotated on every use for theft detection, rolling 30-day window). Survives the short PHP session and is revoked on logout.
 - **Step-up re-authentication** — sensitive actions (account deletion, API-token change) demand a fresh emailed code when the session was restored from a remember token rather than freshly verified.
@@ -127,7 +129,7 @@ Per-page titles, meta descriptions and canonical URLs via Twig blocks (override 
 - **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile).
 - **SQLite** via PDO. Encrypted user emails (AES-256-GCM) and API tokens at rest.
 - **PHPMailer 7** for SMTP; in dev, writes `.eml` files to `var/mail/` instead.
-- **PHPUnit 13** — 305 tests, 814 assertions, all green at **PHPStan level 7**. Twig templates linted by a native `bin/twig_lint.php` (Twig's own tokenizer/parser — no third-party linter).
+- **PHPUnit 13** — 310 tests, 850 assertions, all green at **PHPStan level 7**. Twig templates linted by a native `bin/twig_lint.php` (Twig's own tokenizer/parser — no third-party linter).
 - **No framework.** Custom front controller + flat DI container in `bootstrap.php`. Routes in `config/routes.php`.
 - **Timestamps are stored and served as UTC**, then localised per-visitor in the browser (`<time data-localtime>` + `Intl`), so each user sees their own timezone with no server-side config.
 

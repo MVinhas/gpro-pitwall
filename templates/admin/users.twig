@@ -1,5 +1,28 @@
 {% extends "layout.twig" %}
 {% import "partials/_localtime.twig" as t %}
+{% import _self as ui %}
+
+{# Period-over-period delta pill. Colour is paired with an arrow + sign so it
+   never carries meaning on its own. A null pct means the prior window had no
+   baseline — we say "New" rather than render an infinite percentage. #}
+{% macro trend_badge(metric) %}
+    {% if metric.pct is null %}
+        <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
+            {{ metric.current > 0 ? 'New' : 'No baseline' }}
+        </span>
+    {% else %}
+        {% set cls = metric.direction == 'up'
+            ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/20'
+            : (metric.direction == 'down'
+                ? 'bg-red-50 text-red-700 ring-red-600/20'
+                : 'bg-slate-100 text-slate-500 ring-slate-400/20') %}
+        {% set arrow = metric.direction == 'up' ? '▲' : (metric.direction == 'down' ? '▼' : '■') %}
+        <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset {{ cls }}"
+              title="{{ metric.current }} vs {{ metric.previous }} in the prior period">
+            <span aria-hidden="true">{{ arrow }}</span>{{ metric.pct > 0 ? '+' : '' }}{{ metric.pct }}%
+        </span>
+    {% endif %}
+{% endmacro %}
 
 {% block title %}User Management — GPRO Pitwall{% endblock %}
 {% block robots %}<meta name="robots" content="noindex,nofollow">{% endblock %}
@@ -8,12 +31,60 @@
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 py-6 space-y-6">
 
-    <div class="flex items-baseline justify-between">
+    <div class="flex flex-wrap items-baseline justify-between gap-3">
         <div>
             <h1 class="t-display">User Management</h1>
             <p class="t-caption mt-1">{{ total }} registered · page {{ page }} / {{ total_pages }}</p>
         </div>
-        <a href="/debug" class="btn btn-sm btn-secondary">Debug</a>
+        <div class="flex items-center gap-3">
+            {# Trend window toggle. Reloads with ?days=N; resets to page 1 so the
+               table and the stats describe the same cohort. #}
+            <div class="inline-flex rounded-lg ring-1 ring-inset ring-slate-300 overflow-hidden" role="group" aria-label="Trend window">
+                {% for w in trend_windows %}
+                    <a href="?days={{ w }}"
+                       class="px-3 py-1 text-xs font-medium {{ w == stats.window_days ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-100' }}">
+                        {{ w }}d
+                    </a>
+                {% endfor %}
+            </div>
+            <a href="/debug" class="btn btn-sm btn-secondary">Debug</a>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm px-5 py-4">
+            <p class="t-label">Registered</p>
+            <p class="mt-1 text-2xl font-semibold text-slate-900 tabular-nums">{{ stats.total }}</p>
+            <p class="t-caption mt-1">
+                {% if stats.pending > 0 %}{{ stats.pending }} awaiting verification{% else %}live accounts{% endif %}
+            </p>
+        </div>
+
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm px-5 py-4">
+            <div class="flex items-start justify-between gap-2">
+                <p class="t-label">Active · {{ stats.window_days }}d</p>
+                {{ ui.trend_badge(stats.active) }}
+            </div>
+            <p class="mt-1 text-2xl font-semibold text-slate-900 tabular-nums">{{ stats.active.current }}</p>
+            <p class="t-caption mt-1">synced recently · was {{ stats.active.previous }}</p>
+        </div>
+
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm px-5 py-4">
+            <div class="flex items-start justify-between gap-2">
+                <p class="t-label">New signups · {{ stats.window_days }}d</p>
+                {{ ui.trend_badge(stats.signups) }}
+            </div>
+            <p class="mt-1 text-2xl font-semibold text-slate-900 tabular-nums">{{ stats.signups.current }}</p>
+            <p class="t-caption mt-1">joined · was {{ stats.signups.previous }}</p>
+        </div>
+
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm px-5 py-4">
+            <p class="t-label">API-linked</p>
+            <p class="mt-1 text-2xl font-semibold text-slate-900 tabular-nums">{{ stats.with_token }}</p>
+            <p class="t-caption mt-1">
+                {{ stats.total > 0 ? (stats.with_token / stats.total * 100)|round ~ '% of accounts' : 'have a GPRO token' }}
+            </p>
+        </div>
     </div>
 
     {% if flash %}
@@ -29,17 +100,29 @@
 
     <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-slate-200">
+            <table class="min-w-full divide-y divide-slate-200" data-sortable-table>
                 <thead class="bg-slate-50">
+                    {#
+                        Sortable headers. Sorting is client-side over the current
+                        page only (the dataset is small and usually one page); it
+                        re-orders the rows already rendered, it does not re-query.
+                        data-sort-type drives numeric vs lexical comparison.
+                    #}
                     <tr>
-                        <th class="px-4 py-3 text-left"><span class="t-label">#</span></th>
-                        <th class="px-4 py-3 text-left"><span class="t-label">Username</span></th>
-                        <th class="px-4 py-3 text-left"><span class="t-label">Email hash</span></th>
-                        <th class="px-4 py-3 text-center"><span class="t-label">Admin</span></th>
-                        <th class="px-4 py-3 text-center"><span class="t-label">Token</span></th>
-                        <th class="px-4 py-3 text-center"><span class="t-label">Verified</span></th>
-                        <th class="px-4 py-3 text-left"><span class="t-label">Last sync</span></th>
-                        <th class="px-4 py-3 text-left"><span class="t-label">Created</span></th>
+                        <th data-sort-col="0" data-sort-type="num" tabindex="0" role="button" aria-sort="none"
+                            class="px-4 py-3 text-left cursor-pointer select-none hover:bg-slate-100"><span class="t-label">#</span></th>
+                        <th data-sort-col="1" data-sort-type="text" tabindex="0" role="button" aria-sort="none"
+                            class="px-4 py-3 text-left cursor-pointer select-none hover:bg-slate-100"><span class="t-label">Username</span></th>
+                        <th data-sort-col="2" data-sort-type="num" tabindex="0" role="button" aria-sort="none"
+                            class="px-4 py-3 text-center cursor-pointer select-none hover:bg-slate-100"><span class="t-label">Admin</span></th>
+                        <th data-sort-col="3" data-sort-type="num" tabindex="0" role="button" aria-sort="none"
+                            class="px-4 py-3 text-center cursor-pointer select-none hover:bg-slate-100"><span class="t-label">Token</span></th>
+                        <th data-sort-col="4" data-sort-type="num" tabindex="0" role="button" aria-sort="none"
+                            class="px-4 py-3 text-center cursor-pointer select-none hover:bg-slate-100"><span class="t-label">Verified</span></th>
+                        <th data-sort-col="5" data-sort-type="text" tabindex="0" role="button" aria-sort="none"
+                            class="px-4 py-3 text-left cursor-pointer select-none hover:bg-slate-100"><span class="t-label">Last sync</span></th>
+                        <th data-sort-col="6" data-sort-type="text" tabindex="0" role="button" aria-sort="none"
+                            class="px-4 py-3 text-left cursor-pointer select-none hover:bg-slate-100"><span class="t-label">Created</span></th>
                         <th class="px-4 py-3 text-right"><span class="t-label">Actions</span></th>
                     </tr>
                 </thead>
@@ -48,8 +131,8 @@
                         {% set is_self = (u.id == admin_self_id) %}
                         {% set is_deleted = u.deleted_at is not empty %}
                         <tr class="hover:bg-slate-50 {{ is_deleted ? 'bg-red-50/40' : '' }}">
-                            <td class="px-4 py-3 text-sm text-slate-500 tabular-nums">{{ u.id }}</td>
-                            <td class="px-4 py-3 text-sm font-medium {{ is_deleted ? 'text-slate-400 line-through' : 'text-slate-900' }}">
+                            <td data-sort="{{ u.id }}" class="px-4 py-3 text-sm text-slate-500 tabular-nums">{{ u.id }}</td>
+                            <td data-sort="{{ u.username|lower }}" class="px-4 py-3 text-sm font-medium {{ is_deleted ? 'text-slate-400 line-through' : 'text-slate-900' }}">
                                 {{ u.username }}
                                 {% if is_self %}<span class="ml-1 text-xs text-slate-400 no-underline">(you)</span>{% endif %}
                                 {% if is_deleted %}
@@ -59,24 +142,23 @@
                                     </span>
                                 {% endif %}
                             </td>
-                            <td class="px-4 py-3 text-xs text-slate-400 font-mono">{{ u.email_hash|slice(0, 12) }}…</td>
-                            <td class="px-4 py-3 text-center">
+                            <td data-sort="{{ u.is_admin ? 1 : 0 }}" class="px-4 py-3 text-center">
                                 {% if u.is_admin %}
                                     <span class="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-600/20">Yes</span>
                                 {% else %}
                                     <span class="t-caption">—</span>
                                 {% endif %}
                             </td>
-                            <td class="px-4 py-3 text-center text-xs">
-                                {% if u.api_token %}<span class="text-emerald-600">●</span>{% else %}<span class="text-slate-300">○</span>{% endif %}
+                            <td data-sort="{{ u.api_token ? 1 : 0 }}" class="px-4 py-3 text-center text-xs">
+                                {% if u.api_token %}<span class="text-emerald-600" title="Has API token">●</span>{% else %}<span class="text-slate-300" title="No API token">○</span>{% endif %}
                             </td>
-                            <td class="px-4 py-3 text-center text-xs">
-                                {% if u.verified_at %}<span class="text-emerald-600">●</span>{% else %}<span class="text-amber-500">○</span>{% endif %}
+                            <td data-sort="{{ u.verified_at ? 1 : 0 }}" class="px-4 py-3 text-center text-xs">
+                                {% if u.verified_at %}<span class="text-emerald-600" title="Verified">●</span>{% else %}<span class="text-amber-500" title="Unverified">○</span>{% endif %}
                             </td>
-                            <td class="px-4 py-3 text-xs text-slate-500 tabular-nums">
+                            <td data-sort="{{ u.last_synced_at ?: '' }}" class="px-4 py-3 text-xs text-slate-500 tabular-nums">
                                 {% if u.last_synced_at %}{{ t.localtime(u.last_synced_at, 'datetime') }}{% else %}—{% endif %}
                             </td>
-                            <td class="px-4 py-3 text-xs text-slate-500 tabular-nums">
+                            <td data-sort="{{ u.created_at }}" class="px-4 py-3 text-xs text-slate-500 tabular-nums">
                                 {{ t.localtime(u.created_at, 'date') }}
                             </td>
                             <td class="px-4 py-3 text-right space-x-2 whitespace-nowrap">
@@ -101,7 +183,7 @@
                             </td>
                         </tr>
                     {% else %}
-                        <tr><td colspan="9" class="px-4 py-10 text-center t-caption">No users.</td></tr>
+                        <tr><td colspan="8" class="px-4 py-10 text-center t-caption">No users.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
@@ -169,5 +251,59 @@ document.querySelectorAll('form[data-confirm-restore]').forEach((form) => {
         }
     });
 });
+
+// Client-side column sort for the current page of users. Each header carries a
+// column index and a comparison type; each cell exposes its sort key via
+// data-sort. Clicking toggles asc/desc; a third click is just another toggle.
+(function () {
+    const table = document.querySelector('table[data-sortable-table]');
+    if (!table) return;
+    const tbody = table.tBodies[0];
+    if (!tbody) return;
+
+    function sortBy(col, type, asc) {
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        // Don't sort the "No users." placeholder row.
+        if (rows.length <= 1 && rows[0] && !rows[0].querySelector('[data-sort]')) return;
+
+        rows.sort((a, b) => {
+            const av = a.children[col]?.dataset.sort ?? '';
+            const bv = b.children[col]?.dataset.sort ?? '';
+            let cmp;
+            if (type === 'num') {
+                cmp = (parseFloat(av) || 0) - (parseFloat(bv) || 0);
+            } else {
+                cmp = av.localeCompare(bv);
+            }
+            return asc ? cmp : -cmp;
+        });
+        rows.forEach((r) => tbody.appendChild(r));
+    }
+
+    table.querySelectorAll('th[data-sort-col]').forEach((th) => {
+        const activate = () => {
+            const col = parseInt(th.dataset.sortCol, 10);
+            const type = th.dataset.sortType || 'text';
+            const asc = th.getAttribute('aria-sort') !== 'ascending';
+
+            // The active column is signalled by aria-sort (for assistive tech)
+            // and a subtle text-colour highlight — no arrow glyphs.
+            table.querySelectorAll('th[data-sort-col]').forEach((other) => {
+                other.setAttribute('aria-sort', 'none');
+                other.classList.remove('text-blue-600');
+            });
+
+            th.setAttribute('aria-sort', asc ? 'ascending' : 'descending');
+            th.classList.add('text-blue-600');
+
+            sortBy(col, type, asc);
+        };
+
+        th.addEventListener('click', activate);
+        th.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(); }
+        });
+    });
+})();
 </script>
 {% endblock %}

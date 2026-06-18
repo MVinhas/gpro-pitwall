@@ -14,7 +14,7 @@ class DatabaseSeeder
      * boot path calls migrate() on every request; this version is the gate that
      * lets a warm database skip the entire DDL + scan + legacy-encryption pass.
      */
-    private const int SCHEMA_VERSION = 3;
+    private const int SCHEMA_VERSION = 4;
 
     /**
      * @param array<string, string> $statsSchema
@@ -46,6 +46,7 @@ class DatabaseSeeder
         $this->createVerificationTokensTable();
         $this->createIndexVerificationUser();
         $this->createPersistentTokensTable();
+        $this->createPendingRegistrationsTable();
         $this->createAuditLogTable();
 
         $this->createPilotsTable();
@@ -64,6 +65,8 @@ class DatabaseSeeder
 
 
         $this->applyUserMigrations();
+        $this->purgeUnverifiedUsers();
+        $this->hardenUserUniqueIndexes();
         $this->encryptLegacyApiTokens();
 
         // Stamp the schema version last: if any step above throws, the version
@@ -369,6 +372,71 @@ class DatabaseSeeder
             CREATE INDEX IF NOT EXISTS idx_persistent_tokens_selector
             ON persistent_tokens(selector)
         ");
+    }
+
+    /**
+     * In-flight registrations awaiting email verification. Intentionally carries
+     * NO unique constraint on username/email_hash: multiple people may have a
+     * pending row for the same name, and the winner is decided at promotion into
+     * `users` (where the UNIQUE constraints are the authority). Rows are
+     * short-lived — AuthService purges expired ones opportunistically.
+     */
+    private function createPendingRegistrationsTable(): void
+    {
+        $this->db->exec("
+            CREATE TABLE IF NOT EXISTS pending_registrations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL,
+                email_encrypted TEXT NOT NULL,
+                email_hash TEXT NOT NULL,
+                code_hmac TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                attempts INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        ");
+
+        $this->db->exec("
+            CREATE INDEX IF NOT EXISTS idx_pending_email_hash
+            ON pending_registrations(email_hash)
+        ");
+        $this->db->exec("
+            CREATE INDEX IF NOT EXISTS idx_pending_expires
+            ON pending_registrations(expires_at)
+        ");
+    }
+
+    /**
+     * The new invariant is "a row in `users` is a verified account." Legacy
+     * unverified rows (created by the old register-first flow, e.g. a bounced
+     * verification email) are incomplete accounts that only squat a username and
+     * email. Drop them so the namespace is freed and the invariant holds.
+     * verification_tokens cascade via FK; soft-deleted rows are left untouched.
+     */
+    private function purgeUnverifiedUsers(): void
+    {
+        $this->db->exec(
+            "DELETE FROM users WHERE verified_at IS NULL AND deleted_at IS NULL"
+        );
+    }
+
+    /**
+     * Guarantee the UNIQUE constraints the registration race relies on. A fresh
+     * `users` table declares them inline, but a DB whose columns were added by
+     * applyUserMigrations() (ALTER TABLE) may lack them. Creating the unique
+     * indexes makes the constraint reliable regardless of provenance. Runs after
+     * purgeUnverifiedUsers() so the duplicate ghosts are already gone; any real
+     * duplicate that remained would (correctly) fail loudly here rather than
+     * leave the constraint silently unenforced.
+     */
+    private function hardenUserUniqueIndexes(): void
+    {
+        $this->db->exec(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username)"
+        );
+        $this->db->exec(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_hash ON users(email_hash)"
+        );
     }
 
     private function createPilotsTable(): void
