@@ -16,7 +16,7 @@ use App\Security\EmailCrypto;
  */
 final class ContactService
 {
-    public const SUBJECTS = [
+    public const array SUBJECTS = [
         'Feature Request',
         'Technical Issue',
         'General Question',
@@ -25,9 +25,9 @@ final class ContactService
         'Other',
     ];
 
-    public const MAX_MESSAGE_LENGTH = 5000;
-    private const MAX_PER_HOUR = 5;
-    private const RATE_WINDOW_SECONDS = 3600;
+    public const int MAX_MESSAGE_LENGTH = 5000;
+    private const int MAX_PER_HOUR = 5;
+    private const int RATE_WINDOW_SECONDS = 3600;
 
     public function __construct(
         private readonly EmailService $email,

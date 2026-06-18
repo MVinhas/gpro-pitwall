@@ -76,8 +76,8 @@ class SetupCalculatorService
 
 
             $car = [];
-            $getLvl  = fn($k): float => (float)($carData["lvl$k"] ?? 1);
-            $getWear = fn($k): float => (float)($carData["usa$k"] ?? 0);
+            $getLvl  = fn(string $k): float => (float)($carData["lvl$k"] ?? 1);
+            $getWear = fn(string $k): float => (float)($carData["usa$k"] ?? 0);
 
             foreach ($this->secrets['car'] as $part => $factors) {
                 $sum = 0;

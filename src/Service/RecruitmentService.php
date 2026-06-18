@@ -236,7 +236,7 @@ class RecruitmentService
     public function sortAndPaginate(array $results, string $sortCol, string $sortOrder, int $page, int $limit): array
     {
 
-        usort($results, function ($a, $b) use ($sortCol, $sortOrder) {
+        usort($results, function (array $a, array $b) use ($sortCol, $sortOrder) {
             $valA = $a[$sortCol] ?? 0;
             $valB = $b[$sortCol] ?? 0;
 

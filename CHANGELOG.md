@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Each entry mirrors its annotated release tag.
 
+## [1.6.1] - 2026-06-18
+- Added `tomasvotruba/type-coverage` as a PHPStan extension. Type-declaration coverage is now enforced in `composer analyse`: 100% return/property/constant types and `declare(strict_types=1)`, 99.5% param types (the only gap is two untypeable `resource` handles in `GproApiThrottle`). Introduced a `phpstan.neon` config and backfilled the missing typed constants and closure param types.
+- Raised PHPStan from level 7 to level 8 (null-safety), fixing the one surfaced gap: `Database::getConnection()` could narrow to `PDO|null`.
+
 ## [1.6.0] - 2026-06-18
 - **Security:** Registration reworked so an unverified sign-up can no longer squat a username/email. In-flight registrations live in a new `pending_registrations` table and only become a real `users` row once the emailed code is verified; the account namespace is now "verified accounts only". A bounced or abandoned verification email leaves no residue. Legacy unverified `users` rows are purged by the migration, and the `username`/`email_hash` UNIQUE constraints are hardened with explicit indexes.
 - **Security:** Closed the email-existence oracle on the registration form — registering an email that already has an account is now indistinguishable from a new registration (no row created, no email sent). Username availability is still surfaced (standard UX). The concurrent-registration race is resolved at the authoritative promotion INSERT: when two people race for the same username, whoever verifies email control first wins, instead of a 500 from an unhandled UNIQUE violation.
