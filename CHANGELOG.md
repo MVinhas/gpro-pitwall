@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Each entry mirrors its annotated release tag.
 
+## [1.6.2] - 2026-06-18
+- Removed the orphaned `rector.php` config. `rector/rector` was dropped as a dependency earlier (one-shot tool, not in the check pipeline); the leftover config referenced classes no longer installed and would only mislead.
+
 ## [1.6.1] - 2026-06-18
 - Added `tomasvotruba/type-coverage` as a PHPStan extension. Type-declaration coverage is now enforced in `composer analyse`: 100% return/property/constant types and `declare(strict_types=1)`, 99.5% param types (the only gap is two untypeable `resource` handles in `GproApiThrottle`). Introduced a `phpstan.neon` config and backfilled the missing typed constants and closure param types.
 - Raised PHPStan from level 7 to level 8 (null-safety), fixing the one surfaced gap: `Database::getConnection()` could narrow to `PDO|null`.
