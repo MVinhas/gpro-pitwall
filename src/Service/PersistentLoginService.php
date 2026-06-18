@@ -22,8 +22,8 @@ use DateTimeImmutable;
  */
 final class PersistentLoginService
 {
-    public const COOKIE_NAME = 'gpro_remember';
-    private const COOKIE_PATH = '/';
+    public const string COOKIE_NAME = 'gpro_remember';
+    private const string COOKIE_PATH = '/';
 
     public function __construct(
         private readonly PersistentTokenRepository $tokens,

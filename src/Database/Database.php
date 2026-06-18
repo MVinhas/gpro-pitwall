@@ -42,6 +42,8 @@ class Database
             }
         }
 
+        assert(self::$instance instanceof PDO);
+
         return self::$instance;
     }
 

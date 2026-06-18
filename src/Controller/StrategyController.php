@@ -166,7 +166,7 @@ class StrategyController
                 'pitCoordination' => (float)($tdRaw['pitCoord'] ?? ($tdRaw['pitCoordination'] ?? 0))
             ];
 
-            $has = fn($k): bool => ($request->post($k) !== null && $request->post($k) !== '');
+            $has = fn(string $k): bool => ($request->post($k) !== null && $request->post($k) !== '');
 
             if ($has('d_conc')) {
                 $driver['concentration'] = (int)$request->post('d_conc');

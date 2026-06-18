@@ -1,0 +1,15 @@
+includes:
+    - vendor/tomasvotruba/type-coverage/config/extension.neon
+
+parameters:
+    level: 8
+    paths:
+        - src
+    type_coverage:
+        declare: 100
+        return_type: 100
+        # 99.5, not 100: two GproApiThrottle params are PHP `resource` handles,
+        # which have no native type declaration. Everything typeable is typed.
+        param_type: 99.5
+        property_type: 100
+        constant_type: 100

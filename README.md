@@ -129,7 +129,7 @@ Per-page titles, meta descriptions and canonical URLs via Twig blocks (override 
 - **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile).
 - **SQLite** via PDO. Encrypted user emails (AES-256-GCM) and API tokens at rest.
 - **PHPMailer 7** for SMTP; in dev, writes `.eml` files to `var/mail/` instead.
-- **PHPUnit 13** — 310 tests, 850 assertions, all green at **PHPStan level 7**. Twig templates linted by a native `bin/twig_lint.php` (Twig's own tokenizer/parser — no third-party linter).
+- **PHPUnit 13** — 310 tests, 850 assertions, all green at **PHPStan level 8** with **type-coverage** enforced (100% return/property/constant types + `strict_types`, 99.5% param types). Twig templates linted by a native `bin/twig_lint.php` (Twig's own tokenizer/parser — no third-party linter).
 - **No framework.** Custom front controller + flat DI container in `bootstrap.php`. Routes in `config/routes.php`.
 - **Timestamps are stored and served as UTC**, then localised per-visitor in the browser (`<time data-localtime>` + `Intl`), so each user sees their own timezone with no server-side config.
 
@@ -177,7 +177,7 @@ Generate random keys with `openssl rand -hex 32`.
 
 ```bash
 composer install                       # Install deps
-composer check                         # lint + analyse (PHPStan L7) + twig-lint + test
+composer check                         # lint + analyse (PHPStan L8 + type-coverage) + twig-lint + test
 composer test                          # PHPUnit only
 composer analyse                       # PHPStan only
 composer lint                          # PSR-12
@@ -239,7 +239,7 @@ Reviewed against the OWASP Top 10:2025.
 - Outbound GPRO API calls are bounded by connect + total curl timeouts so a hung upstream can't pin a PHP worker. The filesystem cache deserializes with `allowed_classes => false`, so a tampered cache file degrades to a miss rather than a PHP object-injection vector.
 - Prepared statements only (no string-concatenated SQL). Output XSS defence is Twig autoescaping (on everywhere, no `|raw`); user data is never interpolated into inline JS/event-handler attributes. New registrations additionally whitelist the username (`[A-Za-z0-9_]`, server-enforced), narrowing what can be stored — though that gate is not retroactive, so autoescaping remains the guarantee for pre-existing rows.
 - Pre-commit + CI secret scan (`bin/check_no_secrets.sh`).
-- PHPStan level 7 + PHPUnit suite required to pass before merge.
+- PHPStan level 8 (with type-coverage) + PHPUnit suite required to pass before merge.
 
 ---
 

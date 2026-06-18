@@ -1,7 +1,7 @@
 {
     "name": "mvinhas/gpro-pitwall",
     "description": "Race-weekend cockpit for GPRO managers — strategy, wear, training, recruitment.",
-    "version": "1.6.0",
+    "version": "1.6.1",
     "homepage": "https://gpro-pitwall.com",
     "type": "project",
     "license": "proprietary",
@@ -26,7 +26,8 @@
         "phpstan/phpstan": "^2.2",
         "phpunit/phpunit": "^13.0",
         "squizlabs/php_codesniffer": "^4.0",
-        "symfony/var-dumper": "^8.1"
+        "symfony/var-dumper": "^8.1",
+        "tomasvotruba/type-coverage": "^2.2"
     },
     "autoload": {
         "psr-4": {
@@ -44,7 +45,7 @@
         "sort-packages": true
     },
     "scripts": {
-        "analyse": "phpstan analyse src --level=7 --memory-limit=512M",
+        "analyse": "phpstan analyse --memory-limit=512M",
         "lint": "phpcs --standard=PSR12 src",
         "twig-lint": "php bin/twig_lint.php",
         "audit": "composer audit",
