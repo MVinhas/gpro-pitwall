@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Service;
 
 use App\Repository\AuditLogRepository;
+use App\Repository\PendingRegistrationRepository;
 use App\Repository\UserRepository;
+use DateTimeImmutable;
 use RuntimeException;
 
 /**
@@ -15,11 +17,74 @@ use RuntimeException;
  */
 final class AdminUserService
 {
+    /** Window lengths (days) the dashboard trend can be viewed over. */
+    public const array TREND_WINDOWS = [7, 30, 90];
+
     public function __construct(
         private readonly UserRepository $users,
         private readonly AuditLogRepository $audit,
         private readonly AuthService $auth,
+        private readonly PendingRegistrationRepository $pending,
     ) {
+    }
+
+    /**
+     * Dashboard summary: headline counts plus period-over-period trends so the
+     * admin can see at a glance whether the app is growing or fading. Each trend
+     * compares the last $windowDays against the equal-length window before it.
+     *
+     * @return array{
+     *     window_days: int,
+     *     total: int,
+     *     with_token: int,
+     *     pending: int,
+     *     signups: array{current:int,previous:int,delta:int,pct:?int,direction:string},
+     *     active: array{current:int,previous:int,delta:int,pct:?int,direction:string}
+     * }
+     */
+    public function stats(int $windowDays = 30): array
+    {
+        if (!in_array($windowDays, self::TREND_WINDOWS, true)) {
+            $windowDays = 30;
+        }
+
+        $now = (new DateTimeImmutable())->format('Y-m-d H:i:s');
+
+        return [
+            'window_days' => $windowDays,
+            'total'       => $this->users->countLive(),
+            'with_token'  => $this->users->countWithApiToken(),
+            'pending'     => $this->pending->countActive($now),
+            'signups'     => $this->trend(
+                $this->users->countCreatedSince($windowDays),
+                $this->users->countCreatedBetween($windowDays * 2, $windowDays),
+            ),
+            'active'      => $this->trend(
+                $this->users->countActiveSince($windowDays),
+                $this->users->countActiveBetween($windowDays * 2, $windowDays),
+            ),
+        ];
+    }
+
+    /**
+     * Build a period-over-period comparison. `pct` is null when the prior window
+     * was empty (no meaningful baseline — the view renders "new" instead of an
+     * infinite percentage). `direction` is up/down/flat so colour is never the
+     * only signal.
+     *
+     * @return array{current:int,previous:int,delta:int,pct:?int,direction:string}
+     */
+    private function trend(int $current, int $previous): array
+    {
+        $delta = $current - $previous;
+
+        return [
+            'current'   => $current,
+            'previous'  => $previous,
+            'delta'     => $delta,
+            'pct'       => $previous > 0 ? (int) round(($delta / $previous) * 100) : null,
+            'direction' => $delta > 0 ? 'up' : ($delta < 0 ? 'down' : 'flat'),
+        ];
     }
 
     /**
@@ -90,9 +155,11 @@ final class AdminUserService
     }
 
     /**
-     * Resends the email verification code for a user who hasn't completed
-     * registration yet. Delegates to AuthService::resendCode(), which skips the
-     * public captcha gate (the admin is already authorised) but still honours
+     * Sends a fresh login code to an existing user. (Since registration moved to
+     * the pending_registrations table, every `users` row is already verified, so
+     * this is effectively an admin-triggered login code rather than a
+     * registration resend.) Delegates to AuthService::resendCode(), which skips
+     * the public captcha gate (the admin is already authorised) but still honours
      * the per-account code cap and TTL.
      */
     public function resendVerification(int $actorId, int $targetId, string $ip): void

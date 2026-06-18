@@ -113,6 +113,10 @@ $container['service.user_repo'] = new \App\Repository\UserRepository(
     $container['service.api_token_crypto'],
 );
 $container['service.token_repo'] = new \App\Repository\TokenRepository($container['db']);
+$container['service.pending_registration_repo'] = new \App\Repository\PendingRegistrationRepository(
+    $container['db'],
+    $container['service.email_crypto'],
+);
 $container['service.security_log'] = new \App\Service\SecurityLogger();
 
 $container['service.persistent_token_repo'] =
@@ -219,6 +223,7 @@ $container['service.gpro_sync'] = new GproSyncService(
 $container['service.auth_service']  = new \App\Service\AuthService(
     $container['service.user_repo'],
     $container['service.token_repo'],
+    $container['service.pending_registration_repo'],
     $container['service.email_service'],
     $container['service.rate_limiter'],
     $container['service.recaptcha'],
@@ -426,6 +431,7 @@ $container['service.admin_users'] = new \App\Service\AdminUserService(
     $container['service.user_repo'],
     $container['repo.audit'],
     $container['service.auth_service'],
+    $container['service.pending_registration_repo'],
 );
 
 $container['controller.admin_users'] = new \App\Controller\AdminUserController(

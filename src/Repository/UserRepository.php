@@ -162,7 +162,7 @@ class UserRepository
         // Includes soft-deleted users so the admin can see and restore them;
         // deleted_at distinguishes them in the view.
         $stmt = $this->pdo->prepare(
-            "SELECT id, username, email_hash, is_admin, api_token,
+            "SELECT id, username, is_admin, api_token,
                     verified_at, last_synced_at, sync_status, created_at, deleted_at
              FROM users
              ORDER BY id DESC
@@ -225,9 +225,75 @@ class UserRepository
     public function countWithApiToken(): int
     {
         $stmt = $this->pdo->query(
-            "SELECT COUNT(*) FROM users WHERE api_token IS NOT NULL AND api_token != ''"
+            "SELECT COUNT(*) FROM users
+             WHERE api_token IS NOT NULL AND api_token != '' AND deleted_at IS NULL"
         );
         return $stmt === false ? 0 : (int) $stmt->fetchColumn();
+    }
+
+    /**
+     * Live (non-deleted) account count. The headline "how many real users".
+     */
+    public function countLive(): int
+    {
+        $stmt = $this->pdo->query("SELECT COUNT(*) FROM users WHERE deleted_at IS NULL");
+        return $stmt === false ? 0 : (int) $stmt->fetchColumn();
+    }
+
+    /**
+     * Accounts created within the last N days (non-deleted). Feeds the signup
+     * growth trend on the admin dashboard.
+     */
+    public function countCreatedSince(int $days): int
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT COUNT(*) FROM users
+             WHERE deleted_at IS NULL
+               AND created_at >= datetime('now', :cutoff)"
+        );
+        $stmt->execute(['cutoff' => sprintf('-%d days', max(0, $days))]);
+        return (int) $stmt->fetchColumn();
+    }
+
+    /**
+     * Accounts created in the window [olderDays, newerDays) ago — the prior
+     * period the current window is compared against. With olderDays = 2*window
+     * and newerDays = window, this is the immediately preceding equal-length
+     * period.
+     */
+    public function countCreatedBetween(int $olderDays, int $newerDays): int
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT COUNT(*) FROM users
+             WHERE deleted_at IS NULL
+               AND created_at >= datetime('now', :older)
+               AND created_at <  datetime('now', :newer)"
+        );
+        $stmt->execute([
+            'older' => sprintf('-%d days', max(0, $olderDays)),
+            'newer' => sprintf('-%d days', max(0, $newerDays)),
+        ]);
+        return (int) $stmt->fetchColumn();
+    }
+
+    /**
+     * Users last active (synced) in the window [olderDays, newerDays) ago — the
+     * prior-period counterpart of countActiveSince() for the activity trend.
+     */
+    public function countActiveBetween(int $olderDays, int $newerDays): int
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT COUNT(*) FROM users
+             WHERE deleted_at IS NULL
+               AND last_synced_at IS NOT NULL
+               AND last_synced_at >= datetime('now', :older)
+               AND last_synced_at <  datetime('now', :newer)"
+        );
+        $stmt->execute([
+            'older' => sprintf('-%d days', max(0, $olderDays)),
+            'newer' => sprintf('-%d days', max(0, $newerDays)),
+        ]);
+        return (int) $stmt->fetchColumn();
     }
 
     public function updateSyncStatus(int $userId, string $status): void

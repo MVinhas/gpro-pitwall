@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Each entry mirrors its annotated release tag.
 
+## [1.6.0] - 2026-06-18
+- **Security:** Registration reworked so an unverified sign-up can no longer squat a username/email. In-flight registrations live in a new `pending_registrations` table and only become a real `users` row once the emailed code is verified; the account namespace is now "verified accounts only". A bounced or abandoned verification email leaves no residue. Legacy unverified `users` rows are purged by the migration, and the `username`/`email_hash` UNIQUE constraints are hardened with explicit indexes.
+- **Security:** Closed the email-existence oracle on the registration form — registering an email that already has an account is now indistinguishable from a new registration (no row created, no email sent). Username availability is still surfaced (standard UX). The concurrent-registration race is resolved at the authoritative promotion INSERT: when two people race for the same username, whoever verifies email control first wins, instead of a 500 from an unhandled UNIQUE violation.
+- Admin → Users page revamped: summary cards for registered / active / new-signup / API-linked counts, with period-over-period activity and signup **trends** (▲/▼ with %, selectable 7/30/90-day window) so you can see at a glance whether the app is growing. In-flight (awaiting-verification) registrations are surfaced too.
+- Admin → Users table columns are now click-to-sort (client-side, current page), and the email-hash column was removed.
+
 ## [1.5.7] - 2026-06-17
 - Server-wide outbound API throttle: all GPRO calls leave from one host IP, so a shared token bucket (flock'd state file in `var/cache/`, shared across PHP workers) now caps the aggregate outbound rate. Cache hits are unaffected; under a sync burst, calls are paced by a bounded sleep rather than failing. Configurable via `GPRO_API_RATE` / `GPRO_API_BURST` / `GPRO_API_MAX_BLOCK_MS` (rate 0 disables).
 - FOBY note added to the README and landing page (section + FAQ entry): GPRO's "Find Out By Yourself" culture is acknowledged, framing Pitwall as a transparent second opinion rather than a replacement for the manager's own analysis.

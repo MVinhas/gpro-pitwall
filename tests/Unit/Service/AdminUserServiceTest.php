@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tests\Unit\Service;
 
 use App\Repository\AuditLogRepository;
+use App\Repository\PendingRegistrationRepository;
 use App\Repository\UserRepository;
 use App\Service\AdminUserService;
 use App\Service\AuthService;
@@ -24,6 +25,7 @@ final class AdminUserServiceTest extends TestCase
             $users,
             $audit,
             $auth ?? $this->createStub(AuthService::class),
+            $this->createStub(PendingRegistrationRepository::class),
         );
     }
 
@@ -184,5 +186,72 @@ final class AdminUserServiceTest extends TestCase
         $this->expectException(RuntimeException::class);
 
         $this->service($users, $audit, $auth)->resendVerification(1, 99, '127.0.0.1');
+    }
+
+    public function testStatsComputesPeriodOverPeriodTrends(): void
+    {
+        $users = $this->createStub(UserRepository::class);
+        $users->method('countLive')->willReturn(42);
+        $users->method('countWithApiToken')->willReturn(30);
+        // Signups doubled (5 → 10): +100%, up.
+        $users->method('countCreatedSince')->willReturn(10);
+        $users->method('countCreatedBetween')->willReturn(5);
+        // Activity halved (8 → 4): -50%, down.
+        $users->method('countActiveSince')->willReturn(4);
+        $users->method('countActiveBetween')->willReturn(8);
+
+        $pending = $this->createStub(PendingRegistrationRepository::class);
+        $pending->method('countActive')->willReturn(3);
+
+        $stats = $this->statsService($users, $pending)->stats(30);
+
+        $this->assertSame(30, $stats['window_days']);
+        $this->assertSame(42, $stats['total']);
+        $this->assertSame(3, $stats['pending']);
+
+        $this->assertSame(100, $stats['signups']['pct']);
+        $this->assertSame('up', $stats['signups']['direction']);
+
+        $this->assertSame(-50, $stats['active']['pct']);
+        $this->assertSame('down', $stats['active']['direction']);
+    }
+
+    public function testStatsReportsNullPctWhenPriorWindowWasEmpty(): void
+    {
+        $users = $this->createStub(UserRepository::class);
+        $users->method('countCreatedSince')->willReturn(7);
+        $users->method('countCreatedBetween')->willReturn(0);
+        $users->method('countActiveSince')->willReturn(0);
+        $users->method('countActiveBetween')->willReturn(0);
+
+        $pending = $this->createStub(PendingRegistrationRepository::class);
+
+        $stats = $this->statsService($users, $pending)->stats(7);
+
+        // No baseline → null pct (the view renders "New"/"No baseline").
+        $this->assertNull($stats['signups']['pct']);
+        $this->assertSame('up', $stats['signups']['direction']);
+        $this->assertNull($stats['active']['pct']);
+        $this->assertSame('flat', $stats['active']['direction']);
+    }
+
+    public function testStatsRejectsUnknownWindowAndFallsBackTo30(): void
+    {
+        $users = $this->createStub(UserRepository::class);
+        $pending = $this->createStub(PendingRegistrationRepository::class);
+
+        $this->assertSame(30, $this->statsService($users, $pending)->stats(999)['window_days']);
+    }
+
+    private function statsService(
+        UserRepository $users,
+        PendingRegistrationRepository $pending,
+    ): AdminUserService {
+        return new AdminUserService(
+            $users,
+            $this->createStub(AuditLogRepository::class),
+            $this->createStub(AuthService::class),
+            $pending,
+        );
     }
 }

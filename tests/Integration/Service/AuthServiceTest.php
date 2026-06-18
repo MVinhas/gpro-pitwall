@@ -80,6 +80,18 @@ final class AuthServiceTest extends TestCase
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             )
         ");
+        $this->db->exec("
+            CREATE TABLE pending_registrations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL,
+                email_encrypted TEXT NOT NULL,
+                email_hash TEXT NOT NULL,
+                code_hmac TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                attempts INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        ");
 
         $this->mailDir  = sys_get_temp_dir() . '/gpro-test-mail-' . bin2hex(random_bytes(4));
         $this->cacheDir = sys_get_temp_dir() . '/gpro-test-cache-' . bin2hex(random_bytes(4));
@@ -88,6 +100,7 @@ final class AuthServiceTest extends TestCase
         $apiTokenCrypto = new ApiTokenCrypto($appSecret);
         $userRepo       = new UserRepository($this->db, $emailCrypto, $apiTokenCrypto);
         $tokenRepo      = new TokenRepository($this->db);
+        $pendingRepo    = new \App\Repository\PendingRegistrationRepository($this->db, $emailCrypto);
         $cache          = new FilesystemCache($this->cacheDir);
         $limiter        = new RateLimiterService($cache);
         $captcha        = new ReCaptchaService(secretKey: '', isDev: true);
@@ -115,7 +128,7 @@ final class AuthServiceTest extends TestCase
         );
 
         $this->auth = new AuthService(
-            $userRepo, $tokenRepo, $mailer, $limiter, $captcha,
+            $userRepo, $tokenRepo, $pendingRepo, $mailer, $limiter, $captcha,
             $emailCrypto, $appSecret, $sync, $persistentLogin,
             new \App\Service\SecurityLogger(static fn(string $l) => null),
         );
@@ -138,30 +151,34 @@ final class AuthServiceTest extends TestCase
         $result = $this->auth->register('alice', 'alice@example.invalid', '', '127.0.0.1');
 
         $this->assertTrue($result['success']);
-        $userId = $result['user_id'];
-        $this->assertGreaterThan(0, $userId);
+        $registrationId = $result['registration_id'];
+        $this->assertGreaterThan(0, $registrationId);
 
         $code = $this->codeFromLatestEmail();
         $this->assertMatchesRegularExpression('/^\d{6}$/', $code);
 
-        $verified = $this->auth->verifyCode($userId, $code);
-        $this->assertTrue($verified);
+        // Registration creates NO users row — only a disposable pending row.
+        $this->assertSame(0, (int) $this->db->query('SELECT COUNT(*) FROM users')->fetchColumn());
+        $this->assertSame(1, $this->pendingCount());
+
+        $res = $this->auth->verifyRegistration($registrationId, $code);
+        $this->assertTrue($res['success']);
+        $userId = $res['user_id'];
+        $this->assertGreaterThan(0, $userId);
 
         // Session is populated as side effect of successful verification.
         $this->assertSame($userId, $_SESSION['user_id'] ?? null);
         $this->assertSame('alice', $_SESSION['username'] ?? null);
         $this->assertSame('needs_token', $_SESSION['sync_status'] ?? null);
 
-        // verified_at is now stamped on the row.
+        // The account now exists in users and is verified.
         $row = $this->db->query('SELECT verified_at FROM users WHERE id = ' . $userId)
             ?->fetch(PDO::FETCH_ASSOC);
         $this->assertIsArray($row);
         $this->assertNotNull($row['verified_at']);
 
-        // The token row used for verification is consumed (one-shot).
-        $remaining = $this->db->query('SELECT COUNT(*) FROM verification_tokens')
-            ?->fetchColumn();
-        $this->assertSame(0, (int) $remaining);
+        // The pending row is consumed on promotion (one-shot).
+        $this->assertSame(0, $this->pendingCount());
 
         // A freshly verified session is "fresh" (step-up gate passes).
         $this->assertTrue($_SESSION['auth_fresh'] ?? false);
@@ -170,7 +187,9 @@ final class AuthServiceTest extends TestCase
     public function testVerifyWithoutRememberIssuesNoPersistentToken(): void
     {
         $result = $this->auth->register('noremember', 'nr@example.invalid', '', '127.0.0.1');
-        $this->assertTrue($this->auth->verifyCode($result['user_id'], $this->codeFromLatestEmail()));
+        $this->assertTrue(
+            $this->auth->verifyRegistration($result['registration_id'], $this->codeFromLatestEmail())['success']
+        );
 
         $count = (int) $this->db->query('SELECT COUNT(*) FROM persistent_tokens')->fetchColumn();
         $this->assertSame(0, $count);
@@ -179,21 +198,24 @@ final class AuthServiceTest extends TestCase
     public function testVerifyWithRememberIssuesPersistentToken(): void
     {
         $result = $this->auth->register('remember', 'rm@example.invalid', '', '127.0.0.1');
-        $this->assertTrue(
-            $this->auth->verifyCode($result['user_id'], $this->codeFromLatestEmail(), remember: true)
+        $res = $this->auth->verifyRegistration(
+            $result['registration_id'],
+            $this->codeFromLatestEmail(),
+            remember: true
         );
+        $this->assertTrue($res['success']);
 
         $row = $this->db->query('SELECT user_id, validator_hash FROM persistent_tokens')
             ?->fetch(PDO::FETCH_ASSOC);
         $this->assertIsArray($row);
-        $this->assertSame($result['user_id'], (int) $row['user_id']);
+        $this->assertSame($res['user_id'], (int) $row['user_id']);
         $this->assertNotEmpty($row['validator_hash']);
     }
 
     public function testLogoutClearsPersistentTokens(): void
     {
         $result = $this->auth->register('logout', 'lo@example.invalid', '', '127.0.0.1');
-        $this->auth->verifyCode($result['user_id'], $this->codeFromLatestEmail(), remember: true);
+        $this->auth->verifyRegistration($result['registration_id'], $this->codeFromLatestEmail(), remember: true);
         $this->assertSame(1, (int) $this->db->query('SELECT COUNT(*) FROM persistent_tokens')->fetchColumn());
 
         $this->auth->logout();
@@ -201,48 +223,98 @@ final class AuthServiceTest extends TestCase
         $this->assertSame(0, (int) $this->db->query('SELECT COUNT(*) FROM persistent_tokens')->fetchColumn());
     }
 
-    public function testWrongCodeIsRejectedAndDoesNotLogIn(): void
+    public function testWrongCodeIsRejectedAndDoesNotCreateAccount(): void
     {
         $result = $this->auth->register('bob', 'bob@example.invalid', '', '127.0.0.1');
-        $userId = $result['user_id'];
 
-        $this->assertFalse($this->auth->verifyCode($userId, '000000'));
+        $this->assertFalse($this->auth->verifyRegistration($result['registration_id'], '000000')['success']);
         $this->assertArrayNotHasKey('user_id', $_SESSION);
+        // No account materialises from a failed verification.
+        $this->assertSame(0, (int) $this->db->query('SELECT COUNT(*) FROM users')->fetchColumn());
     }
 
     public function testCodeIsRejectedOnceMaxAttemptsReached(): void
     {
         $result = $this->auth->register('carol', 'carol@example.invalid', '', '127.0.0.1');
-        $userId = $result['user_id'];
+        $registrationId = $result['registration_id'];
+        $code = $this->codeFromLatestEmail();
 
-        // 5 wrong attempts. The 6th is short-circuited by maxAttempts even if
-        // we pass the correct code.
+        // 5 wrong attempts exhaust the budget and discard the pending row; the
+        // 6th fails even with the correct code.
         for ($i = 0; $i < 5; $i++) {
-            $this->auth->verifyCode($userId, '111111');
+            $this->auth->verifyRegistration($registrationId, '111111');
         }
 
-        $code = $this->codeFromLatestEmail();
-        $this->assertFalse($this->auth->verifyCode($userId, $code));
+        $this->assertFalse($this->auth->verifyRegistration($registrationId, $code)['success']);
+        $this->assertSame(0, (int) $this->db->query('SELECT COUNT(*) FROM users')->fetchColumn());
     }
 
-    public function testDuplicateEmailIsRejected(): void
+    public function testRegisteringAnExistingEmailRevealsNothingAndSendsNoCode(): void
     {
+        // First account fully created and verified.
         $first = $this->auth->register('dave', 'dave@example.invalid', '', '127.0.0.1');
-        $this->assertTrue($first['success']);
+        $this->assertTrue(
+            $this->auth->verifyRegistration($first['registration_id'], $this->codeFromLatestEmail())['success']
+        );
 
+        $pendingBefore = $this->pendingCount();
+        $mailsBefore   = count(glob($this->mailDir . '/*.eml') ?: []);
+
+        // Re-registering that email under a different username must be
+        // indistinguishable from a brand-new registration (no enumeration), yet
+        // create no pending row and send no new email — the decoy id can't verify.
         $second = $this->auth->register('dave2', 'dave@example.invalid', '', '127.0.0.1');
-        $this->assertFalse($second['success']);
-        $this->assertStringContainsString('Email', $second['error']);
+        $this->assertTrue($second['success']);
+        $this->assertSame(AuthService::DECOY_PENDING_REGISTRATION_ID, $second['registration_id']);
+
+        $this->assertSame($pendingBefore, $this->pendingCount(), 'no pending row may be created');
+        $this->assertSame($mailsBefore, count(glob($this->mailDir . '/*.eml') ?: []), 'no email may be sent');
+
+        $this->assertFalse(
+            $this->auth->verifyRegistration(AuthService::DECOY_PENDING_REGISTRATION_ID, '000000')['success']
+        );
     }
 
-    public function testDuplicateUsernameIsRejected(): void
+    public function testDuplicateUsernameOfVerifiedAccountIsRejected(): void
     {
         $first = $this->auth->register('eve', 'eve1@example.invalid', '', '127.0.0.1');
-        $this->assertTrue($first['success']);
+        $this->assertTrue(
+            $this->auth->verifyRegistration($first['registration_id'], $this->codeFromLatestEmail())['success']
+        );
 
         $second = $this->auth->register('eve', 'eve2@example.invalid', '', '127.0.0.1');
         $this->assertFalse($second['success']);
         $this->assertStringContainsString('Username', $second['error']);
+    }
+
+    public function testConcurrentPendingSameUsernameIsResolvedByWhoVerifiesFirst(): void
+    {
+        // Two people start registering the same username while neither is
+        // verified. Pending rows carry no UNIQUE constraint, so both are
+        // accepted and both receive a code.
+        $a = $this->auth->register('coyote', 'a@example.invalid', '', '127.0.0.1');
+        $b = $this->auth->register('coyote', 'b@example.invalid', '', '127.0.0.1');
+        $this->assertTrue($a['success']);
+        $this->assertTrue($b['success']);
+        $this->assertSame(2, $this->pendingCount());
+
+        // Force known codes so the assertion never depends on .eml mtime ordering.
+        $this->setPendingCode($a['registration_id'], '111111');
+        $this->setPendingCode($b['registration_id'], '222222');
+
+        // B proves email control first → wins the username at the authoritative INSERT.
+        $this->assertTrue($this->auth->verifyRegistration($b['registration_id'], '222222')['success']);
+
+        $_SESSION = [];
+
+        // A verifies second → loses on the UNIQUE(username) constraint.
+        $resA = $this->auth->verifyRegistration($a['registration_id'], '111111');
+        $this->assertFalse($resA['success']);
+        $this->assertStringContainsString('already registered', $resA['error']);
+
+        // Exactly one real account exists, and it belongs to B (b@…).
+        $this->assertSame(1, (int) $this->db->query('SELECT COUNT(*) FROM users')->fetchColumn());
+        $this->assertSame('coyote', $this->db->query('SELECT username FROM users')->fetchColumn());
     }
 
     public function testUsernameWithHtmlMetacharactersIsRejected(): void
@@ -253,9 +325,9 @@ final class AuthServiceTest extends TestCase
             $this->assertStringContainsString('Username', $result['error']);
         }
 
-        // No user rows and no codes were created for any rejected attempt.
+        // No user rows and no pending rows were created for any rejected attempt.
         $this->assertSame(0, (int) $this->db->query('SELECT COUNT(*) FROM users')->fetchColumn());
-        $this->assertSame(0, $this->codeSendCount());
+        $this->assertSame(0, $this->pendingCount());
     }
 
     public function testCleanUsernamesAreAccepted(): void
@@ -268,23 +340,24 @@ final class AuthServiceTest extends TestCase
 
     public function testLoginIsCappedPerAccountRegardlessOfIp(): void
     {
-        // A registered user. register() itself sends one code (count = 1).
+        // A fully verified user. Registration uses the pending table, so it
+        // writes no verification_tokens row and doesn't touch the login cap.
         $reg = $this->auth->register('mallory', 'mallory@example.invalid', '', '127.0.0.1');
-        $this->assertTrue($reg['success']);
+        $this->assertTrue(
+            $this->auth->verifyRegistration($reg['registration_id'], $this->codeFromLatestEmail())['success']
+        );
+        $this->assertSame(0, $this->codeSendCount());
 
-        // The cap is 3 codes/hour per account. register() already burned one,
-        // so two more logins succeed in sending, the rest are suppressed even
-        // though each comes from a different IP (the targeting is the username,
-        // not the source address).
+        // The cap is 3 login codes/hour per account: the first three logins send,
+        // the rest are suppressed even though each comes from a different IP (the
+        // targeting is the username, not the source address).
         $this->auth->login('mallory', '', '10.0.0.1');
         $this->auth->login('mallory', '', '10.0.0.2');
         $this->auth->login('mallory', '', '10.0.0.3');
         $this->auth->login('mallory', '', '10.0.0.4');
 
-        // 1 (register) + 2 (logins under cap) = 3 codes stored. The 4th and 5th
-        // sends were suppressed by the per-account cap. Token rows are the
-        // reliable send counter (the .eml filename is second-resolution and
-        // would collide within a single test).
+        // verification_tokens rows are the reliable send counter (the .eml
+        // filename is second-resolution and would collide within a single test).
         $this->assertSame(3, $this->codeSendCount());
     }
 
@@ -319,23 +392,46 @@ final class AuthServiceTest extends TestCase
         $this->assertSame(0, $this->codeSendCount());
     }
 
-    public function testResendCodeRidesTheSamePerAccountCap(): void
+    public function testResendRegistrationCodeRidesTheSamePerRegistrationCap(): void
     {
-        // register() sends one (count = 1). Resending twice reaches the cap of
-        // 3; the third resend is suppressed.
+        // register() seeds the cap (count = 1). Resending twice reaches the cap
+        // of 3; the third resend is suppressed.
         $reg = $this->auth->register('rena', 'rena@example.invalid', '', '127.0.0.1');
-        $userId = $reg['user_id'];
+        $registrationId = $reg['registration_id'];
 
-        $this->assertTrue($this->auth->resendCode($userId));   // 2
-        $this->assertTrue($this->auth->resendCode($userId));   // 3
-        $this->assertFalse($this->auth->resendCode($userId));  // capped
+        $this->assertTrue($this->auth->resendRegistrationCode($registrationId));   // 2
+        $this->assertTrue($this->auth->resendRegistrationCode($registrationId));   // 3
+        $this->assertFalse($this->auth->resendRegistrationCode($registrationId));  // capped
+    }
 
-        $this->assertSame(3, $this->codeSendCount());
+    public function testResendRegistrationCodeForUnknownIdIsSilentNoOp(): void
+    {
+        $this->assertFalse($this->auth->resendRegistrationCode(999999));
+        $this->assertFalse($this->auth->resendRegistrationCode(AuthService::DECOY_PENDING_REGISTRATION_ID));
     }
 
     private function codeSendCount(): int
     {
         return (int) $this->db->query('SELECT COUNT(*) FROM verification_tokens')->fetchColumn();
+    }
+
+    private function pendingCount(): int
+    {
+        return (int) $this->db->query('SELECT COUNT(*) FROM pending_registrations')->fetchColumn();
+    }
+
+    /**
+     * Overwrite a pending row's code with a known plaintext so verification is
+     * deterministic without scraping second-resolution .eml filenames.
+     */
+    private function setPendingCode(int $registrationId, string $code): void
+    {
+        $appSecret = 'integration-test-secret-do-not-use-in-prod';
+        $stmt = $this->db->prepare('UPDATE pending_registrations SET code_hmac = :h WHERE id = :id');
+        $stmt->execute([
+            'h'  => hash_hmac('sha256', $code, $appSecret),
+            'id' => $registrationId,
+        ]);
     }
 
     private function authWithFailingCaptcha(): AuthService
@@ -345,6 +441,7 @@ final class AuthServiceTest extends TestCase
         $apiTokenCrypto = new ApiTokenCrypto($appSecret);
         $userRepo       = new UserRepository($this->db, $emailCrypto, $apiTokenCrypto);
         $tokenRepo      = new TokenRepository($this->db);
+        $pendingRepo    = new \App\Repository\PendingRegistrationRepository($this->db, $emailCrypto);
         $cache          = new FilesystemCache($this->cacheDir);
         $limiter        = new RateLimiterService($cache);
         // Non-empty secret + not-dev → verify() rejects the empty token without
@@ -367,7 +464,7 @@ final class AuthServiceTest extends TestCase
         );
 
         return new AuthService(
-            $userRepo, $tokenRepo, $mailer, $limiter, $captcha,
+            $userRepo, $tokenRepo, $pendingRepo, $mailer, $limiter, $captcha,
             $emailCrypto, $appSecret, $sync, $persistentLogin,
             new \App\Service\SecurityLogger(static fn(string $l) => null),
         );

@@ -6,8 +6,10 @@ namespace App\Service;
 
 use App\Repository\UserRepository;
 use App\Repository\TokenRepository;
+use App\Repository\PendingRegistrationRepository;
 use App\Security\EmailCrypto;
 use DateTimeImmutable;
+use PDOException;
 
 class AuthService
 {
@@ -21,9 +23,20 @@ class AuthService
      */
     public const int DECOY_PENDING_USER_ID = -1;
 
+    /**
+     * Registration counterpart of DECOY_PENDING_USER_ID. Returned when someone
+     * registers an email that already has a verified account: the response is
+     * indistinguishable from a real new registration (success + a pending id
+     * that routes to /verify), but no row is created and no code is sent. A
+     * find() on a negative id always misses, so it can never verify. This closes
+     * the email-existence oracle on the registration form.
+     */
+    public const int DECOY_PENDING_REGISTRATION_ID = -1;
+
     public function __construct(
         private readonly UserRepository $users,
         private readonly TokenRepository $tokens,
+        private readonly PendingRegistrationRepository $pending,
         private readonly EmailService $mailer,
         private readonly RateLimiterService $limiter,
         private readonly ReCaptchaService $captcha,
@@ -40,9 +53,14 @@ class AuthService
     }
 
     /**
-     * Handles New User Registration
+     * Handles New User Registration.
      *
-     * @return array{success: true, user_id: int}|array{success: false, error: string}
+     * Creates a *pending* registration — never a `users` row — and emails a
+     * code. The account only materialises in `users` when verifyRegistration()
+     * promotes it, so an unverified attempt can never squat a username/email or
+     * block a real person.
+     *
+     * @return array{success: true, registration_id: int}|array{success: false, error: string}
      */
     public function register(
         string $username,
@@ -76,18 +94,133 @@ class AuthService
             return ['success' => false, 'error' => 'Invalid email address.'];
         }
 
+        // Username availability is surfaced deliberately: it's standard UX (you
+        // must let the user pick another), only verified accounts are checked,
+        // and it leaks nothing private. Email existence is the sensitive bit and
+        // is handled below, not here.
         if ($this->users->findByUsername($username)) {
             return ['success' => false, 'error' => 'Username is already taken.'];
         }
 
+        // Never reveal whether an email already has an account. If it does,
+        // return the exact shape of a successful registration (a pending id that
+        // routes to /verify) but create nothing and send nothing — the decoy id
+        // can't verify. An observer can't distinguish "email taken" from "new".
         if ($this->users->findByEmail($email)) {
-            return ['success' => false, 'error' => 'Email is already registered.'];
+            $this->securityLog->event('register_existing_email', ['ip' => $ip]);
+            return ['success' => true, 'registration_id' => self::DECOY_PENDING_REGISTRATION_ID];
         }
 
-        $user = $this->users->create($username, $email);
-        $this->generateAndSendCode($user);
+        $this->pending->deleteExpired((new DateTimeImmutable())->format('Y-m-d H:i:s'));
 
-        return ['success' => true, 'user_id' => $user['id']];
+        [$code, $hmac, $expiresAt] = $this->freshCode();
+        $registrationId = $this->pending->create($username, $email, $hmac, $expiresAt);
+
+        // Seed the per-registration code cap so resends share one budget.
+        $this->limiter->increment('register_code_' . $registrationId, 3600);
+        $this->mailer->sendVerificationCode($email, $code);
+
+        return ['success' => true, 'registration_id' => $registrationId];
+    }
+
+    /**
+     * Verify a pending registration's code and promote it into a real account.
+     *
+     * The promotion INSERT is the authority that resolves any race: if two
+     * people held a pending row for the same username (or email), whoever
+     * verifies first wins, and the loser hits the UNIQUE constraint and is told
+     * the name is taken. This is the correct fairness rule — the name goes to
+     * whoever proves email control first, not whoever clicked register first.
+     *
+     * @return array{success: true, user_id: int}|array{success: false, error: string}
+     */
+    public function verifyRegistration(int $registrationId, string $code, bool $remember = false): array
+    {
+        $pending = $this->pending->find($registrationId);
+        if (!$pending) {
+            return ['success' => false, 'error' => 'Invalid code or expired.'];
+        }
+
+        if (new DateTimeImmutable() > new DateTimeImmutable($pending['expires_at'])) {
+            $this->pending->delete($registrationId);
+            return ['success' => false, 'error' => 'Invalid code or expired.'];
+        }
+
+        if ((int) $pending['attempts'] >= $this->maxAttempts) {
+            $this->pending->delete($registrationId);
+            return ['success' => false, 'error' => 'Invalid code or expired.'];
+        }
+
+        $this->pending->incrementAttempts($registrationId);
+
+        if (
+            !hash_equals(
+                (string) $pending['code_hmac'],
+                hash_hmac('sha256', $code, $this->appSecret)
+            )
+        ) {
+            $this->securityLog->event('register_code_failed', ['registration_id' => $registrationId]);
+            return ['success' => false, 'error' => 'Invalid code or expired.'];
+        }
+
+        $email = $this->crypto->decrypt((string) $pending['email_encrypted']);
+
+        try {
+            $user = $this->users->create((string) $pending['username'], $email);
+        } catch (PDOException) {
+            // Lost the race for this username/email (or a duplicate slipped in):
+            // the UNIQUE constraint is the authority. Discard the pending row.
+            $this->pending->delete($registrationId);
+            $this->securityLog->event('register_promote_conflict', ['registration_id' => $registrationId]);
+            return ['success' => false, 'error' => 'That username or email is already registered.'];
+        }
+
+        if ($user === null) {
+            return ['success' => false, 'error' => 'Could not complete registration. Please try again.'];
+        }
+
+        $userId = (int) $user['id'];
+        $this->users->markVerified($userId);
+        // The promoted email is now owned by a real account; drop any sibling
+        // pending rows for it so they don't linger until TTL.
+        $this->pending->deleteByEmailHash((string) $pending['email_hash']);
+        $this->mailer->sendWelcomeEmail($email, (string) $user['username']);
+
+        $fresh = $this->users->findById($userId) ?? $user;
+        $this->establishVerifiedSession($fresh, $remember);
+
+        $this->securityLog->event('registration_completed', ['user_id' => $userId]);
+
+        return ['success' => true, 'user_id' => $userId];
+    }
+
+    /**
+     * Re-send the code for an in-progress registration (the user is on /verify).
+     * Bounded by the same per-registration cap as the first send so the resend
+     * link can't become a flood vector. A miss (unknown/decoy id) is a silent
+     * no-op so the caller's response stays generic.
+     */
+    public function resendRegistrationCode(int $registrationId): bool
+    {
+        $pending = $this->pending->find($registrationId);
+        if (!$pending) {
+            return false;
+        }
+
+        $capKey = 'register_code_' . $registrationId;
+        if ($this->limiter->increment($capKey, 3600) > $this->maxCodesPerUserPerHour) {
+            $this->securityLog->event('register_code_capped', ['registration_id' => $registrationId]);
+            return false;
+        }
+
+        [$code, $hmac, $expiresAt] = $this->freshCode();
+        $this->pending->updateCode($registrationId, $hmac, $expiresAt);
+        $this->mailer->sendVerificationCode(
+            $this->crypto->decrypt((string) $pending['email_encrypted']),
+            $code
+        );
+
+        return true;
     }
 
     /**
@@ -186,13 +319,39 @@ class AuthService
             return false;
         }
 
-        // First-time verification
+        // First-time verification. Post-split this is effectively a safety net
+        // (registration verifies via verifyRegistration() and `users` holds only
+        // verified rows) — kept so any manually-inserted or legacy unverified
+        // row still gets a welcome on its first login.
         if (empty($user['verified_at'])) {
             $this->users->markVerified((int) $user['id']);
             $email = $this->getDecryptedEmail((int) $user['id']);
             $this->mailer->sendWelcomeEmail($email, $user['username']);
         }
 
+        $this->establishVerifiedSession($user, $remember);
+
+        $this->tokens->delete((int) $token['id']);
+
+        $this->securityLog->event('login_succeeded', [
+            'user_id'  => (int) $user['id'],
+            'remember' => $remember ? '1' : '0',
+        ]);
+
+        return true;
+    }
+
+    /**
+     * Promote the current PHP session to an authenticated, fresh one for $user
+     * and resolve the post-login sync status. Shared by login (verifyCode) and
+     * registration (verifyRegistration) so both establish identical session
+     * state. Does not touch the verification artefact (token / pending row) —
+     * the caller owns that.
+     *
+     * @param array<string, mixed> $user
+     */
+    private function establishVerifiedSession(array $user, bool $remember): void
+    {
         if (session_status() === PHP_SESSION_NONE) {
             session_start();
         }
@@ -221,15 +380,6 @@ class AuthService
             // outcome, which drives the verify page's immediate feedback.
             $_SESSION['sync_status'] = $this->syncService->trySyncForUser($user, true);
         }
-
-        $this->tokens->delete((int) $token['id']);
-
-        $this->securityLog->event('login_succeeded', [
-            'user_id'  => (int) $user['id'],
-            'remember' => $remember ? '1' : '0',
-        ]);
-
-        return true;
     }
 
     /**
@@ -344,19 +494,30 @@ class AuthService
             (new DateTimeImmutable())->format('Y-m-d H:i:s')
         );
 
-        $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-        $hmac = hash_hmac('sha256', $code, $this->appSecret);
-
-        $expiresAt = (new DateTimeImmutable(
-            "+{$this->codeTtlSeconds} seconds"
-        ))->format('Y-m-d H:i:s');
-
+        [$code, $hmac, $expiresAt] = $this->freshCode();
         $this->tokens->store((int) $user['id'], $hmac, $expiresAt);
 
         $email = $this->getDecryptedEmail((int) $user['id']);
         $this->mailer->sendVerificationCode($email, $code);
 
         return true;
+    }
+
+    /**
+     * Mint a one-time 6-digit code: returns [plaintext, hmac, expiresAt]. The
+     * plaintext is emailed; only the HMAC is ever persisted.
+     *
+     * @return array{0: string, 1: string, 2: string}
+     */
+    private function freshCode(): array
+    {
+        $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        $hmac = hash_hmac('sha256', $code, $this->appSecret);
+        $expiresAt = (new DateTimeImmutable(
+            "+{$this->codeTtlSeconds} seconds"
+        ))->format('Y-m-d H:i:s');
+
+        return [$code, $hmac, $expiresAt];
     }
 
     /**
