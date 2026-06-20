@@ -29,8 +29,16 @@
                 </p>
             </div>
             <div class="text-right">
-                <p class="t-label">Supplier</p>
                 <p class="text-xl font-bold text-blue-600 tabular-nums">{{ strategy_results.supplier }}</p>
+                {% if strategy_results.supplier_info %}
+                    {% set si = strategy_results.supplier_info %}
+                    <p class="mt-1 text-xs tabular-nums" title="Your tyre supplier's characteristics — not the track.">
+                        <span class="text-slate-400">Tyres</span>
+                        {% if si.dry is not null %}<span class="ml-2 text-slate-400">Dry</span><span class="ml-1 text-slate-700">{{ si.dry }}/8</span>{% endif %}
+                        {% if si.wet is not null %}<span class="ml-2 text-slate-400">Wet</span><span class="ml-1 text-slate-700">{{ si.wet }}/8</span>{% endif %}
+                        {% if si.temp is not null %}<span class="ml-2 text-slate-400">Ideal temp</span><span class="ml-1 text-slate-700">{{ si.temp }}°C</span>{% endif %}
+                    </p>
+                {% endif %}
             </div>
         </div>
 

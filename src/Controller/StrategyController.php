@@ -289,6 +289,11 @@ class StrategyController
 
             $strategyResults['setups'] = $setupResults;
             $strategyResults['weather_inputs'] = $setupWeatherInputs;
+            $strategyResults['supplier_info'] = $supplier === null ? null : [
+                'dry' => isset($supplier['dryPerformance']) ? (int)$supplier['dryPerformance'] : null,
+                'wet' => isset($supplier['rainPerformance']) ? (int)$supplier['rainPerformance'] : null,
+                'temp' => isset($supplier['peakTemperature']) ? (int)$supplier['peakTemperature'] : null,
+            ];
 
             $raceIsWet = $setupWeatherInputs['Race']['weather'] === 'Wet';
 

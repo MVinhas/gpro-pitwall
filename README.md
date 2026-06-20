@@ -41,7 +41,7 @@ One screen, in race-prep order:
 - **"Set your race strategy" handoff** — one click to the Strategy tab pre-populated.
 
 ### Race Strategy
-Fuel + tyre + setup for every compound (Extra Soft / Soft / Medium / Hard / Rain). Live risk slider; the calc auto-runs on first visit so you don't need to click Calculate. Best-compound highlighted; per-compound breakdown of lost time (pits / fuel / tyre-compound difference). Setup table for Q1, Q2 and race with weather-aware tyre choices. Fuel figures and the track's overtaking rating (Very Easy → Very Hard, colour-coded) sit in a slim billboard strip above the results.
+Fuel + tyre + setup for every compound (Extra Soft / Soft / Medium / Hard / Rain). Live risk slider; the calc auto-runs on first visit so you don't need to click Calculate. Best-compound highlighted; per-compound breakdown of lost time (pits / fuel / tyre-compound difference). Setup table for Q1, Q2 and race with weather-aware tyre choices. Fuel figures and the track's overtaking rating (Very Easy → Very Hard, colour-coded) sit in a slim billboard strip above the results. The header shows your contracted **tyre supplier** beside the track name, with its dry/wet performance (out of 8) and ideal temperature read straight from the GPRO suppliers feed.
 
 ### Advice from the Race Engineer ⭐
 The headline feature of the Strategy tab. The race engineer suggests your **overtake and defend risk dials (0–100)** for the next race and explains its reasoning in plain advisor prose — like having a real engineer on the pit wall who has already done the homework:
