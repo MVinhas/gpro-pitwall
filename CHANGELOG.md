@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Each entry mirrors its annotated release tag.
 
+## [1.6.3] - 2026-06-20
+- Race Strategy header now shows the contracted tyre supplier's dry/wet performance (out of 8) and ideal temperature beside the track name, read straight from the GPRO suppliers feed (no extra API call). The redundant "Supplier" label was dropped so the name sits level with the track. Hidden cleanly when no supplier is contracted (e.g. after a season reset) or the feed is unavailable.
+
 ## [1.6.2] - 2026-06-18
 - Removed the orphaned `rector.php` config. `rector/rector` was dropped as a dependency earlier (one-shot tool, not in the check pipeline); the leftover config referenced classes no longer installed and would only mislead.
 
