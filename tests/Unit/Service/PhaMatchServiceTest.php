@@ -114,6 +114,59 @@ final class PhaMatchServiceTest extends TestCase
         $this->assertSame(1, $r['attributes']['power']['car_rank']);
     }
 
+    public function testMatchLevelPerfectWhenAllRanksAlign(): void
+    {
+        // Track P > A > H, car P > A > H — every rank coincides.
+        $this->assertSame(
+            PhaMatchService::MATCH_PERFECT,
+            $this->svc->matchLevel($this->alignedTrack(), $this->alignedCar()),
+        );
+    }
+
+    public function testMatchLevelPerfectWithTiedRanks(): void
+    {
+        // Track P top, H == A tied second; car mirrors the same tied shape.
+        $track = ['power' => 18, 'handling' => 12, 'acceleration' => 12];
+        $car   = ['power' => 15, 'handling' => 9, 'acceleration' => 9];
+        $this->assertSame(PhaMatchService::MATCH_PERFECT, $this->svc->matchLevel($track, $car));
+    }
+
+    public function testMatchLevelTopWhenOnlyTopAttributeCoincides(): void
+    {
+        // Both have Power #1, but #2/#3 are flipped.
+        $track = ['power' => 18, 'handling' => 8, 'acceleration' => 16];
+        $car   = ['power' => 18, 'handling' => 16, 'acceleration' => 8];
+        $this->assertSame(PhaMatchService::MATCH_TOP, $this->svc->matchLevel($track, $car));
+    }
+
+    public function testMatchLevelNoneWhenTopsDiffer(): void
+    {
+        $track = ['power' => 18, 'handling' => 8, 'acceleration' => 16];
+        $car   = ['power' => 8, 'handling' => 18, 'acceleration' => 12];
+        $this->assertSame(PhaMatchService::MATCH_NONE, $this->svc->matchLevel($track, $car));
+    }
+
+    public function testMatchLevelNoneWhenTrackTopIsTied(): void
+    {
+        // Track P == H tied top — no single #1, so a single-top car can't be a
+        // top match (only a full perfect mirror would count).
+        $track = ['power' => 18, 'handling' => 18, 'acceleration' => 8];
+        $car   = ['power' => 18, 'handling' => 10, 'acceleration' => 8];
+        $this->assertSame(PhaMatchService::MATCH_NONE, $this->svc->matchLevel($track, $car));
+    }
+
+    public function testMatchLevelNoneForBalancedCar(): void
+    {
+        $car = ['power' => 13, 'handling' => 13, 'acceleration' => 13];
+        $this->assertSame(PhaMatchService::MATCH_NONE, $this->svc->matchLevel($this->alignedTrack(), $car));
+    }
+
+    public function testEvaluateExposesMatchLevel(): void
+    {
+        $r = $this->svc->evaluate($this->alignedTrack(), $this->alignedCar(), false);
+        $this->assertSame(PhaMatchService::MATCH_PERFECT, $r['match']);
+    }
+
     public function testTierPerfectWhenRanksMatchExactly(): void
     {
         // Track P > H > A, car P > H > A.

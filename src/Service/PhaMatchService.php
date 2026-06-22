@@ -24,6 +24,20 @@ final class PhaMatchService
     public const string VERDICT_PUSH = 'push';
     public const string VERDICT_NEUTRAL = 'neutral';
 
+    /**
+     * Strict match levels used by the cockpit highlight and the Race Strategy
+     * push checklist. Only two car/track shapes count as a match:
+     *   - perfect : every attribute shares the same rank on both sides (ties
+     *               included) — the car mirrors what the track rewards.
+     *   - top     : the track's single most-demanded attribute is also the
+     *               car's single strongest attribute.
+     * Everything else is `none` — a tied top on either side that isn't a full
+     * perfect mirror is deliberately NOT a match.
+     */
+    public const string MATCH_NONE = 'none';
+    public const string MATCH_TOP = 'top';
+    public const string MATCH_PERFECT = 'perfect';
+
     private const array ATTRS = ['power', 'handling', 'acceleration'];
 
     /**
@@ -33,6 +47,7 @@ final class PhaMatchService
      *   verdict: string,
      *   pha_similar: bool,
      *   favourite: bool,
+     *   match: string,
      *   attributes: array<string, array{track: float, car: float, track_rank: int, car_rank: int, aligned: bool}>
      * }
      */
@@ -67,8 +82,44 @@ final class PhaMatchService
             'verdict'     => $verdict,
             'pha_similar' => $similar,
             'favourite'   => $favouriteTrack,
+            'match'       => $this->matchLevelFromRanks($trackRanks, $carRanks),
             'attributes'  => $attributes,
         ];
+    }
+
+    /**
+     * Strict car/track match classification — see the MATCH_* constants.
+     *
+     * @param array<string, mixed> $track keys: power, handling, acceleration
+     * @param array<string, mixed> $car   keys: power, handling, acceleration
+     */
+    public function matchLevel(array $track, array $car): string
+    {
+        return $this->matchLevelFromRanks(
+            $this->ranks($this->normalise($track)),
+            $this->ranks($this->normalise($car)),
+        );
+    }
+
+    /**
+     * @param array<string, int> $trackRanks
+     * @param array<string, int> $carRanks
+     */
+    private function matchLevelFromRanks(array $trackRanks, array $carRanks): string
+    {
+        if ($this->ranksMatch($trackRanks, $carRanks)) {
+            return self::MATCH_PERFECT;
+        }
+
+        $trackTop = $this->attrsAtRank($trackRanks, 1);
+        $carTop   = $this->attrsAtRank($carRanks, 1);
+        // A single, unambiguous top on both sides that coincides. A tie on
+        // either side has no single #1, so it can only ever be perfect (above).
+        if (count($trackTop) === 1 && $trackTop === $carTop) {
+            return self::MATCH_TOP;
+        }
+
+        return self::MATCH_NONE;
     }
 
     /** Tier values — lower is better; suitable for sorting. */

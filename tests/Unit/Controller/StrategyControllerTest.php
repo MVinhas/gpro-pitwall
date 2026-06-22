@@ -14,6 +14,7 @@ use App\Service\GproApiFetcher;
 use App\Service\GproDataMapper;
 use App\Service\RaceWeatherService;
 use App\Service\RiskAdvisorService;
+use App\Service\PhaMatchService;
 use App\Service\SetupCalculatorService;
 use App\Service\StrategyService;
 use App\Support\RaceWindow;
@@ -91,6 +92,7 @@ final class StrategyControllerTest extends TestCase
             new Authorize($this->createStub(UserRepository::class)),
             new RaceWeatherService(),
             new RiskAdvisorService(),
+            new PhaMatchService(),
             new Environment(new ArrayLoader([])),
         );
     }

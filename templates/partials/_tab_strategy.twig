@@ -173,20 +173,21 @@
 
     let pending = null;
 
-    // The fragment swap re-renders the Race Engineer accordion with its
-    // server-side default (open), so a collapsed state would be lost on
-    // every slider change. Remember the user's choice for the session.
-    const RE_KEY = 'raceEngineerOpen';
+    // The fragment swap re-renders each accordion with its server-side default
+    // (open), so a collapsed state would be lost on every slider change.
+    // Remember the user's choice per accordion for the session.
+    const ACCORDIONS = { 'race-engineer': 'raceEngineerOpen', 'push-signals': 'pushSignalsOpen' };
     const applyAccordionState = () => {
-        const d = card.querySelector('#race-engineer');
-        const saved = sessionStorage.getItem(RE_KEY);
-        if (d && saved !== null) d.open = saved === '1';
+        for (const [id, key] of Object.entries(ACCORDIONS)) {
+            const d = card.querySelector('#' + id);
+            const saved = sessionStorage.getItem(key);
+            if (d && saved !== null) d.open = saved === '1';
+        }
     };
     // <details> toggle events don't bubble — listen in the capture phase.
     document.addEventListener('toggle', (e) => {
-        if (e.target.id === 'race-engineer') {
-            sessionStorage.setItem(RE_KEY, e.target.open ? '1' : '0');
-        }
+        const key = ACCORDIONS[e.target.id];
+        if (key) sessionStorage.setItem(key, e.target.open ? '1' : '0');
     }, true);
     applyAccordionState();
 
