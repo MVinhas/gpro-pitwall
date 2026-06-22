@@ -12,6 +12,7 @@ use App\Service\GproApiClient;
 use App\Service\GproDataMapper;
 use App\Service\RaceWeatherService;
 use App\Service\RiskAdvisorService;
+use App\Service\PhaMatchService;
 use Twig\Environment;
 
 class StrategyController
@@ -34,6 +35,7 @@ class StrategyController
         private readonly Authorize $authorize,
         private readonly RaceWeatherService $weather,
         private readonly RiskAdvisorService $riskAdvisor,
+        private readonly PhaMatchService $phaMatch,
         private readonly Environment $twig,
     ) {
     }
@@ -311,6 +313,15 @@ class StrategyController
                 $rain['race_rain_avg'],
             );
 
+            $strategyResults['push_signals'] = $this->buildPushSignals(
+                $weatherData,
+                $carRaw,
+                $pilotRaw,
+                $strategyResults['supplier_info'],
+                $raceIsWet,
+                $finalRaceTemp,
+            );
+
             $strategyResults['season'] = $office['seasonNb'] ?? '?';
             $strategyResults['race'] = $office['raceNb'] ?? '?';
             $strategyResults['best_compound'] = $this->pickBestCompound(
@@ -331,6 +342,79 @@ class StrategyController
         } catch (\Exception $exception) {
             return ['error' => 'Calculation Error: ' . $exception->getMessage()];
         }
+    }
+
+    /**
+     * Push checklist shown under the Race Engineer: four binary signals that
+     * argue for a harder qualifying / lower Clear Track Risk. Heuristic, not a
+     * game formula.
+     *
+     * @param array<string, mixed> $raceSetup    GPRO RaceSetup (track + car P/H/A)
+     * @param array<string, mixed> $carRaw        GPRO UpdateCar
+     * @param array<string, mixed> $pilotRaw      GPRO DriProfile (favourite tracks)
+     * @param array{dry: ?int, wet: ?int, temp: ?int}|null $supplierInfo
+     * @return array{
+     *   pha_match: bool, pha_level: string, favourite: bool,
+     *   tyres_weather: bool, tyre_perf: ?int, race_wet: bool,
+     *   temp_match: bool, race_temp: float, ideal_temp: ?int
+     * }
+     */
+    private function buildPushSignals(
+        array $raceSetup,
+        array $carRaw,
+        array $pilotRaw,
+        ?array $supplierInfo,
+        bool $raceIsWet,
+        float $raceTemp,
+    ): array {
+        $matchLevel = $this->phaMatch->matchLevel(
+            [
+                'power'        => $raceSetup['trackPower'] ?? 0,
+                'handling'     => $raceSetup['trackHandl'] ?? 0,
+                'acceleration' => $raceSetup['trackAccel'] ?? 0,
+            ],
+            [
+                'power'        => $carRaw['carPower'] ?? 0,
+                'handling'     => $carRaw['carHandl'] ?? 0,
+                'acceleration' => $carRaw['carAccel'] ?? 0,
+            ],
+        );
+
+        $tyrePerf = $raceIsWet ? ($supplierInfo['wet'] ?? null) : ($supplierInfo['dry'] ?? null);
+        $idealTemp = $supplierInfo['temp'] ?? null;
+
+        return [
+            'pha_match'     => $matchLevel !== PhaMatchService::MATCH_NONE,
+            'pha_level'     => $matchLevel,
+            'favourite'     => $this->isFavouriteTrack($pilotRaw, (int)($raceSetup['trackId'] ?? 0)),
+            'tyres_weather' => $tyrePerf !== null && $tyrePerf >= 4,
+            'tyre_perf'     => $tyrePerf,
+            'race_wet'      => $raceIsWet,
+            'temp_match'    => $idealTemp !== null && abs($raceTemp - $idealTemp) <= 3,
+            'race_temp'     => $raceTemp,
+            'ideal_temp'    => $idealTemp,
+        ];
+    }
+
+    /**
+     * Is the next race on one of the driver's three favourite tracks?
+     * DriProfile exposes favTrack1/2/3 as {name, id} objects.
+     *
+     * @param array<string, mixed> $pilot
+     */
+    private function isFavouriteTrack(array $pilot, int $trackId): bool
+    {
+        if ($trackId <= 0) {
+            return false;
+        }
+
+        foreach (['favTrack1', 'favTrack2', 'favTrack3'] as $key) {
+            $fav = $pilot[$key] ?? null;
+            if (is_array($fav) && (int)($fav['id'] ?? 0) === $trackId) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

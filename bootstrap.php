@@ -282,6 +282,7 @@ use App\Controller\AuthController;
 
 $container['service.race_weather'] = new \App\Service\RaceWeatherService();
 $container['service.risk_advisor'] = new \App\Service\RiskAdvisorService();
+$container['service.pha_match'] = new \App\Service\PhaMatchService();
 
 $container['controller.strategy'] = new StrategyController(
     $container['service.strategy'],
@@ -291,6 +292,7 @@ $container['controller.strategy'] = new StrategyController(
     $container['service.authorize'],
     $container['service.race_weather'],
     $container['service.risk_advisor'],
+    $container['service.pha_match'],
     $container['twig'],
 );
 
@@ -300,7 +302,6 @@ $container['controller.auth'] = new AuthController(
     $_ENV['RECAPTCHA_SITE_KEY'] ?? ''
 );
 
-$container['service.pha_match'] = new \App\Service\PhaMatchService();
 $container['service.boost_fuel'] = new \App\Service\BoostFuelService();
 $container['service.wear_advisor'] = new \App\Service\WearAdvisorService();
 $container['service.upgrade_advisor'] = new \App\Service\PartUpgradeAdvisorService(

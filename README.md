@@ -31,7 +31,7 @@ If working things out from scratch is the part you enjoy, do that first — then
 ### Cockpit (the race-weekend spine)
 One screen, in race-prep order:
 
-- **PHA match** — track vs car Power/Handling/Acceleration alignment, with favourite-track and verdict cards.
+- **PHA match** — track vs car Power/Handling/Acceleration alignment, with a favourite-track badge. Highlights a match only when it's strict: **top** (your car's #1 attribute is the track's #1) or **perfect** (all three ranks line up). No push verdict here — that call now lives in the Strategy tab.
 - **Testing projection** — 100-lap forecast with 3-race decay (Test Points → R&D → Engineering → Car Character) so you see where the car actually lands.
 - **Boost-lap fuel cost** — per-track dry/wet coefficient lookup.
 - **Weather call** — Q1 / Q2 / race-start dry/wet assessment.
@@ -68,6 +68,16 @@ And it now covers the rest of the race-setup form:
 - **Race-distance note** — shown only when distance is worth flagging, and written like an engineer talking, not a stats readout: it tells you in plain words when a race is short or long (no kilometres, no averages quoted) and what that means for energy. Short race → spends less driver energy, so carry higher clear-track risk and place boost laps freely; long race → bleeds energy, so trim both, more so when stamina is thin. Normal-length races say nothing — no point stating the obvious. Under the hood the tiers come from the 64 seeded tracks (field mean ~301 km, bands at the mean ± half a standard deviation), but the manager only ever sees the verdict.
 
 Honest by design: it's a transparent heuristic built from the game's own attribute semantics, not a reverse-engineered formula — and it says so right in the box.
+
+### Push or hold? ⭐
+A collapsible checklist below the Race Engineer that turns four signals into a single push/no-push read for your **Clear Track Risk** dial. Each is a binary check, and the header shows how many of four are met:
+
+- **Car P/H/A matches the track** — top or perfect match (same strict rule as the Cockpit).
+- **Driver's favourite track** — one of the driver's three favourites.
+- **Tyres suit the race** — the supplier's dry (or wet, when the race is wet) rating is 4/8 or better.
+- **Track temp near tyre ideal** — race temperature within ±3 °C of the supplier's ideal temperature.
+
+More signals met = the weekend is set up in your favour, so carry a higher Clear Track Risk; all four met points to a very likely win. Heuristic guidance, not a game formula — and it says so.
 
 ### Car Wear
 Per-part end-of-race wear forecast from your real driver attributes. Read-only driver stats pulled from the API (no manual entry). Risk slider. Per-part: level, start wear, estimated added wear, projected end wear (colour-coded by survival risk).
@@ -129,7 +139,7 @@ Per-page titles, meta descriptions and canonical URLs via Twig blocks (override 
 - **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile).
 - **SQLite** via PDO. Encrypted user emails (AES-256-GCM) and API tokens at rest.
 - **PHPMailer 7** for SMTP; in dev, writes `.eml` files to `var/mail/` instead.
-- **PHPUnit 13** — 310 tests, 850 assertions, all green at **PHPStan level 8** with **type-coverage** enforced (100% return/property/constant types + `strict_types`, 99.5% param types). Twig templates linted by a native `bin/twig_lint.php` (Twig's own tokenizer/parser — no third-party linter).
+- **PHPUnit 13** — 317 tests, 857 assertions, all green at **PHPStan level 8** with **type-coverage** enforced (100% return/property/constant types + `strict_types`, 99.5% param types). Twig templates linted by a native `bin/twig_lint.php` (Twig's own tokenizer/parser — no third-party linter).
 - **No framework.** Custom front controller + flat DI container in `bootstrap.php`. Routes in `config/routes.php`.
 - **Timestamps are stored and served as UTC**, then localised per-visitor in the browser (`<time data-localtime>` + `Intl`), so each user sees their own timezone with no server-side config.
 

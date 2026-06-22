@@ -35,24 +35,16 @@
 
             <div class="p-6 space-y-6">
 
-                {# VERDICT BANNER — shown only for push / all_in #}
-                {% if pha.verdict == 'all_in' %}
-                    <div class="rounded-lg bg-emerald-600 px-5 py-4 text-white shadow-sm">
-                        <p class="text-lg font-extrabold tracking-wide">ALL IN</p>
-                        <p class="text-sm text-emerald-50 mt-0.5">
-                            Your car's strength matches this track's demand <em>and</em> it's your driver's favourite. Push hard and spend your boost laps.
-                        </p>
+                {# MATCH HIGHLIGHT — descriptive only; shown for top / perfect #}
+                {% if pha.match == 'perfect' %}
+                    <div class="notice notice-success">
+                        <p class="font-bold">Perfect match.</p>
+                        <p>Your car's P/H/A ranking mirrors this track's demand across all three attributes.</p>
                     </div>
-                {% elseif pha.verdict == 'push' %}
-                    <div class="rounded-lg bg-blue-600 px-5 py-4 text-white shadow-sm">
-                        <p class="text-lg font-extrabold tracking-wide">PUSH</p>
-                        <p class="text-sm text-blue-50 mt-0.5">
-                            {% if pha.pha_similar %}
-                                Your car's P/H/A profile matches this track's demand — a good weekend to push.
-                            {% else %}
-                                This is your driver's favourite track — worth pushing.
-                            {% endif %}
-                        </p>
+                {% elseif pha.match == 'top' %}
+                    <div class="notice notice-info">
+                        <p class="font-bold">Top match.</p>
+                        <p>Your car's strongest attribute is the one this track demands most.</p>
                     </div>
                 {% endif %}
 
@@ -87,8 +79,8 @@
                 </div>
 
                 <p class="t-caption">
-                    Rank #1 = the most-demanded (track) or strongest (car) attribute. A match across the top
-                    two means your car is built for what this track rewards.
+                    Rank #1 = the most-demanded (track) or strongest (car) attribute. A match means your
+                    car's #1 lines up with the track's #1 (top); a perfect match lines up all three.
                 </p>
             </div>
         </div>

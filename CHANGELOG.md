@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Each entry mirrors its annotated release tag.
 
+## [1.7.0] - 2026-06-22
+- **Push/no-push advisor.** New collapsible "Push or hold?" card on the Race Strategy tab, below the Race Engineer, that turns four binary signals into a single read for your Clear Track Risk dial: car P/H/A matches the track (strict), it's a driver favourite track, the tyre supplier's dry/wet rating for the race conditions is 4/8 or better, and the track temperature is within ±3 °C of the tyre's ideal. The more signals met, the more the weekend is set up in your favour — carry a higher Clear Track Risk; all four met points to a very likely win. The header shows how many of the four are met; expand/collapse state persists like the Race Engineer.
+- Cockpit P/H/A Match no longer shows a PUSH / ALL IN verdict — that call now lives in the Strategy advisor. The card highlights a match only on the strict rule: **top** (car's #1 attribute equals the track's #1) or **perfect** (all three ranks align). No other shape — including a tied top — counts as a match.
+
 ## [1.6.3] - 2026-06-20
 - Race Strategy header now shows the contracted tyre supplier's dry/wet performance (out of 8) and ideal temperature beside the track name, read straight from the GPRO suppliers feed (no extra API call). The redundant "Supplier" label was dropped so the name sits level with the track. Hidden cleanly when no supplier is contracted (e.g. after a season reset) or the feed is unavailable.
 

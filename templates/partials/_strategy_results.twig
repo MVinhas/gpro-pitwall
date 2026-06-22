@@ -142,6 +142,85 @@
             </details>
         {% endif %}
 
+        {# PUSH SIGNALS (heuristic — feeds the Clear Track Risk decision) — accordion #}
+        {% if strategy_results.push_signals is defined %}
+            {% set ps = strategy_results.push_signals %}
+            {% set signals = [
+                {
+                    'ok': ps.pha_match,
+                    'label': 'Car P/H/A matches the track',
+                    'detail': ps.pha_level == 'perfect'
+                        ? 'Perfect — all three attributes line up.'
+                        : (ps.pha_level == 'top'
+                            ? 'Top — your strongest attribute is what the track demands most.'
+                            : 'Your car is built for different attributes than this track rewards.')
+                },
+                {
+                    'ok': ps.favourite,
+                    'label': "Driver's favourite track",
+                    'detail': ps.favourite
+                        ? 'This is one of your driver\'s three favourite tracks.'
+                        : 'Not one of your driver\'s favourite tracks.'
+                },
+                {
+                    'ok': ps.tyres_weather,
+                    'label': 'Tyres suit the ' ~ (ps.race_wet ? 'wet' : 'dry') ~ ' race',
+                    'detail': ps.tyre_perf is null
+                        ? 'No tyre supplier rating available.'
+                        : ('Supplier ' ~ (ps.race_wet ? 'wet' : 'dry') ~ ' rating ' ~ ps.tyre_perf ~ '/8' ~ (ps.tyre_perf >= 4 ? ' — strong enough.' : ' — below 4/8.'))
+                },
+                {
+                    'ok': ps.temp_match,
+                    'label': 'Track temp near tyre ideal',
+                    'detail': ps.ideal_temp is null
+                        ? 'No tyre ideal temperature available.'
+                        : ('Race ' ~ ps.race_temp ~ '°C vs ideal ' ~ ps.ideal_temp ~ '°C (±3°C).')
+                }
+            ] %}
+            {% set met = signals|filter(s => s.ok)|length %}
+            <details open id="push-signals" class="bg-white rounded-xl shadow-sm border border-slate-200 group">
+                <summary class="cursor-pointer list-none p-6 flex flex-wrap items-center justify-between gap-4">
+                    <span class="flex items-center gap-3">
+                        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-600 shadow-sm">
+                            {# Checklist clipboard #}
+                            <svg class="h-5 w-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5h6a1.5 1.5 0 0 0-1.5-1.5h-3A1.5 1.5 0 0 0 9 5Z"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7.5A1.5 1.5 0 0 0 6 6.5v12A1.5 1.5 0 0 0 7.5 20h9a1.5 1.5 0 0 0 1.5-1.5v-12A1.5 1.5 0 0 0 16.5 5H15"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" d="m9 12 1.5 1.5L13 11"/>
+                            </svg>
+                        </span>
+                        <span>
+                            <h4 class="t-section">Push or hold?</h4>
+                            <p class="t-caption mt-0.5">Signals that argue for a higher Clear Track Risk</p>
+                        </span>
+                    </span>
+                    <span class="flex items-center gap-6 text-right">
+                        <span>
+                            <p class="text-2xl font-bold text-blue-600 tabular-nums">{{ met }} / 4</p>
+                            <p class="t-caption">Signals met</p>
+                        </span>
+                        <span class="text-slate-400 group-open:rotate-90 transition-transform" aria-hidden="true">▸</span>
+                    </span>
+                </summary>
+                <div class="px-6 pb-6">
+                    <ul class="divide-y divide-slate-100 border-t border-slate-100">
+                        {% for s in signals %}
+                            <li class="flex items-start gap-3 py-3">
+                                <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full {{ s.ok ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400' }}">
+                                    {% if s.ok %}✓{% else %}–{% endif %}
+                                </span>
+                                <span>
+                                    <p class="text-sm font-semibold {{ s.ok ? 'text-slate-800' : 'text-slate-500' }}">{{ s.label }}</p>
+                                    <p class="text-xs text-slate-500 mt-0.5">{{ s.detail }}</p>
+                                </span>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                    <p class="text-xs text-slate-400 mt-4">More signals met = the weekend is set up in your favour, so carry a higher Clear Track Risk. All four met points to a very likely win. Heuristic guidance — not a game formula.</p>
+                </div>
+            </details>
+        {% endif %}
+
         {# STRATEGY TABLE #}
         <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
             <div class="overflow-x-auto">
