@@ -189,14 +189,50 @@ class PageController
                     $raceSetup = $this->apiClient->getRaceSetup();
                     $carData   = $this->apiClient->getCarData();
                     $pilot     = $this->apiClient->getMyPilotDetails();
+                    $nextRace  = $this->apiClient->getNextRaceProfile();
+                    $office    = $this->apiClient->getOfficeData();
+                    $calendar  = $this->apiClient->getCalendar();
 
-                    $trackId = (int) ($raceSetup['trackId'] ?? 0);
+                    // RaceSetup mirrors the manager's SAVED setup, which GPRO
+                    // carries over from the previous race until a new setup is
+                    // saved (office.doneRaceSetup flips to '1'). So its
+                    // trackName / factors / weather can lag a whole race. Office
+                    // and TrackProfile roll over the moment the new race opens,
+                    // so trust them for the track identity and demand factors;
+                    // fall back to RaceSetup only when those are absent.
+                    $trackName = (string) ($office['trackName'] ?? '');
+                    if ($trackName === '') {
+                        $trackName = (string) ($nextRace['trackName'] ?? ($raceSetup['trackName'] ?? ''));
+                    }
+                    if ($trackName === '') {
+                        $trackName = $activeTrack;
+                    }
+
+                    $trackPha = [
+                        'power'        => $nextRace['power'] ?? $raceSetup['trackPower'] ?? 0,
+                        'handling'     => $nextRace['handl'] ?? $raceSetup['trackHandl'] ?? 0,
+                        'acceleration' => $nextRace['accel'] ?? $raceSetup['trackAccel'] ?? 0,
+                    ];
+
+                    // Favourite-track check needs GPRO's track id, which
+                    // TrackProfile doesn't carry and RaceSetup carries stale.
+                    // Resolve it from the calendar by race number instead.
+                    $trackId = self::nextRaceTrackId($calendar, (int) ($office['raceNb'] ?? 0));
+                    if ($trackId <= 0) {
+                        $trackId = (int) ($raceSetup['trackId'] ?? 0);
+                    }
+
+                    // Stale: the new race has opened but its setup isn't saved in
+                    // GPRO yet, so RaceSetup (and its weather) still describe the
+                    // previous race. Refreshing the cache can't fix this — GPRO
+                    // itself returns the old setup until the manager saves one.
+                    $setupStale = (string) ($office['doneRaceSetup'] ?? '1') === '0'
+                        || ((string) ($raceSetup['trackName'] ?? '') !== ''
+                            && (string) $raceSetup['trackName'] !== $trackName);
+                    $viewData['cockpit_setup_stale'] = $setupStale;
+
                     $viewData['pha'] = $this->phaMatch->evaluate(
-                        [
-                            'power'        => $raceSetup['trackPower'] ?? 0,
-                            'handling'     => $raceSetup['trackHandl'] ?? 0,
-                            'acceleration' => $raceSetup['trackAccel'] ?? 0,
-                        ],
+                        $trackPha,
                         [
                             'power'        => $carData['carPower'] ?? 0,
                             'handling'     => $carData['carHandl'] ?? 0,
@@ -204,28 +240,30 @@ class PageController
                         ],
                         $this->isFavouriteTrack($pilot, $trackId),
                     );
-                    $trackName = $raceSetup['trackName'] ?? $activeTrack;
                     $viewData['pha_track_name'] = $trackName;
 
-                    $w = $raceSetup['weather'] ?? [];
-                    $viewData['weather'] = $this->raceWeather->assess($w);
-                    $viewData['weather_temps'] = [
-                        'q1' => $w['q1Temp'] ?? null,
-                        'q2' => $w['q2Temp'] ?? null,
-                    ];
+                    // Weather lives only on RaceSetup. While stale it's the
+                    // previous race's forecast, so withhold it rather than
+                    // present it as this race's.
+                    if (!$setupStale) {
+                        $w = $raceSetup['weather'] ?? [];
+                        $viewData['weather'] = $this->raceWeather->assess($w);
+                        $viewData['weather_temps'] = [
+                            'q1' => $w['q1Temp'] ?? null,
+                            'q2' => $w['q2Temp'] ?? null,
+                        ];
+                    }
 
                     $wear = $this->carWear->calculateWear(
-                        // Resolve the track by name only. raceSetup.trackId is
-                        // GPRO's track id, NOT our local tracks.id (an
-                        // autoincrement PK), so passing it would let the
-                        // "id = :id OR name = :name" lookup match an unrelated
-                        // row and read the wrong per-part base wear. The Car
-                        // Wear tab feeds id=0 (TrackProfile has no id) and is
-                        // correct — match that.
+                        // Resolve the track by name only. GPRO's track id is NOT
+                        // our local tracks.id (an autoincrement PK), so passing
+                        // it would let the "id = :id OR name = :name" lookup match
+                        // an unrelated row and read the wrong per-part base wear.
+                        // The Car Wear tab feeds id=0 and is correct — match that.
                         [
                             'id'   => 0,
                             'name' => $trackName,
-                            'laps' => $raceSetup['laps'] ?? null,
+                            'laps' => $nextRace['laps'] ?? $raceSetup['laps'] ?? null,
                         ],
                         $carData,
                         $this->mapper->mapDriver($pilot),
@@ -247,10 +285,8 @@ class PageController
                         'acceleration' => $carData['carAccel'] ?? 0,
                     ]);
 
-                    $office = $this->apiClient->getOfficeData();
                     $currentRace = (int) ($office['raceNb'] ?? 0);
                     if ($currentRace > 0) {
-                        $calendar  = $this->apiClient->getCalendar();
                         $allTracks = $this->apiClient->getAllTracksPreview();
                         $targets = $this->testingTargets->targetsFor(
                             $currentRace,
@@ -322,11 +358,7 @@ class PageController
                                 $carData,
                                 $wear['parts'],
                                 $this->mapper->mapDriver($pilot),
-                                [
-                                    'power'        => $raceSetup['trackPower'] ?? 0,
-                                    'handling'     => $raceSetup['trackHandl'] ?? 0,
-                                    'acceleration' => $raceSetup['trackAccel'] ?? 0,
-                                ],
+                                $trackPha,
                                 [
                                     'power'        => $carData['carPower'] ?? 0,
                                     'handling'     => $carData['carHandl'] ?? 0,
@@ -542,18 +574,6 @@ class PageController
     }
 
     /**
-     * Is the next race on one of the driver's three favourite tracks?
-     * DriProfile exposes favTrack1/2/3 as {name, id} objects.
-     *
-     * @param array<string, mixed> $pilot
-     */
-    /**
-     * Extracts the manager's current division (e.g. "Rookie") from a Menu
-     * response whose `group` field is shaped like "Rookie - 31".
-     *
-     * @param array<string, mixed> $menu
-     */
-    /**
      * The track to pre-select when the URL carries no explicit `track`: the
      * user's next-race track when it's a track we know, otherwise the first
      * track in the list (pre-first-sync, or an unrecognised name).
@@ -687,6 +707,35 @@ class PageController
     }
 
     /** @param array<string, mixed> $pilot */
+    /**
+     * GPRO track id of the upcoming race, resolved from the calendar by race
+     * number. Unlike RaceSetup.trackId this never lags a race, and unlike
+     * TrackProfile it actually carries an id. Returns 0 when unresolved.
+     *
+     * @param array<string, mixed> $calendar
+     */
+    public static function nextRaceTrackId(array $calendar, int $raceNb): int
+    {
+        if ($raceNb <= 0) {
+            return 0;
+        }
+        foreach ($calendar['events'] ?? [] as $event) {
+            if (!is_array($event)) {
+                continue;
+            }
+            if (($event['eventType'] ?? '') === 'R' && (int) ($event['idx'] ?? 0) === $raceNb) {
+                return (int) ($event['trackId'] ?? 0);
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * Is the next race on one of the driver's three favourite tracks?
+     * DriProfile exposes favTrack1/2/3 as {name, id} objects.
+     *
+     * @param array<string, mixed> $pilot
+     */
     private function isFavouriteTrack(array $pilot, int $trackId): bool
     {
         if ($trackId <= 0) {

@@ -16,6 +16,9 @@ final class GproApiFetcher
 {
     private readonly string $baseUrl;
     private readonly string $userAgent;
+    private readonly int $connectTimeout;
+    private readonly int $timeout;
+    private readonly int $marketTimeout;
     private ?string $token = null;
 
     /** @param array<string, mixed> $config */
@@ -23,6 +26,12 @@ final class GproApiFetcher
     {
         $this->baseUrl = rtrim((string) $config['base_url'], '/');
         $this->userAgent = 'GPRO-Pitwall/' . ($config['version'] ?? '0.0.0');
+        // Bound both phases so a slow/hung GPRO endpoint can't pin a PHP worker
+        // indefinitely. Defaults are generous (GPRO can be slow under load) but
+        // env-tunable so they can be tightened or relaxed without a redeploy.
+        $this->connectTimeout = max(1, (int) ($config['connect_timeout'] ?? 10));
+        $this->timeout        = max(1, (int) ($config['timeout'] ?? 30));
+        $this->marketTimeout  = max(1, (int) ($config['market_timeout'] ?? 60));
     }
 
     public function setToken(string $token): void
@@ -42,11 +51,8 @@ final class GproApiFetcher
         $ch = curl_init($this->baseUrl . $endpoint);
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
-            // Bound both phases so a slow/hung GPRO endpoint can't pin a PHP
-            // worker indefinitely — on shared hosting a few stuck requests is
-            // an outage.
-            CURLOPT_CONNECTTIMEOUT => 5,
-            CURLOPT_TIMEOUT => 15,
+            CURLOPT_CONNECTTIMEOUT => $this->connectTimeout,
+            CURLOPT_TIMEOUT => $this->timeout,
             CURLOPT_HTTPHEADER => [
                 "Authorization: Bearer {$this->token}",
                 'Accept: application/json',
@@ -93,8 +99,8 @@ final class GproApiFetcher
             CURLOPT_ENCODING       => '',
             // The market dump is larger than the v2 endpoints, so allow a longer
             // transfer budget — but still bound it.
-            CURLOPT_CONNECTTIMEOUT => 5,
-            CURLOPT_TIMEOUT        => 30,
+            CURLOPT_CONNECTTIMEOUT => $this->connectTimeout,
+            CURLOPT_TIMEOUT        => $this->marketTimeout,
             CURLOPT_HTTPHEADER     => [
                 'Accept: application/json',
                 'Accept-Encoding: gzip',

@@ -27,8 +27,11 @@ $container['config']['settings'] = $container['settings'];
 $container['version'] = \App\Support\Version::current();
 
 $container['config']['api'] = [
-    'base_url' => $_ENV['GPRO_API_BASE_URL'] ?? 'https://gpro.net',
-    'version'  => $container['version'],
+    'base_url'        => $_ENV['GPRO_API_BASE_URL'] ?? 'https://gpro.net',
+    'version'         => $container['version'],
+    'connect_timeout' => (int) ($_ENV['GPRO_API_CONNECT_TIMEOUT'] ?? 10),
+    'timeout'         => (int) ($_ENV['GPRO_API_TIMEOUT'] ?? 30),
+    'market_timeout'  => (int) ($_ENV['GPRO_API_MARKET_TIMEOUT'] ?? 60),
 ];
 
 use App\Database\Database;
@@ -202,9 +205,9 @@ $container['service.recaptcha'] = new \App\Service\ReCaptchaService(
 // var/cache) regardless of how many users sync at once. Disable with GPRO_API_RATE=0.
 $container['service.api_throttle'] = new \App\Service\GproApiThrottle(
     __DIR__ . '/var/cache/gpro_api_throttle.json',
-    (float) ($_ENV['GPRO_API_RATE'] ?? 4.0),
-    (float) ($_ENV['GPRO_API_BURST'] ?? 8.0),
-    (int) ($_ENV['GPRO_API_MAX_BLOCK_MS'] ?? 2000),
+    (float) ($_ENV['GPRO_API_RATE'] ?? 2.0),
+    (float) ($_ENV['GPRO_API_BURST'] ?? 4.0),
+    (int) ($_ENV['GPRO_API_MAX_BLOCK_MS'] ?? 4000),
 );
 $container['service.api_fetcher'] = new \App\Service\GproApiFetcher(
     $container['config']['api'],
