@@ -217,6 +217,17 @@ final class GproApiClient
         return $this->getCached('money_levels', '/gb/backend/api/v2/MoneyLevels', $this->ttlShort(), $forceRefresh);
     }
 
+    /**
+     * Group standings with each manager's driver/TD OA (ViewStaff). Used to
+     * rank the manager's own driver against the rest of the group.
+     *
+     * @return array<string, mixed>
+     */
+    public function getGroupStaff(bool $forceRefresh = false): array
+    {
+        return $this->getCached('group_staff', '/gb/backend/api/v2/ViewStaff', $this->ttlShort(), $forceRefresh);
+    }
+
     /** @return array<string, mixed> */
     public function getCalendar(bool $forceRefresh = false): array
     {

@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Each entry mirrors its annotated release tag.
 
+## [1.7.1] - 2026-06-23
+- Push/no-push advisor gains a **wear-headroom signal**: it projects end-of-race part wear at a reference Clear Track Risk of 50 and counts it as a push signal only when no part finishes above 90% — i.e. the car can absorb the extra wear that pushing costs. Hidden when wear can't be projected (e.g. the track isn't in the local DB).
+- Push/no-push advisor gains **relative-performance signals**: your car level and your driver's OA each ranked against the rest of your group (e.g. "#6 of 40 by driver OA"), with above-the-group-average counting as a reason to push. Car ranking comes from `MoneyLevels`, driver OA from the group `ViewStaff` feed; both are matched to your own manager by IDM and hidden cleanly when the group data isn't available.
+- Push/no-push advisor now **hides the tyre-performance and ideal-temperature signals in Rookie and Amateur**, where there's no tyre supplier to choose. The "signals met" tally is now out of however many signals apply to your division.
+
 ## [1.7.0] - 2026-06-22
 - **Push/no-push advisor.** New collapsible "Push or hold?" card on the Race Strategy tab, below the Race Engineer, that turns four binary signals into a single read for your Clear Track Risk dial: car P/H/A matches the track (strict), it's a driver favourite track, the tyre supplier's dry/wet rating for the race conditions is 4/8 or better, and the track temperature is within ±3 °C of the tyre's ideal. The more signals met, the more the weekend is set up in your favour — carry a higher Clear Track Risk; all four met points to a very likely win. The header shows how many of the four are met; expand/collapse state persists like the Race Engineer.
 - Cockpit P/H/A Match no longer shows a PUSH / ALL IN verdict — that call now lives in the Strategy advisor. The card highlights a match only on the strict rule: **top** (car's #1 attribute equals the track's #1) or **perfect** (all three ranks align). No other shape — including a tied top — counts as a match.
