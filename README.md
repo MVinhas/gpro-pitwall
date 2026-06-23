@@ -78,6 +78,7 @@ A collapsible checklist below the Race Engineer that turns several binary signal
 - **Track temp near tyre ideal** — race temperature within ±3 °C of the supplier's ideal temperature. *Hidden in Rookie/Amateur.*
 - **Car level vs the group** — your car level ranked against your whole group (e.g. "#30 of 40"); above the group average is a reason to push.
 - **Driver OA vs the group** — your driver's overall ability ranked against the group (e.g. "#6 of 40"); above average is a reason to push.
+- **Car can take the push** — projects end-of-race part wear at a reference Clear Track Risk of 50; met only when no part finishes above 90%, so the car has the headroom to absorb the extra wear pushing costs.
 
 More signals met = the weekend is set up in your favour, so carry a higher Clear Track Risk; a full sweep points to a very likely win. Heuristic guidance, not a game formula — and it says so.
 

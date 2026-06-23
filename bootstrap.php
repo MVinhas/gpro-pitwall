@@ -293,6 +293,7 @@ $container['controller.strategy'] = new StrategyController(
     $container['service.race_weather'],
     $container['service.risk_advisor'],
     $container['service.pha_match'],
+    $container['service.car_wear'],
     $container['twig'],
 );
 

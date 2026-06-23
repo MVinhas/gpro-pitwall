@@ -13,6 +13,7 @@ use App\Service\GproDataMapper;
 use App\Service\RaceWeatherService;
 use App\Service\RiskAdvisorService;
 use App\Service\PhaMatchService;
+use App\Service\CarWearService;
 use Twig\Environment;
 
 class StrategyController
@@ -36,6 +37,7 @@ class StrategyController
         private readonly RaceWeatherService $weather,
         private readonly RiskAdvisorService $riskAdvisor,
         private readonly PhaMatchService $phaMatch,
+        private readonly CarWearService $carWear,
         private readonly Environment $twig,
     ) {
     }
@@ -326,6 +328,15 @@ class StrategyController
                 $this->fetchQuietly(fn(): array => $this->api->getMenu()),
                 $this->fetchQuietly(fn(): array => $this->api->getMoneyLevels()),
                 $this->fetchQuietly(fn(): array => $this->api->getGroupStaff()),
+                $this->maxEndWearAtPushRisk(
+                    [
+                        'id'   => 0,
+                        'name' => $strategyResults['track'] ?? ($trackProfile['name'] ?? ''),
+                        'laps' => $inputs['laps'],
+                    ],
+                    $carRaw,
+                    $driver,
+                ),
             );
 
             $strategyResults['season'] = $office['seasonNb'] ?? '?';
@@ -365,12 +376,14 @@ class StrategyController
      * @param array<string, mixed> $menu          GPRO Menu (own IDM + division)
      * @param array<string, mixed> $moneyLevels   GPRO MoneyLevels (group car levels)
      * @param array<string, mixed> $groupStaff    GPRO ViewStaff (group driver OA)
+     * @param ?float $wearMaxAtPushRisk           Worst part end-wear at CTR 50, or null
      * @return array{
      *   pha_match: bool, pha_level: string, favourite: bool,
      *   show_tyres: bool, tyres_weather: bool, tyre_perf: ?int, race_wet: bool,
      *   temp_match: bool, race_temp: float, ideal_temp: ?int,
      *   car_rank: ?int, car_total: ?int, car_above: ?bool,
-     *   driver_rank: ?int, driver_total: ?int, driver_above: ?bool
+     *   driver_rank: ?int, driver_total: ?int, driver_above: ?bool,
+     *   wear_ok: ?bool, wear_max: ?float, wear_risk: int
      * }
      */
     private function buildPushSignals(
@@ -383,6 +396,7 @@ class StrategyController
         array $menu,
         array $moneyLevels,
         array $groupStaff,
+        ?float $wearMaxAtPushRisk,
     ): array {
         $matchLevel = $this->phaMatch->matchLevel(
             [
@@ -421,7 +435,40 @@ class StrategyController
             'driver_rank'   => $driver['rank'],
             'driver_total'  => $driver['total'],
             'driver_above'  => $driver['above'],
+            'wear_ok'       => $wearMaxAtPushRisk === null ? null : $wearMaxAtPushRisk <= self::WEAR_HEADROOM_LIMIT,
+            'wear_max'      => $wearMaxAtPushRisk,
+            'wear_risk'     => self::PUSH_RISK,
         ];
+    }
+
+    /** Reference Clear Track Risk for the wear-headroom signal. */
+    private const int PUSH_RISK = 50;
+
+    /** A part projected past this end-wear at PUSH_RISK is a failure risk. */
+    private const float WEAR_HEADROOM_LIMIT = 90.0;
+
+    /**
+     * Highest projected end-of-race part wear (%) at the reference push risk
+     * (CTR 50). Null when wear can't be projected (e.g. the track isn't in our
+     * DB) so the signal hides cleanly.
+     *
+     * @param array<string, mixed> $trackData id=0 forces name-only resolution
+     * @param array<string, mixed> $carRaw
+     * @param array<string, mixed> $driver
+     */
+    private function maxEndWearAtPushRisk(array $trackData, array $carRaw, array $driver): ?float
+    {
+        $wear = $this->carWear->calculateWear($trackData, $carRaw, $driver, self::PUSH_RISK);
+        $parts = $wear['parts'] ?? null;
+        if (isset($wear['error']) || !is_array($parts) || $parts === []) {
+            return null;
+        }
+
+        $max = 0.0;
+        foreach ($parts as $part) {
+            $max = max($max, (float)($part['end'] ?? 0));
+        }
+        return $max;
     }
 
     /**

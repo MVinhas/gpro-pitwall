@@ -195,6 +195,13 @@
                     'detail': '#' ~ ps.driver_rank ~ ' of ' ~ ps.driver_total ~ ' by driver OA — ' ~ (ps.driver_above ? 'above' : 'below or at') ~ ' the group average.'
                 }]) %}
             {% endif %}
+            {% if ps.wear_ok is not null %}
+                {% set signals = signals|merge([{
+                    'ok': ps.wear_ok,
+                    'label': 'Car can take the push',
+                    'detail': 'At ' ~ ps.wear_risk ~ ' Clear Track Risk the worst part ends at ' ~ ps.wear_max|number_format(0) ~ '% wear' ~ (ps.wear_ok ? ' — under 90%, headroom to push.' : ' — over 90%, risk of failure.')
+                }]) %}
+            {% endif %}
             {% set met = signals|filter(s => s.ok)|length %}
             <details open id="push-signals" class="bg-white rounded-xl shadow-sm border border-slate-200 group">
                 <summary class="cursor-pointer list-none p-6 flex flex-wrap items-center justify-between gap-4">

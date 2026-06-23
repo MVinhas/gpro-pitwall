@@ -15,6 +15,7 @@ use App\Service\GproDataMapper;
 use App\Service\RaceWeatherService;
 use App\Service\RiskAdvisorService;
 use App\Service\PhaMatchService;
+use App\Service\CarWearService;
 use App\Service\SetupCalculatorService;
 use App\Service\StrategyService;
 use App\Support\RaceWindow;
@@ -93,6 +94,7 @@ final class StrategyControllerTest extends TestCase
             new RaceWeatherService(),
             new RiskAdvisorService(),
             new PhaMatchService(),
+            new CarWearService($db, []),
             new Environment(new ArrayLoader([])),
         );
     }

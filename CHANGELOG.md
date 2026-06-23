@@ -7,6 +7,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 Each entry mirrors its annotated release tag.
 
 ## [1.7.1] - 2026-06-23
+- Push/no-push advisor gains a **wear-headroom signal**: it projects end-of-race part wear at a reference Clear Track Risk of 50 and counts it as a push signal only when no part finishes above 90% — i.e. the car can absorb the extra wear that pushing costs. Hidden when wear can't be projected (e.g. the track isn't in the local DB).
 - Push/no-push advisor gains **relative-performance signals**: your car level and your driver's OA each ranked against the rest of your group (e.g. "#6 of 40 by driver OA"), with above-the-group-average counting as a reason to push. Car ranking comes from `MoneyLevels`, driver OA from the group `ViewStaff` feed; both are matched to your own manager by IDM and hidden cleanly when the group data isn't available.
 - Push/no-push advisor now **hides the tyre-performance and ideal-temperature signals in Rookie and Amateur**, where there's no tyre supplier to choose. The "signals met" tally is now out of however many signals apply to your division.
 
