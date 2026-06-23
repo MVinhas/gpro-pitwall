@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Each entry mirrors its annotated release tag.
 
+## [1.7.3] - 2026-06-23
+- Cockpit now reads the next-race track, P/H/A demand and lap count from Office + TrackProfile instead of RaceSetup. RaceSetup carries the *previous* race's saved setup until you save a new one in GPRO, which made the cockpit show the wrong track (e.g. Magny Cours instead of Poznan) even after a cache refresh — TrackProfile and Office roll over the moment the new race opens. Favourite-track detection now resolves the GPRO track id from the calendar by race number rather than the (stale) RaceSetup id.
+- Cockpit shows an amber notice when your race setup isn't saved in GPRO yet, and withholds the weather card in that state rather than showing the previous race's forecast.
+- GPRO API curl timeouts raised and made env-tunable (`GPRO_API_CONNECT_TIMEOUT`, `GPRO_API_TIMEOUT`, `GPRO_API_MARKET_TIMEOUT`); outbound throttle eased (steady rate 4→2/s, burst 8→4) to stress the GPRO backend less under load.
+
 ## [1.7.2] - 2026-06-23
 - Header cash now ranks against your group on hover: hovering the **Cash** figure in the top glance strip shows a tooltip like "#30 of 40 by cash in Pro - 8". Rank is computed from the already-cached `MoneyLevels` group feed (matched to your own manager by IDM) — no extra API call — and is hidden cleanly when that data isn't available.
 

@@ -92,4 +92,26 @@ final class PageControllerTest extends TestCase
             PageController::rankCashAgainstGroup(1, 10_000_000, []),
         );
     }
+
+    public function testResolvesNextRaceTrackIdByRaceNumber(): void
+    {
+        $calendar = ['events' => [
+            ['eventType' => 'R', 'idx' => 4, 'trackId' => 41], // Magny Cours
+            ['eventType' => 'SD', 'idx' => 5, 'trackId' => 1],
+            ['eventType' => 'R', 'idx' => 5, 'trackId' => 63], // Poznan
+        ]];
+
+        $this->assertSame(63, PageController::nextRaceTrackId($calendar, 5));
+    }
+
+    public function testNextRaceTrackIdReturnsZeroWhenRaceNotInCalendar(): void
+    {
+        $calendar = ['events' => [
+            ['eventType' => 'R', 'idx' => 4, 'trackId' => 41],
+        ]];
+
+        $this->assertSame(0, PageController::nextRaceTrackId($calendar, 9));
+        $this->assertSame(0, PageController::nextRaceTrackId($calendar, 0));
+        $this->assertSame(0, PageController::nextRaceTrackId([], 5));
+    }
 }

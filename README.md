@@ -34,7 +34,7 @@ One screen, in race-prep order:
 - **PHA match** — track vs car Power/Handling/Acceleration alignment, with a favourite-track badge. Highlights a match only when it's strict: **top** (your car's #1 attribute is the track's #1) or **perfect** (all three ranks line up). No push verdict here — that call now lives in the Strategy tab.
 - **Testing projection** — 100-lap forecast with 3-race decay (Test Points → R&D → Engineering → Car Character) so you see where the car actually lands.
 - **Boost-lap fuel cost** — per-track dry/wet coefficient lookup.
-- **Weather call** — Q1 / Q2 / race-start dry/wet assessment.
+- **Weather call** — Q1 / Q2 / race-start dry/wet assessment. The track and P/H/A come from Office + TrackProfile (which roll over the moment a new race opens), not the saved race setup — so the cockpit shows the correct upcoming race even before you've configured it in GPRO. Until that setup is saved, an amber notice flags it and the weather card is withheld rather than showing the previous race's forecast.
 - **Sponsors** — ongoing negotiation list with per-negotiation characteristics and the recommended answer for each of the five negotiation questions.
 - **Training picks** — gap-closer recommendations weighted against the division ideal.
 - **Car wear panel** — per-part end-of-race wear projection with a live risk slider that re-runs without a page reload, plus a ranked list of swap options for every flagged part (filtered by your group's car-level band from `MoneyLevels` and your live cash from `Menu`). Includes a collapsible PHA-contribution reference table (each part's Power/Handling/Acceleration value per level) for manually working out the PHA shift of a swap when forcing a track-car match.
@@ -142,7 +142,7 @@ Per-page titles, meta descriptions and canonical URLs via Twig blocks (override 
 - **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile).
 - **SQLite** via PDO. Encrypted user emails (AES-256-GCM) and API tokens at rest.
 - **PHPMailer 7** for SMTP; in dev, writes `.eml` files to `var/mail/` instead.
-- **PHPUnit 13** — 327 tests, 880 assertions, all green at **PHPStan level 8** with **type-coverage** enforced (100% return/property/constant types + `strict_types`, 99.5% param types). Twig templates linted by a native `bin/twig_lint.php` (Twig's own tokenizer/parser — no third-party linter).
+- **PHPUnit 13** — 329 tests, 884 assertions, all green at **PHPStan level 8** with **type-coverage** enforced (100% return/property/constant types + `strict_types`, 99.5% param types). Twig templates linted by a native `bin/twig_lint.php` (Twig's own tokenizer/parser — no third-party linter).
 - **No framework.** Custom front controller + flat DI container in `bootstrap.php`. Routes in `config/routes.php`.
 - **Timestamps are stored and served as UTC**, then localised per-visitor in the browser (`<time data-localtime>` + `Intl`), so each user sees their own timezone with no server-side config.
 
@@ -178,9 +178,11 @@ ls -t var/mail/*.eml | head -1 | xargs cat
 | `MAIL_FROM_NAME` | Defaults to `GPRO Pitwall` |
 | `RECAPTCHA_SITE_KEY` / `RECAPTCHA_SECRET_KEY` | Required in prod; bypassed when `IS_DEV=true` |
 | `SYNC_SAFETY_MARGIN` | Default 20. The sync defers when `apiRequestsRemaining < calls + margin` |
-| `GPRO_API_RATE` | Outbound API calls/sec allowed from this host (token-bucket refill). Default 4. `0` disables the throttle |
-| `GPRO_API_BURST` | Token-bucket capacity — how many calls may go out back-to-back before pacing kicks in. Default 8 |
-| `GPRO_API_MAX_BLOCK_MS` | Upper bound on how long a single call waits for a token before proceeding anyway. Default 2000 |
+| `GPRO_API_RATE` | Outbound API calls/sec allowed from this host (token-bucket refill). Default 2. `0` disables the throttle |
+| `GPRO_API_BURST` | Token-bucket capacity — how many calls may go out back-to-back before pacing kicks in. Default 4 |
+| `GPRO_API_MAX_BLOCK_MS` | Upper bound on how long a single call waits for a token before proceeding anyway. Default 4000 |
+| `GPRO_API_CONNECT_TIMEOUT` / `GPRO_API_TIMEOUT` | Per-call curl connect + total timeouts (seconds). Defaults 10 / 30 |
+| `GPRO_API_MARKET_TIMEOUT` | Total timeout for the larger `GetMarketFile` dump (seconds). Default 60 |
 
 Generate random keys with `openssl rand -hex 32`.
 
@@ -267,7 +269,7 @@ Request → public/index.php → Http\Router → Controller → Service → Repo
 - Controllers are thin. Logic lives in services. Services talk to repositories; repositories own SQL.
 - Cache adapters under `src/Cache/Adapter/` resolved by `src/Cache/CacheFactory`. Default driver `filesystem`.
 - `src/Service/GproApiFetcher` does raw HTTP. `src/Service/GproApiClient` composes it with cache + endpoint naming.
-- **Server-wide outbound throttle.** Every Pitwall instance calls the GPRO API from one host IP, so `src/Service/GproApiThrottle` caps the *aggregate* outbound rate — a token bucket shared across all PHP workers via a single `flock`'d state file in `var/cache/`. Cache hits never reach it; only real fetches do. Under a burst (many users syncing at once) it spaces calls by sleeping a bounded amount (`GPRO_API_MAX_BLOCK_MS`), never throws, and degrades to "slightly slower" rather than a failed page. Defaults: `GPRO_API_RATE=4`/s, `GPRO_API_BURST=8`; set `GPRO_API_RATE=0` to disable. This is the per-IP courtesy limit that complements the existing per-token budget guard (`SYNC_SAFETY_MARGIN`).
+- **Server-wide outbound throttle.** Every Pitwall instance calls the GPRO API from one host IP, so `src/Service/GproApiThrottle` caps the *aggregate* outbound rate — a token bucket shared across all PHP workers via a single `flock`'d state file in `var/cache/`. Cache hits never reach it; only real fetches do. Under a burst (many users syncing at once) it spaces calls by sleeping a bounded amount (`GPRO_API_MAX_BLOCK_MS`), never throws, and degrades to "slightly slower" rather than a failed page. Defaults: `GPRO_API_RATE=2`/s, `GPRO_API_BURST=4`; set `GPRO_API_RATE=0` to disable. This is the per-IP courtesy limit that complements the existing per-token budget guard (`SYNC_SAFETY_MARGIN`).
 - **Race-window cache keys.** Race-critical data (car wear, race setup, next-track profile) is namespaced by the current race window (`App\Support\RaceWindow`, computed from the clock against GPRO's weekly Tue/Fri schedule — no API call). The key rolls once per race weekend, so a stale read auto-refreshes a single endpoint at the boundary instead of serving last-window data within `CACHE_TTL_SHORT`. Schedule configurable via `GPRO_RACE_DAYS` / `GPRO_RACE_BOUNDARY_HOUR` / `GPRO_RACE_TZ`; empty `GPRO_RACE_DAYS` disables it.
 
 ---
