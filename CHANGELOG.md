@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Each entry mirrors its annotated release tag.
 
+## [1.7.2] - 2026-06-23
+- Header cash now ranks against your group on hover: hovering the **Cash** figure in the top glance strip shows a tooltip like "#30 of 40 by cash in Pro - 8". Rank is computed from the already-cached `MoneyLevels` group feed (matched to your own manager by IDM) — no extra API call — and is hidden cleanly when that data isn't available.
+
 ## [1.7.1] - 2026-06-23
 - Push/no-push advisor gains a **wear-headroom signal**: it projects end-of-race part wear at a reference Clear Track Risk of 50 and counts it as a push signal only when no part finishes above 90% — i.e. the car can absorb the extra wear that pushing costs. Hidden when wear can't be projected (e.g. the track isn't in the local DB).
 - Push/no-push advisor gains **relative-performance signals**: your car level and your driver's OA each ranked against the rest of your group (e.g. "#6 of 40 by driver OA"), with above-the-group-average counting as a reason to push. Car ranking comes from `MoneyLevels`, driver OA from the group `ViewStaff` feed; both are matched to your own manager by IDM and hidden cleanly when the group data isn't available.

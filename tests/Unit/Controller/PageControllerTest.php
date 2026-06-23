@@ -43,4 +43,53 @@ final class PageControllerTest extends TestCase
     {
         $this->assertSame('', PageController::resolveDefaultTrack([], 'Monte Carlo'));
     }
+
+    public function testRanksCashByValueNotResponseOrder(): void
+    {
+        // Manager 7 has the 3rd-most cash even though listed last.
+        $managers = [
+            ['IDM' => 1, 'cash' => 90_000_000],
+            ['IDM' => 2, 'cash' => 50_000_000],
+            ['IDM' => 7, 'cash' => 60_000_000],
+        ];
+
+        $this->assertSame(
+            ['rank' => 2, 'total' => 3],
+            PageController::rankCashAgainstGroup(7, 60_000_000, $managers),
+        );
+    }
+
+    public function testTopCashRanksFirst(): void
+    {
+        $managers = [
+            ['IDM' => 7, 'cash' => 90_000_000],
+            ['IDM' => 1, 'cash' => 50_000_000],
+        ];
+
+        $this->assertSame(
+            ['rank' => 1, 'total' => 2],
+            PageController::rankCashAgainstGroup(7, 90_000_000, $managers),
+        );
+    }
+
+    public function testReturnsNullsWhenManagerNotInGroup(): void
+    {
+        $managers = [
+            ['IDM' => 1, 'cash' => 90_000_000],
+            ['IDM' => 2, 'cash' => 50_000_000],
+        ];
+
+        $this->assertSame(
+            ['rank' => null, 'total' => null],
+            PageController::rankCashAgainstGroup(99, 10_000_000, $managers),
+        );
+    }
+
+    public function testReturnsNullsForEmptyGroup(): void
+    {
+        $this->assertSame(
+            ['rank' => null, 'total' => null],
+            PageController::rankCashAgainstGroup(1, 10_000_000, []),
+        );
+    }
 }
