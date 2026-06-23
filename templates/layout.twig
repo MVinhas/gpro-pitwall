@@ -145,7 +145,8 @@
 
             {% if billboard %}
             <div class="flex items-center divide-x divide-slate-300 text-xs font-medium tabular-nums">
-                <span class="px-3 first:pl-0">
+                <span class="px-3 first:pl-0{% if billboard.cash_rank %} cursor-help{% endif %}"
+                      {% if billboard.cash_rank %}title="#{{ billboard.cash_rank }} of {{ billboard.cash_total }} by cash in {{ billboard.division ?? 'your group' }}"{% endif %}>
                     <span class="text-slate-400">Cash</span>
                     <span class="ml-1 text-slate-700">${{ billboard.cash|number_format(0, '.', ',') }}</span>
                 </span>

@@ -273,6 +273,19 @@ final class GproApiClient
         return is_array($cached) ? $cached : [];
     }
 
+    /**
+     * Returns the group's money levels only if already cached — never spends an
+     * API call. The per-user sync warms this key (see GproSyncService), so the
+     * billboard can rank the manager's cash against the group for free.
+     *
+     * @return array<string, mixed>
+     */
+    public function getCachedMoneyLevels(): array
+    {
+        $cached = $this->cache->get($this->userKey('money_levels'));
+        return is_array($cached) ? $cached : [];
+    }
+
     /** @return array<string, mixed> */
     public function getAllTracksPreview(bool $forceRefresh = false): array
     {
