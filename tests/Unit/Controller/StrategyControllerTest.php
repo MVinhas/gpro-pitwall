@@ -130,6 +130,85 @@ final class StrategyControllerTest extends TestCase
         $this->assertSame(StrategyController::NO_SUPPLIER_MESSAGE, $result['error'] ?? null);
     }
 
+    public function testIsSupplierlessDivisionMatchesRookieAndAmateurOnly(): void
+    {
+        $this->assertTrue(StrategyController::isSupplierlessDivision('Rookie - 31'));
+        $this->assertTrue(StrategyController::isSupplierlessDivision('amateur - 5'));
+        $this->assertFalse(StrategyController::isSupplierlessDivision('Pro - 8'));
+        $this->assertFalse(StrategyController::isSupplierlessDivision('Master - 5'));
+        $this->assertFalse(StrategyController::isSupplierlessDivision('Elite'));
+        $this->assertFalse(StrategyController::isSupplierlessDivision(''));
+    }
+
+    public function testGroupStandingRanksOwnValueAgainstGroup(): void
+    {
+        // Me (IDM 7) at car level 8; one manager above, two below.
+        $managers = [
+            ['IDM' => 1, 'carLevel' => 9],
+            ['IDM' => 7, 'carLevel' => 8],
+            ['IDM' => 2, 'carLevel' => 6],
+            ['IDM' => 3, 'carLevel' => 5],
+        ];
+        $r = StrategyController::groupStanding(7, $managers, 'carLevel');
+        $this->assertSame(2, $r['rank']);
+        $this->assertSame(4, $r['total']);
+        $this->assertTrue($r['above']); // 8 > mean 7.0
+    }
+
+    public function testGroupStandingBelowAverageAndStringValues(): void
+    {
+        // driOA arrives as strings from the API. Me (IDM 7) ranked low.
+        $managers = [
+            ['IDM' => 1, 'driOA' => '190'],
+            ['IDM' => 2, 'driOA' => '180'],
+            ['IDM' => 3, 'driOA' => '170'],
+            ['IDM' => 7, 'driOA' => '120'],
+        ];
+        $r = StrategyController::groupStanding(7, $managers, 'driOA');
+        $this->assertSame(4, $r['rank']);
+        $this->assertSame(4, $r['total']);
+        $this->assertFalse($r['above']);
+    }
+
+    public function testGroupStandingUsesCompetitionRankingForTies(): void
+    {
+        // Two managers tie above me; I share no rank with them.
+        $managers = [
+            ['IDM' => 1, 'carLevel' => 9],
+            ['IDM' => 2, 'carLevel' => 9],
+            ['IDM' => 7, 'carLevel' => 7],
+        ];
+        $r = StrategyController::groupStanding(7, $managers, 'carLevel');
+        $this->assertSame(3, $r['rank']); // two strictly better → rank 3
+    }
+
+    public function testGroupStandingReturnsNullsWhenManagerMissing(): void
+    {
+        $managers = [
+            ['IDM' => 1, 'carLevel' => 9],
+            ['IDM' => 2, 'carLevel' => 6],
+        ];
+        $r = StrategyController::groupStanding(99, $managers, 'carLevel');
+        $this->assertNull($r['rank']);
+        $this->assertNull($r['total']);
+        $this->assertNull($r['above']);
+    }
+
+    public function testGroupStandingIgnoresZeroOrMissingValues(): void
+    {
+        // Inactive managers (value 0 / absent) are excluded from the field.
+        $managers = [
+            ['IDM' => 1, 'carLevel' => 8],
+            ['IDM' => 4, 'carLevel' => 0],
+            ['IDM' => 5],
+            ['IDM' => 7, 'carLevel' => 6],
+        ];
+        $r = StrategyController::groupStanding(7, $managers, 'carLevel');
+        $this->assertSame(2, $r['rank']);
+        $this->assertSame(2, $r['total']);
+        $this->assertFalse($r['above']); // 6 < mean 7.0
+    }
+
     public function testNewSeasonRace1NoSupplierShowsSupplierNotSeasonMessage(): void
     {
         // The reported bug: new season's race 1. GPRO sends

@@ -161,22 +161,40 @@
                     'detail': ps.favourite
                         ? 'This is one of your driver\'s three favourite tracks.'
                         : 'Not one of your driver\'s favourite tracks.'
-                },
-                {
-                    'ok': ps.tyres_weather,
-                    'label': 'Tyres suit the ' ~ (ps.race_wet ? 'wet' : 'dry') ~ ' race',
-                    'detail': ps.tyre_perf is null
-                        ? 'No tyre supplier rating available.'
-                        : ('Supplier ' ~ (ps.race_wet ? 'wet' : 'dry') ~ ' rating ' ~ ps.tyre_perf ~ '/8' ~ (ps.tyre_perf >= 4 ? ' — strong enough.' : ' — below 4/8.'))
-                },
-                {
-                    'ok': ps.temp_match,
-                    'label': 'Track temp near tyre ideal',
-                    'detail': ps.ideal_temp is null
-                        ? 'No tyre ideal temperature available.'
-                        : ('Race ' ~ ps.race_temp ~ '°C vs ideal ' ~ ps.ideal_temp ~ '°C (±3°C).')
                 }
             ] %}
+            {% if ps.show_tyres %}
+                {% set signals = signals|merge([
+                    {
+                        'ok': ps.tyres_weather,
+                        'label': 'Tyres suit the ' ~ (ps.race_wet ? 'wet' : 'dry') ~ ' race',
+                        'detail': ps.tyre_perf is null
+                            ? 'No tyre supplier rating available.'
+                            : ('Supplier ' ~ (ps.race_wet ? 'wet' : 'dry') ~ ' rating ' ~ ps.tyre_perf ~ '/8' ~ (ps.tyre_perf >= 4 ? ' — strong enough.' : ' — below 4/8.'))
+                    },
+                    {
+                        'ok': ps.temp_match,
+                        'label': 'Track temp near tyre ideal',
+                        'detail': ps.ideal_temp is null
+                            ? 'No tyre ideal temperature available.'
+                            : ('Race ' ~ ps.race_temp ~ '°C vs ideal ' ~ ps.ideal_temp ~ '°C (±3°C).')
+                    }
+                ]) %}
+            {% endif %}
+            {% if ps.car_rank is not null %}
+                {% set signals = signals|merge([{
+                    'ok': ps.car_above,
+                    'label': 'Car level vs the group',
+                    'detail': '#' ~ ps.car_rank ~ ' of ' ~ ps.car_total ~ ' by car level — ' ~ (ps.car_above ? 'above' : 'below or at') ~ ' the group average.'
+                }]) %}
+            {% endif %}
+            {% if ps.driver_rank is not null %}
+                {% set signals = signals|merge([{
+                    'ok': ps.driver_above,
+                    'label': 'Driver OA vs the group',
+                    'detail': '#' ~ ps.driver_rank ~ ' of ' ~ ps.driver_total ~ ' by driver OA — ' ~ (ps.driver_above ? 'above' : 'below or at') ~ ' the group average.'
+                }]) %}
+            {% endif %}
             {% set met = signals|filter(s => s.ok)|length %}
             <details open id="push-signals" class="bg-white rounded-xl shadow-sm border border-slate-200 group">
                 <summary class="cursor-pointer list-none p-6 flex flex-wrap items-center justify-between gap-4">
@@ -196,7 +214,7 @@
                     </span>
                     <span class="flex items-center gap-6 text-right">
                         <span>
-                            <p class="text-2xl font-bold text-blue-600 tabular-nums">{{ met }} / 4</p>
+                            <p class="text-2xl font-bold text-blue-600 tabular-nums">{{ met }} / {{ signals|length }}</p>
                             <p class="t-caption">Signals met</p>
                         </span>
                         <span class="text-slate-400 group-open:rotate-90 transition-transform" aria-hidden="true">▸</span>
@@ -216,7 +234,7 @@
                             </li>
                         {% endfor %}
                     </ul>
-                    <p class="text-xs text-slate-400 mt-4">More signals met = the weekend is set up in your favour, so carry a higher Clear Track Risk. All four met points to a very likely win. Heuristic guidance — not a game formula.</p>
+                    <p class="text-xs text-slate-400 mt-4">More signals met = the weekend is set up in your favour, so carry a higher Clear Track Risk. A full sweep points to a very likely win. Heuristic guidance — not a game formula.</p>
                 </div>
             </details>
         {% endif %}

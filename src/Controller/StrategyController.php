@@ -320,6 +320,12 @@ class StrategyController
                 $strategyResults['supplier_info'],
                 $raceIsWet,
                 $finalRaceTemp,
+                // The group feeds only power the advisory card — never let a
+                // hiccup there fail the whole strategy calc. Degrade to no
+                // relative signals instead.
+                $this->fetchQuietly(fn(): array => $this->api->getMenu()),
+                $this->fetchQuietly(fn(): array => $this->api->getMoneyLevels()),
+                $this->fetchQuietly(fn(): array => $this->api->getGroupStaff()),
             );
 
             $strategyResults['season'] = $office['seasonNb'] ?? '?';
@@ -345,18 +351,26 @@ class StrategyController
     }
 
     /**
-     * Push checklist shown under the Race Engineer: four binary signals that
-     * argue for a harder qualifying / lower Clear Track Risk. Heuristic, not a
-     * game formula.
+     * Push checklist shown under the Race Engineer: binary signals that argue
+     * for a higher Clear Track Risk. Heuristic, not a game formula.
+     *
+     * Tyre signals are hidden in Rookie/Amateur (no supplier choice there).
+     * Relative-performance signals (car level + driver OA ranked against the
+     * group) are added when the group feeds are available.
      *
      * @param array<string, mixed> $raceSetup    GPRO RaceSetup (track + car P/H/A)
      * @param array<string, mixed> $carRaw        GPRO UpdateCar
      * @param array<string, mixed> $pilotRaw      GPRO DriProfile (favourite tracks)
      * @param array{dry: ?int, wet: ?int, temp: ?int}|null $supplierInfo
+     * @param array<string, mixed> $menu          GPRO Menu (own IDM + division)
+     * @param array<string, mixed> $moneyLevels   GPRO MoneyLevels (group car levels)
+     * @param array<string, mixed> $groupStaff    GPRO ViewStaff (group driver OA)
      * @return array{
      *   pha_match: bool, pha_level: string, favourite: bool,
-     *   tyres_weather: bool, tyre_perf: ?int, race_wet: bool,
-     *   temp_match: bool, race_temp: float, ideal_temp: ?int
+     *   show_tyres: bool, tyres_weather: bool, tyre_perf: ?int, race_wet: bool,
+     *   temp_match: bool, race_temp: float, ideal_temp: ?int,
+     *   car_rank: ?int, car_total: ?int, car_above: ?bool,
+     *   driver_rank: ?int, driver_total: ?int, driver_above: ?bool
      * }
      */
     private function buildPushSignals(
@@ -366,6 +380,9 @@ class StrategyController
         ?array $supplierInfo,
         bool $raceIsWet,
         float $raceTemp,
+        array $menu,
+        array $moneyLevels,
+        array $groupStaff,
     ): array {
         $matchLevel = $this->phaMatch->matchLevel(
             [
@@ -383,16 +400,95 @@ class StrategyController
         $tyrePerf = $raceIsWet ? ($supplierInfo['wet'] ?? null) : ($supplierInfo['dry'] ?? null);
         $idealTemp = $supplierInfo['temp'] ?? null;
 
+        $myIdm = (int)($menu['IDM'] ?? 0);
+        $car    = self::groupStanding($myIdm, $moneyLevels['managers'] ?? [], 'carLevel');
+        $driver = self::groupStanding($myIdm, $groupStaff['managers'] ?? [], 'driOA');
+
         return [
             'pha_match'     => $matchLevel !== PhaMatchService::MATCH_NONE,
             'pha_level'     => $matchLevel,
             'favourite'     => $this->isFavouriteTrack($pilotRaw, (int)($raceSetup['trackId'] ?? 0)),
+            'show_tyres'    => !self::isSupplierlessDivision((string)($menu['group'] ?? '')),
             'tyres_weather' => $tyrePerf !== null && $tyrePerf >= 4,
             'tyre_perf'     => $tyrePerf,
             'race_wet'      => $raceIsWet,
             'temp_match'    => $idealTemp !== null && abs($raceTemp - $idealTemp) <= 3,
             'race_temp'     => $raceTemp,
             'ideal_temp'    => $idealTemp,
+            'car_rank'      => $car['rank'],
+            'car_total'     => $car['total'],
+            'car_above'     => $car['above'],
+            'driver_rank'   => $driver['rank'],
+            'driver_total'  => $driver['total'],
+            'driver_above'  => $driver['above'],
+        ];
+    }
+
+    /**
+     * Runs a cache-backed API fetch, swallowing any failure to an empty array.
+     * For optional, non-critical data (the push card's group feeds) so a feed
+     * outage degrades the card instead of failing the strategy.
+     *
+     * @param callable(): array<string, mixed> $fetch
+     * @return array<string, mixed>
+     */
+    private function fetchQuietly(callable $fetch): array
+    {
+        try {
+            return $fetch();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /** Rookie and Amateur don't pick a tyre supplier, so tyre fit is moot. */
+    public static function isSupplierlessDivision(string $group): bool
+    {
+        $tier = strtolower(trim(explode('-', $group, 2)[0]));
+        return $tier === 'rookie' || $tier === 'amateur';
+    }
+
+    /**
+     * Ranks the manager's own value for `$field` against the whole group.
+     * Standard competition ranking (1 = best, ties share the better rank);
+     * "above" is strictly above the group arithmetic mean. Returns nulls when
+     * the manager can't be located or no group values exist, so callers can
+     * hide the signal cleanly.
+     *
+     * @param list<array<string, mixed>> $managers
+     * @return array{rank: ?int, total: ?int, above: ?bool}
+     */
+    public static function groupStanding(int $myIdm, array $managers, string $field): array
+    {
+        $none = ['rank' => null, 'total' => null, 'above' => null];
+        if ($myIdm <= 0) {
+            return $none;
+        }
+
+        $mine = null;
+        $values = [];
+        foreach ($managers as $m) {
+            $value = (int)($m[$field] ?? 0);
+            if ($value <= 0) {
+                continue;
+            }
+            $values[] = $value;
+            if ((int)($m['IDM'] ?? 0) === $myIdm) {
+                $mine = $value;
+            }
+        }
+
+        if ($mine === null || $values === []) {
+            return $none;
+        }
+
+        $better = array_filter($values, static fn(int $v): bool => $v > $mine);
+        $mean = array_sum($values) / count($values);
+
+        return [
+            'rank'  => count($better) + 1,
+            'total' => count($values),
+            'above' => $mine > $mean,
         ];
     }
 
