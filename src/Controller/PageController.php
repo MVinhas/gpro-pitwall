@@ -193,9 +193,7 @@ class PageController
                     $office    = $this->apiClient->getOfficeData();
                     $calendar  = $this->apiClient->getCalendar();
 
-                    // RaceSetup mirrors the manager's SAVED setup, which GPRO
-                    // carries over from the previous race until a new setup is
-                    // saved (office.doneRaceSetup flips to '1'). So its
+                    // RaceSetup mirrors the manager's saved setup, so its
                     // trackName / factors / weather can lag a whole race. Office
                     // and TrackProfile roll over the moment the new race opens,
                     // so trust them for the track identity and demand factors;
@@ -222,13 +220,16 @@ class PageController
                         $trackId = (int) ($raceSetup['trackId'] ?? 0);
                     }
 
-                    // Stale: the new race has opened but its setup isn't saved in
-                    // GPRO yet, so RaceSetup (and its weather) still describe the
-                    // previous race. Refreshing the cache can't fix this — GPRO
-                    // itself returns the old setup until the manager saves one.
-                    $setupStale = (string) ($office['doneRaceSetup'] ?? '1') === '0'
-                        || ((string) ($raceSetup['trackName'] ?? '') !== ''
-                            && (string) $raceSetup['trackName'] !== $trackName);
+                    // Stale weather: RaceSetup (the only weather source) still
+                    // describes the previous race. The signal is a trackId
+                    // mismatch against the authoritative Office, NOT
+                    // office.doneRaceSetup — that flag stays '0' for the whole
+                    // pre-qualifying window (the cockpit's purpose), so keying off
+                    // it raised a permanent false "setup not saved" alarm.
+                    $setupStale = self::isRaceSetupStale(
+                        (int) ($office['trackId'] ?? 0),
+                        (int) ($raceSetup['trackId'] ?? 0),
+                    );
                     $viewData['cockpit_setup_stale'] = $setupStale;
 
                     $viewData['pha'] = $this->phaMatch->evaluate(
@@ -728,6 +729,21 @@ class PageController
             }
         }
         return 0;
+    }
+
+    /**
+     * Is the cached RaceSetup describing a different race than the one the
+     * office is on? RaceSetup (and its weather block) lags a race until GPRO
+     * rolls it over; Office.trackId rolls over the moment the new weekend
+     * opens. A trackId mismatch is therefore the real "weather is stale"
+     * signal — and being numeric it's immune to trackName formatting drift
+     * between the two endpoints. Unknown ids (0, e.g. RaceSetup unavailable)
+     * mean we can't tell, so we don't nag. office.doneRaceSetup is
+     * deliberately NOT consulted: it stays '0' throughout pre-qualifying.
+     */
+    public static function isRaceSetupStale(int $officeTrackId, int $setupTrackId): bool
+    {
+        return $officeTrackId > 0 && $setupTrackId > 0 && $officeTrackId !== $setupTrackId;
     }
 
     /**

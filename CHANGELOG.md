@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Each entry mirrors its annotated release tag.
 
+## [1.7.4] - 2026-06-24
+- Fixed the cockpit always showing "Race setup not saved in GPRO yet". The staleness check keyed off `office.doneRaceSetup`, which stays `0` for the entire pre-qualifying window (the cockpit's whole purpose), so the notice fired permanently and a re-sync could never clear it. Staleness is now decided by a numeric `RaceSetup.trackId` vs `Office.trackId` mismatch — the actual "weather still describes the previous race" signal, immune to trackName formatting drift. The notice and weather card now appear only when GPRO is genuinely still serving the previous race's setup.
+
 ## [1.7.3] - 2026-06-23
 - Cockpit now reads the next-race track, P/H/A demand and lap count from Office + TrackProfile instead of RaceSetup. RaceSetup carries the *previous* race's saved setup until you save a new one in GPRO, which made the cockpit show the wrong track (e.g. Magny Cours instead of Poznan) even after a cache refresh — TrackProfile and Office roll over the moment the new race opens. Favourite-track detection now resolves the GPRO track id from the calendar by race number rather than the (stale) RaceSetup id.
 - Cockpit shows an amber notice when your race setup isn't saved in GPRO yet, and withholds the weather card in that state rather than showing the previous race's forecast.
