@@ -114,4 +114,24 @@ final class PageControllerTest extends TestCase
         $this->assertSame(0, PageController::nextRaceTrackId($calendar, 0));
         $this->assertSame(0, PageController::nextRaceTrackId([], 5));
     }
+
+    public function testSetupIsStaleWhenRaceSetupTrackTrailsOffice(): void
+    {
+        // Office rolled over to race 63; RaceSetup still on the previous 41.
+        $this->assertTrue(PageController::isRaceSetupStale(63, 41));
+    }
+
+    public function testSetupIsFreshWhenTrackIdsMatch(): void
+    {
+        // RaceSetup has rolled over: weather is for the current race.
+        $this->assertFalse(PageController::isRaceSetupStale(63, 63));
+    }
+
+    public function testSetupNotFlaggedStaleWhenAnIdIsUnknown(): void
+    {
+        // Unknown ids (RaceSetup or Office absent) — can't tell, so don't nag.
+        $this->assertFalse(PageController::isRaceSetupStale(0, 41));
+        $this->assertFalse(PageController::isRaceSetupStale(63, 0));
+        $this->assertFalse(PageController::isRaceSetupStale(0, 0));
+    }
 }

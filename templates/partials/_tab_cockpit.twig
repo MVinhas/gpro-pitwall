@@ -21,8 +21,8 @@
 
         {% if cockpit_setup_stale %}
             <div class="notice notice-warn">
-                <p class="font-bold">Race setup not saved in GPRO yet.</p>
-                <p>Track and P/H/A are current for {{ pha_track_name }}, but weather still reflects the previous race. Do your race setup in GPRO, then re-sync here so weather, car wear and driver figures update.</p>
+                <p class="font-bold">Weather forecast not available yet.</p>
+                <p>Track and P/H/A are current for {{ pha_track_name }}, but GPRO is still serving the previous race's setup, so its weather is withheld. Re-sync once GPRO opens the new race's setup.</p>
             </div>
         {% endif %}
 
