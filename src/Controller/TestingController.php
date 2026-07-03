@@ -125,7 +125,9 @@ class TestingController
                 'max_laps'       => self::MAX_LAPS,
             ];
         } catch (\Throwable $e) {
-            return ['error' => 'Testing data unavailable: ' . $e->getMessage()];
+            error_log('[Testing] ' . $e::class . ': ' . $e->getMessage());
+
+            return ['error' => StrategyController::GENERIC_ERROR_MESSAGE];
         }
     }
 

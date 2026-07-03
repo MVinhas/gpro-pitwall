@@ -112,7 +112,9 @@ class CarWearController
 
             return ['results' => $results, 'driver' => $driver];
         } catch (\Exception $exception) {
-            return ['error' => 'Error: ' . $exception->getMessage()];
+            error_log('[CarWear] ' . $exception::class . ': ' . $exception->getMessage());
+
+            return ['error' => StrategyController::GENERIC_ERROR_MESSAGE];
         }
     }
 }
