@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Each entry mirrors its annotated release tag.
 
+## [1.7.5] - 2026-07-03
+- **Security:** the two roadmap files added under the 2026-07-02 tri-file governance split now live in an unnamed local-only directory instead of being named directly in `.gitignore`/`bin/check_no_secrets.sh` — naming a distinctive personal/roadmap filename in a tracked file discloses its existence to anyone browsing the public repo. `.gitignore` and the secret scanner now exclude that directory generically, with no filenames on the record.
+
 ## [1.7.4] - 2026-06-24
 - Fixed the cockpit always showing "Race setup not saved in GPRO yet". The staleness check keyed off `office.doneRaceSetup`, which stays `0` for the entire pre-qualifying window (the cockpit's whole purpose), so the notice fired permanently and a re-sync could never clear it. Staleness is now decided by a numeric `RaceSetup.trackId` vs `Office.trackId` mismatch — the actual "weather still describes the previous race" signal, immune to trackName formatting drift. The notice and weather card now appear only when GPRO is genuinely still serving the previous race's setup.
 

@@ -18,6 +18,9 @@ gpro_pilots.sqlite
 /bin/db_browser.php
 /bin/build_release.sh
 
+# Local-only planning docs — deliberately unnamed here; see CLAUDE.md
+/.local/
+
 # Offline reference spreadsheets — contain the same secret-sauce formulas
 # as config/secrets.php. Working copies only, never in git.
 /offline-spreadsheets/

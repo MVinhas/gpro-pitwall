@@ -38,10 +38,10 @@ if grep -E '\.sqlite$' <<<"$tracked" >/dev/null; then
   grep -E '\.sqlite$' <<<"$tracked" | while read -r f; do note "$f"; done
 fi
 
-# Anything under /data or /var.
-if grep -E '^(data|var)/' <<<"$tracked" >/dev/null; then
-  flag "data/ or var/ contents are tracked"
-  grep -E '^(data|var)/' <<<"$tracked" | while read -r f; do note "$f"; done
+# Anything under /data, /var, or the unnamed local-planning directory.
+if grep -E '^(data|var|\.local)/' <<<"$tracked" >/dev/null; then
+  flag "data/, var/, or .local/ contents are tracked"
+  grep -E '^(data|var|\.local)/' <<<"$tracked" | while read -r f; do note "$f"; done
 fi
 
 # Offline spreadsheets contain the same secret formulas as config/secrets.php.
