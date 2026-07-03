@@ -211,6 +211,29 @@ final class StrategyControllerTest extends TestCase
         $this->assertFalse($r['above']); // 6 < mean 7.0
     }
 
+    public function testUnexpectedApiFailureReturnsGenericMessageNotRawDetails(): void
+    {
+        // Past the curated early-exits (season/supplier/pilot all present), the
+        // driver-profile fetch isn't seeded so it hits the unreachable host and
+        // GproApiFetcher throws RuntimeException(curl error) — internal detail
+        // (connection info) that must never reach the page (A2).
+        $this->seed('office_data', [
+            'endOfSeason'    => 0,
+            'raceNb'         => 5,
+            'tyreSupplierId' => 1,
+            'driId'          => '123',
+        ]);
+        $this->seed('next_race_profile', [
+            'trackNotFoundNote' => false,
+            'trackName'         => 'Imola',
+            'laps'              => 50,
+        ]);
+
+        $result = $this->controller()->runCalc(new Request([], [], [], []));
+
+        $this->assertSame(StrategyController::GENERIC_ERROR_MESSAGE, $result['error'] ?? null);
+    }
+
     public function testNewSeasonRace1NoSupplierShowsSupplierNotSeasonMessage(): void
     {
         // The reported bug: new season's race 1. GPRO sends

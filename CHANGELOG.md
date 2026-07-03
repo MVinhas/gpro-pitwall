@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Each entry mirrors its annotated release tag.
 
+## [1.7.6] - 2026-07-03
+- **Security:** raw exception messages no longer reach users. Cockpit, car-wear, strategy, testing, and recruitment-analyzer errors were rendering `$e->getMessage()` straight into the page/session flash — internal detail (upstream API responses, connection errors) that shouldn't be user-visible. All five now log via `error_log()` and show a generic "something went wrong" message instead.
+
 ## [1.7.5] - 2026-07-03
 - **Security:** the two roadmap files added under the 2026-07-02 tri-file governance split now live in an unnamed local-only directory instead of being named directly in `.gitignore`/`bin/check_no_secrets.sh` — naming a distinctive personal/roadmap filename in a tracked file discloses its existence to anyone browsing the public repo. `.gitignore` and the secret scanner now exclude that directory generically, with no filenames on the record.
 

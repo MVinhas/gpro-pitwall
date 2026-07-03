@@ -372,7 +372,8 @@ class PageController
                         }
                     }
                 } catch (\Throwable $e) {
-                    $viewData['cockpit_error'] = $e->getMessage();
+                    error_log('[Cockpit] ' . $e::class . ': ' . $e->getMessage());
+                    $viewData['cockpit_error'] = StrategyController::GENERIC_ERROR_MESSAGE;
                 }
                 break;
 

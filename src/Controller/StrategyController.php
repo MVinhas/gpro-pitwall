@@ -28,6 +28,9 @@ class StrategyController
     public const string NO_PILOT_MESSAGE =
         'No driver under contract. Hire a pilot in GPRO, then re-sync.';
 
+    public const string GENERIC_ERROR_MESSAGE =
+        'Something went wrong loading this data. Please try refreshing or re-syncing.';
+
     public function __construct(
         private readonly StrategyService $strategyService,
         private readonly GproApiClient $api,
@@ -357,7 +360,9 @@ class StrategyController
 
             return $strategyResults;
         } catch (\Exception $exception) {
-            return ['error' => 'Calculation Error: ' . $exception->getMessage()];
+            error_log('[Strategy] ' . $exception::class . ': ' . $exception->getMessage());
+
+            return ['error' => self::GENERIC_ERROR_MESSAGE];
         }
     }
 

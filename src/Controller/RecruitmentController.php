@@ -38,9 +38,11 @@ class RecruitmentController
             $_SESSION['recruitment_updated_at'] = $market['updated_at'];
             $_SESSION['recruitment_error'] = null;
         } catch (\Throwable $exception) {
+            error_log('[Recruitment] ' . $exception::class . ': ' . $exception->getMessage());
+
             $_SESSION['recruitment_results'] = [];
             $_SESSION['recruitment_updated_at'] = null;
-            $_SESSION['recruitment_error'] = $exception->getMessage();
+            $_SESSION['recruitment_error'] = StrategyController::GENERIC_ERROR_MESSAGE;
         }
 
         $query = http_build_query([
