@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Each entry mirrors its annotated release tag.
 
+## [1.7.9] - 2026-07-04
+- CI now measures test coverage (`pcov`, `--coverage-text` report in the job log) and enforces a minimum statement-coverage floor via the new native `bin/check_coverage.php` — provisional 55%, to be ratcheted up from real CI numbers.
+- New CI `bundle` job on pushes to `main`: builds the release bundle (`bin/build_release.sh --tar`) and uploads it as a 14-day workflow artifact for build verification. Deployment stays a manual SFTP copy; the artifact excludes the private runtime inputs.
+- `bin/build_release.sh` is tracked again so CI can run it, slimmed to assemble+tar only — deploy logic moved to local-only tooling that never reaches the repo. The bundled `composer.lock` copy is now conditional (a CI checkout has no lockfile).
+
 ## [1.7.8] - 2026-07-04
 - `App\Support\Env` finished as a typed accessor (`get`/`int`/`float`/`bool`/`required`): every direct `$_ENV[` read in `src/` and `bootstrap.php` now goes through it, giving typo-safe keys and one place per default. A missing `APP_SECRET` now fails fast with a clear exception instead of an undefined-key warning followed by a TypeError.
 - Per-part wear-base data verified: all 64 tracks × 11 wear columns in `data/tracks.csv` match the canonical source and the seeded database exactly — verification only, no code change.
