@@ -142,7 +142,7 @@ Per-page titles, meta descriptions and canonical URLs via Twig blocks (override 
 - **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile).
 - **SQLite** via PDO. Encrypted user emails (AES-256-GCM) and API tokens at rest.
 - **PHPMailer 7** for SMTP; in dev, writes `.eml` files to `var/mail/` instead.
-- **PHPUnit 13** — 338 tests, 901 assertions, all green at **PHPStan level 8** with **type-coverage** enforced (100% return/property/constant types + `strict_types`, 99.5% param types). Twig templates linted by a native `bin/twig_lint.php` (Twig's own tokenizer/parser — no third-party linter).
+- **PHPUnit 13** — 359 tests, 925 assertions, all green at **PHPStan level 8** with **type-coverage** enforced (100% return/property/constant types + `strict_types`, 99.5% param types). Twig templates linted by a native `bin/twig_lint.php` (Twig's own tokenizer/parser — no third-party linter). CI runs the suite with `pcov` and enforces a minimum statement-coverage floor via `bin/check_coverage.php` (provisional 55%, to be ratcheted up as real coverage becomes known).
 - **No framework.** Custom front controller + flat DI container in `bootstrap.php`. Routes in `config/routes.php`.
 - **Timestamps are stored and served as UTC**, then localised per-visitor in the browser (`<time data-localtime>` + `Intl`), so each user sees their own timezone with no server-side config.
 
@@ -212,7 +212,7 @@ bin/probe_security.sh <url>            # Post-deploy leak probe (must exit 0)
 
 ## Deployment
 
-Source of truth is GitHub; deployment is a manual file copy to your host of choice.
+Source of truth is GitHub; deployment is a manual file copy to your host of choice. CI also builds this bundle automatically as a `gpro-pitwall-bundle` workflow artifact (14-day retention) on every push to `main`, for build verification only — it excludes `config/secrets.php` and `data/tracks.csv`, so an actual deploy still requires the local build below with those files present.
 
 1. Locally: `bin/build_release.sh --tar`. Produces `dist/gpro-pitwall.tar.gz` — a self-contained bundle with `vendor/` already installed (no dev deps), the compiled CSS, and the writable `var/` skeleton.
 2. Upload `dist/gpro-pitwall/*` to your domain's web root.
@@ -254,7 +254,7 @@ Reviewed against the OWASP Top 10:2025.
 - Outbound GPRO API calls are bounded by connect + total curl timeouts so a hung upstream can't pin a PHP worker. The filesystem cache deserializes with `allowed_classes => false`, so a tampered cache file degrades to a miss rather than a PHP object-injection vector.
 - Prepared statements only (no string-concatenated SQL). Output XSS defence is Twig autoescaping (on everywhere, no `|raw`); user data is never interpolated into inline JS/event-handler attributes. New registrations additionally whitelist the username (`[A-Za-z0-9_]`, server-enforced), narrowing what can be stored — though that gate is not retroactive, so autoescaping remains the guarantee for pre-existing rows.
 - Pre-commit + CI secret scan (`bin/check_no_secrets.sh`).
-- PHPStan level 8 (with type-coverage) + PHPUnit suite required to pass before merge.
+- PHPStan level 8 (with type-coverage) + PHPUnit suite, gated by a minimum statement-coverage floor (`bin/check_coverage.php`), required to pass before merge.
 
 ---
 

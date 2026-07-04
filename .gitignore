@@ -16,7 +16,9 @@ gpro_pilots.sqlite
 /GPRO Assistant.docx
 /db_browser.php
 /bin/db_browser.php
-/bin/build_release.sh
+/bin/deploy.sh
+# bin/build_release.sh is tracked again (2026-07-04): the CI bundle job runs
+# it. Deploy tooling stays local-only (see lines above).
 
 # Local-only planning docs — deliberately unnamed here; see CLAUDE.md
 /.local/
