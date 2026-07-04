@@ -430,6 +430,8 @@ $container['controller.api_warmup'] = new ApiWarmupController(
 $container['controller.health'] = new \App\Controller\HealthController(
     $container['db'],
     $container['service.cache'],
+    $container['service.authorize'],
+    $container['settings']['is_dev'],
 );
 
 $container['service.admin_users'] = new \App\Service\AdminUserService(

@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Each entry mirrors its annotated release tag.
 
+## [1.7.7] - 2026-07-03
+- **Security:** `/healthz`'s per-check `detail` (previously raw `$e->getMessage()`, publicly visible) is now shown only to admins or in `IS_DEV` — anonymous callers get `{ok}` only. Every check failure is still logged server-side regardless.
+- **Security:** removed the dead legacy `action=` POST-field routing shim in `Request::getPath()` — it hadn't been used by any template since routing moved to `config/routes.php`, and left an attacker-suppliable field able to reach the router.
+- Sync failures in `GproSyncService` are now logged (`error_log`) with the exception class and message before being persisted as `failed` status — previously the cause was silently discarded, leaving ops blind to *why* a user's sync failed.
+
 ## [1.7.6] - 2026-07-03
 - **Security:** raw exception messages no longer reach users. Cockpit, car-wear, strategy, testing, and recruitment-analyzer errors were rendering `$e->getMessage()` straight into the page/session flash — internal detail (upstream API responses, connection errors) that shouldn't be user-visible. All five now log via `error_log()` and show a generic "something went wrong" message instead.
 

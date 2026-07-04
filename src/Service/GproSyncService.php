@@ -88,7 +88,8 @@ final class GproSyncService
 
             $this->users->markSynced($userId);
             return 'synced';
-        } catch (Throwable) {
+        } catch (Throwable $e) {
+            error_log('[GproSync] user ' . $userId . ' sync failed: ' . $e::class . ': ' . $e->getMessage());
             $this->users->updateSyncStatus($userId, 'failed');
             return 'failed';
         } finally {

@@ -30,6 +30,24 @@ final class RouterTest extends TestCase
         }
     }
 
+    public function testPostActionFieldNoLongerRewritesPath(): void
+    {
+        // The legacy action= shim was removed (A4) — POST / must always
+        // resolve to the literal path, never an attacker-suppliable field.
+        $router = new Router();
+        $request = new Request([], ['action' => 'admin/users'], [], [
+            'REQUEST_METHOD' => 'POST',
+            'REQUEST_URI'    => '/',
+        ]);
+
+        try {
+            $router->dispatch($request, []);
+            $this->fail('Expected HttpException — action= must not dispatch');
+        } catch (HttpException $e) {
+            $this->assertSame(404, $e->getStatusCode());
+        }
+    }
+
     public function testKnownRouteDispatchesToController(): void
     {
         $controller = new class {
