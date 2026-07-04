@@ -7,6 +7,7 @@ namespace App\Controller;
 use App\Http\Request;
 use App\Repository\DivisionMetadataRepository;
 use App\Repository\UserRepository;
+use App\Support\Env;
 use App\Service\IdealPilotService;
 use App\Service\InsightService;
 use App\Service\RecruitmentService;
@@ -531,7 +532,7 @@ class PageController
 
         $sortCol   = (string) $request->get('sort', 'rating');
         $sortOrder = (string) $request->get('order', 'desc');
-        $perPage     = (int) ($_ENV['PAGINATION_LIMIT'] ?? 20);
+        $perPage     = Env::int('PAGINATION_LIMIT', 20);
         $currentPage = max(1, (int) $request->get('page', 1));
         $resultPage = $this->recruitmentService->sortAndPaginate(
             $allResults,

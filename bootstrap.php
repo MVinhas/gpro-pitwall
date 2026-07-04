@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/vendor/autoload.php';
 
-\App\Support\Env::load(__DIR__ . '/.env');
+use App\Support\Env;
+
+Env::load(__DIR__ . '/.env');
 
 // Timestamps are stored and rendered as UTC (SQLite datetime('now')). Pin
 // PHP's default timezone to UTC so those naive strings stay unambiguous on any
@@ -13,8 +15,8 @@ date_default_timezone_set('UTC');
 
 $container = [];
 $container['settings'] = [
-    'is_dev' => ($_ENV['IS_DEV'] ?? 'false') === 'true',
-    'db_file' => $_ENV['DB_FILE'] ?? 'gpro_pilots.sqlite',
+    'is_dev' => Env::bool('IS_DEV'),
+    'db_file' => Env::get('DB_FILE', 'gpro_pilots.sqlite'),
 ];
 
 $container['config'] = [
@@ -27,11 +29,11 @@ $container['config']['settings'] = $container['settings'];
 $container['version'] = \App\Support\Version::current();
 
 $container['config']['api'] = [
-    'base_url'        => $_ENV['GPRO_API_BASE_URL'] ?? 'https://gpro.net',
+    'base_url'        => Env::get('GPRO_API_BASE_URL', 'https://gpro.net'),
     'version'         => $container['version'],
-    'connect_timeout' => (int) ($_ENV['GPRO_API_CONNECT_TIMEOUT'] ?? 10),
-    'timeout'         => (int) ($_ENV['GPRO_API_TIMEOUT'] ?? 30),
-    'market_timeout'  => (int) ($_ENV['GPRO_API_MARKET_TIMEOUT'] ?? 60),
+    'connect_timeout' => Env::int('GPRO_API_CONNECT_TIMEOUT', 10),
+    'timeout'         => Env::int('GPRO_API_TIMEOUT', 30),
+    'market_timeout'  => Env::int('GPRO_API_MARKET_TIMEOUT', 60),
 ];
 
 use App\Database\Database;
@@ -40,7 +42,7 @@ use App\Security\ApiTokenCrypto;
 
 $container['db'] = Database::getConnection();
 
-$container['service.api_token_crypto'] = new ApiTokenCrypto($_ENV['APP_SECRET']);
+$container['service.api_token_crypto'] = new ApiTokenCrypto(Env::required('APP_SECRET'));
 
 $container['db.seeder'] = new DatabaseSeeder(
     $container['db'],
@@ -54,10 +56,10 @@ $container['db.seeder']->migrate();
 use App\Cache\CacheFactory;
 
 $cacheConfig = [
-    'CACHE_DRIVER'   => $_ENV['CACHE_DRIVER'] ?? 'none',
-    'REDIS_HOST'     => $_ENV['REDIS_HOST'] ?? '127.0.0.1',
-    'REDIS_PORT'     => $_ENV['REDIS_PORT'] ?? 6379,
-    'REDIS_PASSWORD' => $_ENV['REDIS_PASSWORD'] ?? null,
+    'CACHE_DRIVER'   => Env::get('CACHE_DRIVER', 'none'),
+    'REDIS_HOST'     => Env::get('REDIS_HOST', '127.0.0.1'),
+    'REDIS_PORT'     => Env::int('REDIS_PORT', 6379),
+    'REDIS_PASSWORD' => Env::get('REDIS_PASSWORD'),
 ];
 
 $container['service.cache'] = CacheFactory::create($cacheConfig);
@@ -76,7 +78,7 @@ $container['twig']->addGlobal('app_version', $container['version']);
 // with APP_PUBLIC_URL when serving from a different domain (e.g. staging).
 $container['twig']->addGlobal(
     'canonical_host',
-    rtrim($_ENV['APP_PUBLIC_URL'] ?? 'https://gpro-pitwall.com', '/'),
+    rtrim(Env::get('APP_PUBLIC_URL', 'https://gpro-pitwall.com'), '/'),
 );
 $container['twig']->addGlobal('no_pilot_message', \App\Controller\StrategyController::NO_PILOT_MESSAGE);
 
@@ -108,7 +110,7 @@ use App\Service\GproSyncService;
 
 use App\Security\EmailCrypto;
 
-$container['service.email_crypto'] = new EmailCrypto($_ENV['APP_SECRET']);
+$container['service.email_crypto'] = new EmailCrypto(Env::required('APP_SECRET'));
 
 $container['service.user_repo'] = new \App\Repository\UserRepository(
     $container['db'],
@@ -180,13 +182,13 @@ $container['twig']->addGlobal('is_logged_in', $currentUser !== null);
 $container['twig']->addGlobal('user', $currentUserSafe);
 
 $mailCfg = [
-    'host'       => $_ENV['MAIL_HOST'] ?? 'localhost',
-    'port'       => $_ENV['MAIL_PORT'] ?? 25,
-    'user'       => $_ENV['MAIL_USER'] ?? '',
-    'pass'       => $_ENV['MAIL_PASS'] ?? '',
-    'from'       => $_ENV['MAIL_FROM'] ?? 'admin@gpro-pitwall.com',
-    'from_name'  => $_ENV['MAIL_FROM_NAME'] ?? 'GPRO Pitwall',
-    'encryption' => $_ENV['MAIL_ENCRYPTION'] ?? 'tls',
+    'host'       => Env::get('MAIL_HOST', 'localhost'),
+    'port'       => Env::get('MAIL_PORT', '25'),
+    'user'       => Env::get('MAIL_USER', ''),
+    'pass'       => Env::get('MAIL_PASS', ''),
+    'from'       => Env::get('MAIL_FROM', 'admin@gpro-pitwall.com'),
+    'from_name'  => Env::get('MAIL_FROM_NAME', 'GPRO Pitwall'),
+    'encryption' => Env::get('MAIL_ENCRYPTION', 'tls'),
     'is_dev'     => $container['settings']['is_dev'],
     'mail_dir'   => __DIR__ . '/var/mail',
 ];
@@ -194,7 +196,7 @@ $mailCfg = [
 $container['service.rate_limiter'] = new \App\Service\RateLimiterService($container['service.cache']);
 $container['service.email_service']  = new \App\Service\EmailService($mailCfg);
 $container['service.recaptcha'] = new \App\Service\ReCaptchaService(
-    $_ENV['RECAPTCHA_SECRET_KEY'] ?? '',
+    Env::get('RECAPTCHA_SECRET_KEY', ''),
     $container['settings']['is_dev'],
 );
 
@@ -205,9 +207,9 @@ $container['service.recaptcha'] = new \App\Service\ReCaptchaService(
 // var/cache) regardless of how many users sync at once. Disable with GPRO_API_RATE=0.
 $container['service.api_throttle'] = new \App\Service\GproApiThrottle(
     __DIR__ . '/var/cache/gpro_api_throttle.json',
-    (float) ($_ENV['GPRO_API_RATE'] ?? 2.0),
-    (float) ($_ENV['GPRO_API_BURST'] ?? 4.0),
-    (int) ($_ENV['GPRO_API_MAX_BLOCK_MS'] ?? 4000),
+    Env::float('GPRO_API_RATE', 2.0),
+    Env::float('GPRO_API_BURST', 4.0),
+    Env::int('GPRO_API_MAX_BLOCK_MS', 4000),
 );
 $container['service.api_fetcher'] = new \App\Service\GproApiFetcher(
     $container['config']['api'],
@@ -221,7 +223,7 @@ $container['service.gpro_sync'] = new GproSyncService(
     $container['service.api_client'],
     $container['service.user_repo'],
     $container['service.cache'],
-    (int) ($_ENV['SYNC_SAFETY_MARGIN'] ?? 20),
+    Env::int('SYNC_SAFETY_MARGIN', 20),
 );
 $container['service.auth_service']  = new \App\Service\AuthService(
     $container['service.user_repo'],
@@ -231,14 +233,14 @@ $container['service.auth_service']  = new \App\Service\AuthService(
     $container['service.rate_limiter'],
     $container['service.recaptcha'],
     $container['service.email_crypto'],
-    $_ENV['APP_SECRET'],
+    Env::required('APP_SECRET'),
     $container['service.gpro_sync'],
     $container['service.persistent_login'],
     $container['service.security_log'],
-    (int)$_ENV['VERIFICATION_CODE_TTL_SECONDS'] ?: 600,
-    (int)$_ENV['VERIFICATION_MAX_ATTEMPTS'] ?: 5,
-    (int) ($_ENV['SYNC_MIN_INTERVAL_SECONDS'] ?? 600),
-    (int) ($_ENV['MAX_CODES_PER_USER_PER_HOUR'] ?? 3),
+    Env::int('VERIFICATION_CODE_TTL_SECONDS', 600),
+    Env::int('VERIFICATION_MAX_ATTEMPTS', 5),
+    Env::int('SYNC_MIN_INTERVAL_SECONDS', 600),
+    Env::int('MAX_CODES_PER_USER_PER_HOUR', 3),
 );
 $container['service.data_mapper'] = new GproDataMapper();
 
@@ -303,7 +305,7 @@ $container['controller.strategy'] = new StrategyController(
 $container['controller.auth'] = new AuthController(
     $container['service.auth_service'],
     $container['twig'],
-    $_ENV['RECAPTCHA_SITE_KEY'] ?? ''
+    Env::get('RECAPTCHA_SITE_KEY', '')
 );
 
 $container['service.boost_fuel'] = new \App\Service\BoostFuelService();

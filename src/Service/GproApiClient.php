@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Service;
 
 use App\Cache\CacheInterface;
+use App\Support\Env;
 use App\Support\RaceWindow;
 use DateTimeImmutable;
 use RuntimeException;
@@ -434,7 +435,7 @@ final class GproApiClient
 
     private function ttlShort(): int
     {
-        return (int) ($_ENV['CACHE_TTL_SHORT'] ?? 259200);
+        return Env::int('CACHE_TTL_SHORT', 259200);
     }
 
     /**
@@ -446,15 +447,15 @@ final class GproApiClient
     private function raceWindow(): string
     {
         $days = array_values(array_filter(
-            array_map('intval', explode(',', (string) ($_ENV['GPRO_RACE_DAYS'] ?? '2,5'))),
+            array_map('intval', explode(',', Env::get('GPRO_RACE_DAYS', '2,5'))),
             static fn (int $d): bool => $d >= 1 && $d <= 7,
         ));
 
         return RaceWindow::idFor(
             new DateTimeImmutable('now'),
             $days,
-            (int) ($_ENV['GPRO_RACE_BOUNDARY_HOUR'] ?? 0),
-            (string) ($_ENV['GPRO_RACE_TZ'] ?? 'Europe/London'),
+            Env::int('GPRO_RACE_BOUNDARY_HOUR', 0),
+            Env::get('GPRO_RACE_TZ', 'Europe/London'),
         );
     }
 }

@@ -61,4 +61,58 @@ final class Env
             }
         }
     }
+
+    /** @return ($default is string ? string : null|string) */
+    public static function get(string $key, ?string $default = null): ?string
+    {
+        if (!array_key_exists($key, $_ENV)) {
+            return $default;
+        }
+
+        return self::toString($_ENV[$key]);
+    }
+
+    public static function int(string $key, int $default): int
+    {
+        if (!array_key_exists($key, $_ENV)) {
+            return $default;
+        }
+
+        return (int) self::toString($_ENV[$key]);
+    }
+
+    public static function float(string $key, float $default): float
+    {
+        if (!array_key_exists($key, $_ENV)) {
+            return $default;
+        }
+
+        return (float) self::toString($_ENV[$key]);
+    }
+
+    public static function bool(string $key, bool $default = false): bool
+    {
+        if (!array_key_exists($key, $_ENV)) {
+            return $default;
+        }
+
+        $parsed = filter_var(self::toString($_ENV[$key]), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+
+        return $parsed ?? $default;
+    }
+
+    public static function required(string $key): string
+    {
+        $value = self::get($key);
+        if ($value === null || $value === '') {
+            throw new \RuntimeException("Missing required env var: {$key}");
+        }
+
+        return $value;
+    }
+
+    private static function toString(mixed $value): string
+    {
+        return is_scalar($value) ? (string) $value : '';
+    }
 }

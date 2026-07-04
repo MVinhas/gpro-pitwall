@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Each entry mirrors its annotated release tag.
 
+## [1.7.8] - 2026-07-04
+- `App\Support\Env` finished as a typed accessor (`get`/`int`/`float`/`bool`/`required`): every direct `$_ENV[` read in `src/` and `bootstrap.php` now goes through it, giving typo-safe keys and one place per default. A missing `APP_SECRET` now fails fast with a clear exception instead of an undefined-key warning followed by a TypeError.
+- Per-part wear-base data verified: all 64 tracks × 11 wear columns in `data/tracks.csv` match the canonical source and the seeded database exactly — verification only, no code change.
+
 ## [1.7.7] - 2026-07-03
 - **Security:** `/healthz`'s per-check `detail` (previously raw `$e->getMessage()`, publicly visible) is now shown only to admins or in `IS_DEV` — anonymous callers get `{ok}` only. Every check failure is still logged server-side regardless.
 - **Security:** removed the dead legacy `action=` POST-field routing shim in `Request::getPath()` — it hadn't been used by any template since routing moved to `config/routes.php`, and left an attacker-suppliable field able to reach the router.
