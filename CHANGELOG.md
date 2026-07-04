@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Each entry mirrors its annotated release tag.
 
+## [1.7.10] - 2026-07-04
+- Coverage floor corrected 55% → 45%: the first pcov run measured the real baseline at 46.2% statements, so the provisional 55% guess failed the first main-push CI run (and skipped the bundle job). Floor now sits just under measured; ratchet-up plan unchanged.
+
 ## [1.7.9] - 2026-07-04
 - CI now measures test coverage (`pcov`, `--coverage-text` report in the job log) and enforces a minimum statement-coverage floor via the new native `bin/check_coverage.php` — provisional 55%, to be ratcheted up from real CI numbers.
 - New CI `bundle` job on pushes to `main`: builds the release bundle (`bin/build_release.sh --tar`) and uploads it as a 14-day workflow artifact for build verification. Deployment stays a manual SFTP copy; the artifact excludes the private runtime inputs.
