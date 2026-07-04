@@ -128,7 +128,7 @@ Logged-in users get an in-app **Send Feedback** form (`/contact`, linked from th
 When your account has a calendar and tyre supplier but no pilot under contract, Cockpit / Race Strategy / Car Wear show a dedicated notice recommending the Recruitment Analyzer (with a direct link) instead of a cryptic error.
 
 ### Health endpoint
-`GET /healthz` returns JSON with per-check status (DB reachable + cache roundtrip). 200 when both green, 503 when either fails. Built for an external uptime probe.
+`GET /healthz` returns JSON with per-check status (DB reachable + cache roundtrip). 200 when both green, 503 when either fails. Built for an external uptime probe. Public responses only expose `{ok}` per check; the failure `detail` string is included only for an admin session or in `IS_DEV` — anonymous callers never see internal error text.
 
 ### SEO & sharing
 Per-page titles, meta descriptions and canonical URLs via Twig blocks (override `APP_PUBLIC_URL` to change the canonical origin); Open Graph + Twitter cards with a generated 1200×630 `og-image.png`; `WebApplication` JSON-LD on the landing page; `robots.txt` + `sitemap.xml` in the docroot; private pages (verify, reauth, control panel, admin, debug, errors) carry `noindex`. Static assets ship with immutable year-long cache headers; the stylesheet is cache-busted per release via `?v={version}`.
@@ -142,7 +142,7 @@ Per-page titles, meta descriptions and canonical URLs via Twig blocks (override 
 - **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile).
 - **SQLite** via PDO. Encrypted user emails (AES-256-GCM) and API tokens at rest.
 - **PHPMailer 7** for SMTP; in dev, writes `.eml` files to `var/mail/` instead.
-- **PHPUnit 13** — 332 tests, 889 assertions, all green at **PHPStan level 8** with **type-coverage** enforced (100% return/property/constant types + `strict_types`, 99.5% param types). Twig templates linted by a native `bin/twig_lint.php` (Twig's own tokenizer/parser — no third-party linter).
+- **PHPUnit 13** — 338 tests, 901 assertions, all green at **PHPStan level 8** with **type-coverage** enforced (100% return/property/constant types + `strict_types`, 99.5% param types). Twig templates linted by a native `bin/twig_lint.php` (Twig's own tokenizer/parser — no third-party linter).
 - **No framework.** Custom front controller + flat DI container in `bootstrap.php`. Routes in `config/routes.php`.
 - **Timestamps are stored and served as UTC**, then localised per-visitor in the browser (`<time data-localtime>` + `Intl`), so each user sees their own timezone with no server-side config.
 
@@ -250,7 +250,7 @@ Reviewed against the OWASP Top 10:2025.
 - Centralised authorisation gate (`requireAuth` / `requireAdmin` / `requireFreshAuth`); every mutating, admin, and debug route is gated server-side.
 - The contact form is authenticated-only with a whitelisted subject list (no user text ever reaches an email header), an HTML-escaped body, and a per-user rate limit (5/hour) that emits a `[security]` event when hit — layered controls that make a CAPTCHA unnecessary there.
 - Security event logging (`SecurityLogger`) emits structured `[security]` lines for failed logins, rate-limit hits, and remember-token theft detection; admin mutations recorded in `audit_log`.
-- Every controller-level `catch` logs the throwable server-side (`error_log`) and returns a generic message to the user — never `$e->getMessage()` (cockpit, car wear, strategy, testing, recruitment analyzer, admin actions). There is no global uncaught-exception handler yet, so a *fatal*/uncaught error still falls through to the host's raw PHP `display_errors` setting.
+- Prod never leaks exception detail to clients: every controller-level `catch` logs the throwable server-side and shows the user a generic message instead of `$e->getMessage()` (cockpit, car wear, strategy, testing, recruitment analyzer, admin actions); anything that still bubbles past those is caught by the front controller's top-level handler in `public/index.php`, logged under a short reference id, and rendered as a generic 500 page.
 - Outbound GPRO API calls are bounded by connect + total curl timeouts so a hung upstream can't pin a PHP worker. The filesystem cache deserializes with `allowed_classes => false`, so a tampered cache file degrades to a miss rather than a PHP object-injection vector.
 - Prepared statements only (no string-concatenated SQL). Output XSS defence is Twig autoescaping (on everywhere, no `|raw`); user data is never interpolated into inline JS/event-handler attributes. New registrations additionally whitelist the username (`[A-Za-z0-9_]`, server-enforced), narrowing what can be stored — though that gate is not retroactive, so autoescaping remains the guarantee for pre-existing rows.
 - Pre-commit + CI secret scan (`bin/check_no_secrets.sh`).

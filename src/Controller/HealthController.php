@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Cache\CacheInterface;
+use App\Security\Authorize;
 use PDO;
 use Throwable;
 
@@ -13,14 +14,18 @@ final readonly class HealthController
     public function __construct(
         private PDO $db,
         private CacheInterface $cache,
+        private Authorize $authorize,
+        private bool $isDev,
     ) {
     }
 
     public function check(): void
     {
+        $showDetail = $this->isDev || $this->authorize->isAdmin();
+
         $checks = [
-            'db'    => $this->checkDb(),
-            'cache' => $this->checkCache(),
+            'db'    => $this->checkDb($showDetail),
+            'cache' => $this->checkCache($showDetail),
         ];
 
         $ok = !in_array(false, array_column($checks, 'ok'), true);
@@ -35,23 +40,24 @@ final readonly class HealthController
         ]);
     }
 
-    /** @return array{ok: bool, detail: string} */
-    private function checkDb(): array
+    /** @return array{ok: bool, detail?: string} */
+    private function checkDb(bool $showDetail): array
     {
         try {
             $stmt = $this->db->query('SELECT 1');
             if ($stmt === false) {
-                return ['ok' => false, 'detail' => 'sqlite query returned false'];
+                return $this->result(false, 'sqlite query returned false', $showDetail);
             }
             $stmt->fetch();
-            return ['ok' => true, 'detail' => 'sqlite reachable'];
+            return $this->result(true, 'sqlite reachable', $showDetail);
         } catch (Throwable $e) {
-            return ['ok' => false, 'detail' => $e->getMessage()];
+            error_log('[healthz] db check failed: ' . $e::class . ': ' . $e->getMessage());
+            return $this->result(false, $e->getMessage(), $showDetail);
         }
     }
 
-    /** @return array{ok: bool, detail: string} */
-    private function checkCache(): array
+    /** @return array{ok: bool, detail?: string} */
+    private function checkCache(bool $showDetail): array
     {
         $key = '__healthz__';
         $value = bin2hex(random_bytes(8));
@@ -62,12 +68,19 @@ final readonly class HealthController
             $this->cache->delete($key);
 
             if ($roundtrip !== $value) {
-                return ['ok' => false, 'detail' => 'roundtrip mismatch'];
+                return $this->result(false, 'roundtrip mismatch', $showDetail);
             }
 
-            return ['ok' => true, 'detail' => 'roundtrip ok'];
+            return $this->result(true, 'roundtrip ok', $showDetail);
         } catch (Throwable $e) {
-            return ['ok' => false, 'detail' => $e->getMessage()];
+            error_log('[healthz] cache check failed: ' . $e::class . ': ' . $e->getMessage());
+            return $this->result(false, $e->getMessage(), $showDetail);
         }
+    }
+
+    /** @return array{ok: bool, detail?: string} */
+    private function result(bool $ok, string $detail, bool $showDetail): array
+    {
+        return $showDetail ? ['ok' => $ok, 'detail' => $detail] : ['ok' => $ok];
     }
 }

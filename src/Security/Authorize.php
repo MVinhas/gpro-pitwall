@@ -92,6 +92,21 @@ final readonly class Authorize
         return (int)($user['is_admin'] ?? 0) === 1;
     }
 
+    /**
+     * Non-throwing admin check for endpoints that must stay reachable
+     * anonymously (e.g. /healthz) but should show extra detail to admins only.
+     */
+    public function isAdmin(): bool
+    {
+        $id = $this->currentUserId();
+        if ($id === null) {
+            return false;
+        }
+
+        $user = $this->users->findById($id);
+        return $user !== null && self::hasAdminAccess($user);
+    }
+
     private function redirect(string $path): never
     {
         header('Location: ' . $path);

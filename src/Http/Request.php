@@ -54,15 +54,6 @@ class Request
     public function getPath(): string
     {
         $uri = (string)($this->server['REQUEST_URI'] ?? '/');
-        $path = parse_url($uri, PHP_URL_PATH);
-
-        if ($this->getMethod() === 'POST' && ($path === '/' || $path === '/index.php')) {
-            $action = $this->post('action');
-            if ($action && is_string($action) && preg_match('#^[a-zA-Z0-9/_-]+$#', $action)) {
-                return '/' . ltrim($action, '/');
-            }
-        }
-
-        return (string)$path;
+        return (string)parse_url($uri, PHP_URL_PATH);
     }
 }
