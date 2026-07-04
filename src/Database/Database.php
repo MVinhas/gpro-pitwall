@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Database;
 
+use App\Support\Env;
 use PDO;
 use PDOException;
 
@@ -21,7 +22,7 @@ class Database
      */
     public static function path(): string
     {
-        $dbFile = $_ENV['DB_FILE'] ?? 'gpro_pilots.sqlite';
+        $dbFile = Env::get('DB_FILE', 'gpro_pilots.sqlite');
         $projectRoot = realpath(__DIR__ . '/../../');
 
         return $projectRoot . '/' . $dbFile;

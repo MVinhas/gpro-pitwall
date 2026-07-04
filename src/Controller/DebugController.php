@@ -7,6 +7,7 @@ namespace App\Controller;
 use App\Repository\UserRepository;
 use App\Security\Authorize;
 use App\Cache\CacheInterface;
+use App\Support\Env;
 use Twig\Environment;
 
 class DebugController
@@ -63,7 +64,7 @@ class DebugController
             'user_stats' => $userStats,
             'env_vars' => $maskedEnv,
             'api_limit' => $_SESSION['api_limit'] ?? 'Unknown',
-            'cache_driver' => $_ENV['CACHE_DRIVER'] ?? 'unknown',
+            'cache_driver' => Env::get('CACHE_DRIVER', 'unknown'),
             'flash' => $_SESSION['flash'] ?? null,
             'csrf_token' => $_SESSION['csrf_token'] ?? '',
             'is_logged_in' => true,
