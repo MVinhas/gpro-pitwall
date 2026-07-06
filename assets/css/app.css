@@ -1,4 +1,8 @@
-@import "tailwindcss";
+/* source(none): utilities come only from the @source paths below. Tailwind
+   v4's automatic scan would otherwise also read every non-gitignored file —
+   including prose like README/CHANGELOG — and emit dead rules for
+   class-like words in it. */
+@import "tailwindcss" source(none);
 
 @source "../../templates/**/*.twig";
 @source "../../src/**/*.php";
