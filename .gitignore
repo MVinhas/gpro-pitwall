@@ -3,7 +3,6 @@
 /data
 /config/secrets.php
 /vendor
-composer.lock
 gpro_pilots.sqlite
 *.sqlite
 /bin/act

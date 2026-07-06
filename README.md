@@ -220,7 +220,7 @@ Source of truth is GitHub; deployment is a manual file copy to your host of choi
    - **Document root** = `public/` *(the load-bearing setting — every sensitive file lives outside)*
    - **PHP version** = 8.5
    - **HTTPS** enabled
-4. Create `.env` on the server. Set `APP_ENV=prod`, `IS_DEV=false`, fill SMTP credentials, generate fresh `APP_SECRET` + `EMAIL_ENCRYPTION_KEY` (never reuse dev keys — `openssl rand -hex 32`).
+4. Create `.env` on the server. Set `APP_ENV=prod`, `IS_DEV=false`, fill SMTP credentials, generate a fresh `APP_SECRET` (never reuse the dev key — `openssl rand -hex 32`; it is the single root secret from which both AES keys and the email-hash HMAC key are derived).
 5. Set file permissions:
    ```bash
    chmod 600 .env
@@ -241,7 +241,7 @@ Source of truth is GitHub; deployment is a manual file copy to your host of choi
 Reviewed against the OWASP Top 10:2025.
 
 - CSRF token on every POST (validated in `public/index.php`).
-- Email + API token encrypted at rest via AES-256-GCM with domain-separated keys derived from `APP_SECRET` / `EMAIL_ENCRYPTION_KEY`. The decrypted API token is never sent back to the browser — the Control Panel shows only a masked last-4 hint and the field accepts a new value (blank = unchanged); the token is also stripped from the shared Twig `user` global. This protects against DB-file exfiltration; note the encryption key lives in `.env` on the same host, so it is not a defence against an attacker with arbitrary file-read on the server.
+- Email + API token encrypted at rest via AES-256-GCM with domain-separated keys derived from the single `APP_SECRET`. The decrypted API token is never sent back to the browser — the Control Panel shows only a masked last-4 hint and the field accepts a new value (blank = unchanged); the token is also stripped from the shared Twig `user` global. This protects against DB-file exfiltration; note the encryption key lives in `.env` on the same host, so it is not a defence against an attacker with arbitrary file-read on the server.
 - Login keeps full control-flow parity between known and unknown usernames: an unknown username produces a decoy pending state that routes to `/verify` identically to a real account (and can never verify), so neither the response body nor the redirect reveals whether a username exists.
 - `email_hash` (HMAC-SHA256) used for lookups so an attacker reading the DB can't enumerate users by email.
 - Security headers in `public/.htaccess`: Content-Security-Policy, HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy. HSTS + cookie Secure flag trust `X-Forwarded-Proto` so they still apply behind a TLS-terminating proxy.

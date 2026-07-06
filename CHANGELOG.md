@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Each entry mirrors its annotated release tag.
 
+## [1.8.1] - 2026-07-06
+- `composer.lock` is now committed: CI and CI-built bundles install the exact locked dependency set instead of re-resolving from constraints on every run, `composer audit` checks a fixed target, and the CI vendor-cache key (`hashFiles('composer.lock')`) finally keys on real dependencies. Version bumps now refresh the lock hash (`composer update --lock`) in the same commit.
+- Tailwind now builds with `source(none)`: utilities come only from the declared `@source` paths (templates, `src/`, `public/index.php`). Tailwind v4's automatic scan had been reading every non-gitignored file — prose included — emitting dead rules for class-like words in README/CHANGELOG (`.sticky`, `.contents`, `.invisible`, `.top-1`, all unused by any template and now gone). Compiled CSS is reproducible from the declared sources again.
+- README deployment/security docs corrected: there is no `EMAIL_ENCRYPTION_KEY` — `APP_SECRET` is the single root secret from which both AES-256-GCM keys (domain-separated) and the email-hash HMAC key are derived.
+
 ## [1.8.0] - 2026-07-06
 - UX overhaul foundation (P0 of the 1.x density roadmap): new `.card`/`.card-hd`/`.card-bd` component classes in `assets/css/app.css` — the shared white-card idiom with a mobile padding step-down (`p-4`, `sm:p-6`).
 - New `templates/partials/_acc.twig`: standardised `<details>` accordion partial (icon/verdict/body blocks, rotating chevron, visible focus ring) for the upcoming Strategy and Cockpit collapses.
