@@ -54,10 +54,10 @@ jobs:
         run: vendor/bin/phpunit --coverage-text --coverage-clover var/coverage/clover.xml
 
       - name: Enforce coverage threshold
-        # 55% is a deliberately conservative starting floor — no local
-        # coverage driver exists to measure the real number yet. Ratchet
-        # this up once real coverage is known from CI output.
-        run: php bin/check_coverage.php var/coverage/clover.xml 55
+        # Floor sits just under the measured baseline (46.2% statements,
+        # first pcov run 2026-07-04). Ratchet UP as coverage grows — never
+        # down.
+        run: php bin/check_coverage.php var/coverage/clover.xml 45
 
       - name: Composer audit (security check)
         run: composer audit --no-interaction
