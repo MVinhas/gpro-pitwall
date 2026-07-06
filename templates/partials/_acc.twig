@@ -1,0 +1,35 @@
+{# Standardised <details> accordion. A closed accordion must still inform:
+   callers put the card's conclusion in the verdict block (rendered from the
+   same variables as the body — never a hardcoded second copy).
+
+   Usage:
+   {% embed 'partials/_acc.twig' with { id: 'wear', title: 'Car wear', caption: '…', open_default: false, lg_open: true } only %}
+       {% block icon %}…{% endblock %}
+       {% block verdict %}…{% endblock %}
+       {% block body %}…{% endblock %}
+   {% endembed %}
+
+   id           required — anchor target + sessionStorage persistence key (layout.twig snippet)
+   open_default server-rendered open state (no-JS users and first paint)
+   lg_open      first visit on ≥1024px viewports opens it (data-acc-lg-open) #}
+<details id="{{ id }}" data-acc {% if lg_open|default(false) %}data-acc-lg-open{% endif %}
+         {% if open_default|default(false) %}open{% endif %}
+         class="card group scroll-mt-16">
+    <summary class="cursor-pointer list-none p-4 sm:p-6 flex flex-wrap items-center justify-between gap-4
+                    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">
+        <span class="flex items-center gap-3">
+            {% block icon %}{% endblock %}
+            <span>
+                <h4 class="t-section">{{ title }}</h4>
+                {% if caption|default('') %}<p class="t-caption mt-0.5">{{ caption }}</p>{% endif %}
+            </span>
+        </span>
+        <span class="flex items-center gap-6 text-right">
+            {% block verdict %}{% endblock %}
+            <span class="text-slate-400 group-open:rotate-90 transition-transform" aria-hidden="true">▸</span>
+        </span>
+    </summary>
+    <div class="px-4 pb-4 sm:px-6 sm:pb-6">
+        {% block body %}{% endblock %}
+    </div>
+</details>

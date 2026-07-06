@@ -27,8 +27,8 @@
         {% endif %}
 
         {# PHA MATCH CARD #}
-        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-            <div class="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+        <div id="pha" class="card scroll-mt-16">
+            <div class="card-hd flex items-center justify-between">
                 <div>
                     <h3 class="t-section">Power / Handling / Acceleration match</h3>
                     <p class="t-heading mt-0.5">{{ pha_track_name }}</p>
@@ -40,7 +40,7 @@
                 {% endif %}
             </div>
 
-            <div class="p-6 space-y-6">
+            <div class="card-bd space-y-6">
 
                 {# MATCH HIGHLIGHT — descriptive only; shown for top / perfect #}
                 {% if pha.match == 'perfect' %}
@@ -94,12 +94,12 @@
 
         {# TESTING PROJECTION #}
         {% if testing_projection is defined and testing_projection is not empty %}
-            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <div class="px-6 py-4 border-b border-slate-200 bg-slate-50">
+            <div id="testing" class="card scroll-mt-16">
+                <div class="card-hd">
                     <h3 class="t-section">If you test 100 laps today</h3>
                     <p class="t-caption mt-0.5">PHA points that would land in your car after race +3 (Test → R&amp;D → Engineering → Car Character decay).</p>
                 </div>
-                <div class="p-6">
+                <div class="card-bd">
                     <div class="overflow-x-auto">
                         <table class="min-w-full text-sm">
                             <thead>
@@ -159,11 +159,11 @@
 
         {# WEATHER CALL #}
         {% if weather is defined %}
-            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <div class="px-6 py-4 border-b border-slate-200 bg-slate-50">
+            <div id="weather" class="card scroll-mt-16">
+                <div class="card-hd">
                     <h3 class="t-section">Weather</h3>
                 </div>
-                <div class="p-6 space-y-4">
+                <div class="card-bd space-y-4">
                     <div class="grid grid-cols-3 gap-3">
                         <div class="rounded-lg border border-slate-200 p-3 text-center">
                             <p class="t-label">Qualifying 1</p>
@@ -197,14 +197,14 @@
 
         {# TRAINING PICKS #}
         {% if training_baseline_count is defined %}
-            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <div class="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+            <div id="training" class="card scroll-mt-16">
+                <div class="card-hd flex items-center justify-between">
                     <h3 class="t-section">Training picks</h3>
                     {% if training_division %}
                         <span class="t-caption">vs {{ training_division }} ideal</span>
                     {% endif %}
                 </div>
-                <div class="p-6 space-y-3">
+                <div class="card-bd space-y-3">
                     {% if training_picks is defined and training_picks is not empty %}
                         <ul class="space-y-2">
                             {% for t in training_picks %}
@@ -241,14 +241,14 @@
 
         {# SPONSOR NEGOTIATIONS #}
         {% if sponsor_negotiations is defined %}
-            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <div class="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-baseline justify-between">
+            <div id="sponsors" class="card scroll-mt-16">
+                <div class="card-hd flex items-baseline justify-between">
                     <h3 class="t-section">Sponsors</h3>
                     <span class="t-caption">
                         {{ sponsor_negotiations.car_spots_taken }} / {{ sponsor_negotiations.car_spots_total }} car spots filled
                     </span>
                 </div>
-                <div class="p-6 space-y-4">
+                <div class="card-bd space-y-4">
                     {% if sponsor_negotiations.ongoing is empty %}
                         <p class="t-caption">No ongoing negotiations.</p>
                     {% else %}
@@ -290,8 +290,7 @@
 
         {# CAR WEAR #}
         {% if wear_advice is defined %}
-            <div id="cockpit-wear-card"
-                 class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div id="wear" class="card scroll-mt-16">
                 {% include 'partials/_cockpit_wear.twig' %}
             </div>
         {% endif %}
@@ -312,7 +311,7 @@
 
 <script>
 (() => {
-    const card = document.getElementById('cockpit-wear-card');
+    const card = document.getElementById('wear');
     if (!card) return;
     let pending = null;
     card.addEventListener('input', (e) => {
@@ -335,6 +334,7 @@
             });
             if (!res.ok) return;
             card.innerHTML = await res.text();
+            window.applyAccState(card);
         } catch (err) {
             if (err.name !== 'AbortError') console.error(err);
         }

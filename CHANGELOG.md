@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Each entry mirrors its annotated release tag.
 
+## [1.8.0] - 2026-07-06
+- UX overhaul foundation (P0 of the 1.x density roadmap): new `.card`/`.card-hd`/`.card-bd` component classes in `assets/css/app.css` — the shared white-card idiom with a mobile padding step-down (`p-4`, `sm:p-6`).
+- New `templates/partials/_acc.twig`: standardised `<details>` accordion partial (icon/verdict/body blocks, rotating chevron, visible focus ring) for the upcoming Strategy and Cockpit collapses.
+- Accordion open/closed state persistence centralised in `layout.twig`: any `<details data-acc>` with an `id` persists per-session, and `window.applyAccState(root)` restores state after fragment `innerHTML` swaps (Strategy results and Cockpit wear both wired). Replaces the local per-accordion code in the Strategy tab.
+- Cockpit cards got stable anchor ids (`#pha`, `#testing`, `#weather`, `#training`, `#sponsors`, `#wear`) with `scroll-mt-16` so future sticky navigation never covers a jump target; the six cards migrated to the new card classes.
+
 ## [1.7.10] - 2026-07-04
 - Coverage floor corrected 55% → 45%: the first pcov run measured the real baseline at 46.2% statements, so the provisional 55% guess failed the first main-push CI run (and skipped the bundle job). Floor now sits just under measured; ratchet-up plan unchanged.
 
