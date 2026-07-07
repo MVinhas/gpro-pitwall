@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Each entry mirrors its annotated release tag.
 
+## [1.9.0] - 2026-07-07
+- Race Strategy density overhaul (P1 of the 1.x roadmap): the answer now leads. New verdict strip at the top of the results — best compound, stops, recommended fuel per stint, total time lost, and the margin over the runner-up compound — refreshed live by the same fragment swap as the tables.
+- Results reordered: verdict → compact track/supplier/fuel header (track heading, supplier characteristics and the consumption/fuel/overtaking billboard merged into one block, no data removed) → compound table → setup table → advisory accordions. The Race Engineer and Push-or-hold advisors no longer render hardcoded-open: closed on mobile, open on first desktop visit (`data-acc-lg-open`), user choice persisted per session.
+- Driver and Team "from last sync" cards merged into one collapsed "Data used — from last sync" accordion (`_acc.twig`'s first consumer) below the Race Settings card; settings now lead the form column, which sticks (`lg:sticky`) alongside results on desktop.
+- Compound table column diet on mobile: the Est. Pit and Lost (Pits/Fuel/TCD) breakdown columns hide below `md` — Total Lost, the ranking metric, stays. No horizontal scroll at 375 px.
+- Stale-data banner slimmed to a one-line `.notice-slim` variant (new in `assets/css/app.css`, reused by later phases).
+
 ## [1.8.1] - 2026-07-06
 - `composer.lock` is now committed: CI and CI-built bundles install the exact locked dependency set instead of re-resolving from constraints on every run, `composer audit` checks a fixed target, and the CI vendor-cache key (`hashFiles('composer.lock')`) finally keys on real dependencies. Version bumps now refresh the lock hash (`composer update --lock`) in the same commit.
 - Tailwind now builds with `source(none)`: utilities come only from the declared `@source` paths (templates, `src/`, `public/index.php`). Tailwind v4's automatic scan had been reading every non-gitignored file — prose included — emitting dead rules for class-like words in README/CHANGELOG (`.sticky`, `.contents`, `.invisible`, `.top-1`, all unused by any template and now gone). Compiled CSS is reproducible from the declared sources again.

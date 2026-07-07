@@ -94,6 +94,7 @@
 .notice-warn    { @apply bg-amber-50 border-amber-400 text-amber-800; }
 .notice-error   { @apply bg-red-50 border-red-400 text-red-800; }
 .notice-success { @apply bg-emerald-50 border-emerald-400 text-emerald-800; }
+.notice-slim    { @apply py-2 text-xs; }
 
 /* =========================
    CARD STANDARD
