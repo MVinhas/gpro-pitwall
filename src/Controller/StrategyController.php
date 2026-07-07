@@ -344,9 +344,12 @@ class StrategyController
 
             $strategyResults['season'] = $office['seasonNb'] ?? '?';
             $strategyResults['race'] = $office['raceNb'] ?? '?';
-            $strategyResults['best_compound'] = $this->pickBestCompound(
+            // $raceIsWet (forecast default, user-overridable via the Race
+            // weather select) keeps the verdict coherent with the setup
+            // column, risk advice and push signals on the same card.
+            $strategyResults['best_compound'] = self::pickBestCompound(
                 $strategyResults['tyres'] ?? [],
-                $rain['race_start_wet'],
+                $raceIsWet,
             );
 
             $bestTyre = $strategyResults['tyres'][$strategyResults['best_compound']] ?? null;
@@ -590,16 +593,22 @@ class StrategyController
     }
 
     /**
-     * Pick the lowest-total-lost compound, excluding Rain unless the race itself starts wet.
+     * Pick the best compound for the effective race weather. Wet race → Rain
+     * outright (the only wet compound; total_lost comparisons against dry
+     * tyres are meaningless). Dry race → lowest total_lost among dry compounds.
      *
      * @param array<string, array<string, mixed>> $tyres
      */
-    private function pickBestCompound(array $tyres, bool $raceWet): ?string
+    public static function pickBestCompound(array $tyres, bool $raceWet): ?string
     {
+        if ($raceWet) {
+            return isset($tyres['Rain']) ? 'Rain' : null;
+        }
+
         $best = null;
         $bestLost = INF;
         foreach ($tyres as $compound => $row) {
-            if (!$raceWet && $compound === 'Rain') {
+            if ($compound === 'Rain') {
                 continue;
             }
             $lost = (float)($row['total_lost'] ?? INF);

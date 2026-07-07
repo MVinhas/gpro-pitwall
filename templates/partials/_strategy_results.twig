@@ -22,12 +22,16 @@
     <div class="space-y-6">
         {# VERDICT STRIP #}
         {% set best = strategy_results.tyres[strategy_results.best_compound] %}
+        {# Runner-up must be the same tyre type as the winner: dry compares
+           against dry only; Rain (wet) has no same-type rival, so no line. #}
         {% set runner_name = null %}
-        {% for comp, data in strategy_results.tyres %}
-            {% if comp != strategy_results.best_compound and (runner_name is null or data.total_lost < strategy_results.tyres[runner_name].total_lost) %}
-                {% set runner_name = comp %}
-            {% endif %}
-        {% endfor %}
+        {% if strategy_results.best_compound != 'Rain' %}
+            {% for comp, data in strategy_results.tyres %}
+                {% if comp != 'Rain' and comp != strategy_results.best_compound and (runner_name is null or data.total_lost < strategy_results.tyres[runner_name].total_lost) %}
+                    {% set runner_name = comp %}
+                {% endif %}
+            {% endfor %}
+        {% endif %}
         <div class="card border-l-4 border-l-emerald-500">
             <div class="bg-emerald-50 px-4 py-3 sm:px-6 flex flex-wrap items-baseline gap-x-3 gap-y-1">
                 <span class="inline-flex items-center rounded-md bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white">★ Best</span>

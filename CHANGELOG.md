@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Each entry mirrors its annotated release tag.
 
+## [1.12.1] - 2026-07-07
+- Strategy verdict now compares same-type tyres only: on a dry race the best compound and its "beats X by Ys" runner-up are both dry (Rain no longer appears as a nonsense runner-up); on a wet race Rain is recommended outright with no runner-up line — there is only one wet compound to choose.
+- The best-compound pick follows the effective race weather (the forecast default, overridable via the Race weather select) instead of the forecast-only flag, so the verdict stays coherent with the setup column, risk advice and push signals on the same screen.
+- README: added CI, release, PHP, PHPStan, coverage-floor and PSR-12 badges.
+
 ## [1.12.0] - 2026-07-07
 - Consistency pass on every remaining tab (P4 of the 1.x roadmap): all cards app-wide now use the shared `.card`/`.card-hd`/`.card-bd` component classes — zero raw card-utility strings left in templates; admin, auth, contact and control-panel pages normalized to the same radius/shadow.
 - Car Wear tab: the read-only driver-stats block is a collapsed "Driver — from last sync" accordion; the results table matches the cockpit wear idiom (tighter rows, severity-tinted rows) and keeps the End Wear verdict on-screen at 375 px.

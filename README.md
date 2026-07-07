@@ -1,5 +1,12 @@
 # GPRO Pitwall
 
+[![CI](https://github.com/MVinhas/gpro-pitwall/actions/workflows/ci.yml/badge.svg)](https://github.com/MVinhas/gpro-pitwall/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/tag/MVinhas/gpro-pitwall?sort=semver&label=release&color=blue)](https://github.com/MVinhas/gpro-pitwall/tags)
+[![PHP 8.5](https://img.shields.io/badge/PHP-8.5-777BB4?logo=php&logoColor=white)](composer.json)
+[![PHPStan level 8](https://img.shields.io/badge/PHPStan-level%208-4F5B93)](phpstan.neon)
+[![Coverage floor](https://img.shields.io/badge/coverage-%E2%89%A545%25%20CI--enforced-yellow)](.github/workflows/ci.yml)
+[![PSR-12](https://img.shields.io/badge/code%20style-PSR--12-blue)](https://www.php-fig.org/psr/psr-12/)
+
 Race-weekend cockpit for [Grand Prix Racing Online](https://www.gpro.net) managers. Pulls your own GPRO data via the public API and turns it into the answers you actually need before qualifying: what to train, what to swap, what to set, what to bet on weather.
 
 **New: Advice from the Race Engineer.** Your strategy screen now talks back. A race engineer that reads your driver, the track and the forecast, then tells you — in plain words — exactly how hard to attack and how hard to defend, where to place your boost laps, and when to take the strategy with fewer pit stops. No other GPRO tool does this.
@@ -45,7 +52,7 @@ One screen, in race-prep order. A **decision summary board** leads: one verdict 
 - **"Set your race strategy" handoff** — one click to the Strategy tab pre-populated.
 
 ### Race Strategy
-Fuel + tyre + setup for every compound (Extra Soft / Soft / Medium / Hard / Rain). Live risk slider; the calc auto-runs on first visit so you don't need to click Calculate. Best-compound highlighted; per-compound breakdown of lost time (pits / fuel / tyre-compound difference). Setup table for Q1, Q2 and race with weather-aware tyre choices. Fuel figures and the track's overtaking rating (Very Easy → Very Hard, colour-coded) sit in a slim billboard strip above the results. The header shows your contracted **tyre supplier** beside the track name, with its dry/wet performance (out of 8) and ideal temperature read straight from the GPRO suppliers feed.
+Fuel + tyre + setup for every compound (Extra Soft / Soft / Medium / Hard / Rain). Live risk slider; the calc auto-runs on first visit so you don't need to click Calculate. Best-compound highlighted, matched to the effective race weather: a dry race compares dry compounds only (Rain never appears as the "beats X" runner-up), a wet race recommends Rain outright with no runner-up line — there is only one wet compound. Per-compound breakdown of lost time (pits / fuel / tyre-compound difference). Setup table for Q1, Q2 and race with weather-aware tyre choices. Fuel figures and the track's overtaking rating (Very Easy → Very Hard, colour-coded) sit in a slim billboard strip above the results. The header shows your contracted **tyre supplier** beside the track name, with its dry/wet performance (out of 8) and ideal temperature read straight from the GPRO suppliers feed.
 
 ### Advice from the Race Engineer ⭐
 The headline feature of the Strategy tab. The race engineer suggests your **overtake and defend risk dials (0–100)** for the next race and explains its reasoning in plain advisor prose — like having a real engineer on the pit wall who has already done the homework:
@@ -146,7 +153,7 @@ Per-page titles, meta descriptions and canonical URLs via Twig blocks (override 
 - **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile).
 - **SQLite** via PDO. Encrypted user emails (AES-256-GCM) and API tokens at rest.
 - **PHPMailer 7** for SMTP; in dev, writes `.eml` files to `var/mail/` instead.
-- **PHPUnit 13** — 362 tests, 933 assertions, all green at **PHPStan level 8** with **type-coverage** enforced (100% return/property/constant types + `strict_types`, 99.5% param types). Twig templates linted by a native `bin/twig_lint.php` (Twig's own tokenizer/parser — no third-party linter). CI runs the suite with `pcov` and enforces a minimum statement-coverage floor via `bin/check_coverage.php` (provisional 55%, to be ratcheted up as real coverage becomes known).
+- **PHPUnit 13** — 365 tests, 937 assertions, all green at **PHPStan level 8** with **type-coverage** enforced (100% return/property/constant types + `strict_types`, 99.5% param types). Twig templates linted by a native `bin/twig_lint.php` (Twig's own tokenizer/parser — no third-party linter). CI runs the suite with `pcov` and enforces a minimum statement-coverage floor via `bin/check_coverage.php` (provisional 55%, to be ratcheted up as real coverage becomes known).
 - **No framework.** Custom front controller + flat DI container in `bootstrap.php`. Routes in `config/routes.php`.
 - **Timestamps are stored and served as UTC**, then localised per-visitor in the browser (`<time data-localtime>` + `Intl`), so each user sees their own timezone with no server-side config.
 

@@ -211,6 +211,40 @@ final class StrategyControllerTest extends TestCase
         $this->assertFalse($r['above']); // 6 < mean 7.0
     }
 
+    public function testPickBestCompoundDryRaceExcludesRainEvenWhenCheapest(): void
+    {
+        // Rain is the cheapest on paper, but it's the wrong tyre type for a
+        // dry race — the verdict must never cross the dry/wet boundary (B8).
+        $tyres = [
+            'Extra Soft' => ['total_lost' => 120.0],
+            'Soft'       => ['total_lost' => 110.5],
+            'Medium'     => ['total_lost' => 130.0],
+            'Hard'       => ['total_lost' => 150.0],
+            'Rain'       => ['total_lost' => 90.0],
+        ];
+        $this->assertSame('Soft', StrategyController::pickBestCompound($tyres, false));
+    }
+
+    public function testPickBestCompoundWetRaceAlwaysPicksRain(): void
+    {
+        // Only one wet compound exists; total_lost comparisons against dry
+        // tyres are meaningless when the race is wet (B8).
+        $tyres = [
+            'Extra Soft' => ['total_lost' => 80.0],
+            'Soft'       => ['total_lost' => 90.0],
+            'Medium'     => ['total_lost' => 100.0],
+            'Hard'       => ['total_lost' => 110.0],
+            'Rain'       => ['total_lost' => 140.0],
+        ];
+        $this->assertSame('Rain', StrategyController::pickBestCompound($tyres, true));
+    }
+
+    public function testPickBestCompoundEmptyOrRainlessWetReturnsNull(): void
+    {
+        $this->assertNull(StrategyController::pickBestCompound([], false));
+        $this->assertNull(StrategyController::pickBestCompound(['Soft' => ['total_lost' => 90.0]], true));
+    }
+
     public function testUnexpectedApiFailureReturnsGenericMessageNotRawDetails(): void
     {
         // Past the curated early-exits (season/supplier/pilot all present), the
