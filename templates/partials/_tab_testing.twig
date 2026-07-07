@@ -3,19 +3,13 @@
 {% if testing_error == no_pilot_message %}
     {% include 'partials/_no_pilot_notice.twig' %}
 {% elseif testing_error %}
-    <div class="rounded-md bg-amber-50 border-l-4 border-amber-400 p-4 shadow-sm">
-        <p class="text-sm text-amber-800">
-            <span class="font-bold">Testing unavailable.</span> {{ testing_error }}
-        </p>
-    </div>
+    <div class="notice notice-warn"><span class="font-bold">Testing unavailable.</span> {{ testing_error }}</div>
 {% elseif testing_results %}
     {% set r = testing_results %}
 
-    <div class="mb-4 rounded-md bg-amber-50 border-l-4 border-amber-400 p-4 shadow-sm">
-        <p class="text-sm text-amber-800">
-            <span class="font-bold">Changed the car?</span>
-            Re-sync first — testing below uses your last-synced car data{% if user.last_synced_at %} (last sync: {{ t.localtime(user.last_synced_at, 'datetime') }}){% endif %}.
-        </p>
+    <div class="notice notice-warn notice-slim mb-4">
+        <span class="font-bold">Changed the car?</span>
+        Re-sync first — testing uses your last sync{% if user.last_synced_at %} ({{ t.localtime(user.last_synced_at, 'datetime') }}){% endif %}.
     </div>
 
     {# Two flowing columns (single grid, no shared row heights, so cards stack
@@ -26,8 +20,8 @@
     <div class="space-y-6">
 
     {# ===== TRACK + CAR ===== #}
-    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div class="px-6 py-4 border-b border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-2">
+    <div class="card">
+        <div class="card-hd flex flex-wrap items-center justify-between gap-2">
             <div>
                 <h3 class="t-heading">{{ r.track.name }}</h3>
                 <p class="t-caption">Testing track · Season {{ r.season }}, Race {{ r.race }}</p>
@@ -66,7 +60,7 @@
     </div>
 
     {# ===== POINTS PER 5 LAPS BY PRIORITY ===== #}
-    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+    <div class="card">
         <div class="px-6 py-3 border-b border-slate-200 bg-slate-50">
             <h3 class="t-section">Points Gained per 5 Laps</h3>
         </div>
@@ -99,7 +93,7 @@
     <div class="space-y-6">
 
     {# ===== POINTS DISTRIBUTION ===== #}
-    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+    <div class="card">
         <div class="px-6 py-3 border-b border-slate-200 bg-slate-50">
             <h3 class="t-section">Points Distribution</h3>
         </div>
@@ -108,9 +102,9 @@
                 <thead class="bg-white">
                     <tr>
                         <th class="px-6 py-3 text-left"><span class="t-label">Characteristic</span></th>
-                        <th class="px-4 py-3 text-center border-l border-slate-100"><span class="t-label">Test</span></th>
-                        <th class="px-4 py-3 text-center border-l border-slate-100"><span class="t-label">R&amp;D</span></th>
-                        <th class="px-4 py-3 text-center border-l border-slate-100"><span class="t-label">Engineering</span></th>
+                        <th class="hidden sm:table-cell px-4 py-3 text-center border-l border-slate-100"><span class="t-label">Test</span></th>
+                        <th class="hidden sm:table-cell px-4 py-3 text-center border-l border-slate-100"><span class="t-label">R&amp;D</span></th>
+                        <th class="hidden sm:table-cell px-4 py-3 text-center border-l border-slate-100"><span class="t-label">Engineering</span></th>
                         <th class="px-4 py-3 text-center border-l border-blue-200 bg-blue-50"><span class="text-xs font-bold uppercase tracking-wide text-blue-800">Car Character</span></th>
                     </tr>
                 </thead>
@@ -118,9 +112,9 @@
                     {% for label, key in {'Power': 'power', 'Handling': 'handling', 'Acceleration': 'acceleration'} %}
                         <tr>
                             <td class="px-6 py-3 font-bold text-slate-700">{{ label }}</td>
-                            <td class="px-4 py-3 text-center font-mono tabular-nums text-slate-600 border-l border-slate-100">{{ r.points.test[key]|round(1) }}</td>
-                            <td class="px-4 py-3 text-center font-mono tabular-nums text-slate-600 border-l border-slate-100">{{ r.points.rd[key]|round(1) }}</td>
-                            <td class="px-4 py-3 text-center font-mono tabular-nums text-slate-600 border-l border-slate-100">{{ r.points.eng[key]|round(1) }}</td>
+                            <td class="hidden sm:table-cell px-4 py-3 text-center font-mono tabular-nums text-slate-600 border-l border-slate-100">{{ r.points.test[key]|round(1) }}</td>
+                            <td class="hidden sm:table-cell px-4 py-3 text-center font-mono tabular-nums text-slate-600 border-l border-slate-100">{{ r.points.rd[key]|round(1) }}</td>
+                            <td class="hidden sm:table-cell px-4 py-3 text-center font-mono tabular-nums text-slate-600 border-l border-slate-100">{{ r.points.eng[key]|round(1) }}</td>
                             <td class="px-4 py-3 text-center font-mono text-base font-bold tabular-nums text-blue-700 bg-blue-50 border-l border-blue-100">{{ r.points.car_character[key]|round(1) }}</td>
                         </tr>
                     {% endfor %}
@@ -134,7 +128,7 @@
 
     {# ===== IDEAL SETUP ===== #}
     {% if r.setup %}
-        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="card">
             <div class="px-6 py-3 border-b border-slate-200 bg-slate-50">
                 <h3 class="t-section">Ideal Setup</h3>
             </div>
@@ -162,8 +156,8 @@
 
     {# ===== EXPECTED WEAR (dynamic by laps) ===== #}
     {% if r.wear %}
-        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-6" id="testing-wear">
-            <div class="px-6 py-4 border-b border-slate-200 bg-slate-50">
+        <div class="card mb-6" id="testing-wear">
+            <div class="card-hd">
                 <div class="flex items-center justify-between gap-4 mb-1">
                     <div class="flex items-center gap-2">
                         <h3 class="t-section">Expected Car Wear</h3>
@@ -181,7 +175,7 @@
                     <thead class="bg-slate-50">
                         <tr>
                             <th class="px-6 py-3 text-left"><span class="t-label">Part</span></th>
-                            <th class="px-6 py-3 text-center"><span class="t-label">Current</span></th>
+                            <th class="hidden sm:table-cell px-6 py-3 text-center"><span class="t-label">Current</span></th>
                             <th class="px-6 py-3 text-center"><span class="t-label">Added</span></th>
                             <th class="px-6 py-3 text-center"><span class="t-label">After Testing</span></th>
                         </tr>
@@ -193,7 +187,7 @@
                                 data-start="{{ data.start }}"
                                 data-per-lap="{{ data.per_lap }}">
                                 <td class="px-6 py-3 whitespace-nowrap text-sm font-medium text-slate-900">{{ part }}</td>
-                                <td class="px-6 py-3 text-center text-sm tabular-nums text-slate-600">{{ data.start }}%</td>
+                                <td class="hidden sm:table-cell px-6 py-3 text-center text-sm tabular-nums text-slate-600">{{ data.start }}%</td>
                                 <td class="px-6 py-3 text-center text-sm font-medium tabular-nums text-blue-600" data-wear-added>—</td>
                                 <td class="px-6 py-3 text-center">
                                     <span data-wear-end class="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium tabular-nums ring-1 ring-inset">—</span>

@@ -24,6 +24,7 @@
                    class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer">
             <span data-cockpit-risk-value class="text-sm font-bold text-blue-600 w-10 text-right">{{ cockpit_risk }}</span>
         </div>
+        <noscript><button type="submit" class="btn btn-sm btn-secondary w-full">Update</button></noscript>
     </form>
 
     {% if wear_advice.swap is empty and wear_advice.risky is empty and wear_advice.watch is empty %}

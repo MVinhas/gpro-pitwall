@@ -1,33 +1,19 @@
 <div class="space-y-6">
     {# Notification Banner #}
-    <div class="notice notice-info">
-        <div class="flex">
-            <div class="flex-shrink-0">
-                <svg class="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
-                </svg>
-            </div>
-            <div class="ml-3">
-                <p class="font-bold">
-                    Driver decisions happen on Mondays and Thursdays at 18:00 (Europe/Lisbon).
-                </p>
-                <p class="mt-1">
-                    Offers rise incrementally starting on Mondays and Thursdays at 10:00 (Europe/Lisbon).
-                </p>
-            </div>
-        </div>
+    <div class="notice notice-info notice-slim">
+        <span class="font-bold">Driver decisions:</span> Mondays &amp; Thursdays 18:00 Europe/Lisbon — offers rise incrementally from 10:00 the same days.
     </div>
 
-    <div class="bg-white shadow-lg rounded-xl overflow-hidden border border-slate-200">
+    <div class="card">
         {# Header Section #}
-        <div class="bg-slate-50 px-6 py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center">
+        <div class="card-hd flex flex-col sm:flex-row justify-between items-start sm:items-center">
             <div>
                 <h2 class="t-heading">Recruitment Analyzer</h2>
                 <p class="t-caption">Score the live GPRO driver market against your division's ideal pilot.</p>
             </div>
         </div>
 
-        <div class="p-6">
+        <div class="card-bd">
             <form method="POST" action="/analyze_recruitment" class="space-y-6">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 

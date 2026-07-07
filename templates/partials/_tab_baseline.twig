@@ -2,8 +2,8 @@
     
     {# LEFT COLUMN: Division Stats #}
     <div class="lg:col-span-7 flex flex-col gap-6">
-        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-            <div class="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+        <div class="card">
+            <div class="card-hd flex justify-between items-center">
                 <h3 class="t-heading">
                     {{ active_division }} Baseline
                     <span class="ml-2 inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
@@ -16,7 +16,7 @@
                 </span>
             </div>
 
-            <div class="p-6">
+            <div class="card-bd">
                 {% if all_ideal_pilots[active_division].count > 0 %}
                     <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
                         {% for key, val in all_ideal_pilots[active_division].stats %}
@@ -56,11 +56,11 @@
     <div class="lg:col-span-5 flex flex-col gap-6">
         
         {# Add Pilot Card #}
-        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-            <div class="px-6 py-4 border-b border-slate-200 bg-slate-50">
+        <div class="card">
+            <div class="card-hd">
                 <h3 class="t-heading">Add Pilot Data</h3>
             </div>
-            <div class="p-6">
+            <div class="card-bd">
                 <form method="POST" action="/add_pilot" class="space-y-4">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <input type="hidden" name="division" value="{{ active_division }}">
@@ -83,8 +83,8 @@
         </div>
 
         {# Season Tracker Card #}
-        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-            <div class="p-6 flex items-center justify-between">
+        <div class="card">
+            <div class="card-bd flex items-center justify-between">
                 <div>
                     <h4 class="t-section">Season</h4>
                     <p class="t-caption">Current Data Season</p>
