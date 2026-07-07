@@ -29,7 +29,7 @@ If working things out from scratch is the part you enjoy, do that first — then
 ## Features
 
 ### Cockpit (the race-weekend spine)
-One screen, in race-prep order:
+One screen, in race-prep order. A **decision summary board** leads: one verdict tile per card (jump-links that open the matching card), so every call is readable without scrolling. Each card below is a collapsible accordion that repeats its verdict in the header — closed by default on mobile, open on first visit on desktop, your choice remembered per session. Desktop lays the cards out in two columns:
 
 - **PHA match** — track vs car Power/Handling/Acceleration alignment, with a favourite-track badge. Highlights a match only when it's strict: **top** (your car's #1 attribute is the track's #1) or **perfect** (all three ranks line up). No push verdict here — that call now lives in the Strategy tab.
 - **Testing projection** — 100-lap forecast with 3-race decay (Test Points → R&D → Engineering → Car Character) so you see where the car actually lands.
@@ -37,7 +37,7 @@ One screen, in race-prep order:
 - **Weather call** — Q1 / Q2 / race-start dry/wet assessment. The track and P/H/A come from Office + TrackProfile (which roll over the moment a new race opens), not the saved race setup — so the cockpit shows the correct upcoming race even before you've configured it in GPRO. Until that setup is saved, an amber notice flags it and the weather card is withheld rather than showing the previous race's forecast.
 - **Sponsors** — ongoing negotiation list with per-negotiation characteristics and the recommended answer for each of the five negotiation questions.
 - **Training picks** — gap-closer recommendations weighted against the division ideal.
-- **Car wear panel** — per-part end-of-race wear projection with a live risk slider that re-runs without a page reload, plus a ranked list of swap options for every flagged part (filtered by your group's car-level band from `MoneyLevels` and your live cash from `Menu`). Includes a collapsible PHA-contribution reference table (each part's Power/Handling/Acceleration value per level) for manually working out the PHA shift of a swap when forcing a track-car match.
+- **Car wear panel** — per-part end-of-race wear projection with a live risk slider that re-runs without a page reload. Flagged parts land in one compact status table (Part · Lvl · now% → end% · Replace/Red/Watch), and each part's ranked swap options (filtered by your group's car-level band from `MoneyLevels` and your live cash from `Menu`) collapse to their best pick. Includes a collapsible PHA-contribution reference table (each part's Power/Handling/Acceleration value per level) for manually working out the PHA shift of a swap when forcing a track-car match.
 - **"Set your race strategy" handoff** — one click to the Strategy tab pre-populated.
 
 ### Race Strategy

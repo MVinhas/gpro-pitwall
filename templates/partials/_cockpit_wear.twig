@@ -1,8 +1,19 @@
-<div class="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
-    <h3 class="t-section">Car wear</h3>
-    <span class="t-caption">Risk: <span class="font-semibold text-slate-700">{{ cockpit_risk }}</span></span>
-</div>
-<div class="p-6 space-y-4">
+{# Rendered standalone by the fragment endpoint (fragment=cockpit_wear) and
+   swapped into the #wear <details> innerHTML — so this file is summary + body
+   only, never its own <details>. The verdict chip comes from the shared
+   _wear_verdict.twig partial (same source as the board tile). #}
+<summary class="cursor-pointer list-none p-4 sm:p-6 flex flex-wrap items-center justify-between gap-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">
+    <span class="flex items-center gap-3">
+        <span>
+            <h4 class="t-section">Car wear</h4>
+        </span>
+    </span>
+    <span class="flex items-center gap-6 text-right">
+        {% include 'partials/_wear_verdict.twig' with { wear_advice: wear_advice, site: 'summary' } only %}
+        <span class="text-slate-400 group-open/wear:rotate-90 transition-transform" aria-hidden="true">▸</span>
+    </span>
+</summary>
+<div class="px-4 pb-4 sm:px-6 sm:pb-6 space-y-4">
     <form method="GET" action="" class="space-y-2" data-cockpit-wear-form>
         <input type="hidden" name="main_tab" value="Cockpit">
         {% if active_track %}<input type="hidden" name="track" value="{{ active_track }}">{% endif %}
@@ -15,64 +26,46 @@
         </div>
     </form>
 
-    <p class="text-sm font-medium {{ wear_advice.swap is not empty ? 'text-red-700' : (wear_advice.risky is not empty ? 'text-amber-700' : (wear_advice.watch is not empty ? 'text-slate-700' : 'text-emerald-700')) }}">
-        {{ wear_advice.headline }}
-    </p>
-
-    {% if wear_advice.swap is not empty %}
-        <div>
-            <p class="t-label mb-2 text-red-700">Will not finish the race — replace it</p>
-            <ul class="space-y-1">
-                {% for p in wear_advice.swap %}
-                    <li class="rounded-md bg-red-50 px-3 py-2 ring-1 ring-inset ring-red-600/10">
-                        <div class="flex justify-between items-baseline">
-                            <span class="text-sm font-semibold text-slate-900">{{ p.part }}</span>
-                            <span class="t-caption">Lvl {{ p.level }} · now at {{ p.start }}%</span>
-                        </div>
-                        <p class="t-caption text-red-700 mt-0.5">
-                            If untouched, ends the race at <span class="font-semibold">{{ p.end }}%</span>.
-                        </p>
-                    </li>
-                {% endfor %}
-            </ul>
-        </div>
-    {% endif %}
-
-    {% if wear_advice.risky is not empty %}
-        <div>
-            <p class="t-label mb-2 text-amber-700">Will finish in the red</p>
-            <ul class="space-y-1">
-                {% for p in wear_advice.risky %}
-                    <li class="rounded-md bg-amber-50 px-3 py-2 ring-1 ring-inset ring-amber-600/10">
-                        <div class="flex justify-between items-baseline">
-                            <span class="text-sm font-semibold text-slate-900">{{ p.part }}</span>
-                            <span class="t-caption">Lvl {{ p.level }} · now at {{ p.start }}%</span>
-                        </div>
-                        <p class="t-caption text-amber-800 mt-0.5">
-                            If untouched, ends the race at <span class="font-semibold">{{ p.end }}%</span>.
-                        </p>
-                    </li>
-                {% endfor %}
-            </ul>
-        </div>
-    {% endif %}
-
-    {% if wear_advice.watch is not empty %}
-        <div>
-            <p class="t-label mb-2">Watch</p>
-            <ul class="space-y-1">
-                {% for p in wear_advice.watch %}
-                    <li class="rounded-md bg-slate-50 px-3 py-2 ring-1 ring-inset ring-slate-200">
-                        <div class="flex justify-between items-baseline">
-                            <span class="text-sm font-semibold text-slate-900">{{ p.part }}</span>
-                            <span class="t-caption">Lvl {{ p.level }} · now at {{ p.start }}%</span>
-                        </div>
-                        <p class="t-caption mt-0.5">
-                            If untouched, ends the race at <span class="font-semibold">{{ p.end }}%</span>.
-                        </p>
-                    </li>
-                {% endfor %}
-            </ul>
+    {% if wear_advice.swap is empty and wear_advice.risky is empty and wear_advice.watch is empty %}
+        <p class="text-sm font-medium text-emerald-700">{{ wear_advice.headline }}</p>
+    {% else %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full text-sm">
+                <thead>
+                    <tr class="text-left text-slate-500">
+                        <th class="py-1.5 pr-3 font-medium">Part</th>
+                        <th class="py-1.5 px-2 font-medium text-right">Lvl</th>
+                        <th class="py-1.5 px-2 font-medium text-right">Wear</th>
+                        <th class="py-1.5 pl-2 font-medium text-right">Status</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for p in wear_advice.swap %}
+                        <tr class="bg-red-50">
+                            <td class="py-1.5 pr-3 font-medium text-slate-900">{{ p.part }}</td>
+                            <td class="py-1.5 px-2 text-right tabular-nums text-slate-600">{{ p.level }}</td>
+                            <td class="py-1.5 px-2 text-right tabular-nums text-slate-700">{{ p.start }}% → {{ p.end }}%</td>
+                            <td class="py-1.5 pl-2 text-right"><span class="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-semibold bg-red-100 text-red-800">Replace</span></td>
+                        </tr>
+                    {% endfor %}
+                    {% for p in wear_advice.risky %}
+                        <tr class="bg-amber-50">
+                            <td class="py-1.5 pr-3 font-medium text-slate-900">{{ p.part }}</td>
+                            <td class="py-1.5 px-2 text-right tabular-nums text-slate-600">{{ p.level }}</td>
+                            <td class="py-1.5 px-2 text-right tabular-nums text-slate-700">{{ p.start }}% → {{ p.end }}%</td>
+                            <td class="py-1.5 pl-2 text-right"><span class="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-semibold bg-amber-100 text-amber-800">Red</span></td>
+                        </tr>
+                    {% endfor %}
+                    {% for p in wear_advice.watch %}
+                        <tr>
+                            <td class="py-1.5 pr-3 font-medium text-slate-900">{{ p.part }}</td>
+                            <td class="py-1.5 px-2 text-right tabular-nums text-slate-600">{{ p.level }}</td>
+                            <td class="py-1.5 px-2 text-right tabular-nums text-slate-700">{{ p.start }}% → {{ p.end }}%</td>
+                            <td class="py-1.5 pl-2 text-right"><span class="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-semibold bg-slate-100 text-slate-700">Watch</span></td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
     {% endif %}
 
@@ -81,58 +74,77 @@
             <p class="t-label text-slate-700">Swap options</p>
             {% for part, opts in swap_advice %}
                 {% set cur = opts.current %}
-                <div class="rounded-md border border-slate-200 p-3">
-                    <div class="flex items-baseline justify-between mb-3">
-                        <span class="text-sm font-semibold text-slate-900">{{ part }}</span>
-                        <span class="t-caption">currently Lvl {{ cur.level }} · {{ cur.start }}% → {{ cur.end }}% if untouched</span>
-                    </div>
-
-                    {% if opts.picks is empty %}
+                {% if opts.picks is empty %}
+                    <div class="rounded-md border border-slate-200 p-3">
+                        <div class="flex items-baseline justify-between mb-1 gap-3 flex-wrap">
+                            <span class="text-sm font-semibold text-slate-900">{{ part }}</span>
+                            <span class="t-caption">currently Lvl {{ cur.level }} · {{ cur.start }}% → {{ cur.end }}% if untouched</span>
+                        </div>
                         <p class="t-caption">No affordable, survivable option within your group's range.</p>
-                    {% else %}
-                        {# Picks are pre-sorted tier ASC then cost ASC, so the
-                           best pick is always the first row. Highlight it only
-                           if that best tier is Perfect (0) or Top match (1). #}
-                        {% set top_pick_qualifies = opts.picks[0].pha_tier in [0, 1] %}
-                        <ul class="space-y-2">
-                            {% for r in opts.picks %}
-                                {% set slot_label = {
-                                    'free_downgrade': 'Free downgrade',
-                                    'downgrade':      'Downgrade',
-                                    'sidegrade':      'Sidegrade',
-                                    'upgrade':        'Upgrade',
-                                }[r.slot] %}
-                                {% set tier_label = {0: 'Perfect', 1: 'Top match'}[r.pha_tier] ?? null %}
-                                {% set tier_bg = {
-                                    0: 'bg-emerald-100 text-emerald-800',
-                                    1: 'bg-lime-100 text-lime-800',
-                                }[r.pha_tier] ?? '' %}
-                                {% set tier_help = {
-                                    0: 'Your car PHA ranking exactly mirrors the track demand — strongest matches most-demanded, all the way down.',
-                                    1: 'Your car top attribute matches what the track demands most; the lower two may differ.',
-                                }[r.pha_tier] ?? '' %}
-                                {% set row_bg = loop.first and top_pick_qualifies
-                                    ? 'bg-emerald-50 border-emerald-200'
-                                    : 'bg-white border-slate-200' %}
-                                <li class="rounded-md border {{ row_bg }} px-3 py-2">
-                                    <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                                        <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ slot_label }}</span>
-                                        <span class="text-sm font-semibold text-slate-900">Lvl {{ r.level }}</span>
-                                        <span class="t-caption">{{ r.cost > 0 ? '$' ~ r.cost|number_format : 'free' }}</span>
-                                        <span class="t-caption">ends at {{ r.end }}%</span>
-                                        {% if tier_label %}
-                                            <span class="ml-auto inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold cursor-help {{ tier_bg }}"
-                                                  title="{{ tier_help }}">
-                                                {{ tier_label }}
-                                            </span>
-                                        {% endif %}
-                                    </div>
-                                    <p class="t-caption mt-1">{{ r.rationale }}</p>
-                                </li>
-                            {% endfor %}
-                        </ul>
-                    {% endif %}
-                </div>
+                    </div>
+                {% else %}
+                    {# Picks are pre-sorted tier ASC then cost ASC, so opts.picks[0]
+                       is the best pick. Highlight the top row only when its tier is
+                       Perfect (0) or Top match (1). #}
+                    {% set top_pick_qualifies = opts.picks[0].pha_tier in [0, 1] %}
+                    {% set best = opts.picks[0] %}
+                    {% set best_slot = {
+                        'free_downgrade': 'Free downgrade',
+                        'downgrade':      'Downgrade',
+                        'sidegrade':      'Sidegrade',
+                        'upgrade':        'Upgrade',
+                    }[best.slot] %}
+                    <details data-acc id="swap-{{ part|lower|replace({' ': '-'}) }}" class="group rounded-md border border-slate-200">
+                        <summary class="flex cursor-pointer select-none list-none items-start justify-between gap-3 p-3 hover:bg-slate-50">
+                            <span class="min-w-0">
+                                <span class="text-sm font-semibold text-slate-900">{{ part }} — best: {{ best_slot }} Lvl {{ best.level }} · ends {{ best.end }}% · {{ best.cost > 0 ? '$' ~ best.cost|number_format : 'free' }}</span>
+                                <span class="t-caption block mt-0.5">currently Lvl {{ cur.level }} · {{ cur.start }}% → {{ cur.end }}% if untouched</span>
+                            </span>
+                            <svg class="h-4 w-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </summary>
+                        <div class="border-t border-slate-200 px-3 pb-3 pt-3">
+                            <ul class="space-y-2">
+                                {% for r in opts.picks %}
+                                    {% set slot_label = {
+                                        'free_downgrade': 'Free downgrade',
+                                        'downgrade':      'Downgrade',
+                                        'sidegrade':      'Sidegrade',
+                                        'upgrade':        'Upgrade',
+                                    }[r.slot] %}
+                                    {% set tier_label = {0: 'Perfect', 1: 'Top match'}[r.pha_tier] ?? null %}
+                                    {% set tier_bg = {
+                                        0: 'bg-emerald-100 text-emerald-800',
+                                        1: 'bg-lime-100 text-lime-800',
+                                    }[r.pha_tier] ?? '' %}
+                                    {% set tier_help = {
+                                        0: 'Your car PHA ranking exactly mirrors the track demand — strongest matches most-demanded, all the way down.',
+                                        1: 'Your car top attribute matches what the track demands most; the lower two may differ.',
+                                    }[r.pha_tier] ?? '' %}
+                                    {% set row_bg = loop.first and top_pick_qualifies
+                                        ? 'bg-emerald-50 border-emerald-200'
+                                        : 'bg-white border-slate-200' %}
+                                    <li class="rounded-md border {{ row_bg }} px-3 py-2">
+                                        <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                                            <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ slot_label }}</span>
+                                            <span class="text-sm font-semibold text-slate-900">Lvl {{ r.level }}</span>
+                                            <span class="t-caption">{{ r.cost > 0 ? '$' ~ r.cost|number_format : 'free' }}</span>
+                                            <span class="t-caption">ends at {{ r.end }}%</span>
+                                            {% if tier_label %}
+                                                <span class="ml-auto inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold cursor-help {{ tier_bg }}"
+                                                      title="{{ tier_help }}">
+                                                    {{ tier_label }}
+                                                </span>
+                                            {% endif %}
+                                        </div>
+                                        <p class="t-caption mt-1">{{ r.rationale }}</p>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </details>
+                {% endif %}
             {% endfor %}
         </div>
     {% endif %}

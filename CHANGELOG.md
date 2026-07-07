@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Each entry mirrors its annotated release tag.
 
+## [1.10.0] - 2026-07-07
+- Cockpit density overhaul (P2 of the 1.x roadmap): new decision summary board at the top — one verdict tile per card (PHA match, testing, weather, training, sponsors, car wear) plus a "next step" tile; each tile links to its card and opens it on click.
+- Every cockpit card is now a collapsible accordion with its verdict repeated in the header (closed by default on mobile, open on first desktop visit, choice persisted per session). Card order keeps the decision sequence.
+- Two-column desktop layout (PHA/weather/training left, wear/sponsors/testing right); mobile stays a single column in decision order.
+- Car-wear card diet: the swap/risky/watch lists merged into one compact status table (Part · Lvl · now% → end% · Replace/Red/Watch chip); each part's swap options collapse to a best-pick one-liner; the verdict chip is a shared partial (`_wear_verdict.twig`) rendered in both the board tile and the card header, mirrored by JS after fragment refreshes.
+- Testing projection diet: tighter rows, Raw/Landed columns merged below small viewports, landing-track tiles and the decay note moved behind an inner "Landing tracks" accordion.
+- Sponsors card diet: per-negotiation characteristics compressed to a single chip row; contested/needs-attention flags surface in the accordion header.
+
 ## [1.9.0] - 2026-07-07
 - Race Strategy density overhaul (P1 of the 1.x roadmap): the answer now leads. New verdict strip at the top of the results — best compound, stops, recommended fuel per stint, total time lost, and the margin over the runner-up compound — refreshed live by the same fragment swap as the tables.
 - Results reordered: verdict → compact track/supplier/fuel header (track heading, supplier characteristics and the consumption/fuel/overtaking billboard merged into one block, no data removed) → compound table → setup table → advisory accordions. The Race Engineer and Push-or-hold advisors no longer render hardcoded-open: closed on mobile, open on first desktop visit (`data-acc-lg-open`), user choice persisted per session.
