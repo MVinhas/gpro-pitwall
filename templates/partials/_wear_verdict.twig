@@ -1,0 +1,17 @@
+{# Single source for the wear verdict chip — rendered in the board tile and in
+   the wear card's <summary> so the two can never drift. The page JS mirrors
+   [data-wear-verdict] onto [data-tile-wear] after each fragment swap.
+   site: 'tile' | 'summary' — selects which data-attribute the span carries. #}
+{% set cls = 'text-xs font-semibold text-emerald-700' %}
+{% set txt = 'All OK' %}
+{% if wear_advice.swap is not empty %}
+    {% set cls = 'text-xs font-semibold text-red-700' %}
+    {% set txt = wear_advice.swap|length ~ " won't finish" %}
+{% elseif wear_advice.risky is not empty %}
+    {% set cls = 'text-xs font-semibold text-amber-700' %}
+    {% set txt = wear_advice.risky|length ~ ' in the red' %}
+{% elseif wear_advice.watch is not empty %}
+    {% set cls = 'text-xs font-semibold text-slate-700' %}
+    {% set txt = wear_advice.watch|length ~ ' to watch' %}
+{% endif %}
+<span {% if site == 'tile' %}data-tile-wear{% else %}data-wear-verdict{% endif %} class="{{ cls }}">{{ txt }}</span>

@@ -11,10 +11,11 @@
 
    id           required — anchor target + sessionStorage persistence key (layout.twig snippet)
    open_default server-rendered open state (no-JS users and first paint)
-   lg_open      first visit on ≥1024px viewports opens it (data-acc-lg-open) #}
+   lg_open      first visit on ≥1024px viewports opens it (data-acc-lg-open)
+   extra_class  optional extra classes appended to the <details> (e.g. grid order-*) #}
 <details id="{{ id }}" data-acc {% if lg_open|default(false) %}data-acc-lg-open{% endif %}
          {% if open_default|default(false) %}open{% endif %}
-         class="card group scroll-mt-16">
+         class="card group scroll-mt-16 {{ extra_class|default('') }}">
     <summary class="cursor-pointer list-none p-4 sm:p-6 flex flex-wrap items-center justify-between gap-4
                     focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">
         <span class="flex items-center gap-3">
