@@ -30,6 +30,17 @@ use Twig\Environment;
 
 class PageController
 {
+    /**
+     * Short tab labels shown in the nav map back to their canonical routing
+     * keys here, so a `?main_tab=Strategy` link resolves to `Race Strategy`
+     * while every internal link and redirect keeps using canonical names.
+     */
+    private const array MAIN_TAB_ALIASES = [
+        'Strategy'    => 'Race Strategy',
+        'Training'    => 'Training Planner',
+        'Recruitment' => 'Recruitment Analyzer',
+    ];
+
     /** @param array<string, mixed> $config */
     public function __construct(
         private readonly IdealPilotService $idealPilotService,
@@ -115,7 +126,7 @@ class PageController
             $defaultTab = $mainSections[0] ?? '';
         }
 
-        $activeMainTab = (string) $request->get('main_tab', $defaultTab);
+        $activeMainTab = self::canonicalMainTab((string) $request->get('main_tab', $defaultTab));
         if (!in_array($activeMainTab, $mainSections, true)) {
             $activeMainTab = $defaultTab;
         }
@@ -590,6 +601,16 @@ class PageController
         }
 
         return $trackNames[0] ?? '';
+    }
+
+    /**
+     * Resolves a short nav alias ("Strategy") to its canonical routing key
+     * ("Race Strategy"). Canonical names and unknown strings pass through
+     * unchanged, so old URLs and internal links keep working.
+     */
+    public static function canonicalMainTab(string $tab): string
+    {
+        return self::MAIN_TAB_ALIASES[$tab] ?? $tab;
     }
 
     /**

@@ -134,4 +134,24 @@ final class PageControllerTest extends TestCase
         $this->assertFalse(PageController::isRaceSetupStale(63, 0));
         $this->assertFalse(PageController::isRaceSetupStale(0, 0));
     }
+
+    public function testShortTabAliasesResolveToCanonicalKeys(): void
+    {
+        $this->assertSame('Race Strategy', PageController::canonicalMainTab('Strategy'));
+        $this->assertSame('Training Planner', PageController::canonicalMainTab('Training'));
+        $this->assertSame('Recruitment Analyzer', PageController::canonicalMainTab('Recruitment'));
+    }
+
+    public function testCanonicalMainTabPassesCanonicalNamesThrough(): void
+    {
+        $this->assertSame('Cockpit', PageController::canonicalMainTab('Cockpit'));
+        $this->assertSame('Race Strategy', PageController::canonicalMainTab('Race Strategy'));
+        $this->assertSame('Division Baseline', PageController::canonicalMainTab('Division Baseline'));
+    }
+
+    public function testCanonicalMainTabPassesUnknownStringsThrough(): void
+    {
+        $this->assertSame('Nonsense', PageController::canonicalMainTab('Nonsense'));
+        $this->assertSame('', PageController::canonicalMainTab(''));
+    }
 }
