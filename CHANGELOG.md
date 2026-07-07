@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Each entry mirrors its annotated release tag.
 
+## [1.10.1] - 2026-07-07
+- Silverstone track data refreshed for GPRO's layout redesign, verified against the live GPRO API: handling 11→12, downforce Low→Medium, lap 5.138→5.89 km, 60→52 laps, distance 308.3→306.3 km, 14→18 corners, avg speed 225.46→266.09 km/h, pit in/out 22.5→24.5 s.
+- Indianapolis Oval event length corrected (80→200 laps, 321.8→804.4 km, avg speed 408.42→471.65 km/h) — caught by a full 64-track drift sweep against the API; all other tracks matched.
+- Seeder schema version bumped (4→5) so existing databases re-run the idempotent track reseed on the first request after deploy.
+
 ## [1.10.0] - 2026-07-07
 - Cockpit density overhaul (P2 of the 1.x roadmap): new decision summary board at the top — one verdict tile per card (PHA match, testing, weather, training, sponsors, car wear) plus a "next step" tile; each tile links to its card and opens it on click.
 - Every cockpit card is now a collapsible accordion with its verdict repeated in the header (closed by default on mobile, open on first desktop visit, choice persisted per session). Card order keeps the decision sequence.

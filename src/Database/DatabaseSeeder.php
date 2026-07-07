@@ -10,11 +10,13 @@ use App\Security\ApiTokenCrypto;
 class DatabaseSeeder
 {
     /**
-     * Bump this whenever a migration/seed step is added or changed below. The
-     * boot path calls migrate() on every request; this version is the gate that
-     * lets a warm database skip the entire DDL + scan + legacy-encryption pass.
+     * Bump this whenever a migration/seed step is added or changed below — or
+     * when data/tracks.csv changes: prod is SFTP-only, so this gate is the only
+     * thing that makes a warm database re-run seedTracksFromCsv. The boot path
+     * calls migrate() on every request; this version lets a warm database skip
+     * the entire DDL + scan + legacy-encryption pass.
      */
-    private const int SCHEMA_VERSION = 4;
+    private const int SCHEMA_VERSION = 5;
 
     /**
      * @param array<string, string> $statsSchema
