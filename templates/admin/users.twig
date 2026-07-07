@@ -52,7 +52,7 @@
     </div>
 
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div class="bg-white rounded-xl border border-slate-200 shadow-sm px-5 py-4">
+        <div class="card px-5 py-4">
             <p class="t-label">Registered</p>
             <p class="mt-1 text-2xl font-semibold text-slate-900 tabular-nums">{{ stats.total }}</p>
             <p class="t-caption mt-1">
@@ -60,7 +60,7 @@
             </p>
         </div>
 
-        <div class="bg-white rounded-xl border border-slate-200 shadow-sm px-5 py-4">
+        <div class="card px-5 py-4">
             <div class="flex items-start justify-between gap-2">
                 <p class="t-label">Active · {{ stats.window_days }}d</p>
                 {{ ui.trend_badge(stats.active) }}
@@ -69,7 +69,7 @@
             <p class="t-caption mt-1">synced recently · was {{ stats.active.previous }}</p>
         </div>
 
-        <div class="bg-white rounded-xl border border-slate-200 shadow-sm px-5 py-4">
+        <div class="card px-5 py-4">
             <div class="flex items-start justify-between gap-2">
                 <p class="t-label">New signups · {{ stats.window_days }}d</p>
                 {{ ui.trend_badge(stats.signups) }}
@@ -78,7 +78,7 @@
             <p class="t-caption mt-1">joined · was {{ stats.signups.previous }}</p>
         </div>
 
-        <div class="bg-white rounded-xl border border-slate-200 shadow-sm px-5 py-4">
+        <div class="card px-5 py-4">
             <p class="t-label">API-linked</p>
             <p class="mt-1 text-2xl font-semibold text-slate-900 tabular-nums">{{ stats.with_token }}</p>
             <p class="t-caption mt-1">
@@ -98,7 +98,7 @@
         </div>
     {% endif %}
 
-    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+    <div class="card">
         <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-slate-200" data-sortable-table>
                 <thead class="bg-slate-50">
@@ -204,8 +204,8 @@
         {% endif %}
     </div>
 
-    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div class="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-baseline justify-between">
+    <div class="card">
+        <div class="card-hd flex items-baseline justify-between">
             <h2 class="t-heading">Recent admin actions</h2>
             <span class="t-caption">Newest first · last {{ audit|length }}</span>
         </div>

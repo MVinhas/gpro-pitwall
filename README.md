@@ -30,6 +30,8 @@ If working things out from scratch is the part you enjoy, do that first — then
 
 Everything lives behind a **sticky top tab bar** — a horizontally scrollable pill bar on mobile (replacing the old dropdown), an underline tab bar on desktop, grouped by intent (race weekend / team building / admin). Tabs carry short labels (Strategy, Training, Recruitment) and the old full-name URLs still resolve. On the Cockpit and Race Strategy tabs a compact `① Cockpit → ② Strategy` stepper links the two connected steps. Signed-in users get a header status strip — name, last sync and a **re-sync button** beside a live billboard (cash, division, next race).
 
+Every page shares one visual system: a common card component, one-line stale-data notices, and verdict-first accordions whose summaries stay informative while closed. Phone-first density is deliberate — key tables keep their answer column on-screen at 375 px (less-critical columns appear from tablet width up), disclosure summaries have visible keyboard-focus rings, animations respect `prefers-reduced-motion`, and every form — including the slider-driven ones — still submits without JavaScript.
+
 ### Cockpit (the race-weekend spine)
 One screen, in race-prep order. A **decision summary board** leads: one verdict tile per card (jump-links that open the matching card), so every call is readable without scrolling. Each card below is a collapsible accordion that repeats its verdict in the header — closed by default on mobile, open on first visit on desktop, your choice remembered per session. Desktop lays the cards out in two columns:
 

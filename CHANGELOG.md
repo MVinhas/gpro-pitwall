@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Each entry mirrors its annotated release tag.
 
+## [1.12.0] - 2026-07-07
+- Consistency pass on every remaining tab (P4 of the 1.x roadmap): all cards app-wide now use the shared `.card`/`.card-hd`/`.card-bd` component classes — zero raw card-utility strings left in templates; admin, auth, contact and control-panel pages normalized to the same radius/shadow.
+- Car Wear tab: the read-only driver-stats block is a collapsed "Driver — from last sync" accordion; the results table matches the cockpit wear idiom (tighter rows, severity-tinted rows) and keeps the End Wear verdict on-screen at 375 px.
+- Training tab: driver stats and schedule grouped behind two accordions (open by default on desktop) with an always-visible totals row (sessions + cost, live-updating, server-rendered without JS).
+- Testing and Car Wear "Changed the car?" banners slimmed to one line; Recruitment's info banner likewise.
+- Mobile table diet: the strategy compound table (Minimum fuel), Testing points-decay stages and wear "Current" columns hide below tablet width so each table's answer column stays on-screen at 375 px with zero horizontal scroll.
+- Accessibility + no-JS hygiene (P5): global keyboard-focus ring on all accordion summaries, `prefers-reduced-motion` now also disables micro-transitions, and the two slider-only forms (Car Wear tab, cockpit wear card) gained `<noscript>` submit buttons — previously they could not be submitted without JavaScript.
+- Verified end-to-end on a live isolated instance across 375/768/1280 px; mobile page heights re-measured against the 1.x baselines (Cockpit ~8.3 → ~2.4 screens, Strategy ~5.9 → ~3.8).
+
 ## [1.11.0] - 2026-07-07
 - Global chrome + navigation overhaul (P3 of the 1.x roadmap): the tab bar is now sticky on all viewports (translucent, blurred) so navigation never requires scrolling back up; on mobile the dropdown is replaced by a horizontally scrollable pill bar (one tap, siblings visible, active pill auto-centred, plain links so it works without JS).
 - Nav grouped by intent: divider between the race-weekend cluster (Cockpit · Strategy · Car Wear · Testing) and team-building (Training · Recruitment), plus an "Admin" label before the admin-only division tabs. Order unchanged.

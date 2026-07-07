@@ -94,17 +94,18 @@
                 <table class="min-w-full divide-y divide-slate-200">
                     <thead class="bg-slate-800">
                         <tr>
-                            <th rowspan="2" class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-white">Compound</th>
-                            <th rowspan="2" class="px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-white">Stops</th>
-                            <th colspan="2" class="px-4 py-2 text-center text-xs font-bold uppercase tracking-wide text-white border-b border-slate-700">Fuel / Stint</th>
+                            <th rowspan="2" class="px-3 sm:px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-white">Compound</th>
+                            <th rowspan="2" class="px-2 sm:px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-white">Stops</th>
+                            <th colspan="2" class="hidden sm:table-cell px-4 py-2 text-center text-xs font-bold uppercase tracking-wide text-white border-b border-slate-700">Fuel / Stint</th>
+                            <th class="sm:hidden px-3 py-2 text-center text-xs font-bold uppercase tracking-wide text-white border-b border-slate-700">Fuel / Stint</th>
                             <th rowspan="2" class="hidden md:table-cell px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-white">Est. Pit</th>
                             <th rowspan="2" class="hidden md:table-cell px-4 py-3 text-center text-xs font-medium uppercase tracking-wide text-slate-400 border-l border-slate-600">Lost (Pits)</th>
                             <th rowspan="2" class="hidden md:table-cell px-4 py-3 text-center text-xs font-medium uppercase tracking-wide text-slate-400">Lost (Fuel)</th>
                             <th rowspan="2" class="hidden md:table-cell px-4 py-3 text-center text-xs font-medium uppercase tracking-wide text-slate-400">Lost (TCD)</th>
-                            <th rowspan="2" class="px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-white bg-slate-900">Total Lost</th>
+                            <th rowspan="2" class="px-2 sm:px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-white bg-slate-900">Total Lost</th>
                         </tr>
                         <tr>
-                            <th class="px-3 py-1.5 text-center text-[10px] font-medium uppercase tracking-wide text-slate-400" title="Bare-minimum fuel to finish the stint; no safety margin.">Minimum</th>
+                            <th class="hidden sm:table-cell px-3 py-1.5 text-center text-[10px] font-medium uppercase tracking-wide text-slate-400" title="Bare-minimum fuel to finish the stint; no safety margin.">Minimum</th>
                             <th class="px-3 py-1.5 text-center text-[10px] font-medium uppercase tracking-wide text-slate-400" title="Minimum + 1 extra lap of fuel — buffer against bad pit timing.">Recommended</th>
                         </tr>
                     </thead>
@@ -112,16 +113,16 @@
                         {% for comp, data in strategy_results.tyres %}
                             {% set is_best = (comp == strategy_results.best_compound) %}
                             <tr class="transition-colors {{ is_best ? 'bg-emerald-50 hover:bg-emerald-100' : 'hover:bg-slate-50' }}">
-                                <td class="px-4 py-3 text-sm font-bold text-slate-900">
+                                <td class="px-3 sm:px-4 py-3 text-sm font-bold text-slate-900">
                                     {% if is_best %}
                                         <span class="inline-flex items-center rounded-md bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white mr-2 align-middle">★ Best</span>
                                     {% endif %}
                                     {{ comp }}
                                 </td>
-                                <td class="px-4 py-3 text-center text-sm font-bold tabular-nums {{ data.stops > 3 ? 'text-red-500' : (is_best ? 'text-emerald-700' : 'text-blue-600') }}">
+                                <td class="px-2 sm:px-4 py-3 text-center text-sm font-bold tabular-nums {{ data.stops > 3 ? 'text-red-500' : (is_best ? 'text-emerald-700' : 'text-blue-600') }}">
                                     {{ data.stops }}
                                 </td>
-                                <td class="px-3 py-3 text-center text-sm text-slate-500 tabular-nums">{{ data.fuel_load }} L</td>
+                                <td class="hidden sm:table-cell px-3 py-3 text-center text-sm text-slate-500 tabular-nums">{{ data.fuel_load }} L</td>
                                 <td class="px-3 py-3 text-center text-sm font-semibold tabular-nums {{ is_best ? 'text-emerald-700' : 'text-blue-600' }}">{{ data.fuel_recommended }} L</td>
                                 <td class="hidden md:table-cell px-4 py-3 text-center text-sm text-slate-500 tabular-nums">{{ data.pit_time_est }}s</td>
 
@@ -135,7 +136,7 @@
                                     {{ data.lost_tcd }}
                                 </td>
 
-                                <td class="px-4 py-3 text-center text-sm font-bold tabular-nums border-l border-slate-200 {{ is_best ? 'text-emerald-700 bg-emerald-100' : 'text-slate-900 bg-slate-50' }}">
+                                <td class="px-2 sm:px-4 py-3 text-center text-sm font-bold tabular-nums border-l border-slate-200 {{ is_best ? 'text-emerald-700 bg-emerald-100' : 'text-slate-900 bg-slate-50' }}">
                                     {{ data.total_lost }}s
                                 </td>
                             </tr>
