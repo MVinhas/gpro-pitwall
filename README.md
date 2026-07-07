@@ -28,6 +28,8 @@ If working things out from scratch is the part you enjoy, do that first — then
 
 ## Features
 
+Everything lives behind a **sticky top tab bar** — a horizontally scrollable pill bar on mobile (replacing the old dropdown), an underline tab bar on desktop, grouped by intent (race weekend / team building / admin). Tabs carry short labels (Strategy, Training, Recruitment) and the old full-name URLs still resolve. On the Cockpit and Race Strategy tabs a compact `① Cockpit → ② Strategy` stepper links the two connected steps. Signed-in users get a header status strip — name, last sync and a **re-sync button** beside a live billboard (cash, division, next race).
+
 ### Cockpit (the race-weekend spine)
 One screen, in race-prep order. A **decision summary board** leads: one verdict tile per card (jump-links that open the matching card), so every call is readable without scrolling. Each card below is a collapsible accordion that repeats its verdict in the header — closed by default on mobile, open on first visit on desktop, your choice remembered per session. Desktop lays the cards out in two columns:
 
@@ -142,7 +144,7 @@ Per-page titles, meta descriptions and canonical URLs via Twig blocks (override 
 - **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile).
 - **SQLite** via PDO. Encrypted user emails (AES-256-GCM) and API tokens at rest.
 - **PHPMailer 7** for SMTP; in dev, writes `.eml` files to `var/mail/` instead.
-- **PHPUnit 13** — 359 tests, 925 assertions, all green at **PHPStan level 8** with **type-coverage** enforced (100% return/property/constant types + `strict_types`, 99.5% param types). Twig templates linted by a native `bin/twig_lint.php` (Twig's own tokenizer/parser — no third-party linter). CI runs the suite with `pcov` and enforces a minimum statement-coverage floor via `bin/check_coverage.php` (provisional 55%, to be ratcheted up as real coverage becomes known).
+- **PHPUnit 13** — 362 tests, 933 assertions, all green at **PHPStan level 8** with **type-coverage** enforced (100% return/property/constant types + `strict_types`, 99.5% param types). Twig templates linted by a native `bin/twig_lint.php` (Twig's own tokenizer/parser — no third-party linter). CI runs the suite with `pcov` and enforces a minimum statement-coverage floor via `bin/check_coverage.php` (provisional 55%, to be ratcheted up as real coverage becomes known).
 - **No framework.** Custom front controller + flat DI container in `bootstrap.php`. Routes in `config/routes.php`.
 - **Timestamps are stored and served as UTC**, then localised per-visitor in the browser (`<time data-localtime>` + `Intl`), so each user sees their own timezone with no server-side config.
 

@@ -2,6 +2,12 @@
    in every URL pollutes the bar and confuses users on the Car Wear /
    Strategy / Recruitment tabs. Compute per-link. #}
 {% set division_tabs = ['Division Baseline', 'Division Differences'] %}
+
+{# Short display labels. Canonical routing keys stay unchanged everywhere;
+   PageController::canonicalMainTab resolves these aliases back on the way in,
+   so old URLs keep working. #}
+{% set tab_labels = {'Race Strategy': 'Strategy', 'Training Planner': 'Training', 'Recruitment Analyzer': 'Recruitment'} %}
+
 {% macro tab_href(section, active_division, active_track, division_tabs) %}
     {%- set href = '?main_tab=' ~ section|url_encode -%}
     {%- if section in division_tabs -%}
@@ -13,34 +19,92 @@
     {{- href -}}
 {% endmacro %}
 
-<nav class="mb-8">
-    <div class="md:hidden">
-        {# Mobile Dropdown fallback #}
-        <label for="tabs" class="sr-only">Select a tab</label>
-        <select id="tabs" name="tabs" class="form-select" onchange="window.location.href=this.value">
-            {% for section in main_sections %}
-                <option value="{{ _self.tab_href(section, active_division, active_track, division_tabs) }}" {{ section == active_main_tab ? 'selected' : '' }}>
-                    {{ section }}
-                </option>
-            {% endfor %}
-        </select>
+{# Intent grouping: race-weekend flow, then team-building, then admin. Used to
+   drop a divider (and an "Admin" chip) whenever the group changes in the loop —
+   no reordering of the sections themselves. #}
+{% macro group_of(section, division_tabs) %}
+{%- if section in division_tabs -%}admin
+{%- elseif section in ['Training Planner', 'Recruitment Analyzer'] -%}team
+{%- else -%}race
+{%- endif -%}
+{% endmacro %}
+
+<nav class="sticky top-0 z-40 -mx-4 px-4 mb-6 bg-slate-100/95 backdrop-blur-sm" aria-label="Primary">
+    {# Mobile: horizontally scrollable pill bar (was a dropdown). Plain links —
+       works without JS; a tiny script below just centres the active pill. #}
+    <div class="md:hidden flex overflow-x-auto gap-2 no-scrollbar py-2" data-nav-pills>
+        {% for section in main_sections %}
+            {% set group = _self.group_of(section, division_tabs)|trim %}
+            {% set prev_group = loop.first ? '' : _self.group_of(main_sections[loop.index0 - 1], division_tabs)|trim %}
+            {% if not loop.first and group != prev_group %}
+                <span class="shrink-0 self-center h-6 border-l border-slate-300" aria-hidden="true"></span>
+                {% if group == 'admin' %}
+                    <span class="shrink-0 self-center t-label px-1">Admin</span>
+                {% endif %}
+            {% endif %}
+            {% set label = tab_labels[section]|default(section) %}
+            {% set is_active = (section == active_main_tab) %}
+            <a href="{{ _self.tab_href(section, active_division, active_track, division_tabs) }}"
+               class="shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium transition-colors
+                      {{ is_active
+                         ? 'bg-blue-600 text-white'
+                         : 'bg-white text-slate-600 ring-1 ring-inset ring-slate-200 hover:bg-slate-50 hover:text-slate-800' }}"
+               {% if is_active %}aria-current="page"{% endif %}>
+                {{ label }}
+            </a>
+        {% endfor %}
     </div>
 
-    <div class="hidden md:block">
-        <div class="border-b border-slate-200">
-            <nav class="-mb-px flex space-x-8" aria-label="Tabs">
-                {% for section in main_sections %}
-                    {% set is_active = (section == active_main_tab) %}
-                    <a href="{{ _self.tab_href(section, active_division, active_track, division_tabs) }}"
-                       class="whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors duration-200
-                              {{ is_active
-                                 ? 'border-blue-600 text-blue-600'
-                                 : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700'
-                              }}">
-                        {{ section }}
-                    </a>
-                {% endfor %}
-            </nav>
+    {# Desktop: underline tab bar. #}
+    <div class="hidden md:block border-b border-slate-200">
+        <div class="-mb-px flex gap-6">
+            {% for section in main_sections %}
+                {% set group = _self.group_of(section, division_tabs)|trim %}
+                {% set prev_group = loop.first ? '' : _self.group_of(main_sections[loop.index0 - 1], division_tabs)|trim %}
+                {% if not loop.first and group != prev_group %}
+                    <span class="self-center h-5 border-l border-slate-300" aria-hidden="true"></span>
+                    {% if group == 'admin' %}
+                        <span class="self-center t-label whitespace-nowrap">Admin</span>
+                    {% endif %}
+                {% endif %}
+                {% set label = tab_labels[section]|default(section) %}
+                {% set is_active = (section == active_main_tab) %}
+                <a href="{{ _self.tab_href(section, active_division, active_track, division_tabs) }}"
+                   class="whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors duration-200
+                          {{ is_active
+                             ? 'border-blue-600 text-blue-600'
+                             : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700' }}"
+                   {% if is_active %}aria-current="page"{% endif %}>
+                    {{ label }}
+                </a>
+            {% endfor %}
         </div>
     </div>
 </nav>
+
+{# Weekend-flow stepper — sits UNDER the sticky nav (outside it, so it scrolls
+   away). Only on the two connected steps. #}
+{% if active_main_tab in ['Cockpit', 'Race Strategy'] %}
+    {% set on_cockpit = (active_main_tab == 'Cockpit') %}
+    <div class="-mt-2 mb-6 flex items-center gap-2 text-xs">
+        <a href="{{ _self.tab_href('Cockpit', active_division, active_track, division_tabs) }}"
+           class="rounded-full px-2 py-0.5 transition-colors
+                  {{ on_cockpit ? 'bg-blue-50 text-blue-700 font-semibold ring-1 ring-inset ring-blue-200' : 'text-slate-500 hover:text-slate-700' }}"
+           {% if on_cockpit %}aria-current="step"{% endif %}>① Cockpit</a>
+        <span class="text-slate-400" aria-hidden="true">→</span>
+        <a href="{{ _self.tab_href('Race Strategy', active_division, active_track, division_tabs) }}"
+           class="rounded-full px-2 py-0.5 transition-colors
+                  {{ not on_cockpit ? 'bg-blue-50 text-blue-700 font-semibold ring-1 ring-inset ring-blue-200' : 'text-slate-500 hover:text-slate-700' }}"
+           {% if not on_cockpit %}aria-current="step"{% endif %}>② Strategy</a>
+    </div>
+{% endif %}
+
+<script>
+// Centre the active mobile pill on load so the current tab is always visible in
+// the scroll bar. No-op on desktop (the pill bar is display:none) and for
+// no-JS users (the links still work, just not auto-centred).
+(() => {
+    const active = document.querySelector('[data-nav-pills] [aria-current="page"]');
+    if (active) active.scrollIntoView({ inline: 'center', block: 'nearest' });
+})();
+</script>

@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Each entry mirrors its annotated release tag.
 
+## [1.11.0] - 2026-07-07
+- Global chrome + navigation overhaul (P3 of the 1.x roadmap): the tab bar is now sticky on all viewports (translucent, blurred) so navigation never requires scrolling back up; on mobile the dropdown is replaced by a horizontally scrollable pill bar (one tap, siblings visible, active pill auto-centred, plain links so it works without JS).
+- Nav grouped by intent: divider between the race-weekend cluster (Cockpit · Strategy · Car Wear · Testing) and team-building (Training · Recruitment), plus an "Admin" label before the admin-only division tabs. Order unchanged.
+- Shorter tab labels (Strategy, Training, Recruitment) — display-only: canonical routing keys are unchanged and a unit-tested alias map (`PageController::canonicalMainTab`) accepts the short names, so old bookmarked URLs keep resolving.
+- Weekend-flow stepper on the Cockpit and Race Strategy tabs: a one-line `① Cockpit → ② Strategy` chip row under the tab bar, current step highlighted.
+- Header diet on mobile: smaller logo and title, tagline hidden, tighter padding.
+- The dedicated re-sync band is gone; the re-sync button (spinner intact, now compact) lives in the signed-in status strip beside "Last sync", one border-row less of chrome.
+
 ## [1.10.1] - 2026-07-07
 - Silverstone track data refreshed for GPRO's layout redesign, verified against the live GPRO API: handling 11→12, downforce Low→Medium, lap 5.138→5.89 km, 60→52 laps, distance 308.3→306.3 km, 14→18 corners, avg speed 225.46→266.09 km/h, pit in/out 22.5→24.5 s.
 - Indianapolis Oval event length corrected (80→200 laps, 321.8→804.4 km, avg speed 408.42→471.65 km/h) — caught by a full 64-track drift sweep against the API; all other tracks matched.
