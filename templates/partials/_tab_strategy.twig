@@ -1,85 +1,18 @@
 {% import "partials/_localtime.twig" as t %}
-<div class="mb-4 rounded-md bg-amber-50 border-l-4 border-amber-400 p-4 shadow-sm">
-    <p class="text-sm text-amber-800">
-        <span class="font-bold">Changed the car?</span>
-        Re-sync first — the strategy below uses your last-synced car data{% if user.last_synced_at %} (last sync: {{ t.localtime(user.last_synced_at, 'datetime') }}){% endif %}.
-    </p>
+<div class="notice notice-warn notice-slim mb-4">
+    <span class="font-bold">Changed the car?</span>
+    Re-sync first — strategy uses your last sync{% if user.last_synced_at %} ({{ t.localtime(user.last_synced_at, 'datetime') }}){% endif %}.
 </div>
 
 <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
     {# LEFT: Configuration Panel #}
-    <div class="lg:col-span-3">
+    <div class="lg:col-span-3 lg:sticky lg:top-16 self-start">
         <form method="POST" action="/calculate_strategy" id="stratForm">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
-            {# CARD 1: DRIVER — informative, from the last sync #}
-            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-4">
-                <div class="px-4 py-2 border-b border-slate-200 bg-slate-50 flex items-baseline justify-between">
-                    <h3 class="t-section">Driver</h3>
-                    <span class="text-[10px] text-slate-400">from last sync</span>
-                </div>
-                {% set d = strategy_results.stats.driver %}
-                <div class="px-4 py-3 grid grid-cols-2 gap-x-8 gap-y-1 text-xs">
-                    {% for key, label in {
-                        'concentration':     'Concentration',
-                        'talent':            'Talent',
-                        'aggressiveness':    'Aggressiveness',
-                        'experience':        'Experience',
-                        'technical_insight': 'Tech Insight',
-                        'weight':            'Weight'
-                    } %}
-                        <span class="flex justify-between gap-2">
-                            <span class="text-slate-400">{{ label }}</span>
-                            <span class="font-semibold text-slate-700 tabular-nums">{{ d[key] }}</span>
-                        </span>
-                    {% endfor %}
-                </div>
-            </div>
-
-            {# CARD 2: TEAM — informative, from the last sync #}
-            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-4">
-                <div class="px-4 py-2 border-b border-slate-200 bg-slate-50 flex items-baseline justify-between">
-                    <h3 class="t-section">Team</h3>
-                    <span class="text-[10px] text-slate-400">from last sync</span>
-                </div>
-                <div class="px-4 py-3 space-y-1 text-xs">
-                    <p class="t-label">Car Levels</p>
-                    <div class="grid grid-cols-2 gap-x-8 gap-y-1">
-                        {% for key, label in { 'lvlEngine': 'Engine', 'lvlSusp': 'Suspension', 'lvlElectronics': 'Electronics' } %}
-                            <span class="flex justify-between gap-2">
-                                <span class="text-slate-400">{{ label }}</span>
-                                <span class="font-semibold text-slate-700 tabular-nums">{{ strategy_results.stats.car[key] }}</span>
-                            </span>
-                        {% endfor %}
-                    </div>
-                    <p class="t-label pt-2">Staff</p>
-                    <div class="grid grid-cols-2 gap-x-8 gap-y-1">
-                        <span class="flex justify-between gap-2">
-                            <span class="text-slate-400">Concentration</span>
-                            <span class="font-semibold text-slate-700 tabular-nums">{{ strategy_results.stats.staff.concentration }}</span>
-                        </span>
-                        <span class="flex justify-between gap-2">
-                            <span class="text-slate-400">Stress Handling</span>
-                            <span class="font-semibold text-slate-700 tabular-nums">{{ strategy_results.stats.staff.stressHandling }}</span>
-                        </span>
-                    </div>
-                    <p class="t-label pt-2">Tech Director</p>
-                    <div class="grid grid-cols-2 gap-x-8 gap-y-1">
-                        <span class="flex justify-between gap-2">
-                            <span class="text-slate-400">Experience</span>
-                            <span class="font-semibold text-slate-700 tabular-nums">{{ strategy_results.stats.td.experience }}</span>
-                        </span>
-                        <span class="flex justify-between gap-2">
-                            <span class="text-slate-400">Pit Coordination</span>
-                            <span class="font-semibold text-slate-700 tabular-nums">{{ strategy_results.stats.td.pitCoordination }}</span>
-                        </span>
-                    </div>
-                </div>
-            </div>
-
-            {# CARD 3: RACE SETTINGS #}
-            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-4">
+            {# CARD: RACE SETTINGS #}
+            <div class="card mb-4">
                 <div class="px-4 py-3 border-b border-slate-200 bg-slate-50">
                     <h3 class="t-section">Race Settings</h3>
                 </div>
@@ -147,6 +80,79 @@
                 Calculate Strategy
             </button>
         </form>
+
+        {# Read-only reference: driver/car/staff snapshot from the last sync #}
+        <div class="mt-4">
+            {% embed 'partials/_acc.twig' with {
+                id: 'strategy-data',
+                title: 'Data used — from last sync',
+                caption: 'Driver, car and staff snapshot',
+                stats: strategy_results.stats,
+                last_synced_at: user.last_synced_at
+            } only %}
+                {% block verdict %}
+                    {% import 'partials/_localtime.twig' as t %}
+                    {% if last_synced_at %}
+                        <span class="text-xs text-slate-500 tabular-nums">{{ t.localtime(last_synced_at, 'datetime') }}</span>
+                    {% endif %}
+                {% endblock %}
+                {% block body %}
+                    <div class="grid sm:grid-cols-2 gap-x-8 gap-y-3">
+                        <div class="space-y-1 text-xs">
+                            <p class="t-label">Driver</p>
+                            <div class="grid grid-cols-2 gap-x-8 gap-y-1">
+                                {% for key, label in {
+                                    'concentration':     'Concentration',
+                                    'talent':            'Talent',
+                                    'aggressiveness':    'Aggressiveness',
+                                    'experience':        'Experience',
+                                    'technical_insight': 'Tech Insight',
+                                    'weight':            'Weight'
+                                } %}
+                                    <span class="flex justify-between gap-2">
+                                        <span class="text-slate-400">{{ label }}</span>
+                                        <span class="font-semibold text-slate-700 tabular-nums">{{ stats.driver[key] }}</span>
+                                    </span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <div class="space-y-1 text-xs">
+                            <p class="t-label">Car Levels</p>
+                            <div class="grid grid-cols-2 gap-x-8 gap-y-1">
+                                {% for key, label in { 'lvlEngine': 'Engine', 'lvlSusp': 'Suspension', 'lvlElectronics': 'Electronics' } %}
+                                    <span class="flex justify-between gap-2">
+                                        <span class="text-slate-400">{{ label }}</span>
+                                        <span class="font-semibold text-slate-700 tabular-nums">{{ stats.car[key] }}</span>
+                                    </span>
+                                {% endfor %}
+                            </div>
+                            <p class="t-label pt-2">Staff</p>
+                            <div class="grid grid-cols-2 gap-x-8 gap-y-1">
+                                <span class="flex justify-between gap-2">
+                                    <span class="text-slate-400">Concentration</span>
+                                    <span class="font-semibold text-slate-700 tabular-nums">{{ stats.staff.concentration }}</span>
+                                </span>
+                                <span class="flex justify-between gap-2">
+                                    <span class="text-slate-400">Stress Handling</span>
+                                    <span class="font-semibold text-slate-700 tabular-nums">{{ stats.staff.stressHandling }}</span>
+                                </span>
+                            </div>
+                            <p class="t-label pt-2">Tech Director</p>
+                            <div class="grid grid-cols-2 gap-x-8 gap-y-1">
+                                <span class="flex justify-between gap-2">
+                                    <span class="text-slate-400">Experience</span>
+                                    <span class="font-semibold text-slate-700 tabular-nums">{{ stats.td.experience }}</span>
+                                </span>
+                                <span class="flex justify-between gap-2">
+                                    <span class="text-slate-400">Pit Coordination</span>
+                                    <span class="font-semibold text-slate-700 tabular-nums">{{ stats.td.pitCoordination }}</span>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                {% endblock %}
+            {% endembed %}
+        </div>
     </div>
 
     {# RIGHT: Results Display #}
