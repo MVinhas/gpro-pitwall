@@ -1,317 +1,516 @@
 # Changelog
 
-All notable changes to GPRO Pitwall are documented here.
+All notable changes to GPRO Pitwall are documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-Each entry mirrors its annotated release tag.
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
+project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+Every release is published as an annotated git tag of the same name.
+
+## [1.12.2] - 2026-07-08
+
+### Changed
+- README rewritten for first-time visitors: banner image, condensed per-tab feature tour, configuration split into required vs optional keys, tightened deployment/security sections.
+- CHANGELOG restructured into Keep a Changelog categories (Added / Changed / Fixed / Removed / Security) with tightened entries — content unchanged.
+
+### Fixed
+- README claimed a "provisional 55%" CI coverage floor; the enforced floor has been 45% since 1.7.10.
 
 ## [1.12.1] - 2026-07-07
-- Strategy verdict now compares same-type tyres only: on a dry race the best compound and its "beats X by Ys" runner-up are both dry (Rain no longer appears as a nonsense runner-up); on a wet race Rain is recommended outright with no runner-up line — there is only one wet compound to choose.
-- The best-compound pick follows the effective race weather (the forecast default, overridable via the Race weather select) instead of the forecast-only flag, so the verdict stays coherent with the setup column, risk advice and push signals on the same screen.
-- README: added CI, release, PHP, PHPStan, coverage-floor and PSR-12 badges.
+
+### Fixed
+- Strategy verdict compares same-type tyres only: on a dry race the best compound and its "beats X" runner-up are both dry (Rain no longer appears as a nonsense runner-up); on a wet race Rain is recommended outright with no runner-up line — it is the only wet compound.
+- The best-compound pick follows the effective race weather (forecast default, overridable via the Race weather select), keeping the verdict coherent with the setup column, risk advice and push signals on the same screen.
+
+### Added
+- README status badges: CI, release, PHP, PHPStan, coverage floor, PSR-12.
 
 ## [1.12.0] - 2026-07-07
-- Consistency pass on every remaining tab (P4 of the 1.x roadmap): all cards app-wide now use the shared `.card`/`.card-hd`/`.card-bd` component classes — zero raw card-utility strings left in templates; admin, auth, contact and control-panel pages normalized to the same radius/shadow.
-- Car Wear tab: the read-only driver-stats block is a collapsed "Driver — from last sync" accordion; the results table matches the cockpit wear idiom (tighter rows, severity-tinted rows) and keeps the End Wear verdict on-screen at 375 px.
-- Training tab: driver stats and schedule grouped behind two accordions (open by default on desktop) with an always-visible totals row (sessions + cost, live-updating, server-rendered without JS).
-- Testing and Car Wear "Changed the car?" banners slimmed to one line; Recruitment's info banner likewise.
-- Mobile table diet: the strategy compound table (Minimum fuel), Testing points-decay stages and wear "Current" columns hide below tablet width so each table's answer column stays on-screen at 375 px with zero horizontal scroll.
-- Accessibility + no-JS hygiene (P5): global keyboard-focus ring on all accordion summaries, `prefers-reduced-motion` now also disables micro-transitions, and the two slider-only forms (Car Wear tab, cockpit wear card) gained `<noscript>` submit buttons — previously they could not be submitted without JavaScript.
-- Verified end-to-end on a live isolated instance across 375/768/1280 px; mobile page heights re-measured against the 1.x baselines (Cockpit ~8.3 → ~2.4 screens, Strategy ~5.9 → ~3.8).
+
+### Changed
+- App-wide consistency pass (P4 of the 1.x roadmap): every card uses the shared `.card` / `.card-hd` / `.card-bd` component classes — zero raw card-utility strings left; admin, auth, contact and control-panel pages normalized to the same radius/shadow.
+- Car Wear tab: driver stats collapsed into a "Driver — from last sync" accordion; the results table matches the cockpit wear idiom and keeps the End Wear verdict on-screen at 375 px.
+- Training tab: driver stats and schedule grouped behind two accordions with an always-visible totals row (sessions + cost, server-rendered).
+- Info banners on Testing, Car Wear and Recruitment slimmed to one line.
+- Mobile table diet: the strategy Minimum-fuel, Testing decay-stage and wear Current columns hide below tablet width — no horizontal scroll at 375 px. Mobile page heights re-measured: Cockpit ~8.3 → ~2.4 screens, Strategy ~5.9 → ~3.8.
+
+### Added
+- Accessibility + no-JS hygiene (P5): global keyboard-focus ring on accordion summaries, `prefers-reduced-motion` also disables micro-transitions, and the two slider-only forms gained `<noscript>` submit buttons — previously unsubmittable without JavaScript.
 
 ## [1.11.0] - 2026-07-07
-- Global chrome + navigation overhaul (P3 of the 1.x roadmap): the tab bar is now sticky on all viewports (translucent, blurred) so navigation never requires scrolling back up; on mobile the dropdown is replaced by a horizontally scrollable pill bar (one tap, siblings visible, active pill auto-centred, plain links so it works without JS).
-- Nav grouped by intent: divider between the race-weekend cluster (Cockpit · Strategy · Car Wear · Testing) and team-building (Training · Recruitment), plus an "Admin" label before the admin-only division tabs. Order unchanged.
-- Shorter tab labels (Strategy, Training, Recruitment) — display-only: canonical routing keys are unchanged and a unit-tested alias map (`PageController::canonicalMainTab`) accepts the short names, so old bookmarked URLs keep resolving.
-- Weekend-flow stepper on the Cockpit and Race Strategy tabs: a one-line `① Cockpit → ② Strategy` chip row under the tab bar, current step highlighted.
-- Header diet on mobile: smaller logo and title, tagline hidden, tighter padding.
-- The dedicated re-sync band is gone; the re-sync button (spinner intact, now compact) lives in the signed-in status strip beside "Last sync", one border-row less of chrome.
+
+### Added
+- Sticky tab bar on all viewports (translucent, blurred); the mobile dropdown replaced by a horizontally scrollable pill bar — one tap, siblings visible, plain links so it works without JS (P3 of the 1.x roadmap).
+- Weekend-flow stepper on the Cockpit and Race Strategy tabs: a one-line `① Cockpit → ② Strategy` chip row, current step highlighted.
+
+### Changed
+- Nav grouped by intent: race-weekend cluster, team-building cluster, and an "Admin" label before the admin-only tabs. Order unchanged.
+- Shorter tab labels (Strategy, Training, Recruitment) — display-only; a unit-tested alias map keeps old bookmarked URLs resolving.
+- Mobile header diet: smaller logo and title, tagline hidden; the dedicated re-sync band removed — the re-sync button now lives in the signed-in status strip beside "Last sync".
 
 ## [1.10.1] - 2026-07-07
-- Silverstone track data refreshed for GPRO's layout redesign, verified against the live GPRO API: handling 11→12, downforce Low→Medium, lap 5.138→5.89 km, 60→52 laps, distance 308.3→306.3 km, 14→18 corners, avg speed 225.46→266.09 km/h, pit in/out 22.5→24.5 s.
-- Indianapolis Oval event length corrected (80→200 laps, 321.8→804.4 km, avg speed 408.42→471.65 km/h) — caught by a full 64-track drift sweep against the API; all other tracks matched.
+
+### Fixed
+- Silverstone track data refreshed for GPRO's layout redesign, verified against the live API: handling 11→12, downforce Low→Medium, lap 5.138→5.89 km, 60→52 laps, 14→18 corners, avg speed 225.46→266.09 km/h, pit in/out 22.5→24.5 s.
+- Indianapolis Oval event length corrected (80→200 laps, 321.8→804.4 km) — caught by a full 64-track drift sweep against the API; all other tracks matched.
+
+### Changed
 - Seeder schema version bumped (4→5) so existing databases re-run the idempotent track reseed on the first request after deploy.
 
 ## [1.10.0] - 2026-07-07
-- Cockpit density overhaul (P2 of the 1.x roadmap): new decision summary board at the top — one verdict tile per card (PHA match, testing, weather, training, sponsors, car wear) plus a "next step" tile; each tile links to its card and opens it on click.
-- Every cockpit card is now a collapsible accordion with its verdict repeated in the header (closed by default on mobile, open on first desktop visit, choice persisted per session). Card order keeps the decision sequence.
-- Two-column desktop layout (PHA/weather/training left, wear/sponsors/testing right); mobile stays a single column in decision order.
-- Car-wear card diet: the swap/risky/watch lists merged into one compact status table (Part · Lvl · now% → end% · Replace/Red/Watch chip); each part's swap options collapse to a best-pick one-liner; the verdict chip is a shared partial (`_wear_verdict.twig`) rendered in both the board tile and the card header, mirrored by JS after fragment refreshes.
-- Testing projection diet: tighter rows, Raw/Landed columns merged below small viewports, landing-track tiles and the decay note moved behind an inner "Landing tracks" accordion.
-- Sponsors card diet: per-negotiation characteristics compressed to a single chip row; contested/needs-attention flags surface in the accordion header.
+
+### Added
+- Cockpit decision summary board (P2 of the 1.x roadmap): one verdict tile per card plus a "next step" tile; each tile links to its card and opens it on click.
+
+### Changed
+- Every cockpit card is now a collapsible accordion with its verdict repeated in the header — closed by default on mobile, open on first desktop visit, choice persisted per session. Two-column desktop layout; mobile stays single-column in decision order.
+- Car-wear card diet: swap/risky/watch lists merged into one compact status table (Part · Lvl · now% → end% · verdict chip); swap options collapse to a best-pick one-liner; the verdict chip is a shared partial rendered in both the board tile and the card header.
+- Testing projection and sponsors cards tightened: merged columns below small viewports, landing-track detail behind an inner accordion, per-negotiation characteristics compressed to a chip row.
 
 ## [1.9.0] - 2026-07-07
-- Race Strategy density overhaul (P1 of the 1.x roadmap): the answer now leads. New verdict strip at the top of the results — best compound, stops, recommended fuel per stint, total time lost, and the margin over the runner-up compound — refreshed live by the same fragment swap as the tables.
-- Results reordered: verdict → compact track/supplier/fuel header (track heading, supplier characteristics and the consumption/fuel/overtaking billboard merged into one block, no data removed) → compound table → setup table → advisory accordions. The Race Engineer and Push-or-hold advisors no longer render hardcoded-open: closed on mobile, open on first desktop visit (`data-acc-lg-open`), user choice persisted per session.
-- Driver and Team "from last sync" cards merged into one collapsed "Data used — from last sync" accordion (`_acc.twig`'s first consumer) below the Race Settings card; settings now lead the form column, which sticks (`lg:sticky`) alongside results on desktop.
-- Compound table column diet on mobile: the Est. Pit and Lost (Pits/Fuel/TCD) breakdown columns hide below `md` — Total Lost, the ranking metric, stays. No horizontal scroll at 375 px.
-- Stale-data banner slimmed to a one-line `.notice-slim` variant (new in `assets/css/app.css`, reused by later phases).
+
+### Added
+- Strategy verdict strip (P1 of the 1.x roadmap): best compound, stops, recommended fuel per stint, total time lost and the margin over the runner-up — refreshed live by the same fragment swap as the tables.
+- One-line `.notice-slim` banner variant, reused by later phases.
+
+### Changed
+- Results reordered answer-first: verdict → compact track/supplier/fuel header → compound table → setup table → advisory accordions. The Race Engineer and Push-or-hold advisors are closed on mobile, open on first desktop visit, choice persisted.
+- Driver and Team panels merged into one collapsed "Data used — from last sync" accordion; the settings form column sticks alongside results on desktop.
+- Compound-table mobile diet: Est. Pit and the Lost breakdown columns hide below `md` — Total Lost, the ranking metric, stays. No horizontal scroll at 375 px.
 
 ## [1.8.1] - 2026-07-06
-- `composer.lock` is now committed: CI and CI-built bundles install the exact locked dependency set instead of re-resolving from constraints on every run, `composer audit` checks a fixed target, and the CI vendor-cache key (`hashFiles('composer.lock')`) finally keys on real dependencies. Version bumps now refresh the lock hash (`composer update --lock`) in the same commit.
-- Tailwind now builds with `source(none)`: utilities come only from the declared `@source` paths (templates, `src/`, `public/index.php`). Tailwind v4's automatic scan had been reading every non-gitignored file — prose included — emitting dead rules for class-like words in README/CHANGELOG (`.sticky`, `.contents`, `.invisible`, `.top-1`, all unused by any template and now gone). Compiled CSS is reproducible from the declared sources again.
-- README deployment/security docs corrected: there is no `EMAIL_ENCRYPTION_KEY` — `APP_SECRET` is the single root secret from which both AES-256-GCM keys (domain-separated) and the email-hash HMAC key are derived.
+
+### Changed
+- `composer.lock` is now committed: CI and CI-built bundles install the exact locked dependency set, `composer audit` checks a fixed target, and version bumps refresh the lock hash in the same commit.
+- Tailwind builds with `source(none)`: utilities come only from the declared `@source` paths, so class-like words in prose files no longer emit dead CSS rules and the compiled stylesheet is reproducible.
+
+### Fixed
+- README secret-key docs corrected: `APP_SECRET` is the single root secret from which both AES-256-GCM keys and the email-hash HMAC key derive — there is no `EMAIL_ENCRYPTION_KEY`.
 
 ## [1.8.0] - 2026-07-06
-- UX overhaul foundation (P0 of the 1.x density roadmap): new `.card`/`.card-hd`/`.card-bd` component classes in `assets/css/app.css` — the shared white-card idiom with a mobile padding step-down (`p-4`, `sm:p-6`).
-- New `templates/partials/_acc.twig`: standardised `<details>` accordion partial (icon/verdict/body blocks, rotating chevron, visible focus ring) for the upcoming Strategy and Cockpit collapses.
-- Accordion open/closed state persistence centralised in `layout.twig`: any `<details data-acc>` with an `id` persists per-session, and `window.applyAccState(root)` restores state after fragment `innerHTML` swaps (Strategy results and Cockpit wear both wired). Replaces the local per-accordion code in the Strategy tab.
-- Cockpit cards got stable anchor ids (`#pha`, `#testing`, `#weather`, `#training`, `#sponsors`, `#wear`) with `scroll-mt-16` so future sticky navigation never covers a jump target; the six cards migrated to the new card classes.
+
+### Added
+- Shared `.card` / `.card-hd` / `.card-bd` component classes — the white-card idiom with a mobile padding step-down (P0 of the 1.x roadmap).
+- Standardised `<details>` accordion partial (`_acc.twig`) with icon/verdict/body blocks and a visible focus ring.
+- Accordion open/closed persistence centralised in `layout.twig`, restored after fragment swaps (Strategy results and Cockpit wear wired).
+
+### Changed
+- Cockpit cards migrated to the card classes and given stable anchor ids with scroll margin, so future sticky navigation never covers a jump target.
 
 ## [1.7.10] - 2026-07-04
-- Coverage floor corrected 55% → 45%: the first pcov run measured the real baseline at 46.2% statements, so the provisional 55% guess failed the first main-push CI run (and skipped the bundle job). Floor now sits just under measured; ratchet-up plan unchanged.
+
+### Fixed
+- Coverage floor corrected 55% → 45%: the first pcov run measured the real baseline at 46.2% statements, so the provisional floor failed CI on main. Ratchet-up plan unchanged.
 
 ## [1.7.9] - 2026-07-04
-- CI now measures test coverage (`pcov`, `--coverage-text` report in the job log) and enforces a minimum statement-coverage floor via the new native `bin/check_coverage.php` — provisional 55%, to be ratcheted up from real CI numbers.
-- New CI `bundle` job on pushes to `main`: builds the release bundle (`bin/build_release.sh --tar`) and uploads it as a 14-day workflow artifact for build verification. Deployment stays a manual SFTP copy; the artifact excludes the private runtime inputs.
-- `bin/build_release.sh` is tracked again so CI can run it, slimmed to assemble+tar only — deploy logic moved to local-only tooling that never reaches the repo. The bundled `composer.lock` copy is now conditional (a CI checkout has no lockfile).
+
+### Added
+- CI measures test coverage (`pcov`) and enforces a minimum statement-coverage floor via the native `bin/check_coverage.php`.
+- CI `bundle` job on pushes to `main`: builds the release bundle and uploads it as a 14-day workflow artifact for build verification. Deployment stays a manual copy; the artifact excludes the private runtime inputs.
+
+### Changed
+- `bin/build_release.sh` is tracked again so CI can run it, slimmed to assemble + tar only — deploy logic moved to local-only tooling.
 
 ## [1.7.8] - 2026-07-04
-- `App\Support\Env` finished as a typed accessor (`get`/`int`/`float`/`bool`/`required`): every direct `$_ENV[` read in `src/` and `bootstrap.php` now goes through it, giving typo-safe keys and one place per default. A missing `APP_SECRET` now fails fast with a clear exception instead of an undefined-key warning followed by a TypeError.
-- Per-part wear-base data verified: all 64 tracks × 11 wear columns in `data/tracks.csv` match the canonical source and the seeded database exactly — verification only, no code change.
+
+### Changed
+- `App\Support\Env` typed accessor (`get`/`int`/`float`/`bool`/`required`) now fronts every environment read; a missing `APP_SECRET` fails fast with a clear exception instead of a warning followed by a TypeError.
+- Per-part wear-base data verified: all 64 tracks × 11 wear columns match the canonical source and the seeded database exactly — verification only, no code change.
 
 ## [1.7.7] - 2026-07-03
-- **Security:** `/healthz`'s per-check `detail` (previously raw `$e->getMessage()`, publicly visible) is now shown only to admins or in `IS_DEV` — anonymous callers get `{ok}` only. Every check failure is still logged server-side regardless.
-- **Security:** removed the dead legacy `action=` POST-field routing shim in `Request::getPath()` — it hadn't been used by any template since routing moved to `config/routes.php`, and left an attacker-suppliable field able to reach the router.
-- Sync failures in `GproSyncService` are now logged (`error_log`) with the exception class and message before being persisted as `failed` status — previously the cause was silently discarded, leaving ops blind to *why* a user's sync failed.
+
+### Security
+- `/healthz`'s per-check failure detail (previously raw exception text, publicly visible) is now shown only to admins or in dev — anonymous callers get `{ok}` only.
+- Removed the dead legacy `action=` POST routing shim — an attacker-suppliable field that could still reach the router.
+
+### Changed
+- Sync failures are now logged with the exception class and message before being persisted as `failed` — previously the cause was silently discarded.
 
 ## [1.7.6] - 2026-07-03
-- **Security:** raw exception messages no longer reach users. Cockpit, car-wear, strategy, testing, and recruitment-analyzer errors were rendering `$e->getMessage()` straight into the page/session flash — internal detail (upstream API responses, connection errors) that shouldn't be user-visible. All five now log via `error_log()` and show a generic "something went wrong" message instead.
+
+### Security
+- Raw exception messages no longer reach users: cockpit, car-wear, strategy, testing and recruitment errors log server-side and show a generic message instead of internal detail.
 
 ## [1.7.5] - 2026-07-03
-- **Security:** the two roadmap files added under the 2026-07-02 tri-file governance split now live in an unnamed local-only directory instead of being named directly in `.gitignore`/`bin/check_no_secrets.sh` — naming a distinctive personal/roadmap filename in a tracked file discloses its existence to anyone browsing the public repo. `.gitignore` and the secret scanner now exclude that directory generically, with no filenames on the record.
+
+### Security
+- Local roadmap files moved into a generically ignored directory: naming a distinctive personal filename in a tracked file (`.gitignore`, the secret scanner) discloses its existence to anyone browsing the repo.
 
 ## [1.7.4] - 2026-06-24
-- Fixed the cockpit always showing "Race setup not saved in GPRO yet". The staleness check keyed off `office.doneRaceSetup`, which stays `0` for the entire pre-qualifying window (the cockpit's whole purpose), so the notice fired permanently and a re-sync could never clear it. Staleness is now decided by a numeric `RaceSetup.trackId` vs `Office.trackId` mismatch — the actual "weather still describes the previous race" signal, immune to trackName formatting drift. The notice and weather card now appear only when GPRO is genuinely still serving the previous race's setup.
+
+### Fixed
+- Cockpit no longer permanently shows "Race setup not saved in GPRO yet". Staleness keyed off a flag that stays unset for the entire pre-qualifying window; it is now decided by a RaceSetup vs Office track-id mismatch — the actual "weather still describes the previous race" signal.
 
 ## [1.7.3] - 2026-06-23
-- Cockpit now reads the next-race track, P/H/A demand and lap count from Office + TrackProfile instead of RaceSetup. RaceSetup carries the *previous* race's saved setup until you save a new one in GPRO, which made the cockpit show the wrong track (e.g. Magny Cours instead of Poznan) even after a cache refresh — TrackProfile and Office roll over the moment the new race opens. Favourite-track detection now resolves the GPRO track id from the calendar by race number rather than the (stale) RaceSetup id.
-- Cockpit shows an amber notice when your race setup isn't saved in GPRO yet, and withholds the weather card in that state rather than showing the previous race's forecast.
-- GPRO API curl timeouts raised and made env-tunable (`GPRO_API_CONNECT_TIMEOUT`, `GPRO_API_TIMEOUT`, `GPRO_API_MARKET_TIMEOUT`); outbound throttle eased (steady rate 4→2/s, burst 8→4) to stress the GPRO backend less under load.
+
+### Fixed
+- Cockpit reads the next-race track, P/H/A demand and lap count from Office + TrackProfile instead of RaceSetup, which carries the *previous* race until a new setup is saved — the cockpit showed the wrong track even after a cache refresh. Favourite-track detection now resolves the track id from the calendar.
+
+### Added
+- Amber notice when the race setup isn't saved in GPRO yet; the weather card is withheld in that state rather than showing the previous race's forecast.
+
+### Changed
+- GPRO API curl timeouts raised and made env-tunable; outbound throttle eased (steady rate 4→2/s, burst 8→4) to stress the GPRO backend less.
 
 ## [1.7.2] - 2026-06-23
-- Header cash now ranks against your group on hover: hovering the **Cash** figure in the top glance strip shows a tooltip like "#30 of 40 by cash in Pro - 8". Rank is computed from the already-cached `MoneyLevels` group feed (matched to your own manager by IDM) — no extra API call — and is hidden cleanly when that data isn't available.
+
+### Added
+- Hovering the header Cash figure shows your rank against your group (e.g. "#30 of 40 by cash in Pro - 8"), computed from already-cached group data — no extra API call.
 
 ## [1.7.1] - 2026-06-23
-- Push/no-push advisor gains a **wear-headroom signal**: it projects end-of-race part wear at a reference Clear Track Risk of 50 and counts it as a push signal only when no part finishes above 90% — i.e. the car can absorb the extra wear that pushing costs. Hidden when wear can't be projected (e.g. the track isn't in the local DB).
-- Push/no-push advisor gains **relative-performance signals**: your car level and your driver's OA each ranked against the rest of your group (e.g. "#6 of 40 by driver OA"), with above-the-group-average counting as a reason to push. Car ranking comes from `MoneyLevels`, driver OA from the group `ViewStaff` feed; both are matched to your own manager by IDM and hidden cleanly when the group data isn't available.
-- Push/no-push advisor now **hides the tyre-performance and ideal-temperature signals in Rookie and Amateur**, where there's no tyre supplier to choose. The "signals met" tally is now out of however many signals apply to your division.
+
+### Added
+- Push advisor wear-headroom signal: end-of-race wear projected at a reference risk of 50 counts as a push signal only when no part finishes above 90%.
+- Push advisor relative-performance signals: car level and driver OA each ranked against your group, above-average counting as a reason to push. Hidden cleanly when group data isn't available.
+
+### Changed
+- The tyre-performance and ideal-temperature signals are hidden in Rookie/Amateur (no tyre supplier there); the tally counts only the signals that apply to your division.
 
 ## [1.7.0] - 2026-06-22
-- **Push/no-push advisor.** New collapsible "Push or hold?" card on the Race Strategy tab, below the Race Engineer, that turns four binary signals into a single read for your Clear Track Risk dial: car P/H/A matches the track (strict), it's a driver favourite track, the tyre supplier's dry/wet rating for the race conditions is 4/8 or better, and the track temperature is within ±3 °C of the tyre's ideal. The more signals met, the more the weekend is set up in your favour — carry a higher Clear Track Risk; all four met points to a very likely win. The header shows how many of the four are met; expand/collapse state persists like the Race Engineer.
-- Cockpit P/H/A Match no longer shows a PUSH / ALL IN verdict — that call now lives in the Strategy advisor. The card highlights a match only on the strict rule: **top** (car's #1 attribute equals the track's #1) or **perfect** (all three ranks align). No other shape — including a tied top — counts as a match.
+
+### Added
+- "Push or hold?" advisor on Race Strategy: four binary signals (strict car–track PHA match, driver favourite track, tyre rating ≥ 4/8 for the race conditions, track temperature within ±3 °C of the tyre's ideal) condensed into one Clear Track Risk read — the more met, the more the weekend favours you.
+
+### Changed
+- Cockpit PHA Match no longer shows a push verdict (that call moved to the advisor) and highlights only strict **top** or **perfect** matches.
 
 ## [1.6.3] - 2026-06-20
-- Race Strategy header now shows the contracted tyre supplier's dry/wet performance (out of 8) and ideal temperature beside the track name, read straight from the GPRO suppliers feed (no extra API call). The redundant "Supplier" label was dropped so the name sits level with the track. Hidden cleanly when no supplier is contracted (e.g. after a season reset) or the feed is unavailable.
+
+### Added
+- Race Strategy header shows the contracted tyre supplier's dry/wet performance (out of 8) and ideal temperature beside the track name, read from the GPRO suppliers feed — hidden cleanly when no supplier is contracted.
 
 ## [1.6.2] - 2026-06-18
-- Removed the orphaned `rector.php` config. `rector/rector` was dropped as a dependency earlier (one-shot tool, not in the check pipeline); the leftover config referenced classes no longer installed and would only mislead.
+
+### Removed
+- Orphaned `rector.php` config left over from a previously dropped dependency.
 
 ## [1.6.1] - 2026-06-18
-- Added `tomasvotruba/type-coverage` as a PHPStan extension. Type-declaration coverage is now enforced in `composer analyse`: 100% return/property/constant types and `declare(strict_types=1)`, 99.5% param types (the only gap is two untypeable `resource` handles in `GproApiThrottle`). Introduced a `phpstan.neon` config and backfilled the missing typed constants and closure param types.
-- Raised PHPStan from level 7 to level 8 (null-safety), fixing the one surfaced gap: `Database::getConnection()` could narrow to `PDO|null`.
+
+### Added
+- Type-declaration coverage enforced in `composer analyse`: 100% return/property/constant types and `strict_types`, 99.5% param types (two untypeable `resource` handles).
+
+### Changed
+- PHPStan raised from level 7 to level 8 (null-safety), fixing the one surfaced gap.
 
 ## [1.6.0] - 2026-06-18
-- **Security:** Registration reworked so an unverified sign-up can no longer squat a username/email. In-flight registrations live in a new `pending_registrations` table and only become a real `users` row once the emailed code is verified; the account namespace is now "verified accounts only". A bounced or abandoned verification email leaves no residue. Legacy unverified `users` rows are purged by the migration, and the `username`/`email_hash` UNIQUE constraints are hardened with explicit indexes.
-- **Security:** Closed the email-existence oracle on the registration form — registering an email that already has an account is now indistinguishable from a new registration (no row created, no email sent). Username availability is still surfaced (standard UX). The concurrent-registration race is resolved at the authoritative promotion INSERT: when two people race for the same username, whoever verifies email control first wins, instead of a 500 from an unhandled UNIQUE violation.
-- Admin → Users page revamped: summary cards for registered / active / new-signup / API-linked counts, with period-over-period activity and signup **trends** (▲/▼ with %, selectable 7/30/90-day window) so you can see at a glance whether the app is growing. In-flight (awaiting-verification) registrations are surfaced too.
-- Admin → Users table columns are now click-to-sort (client-side, current page), and the email-hash column was removed.
+
+### Security
+- Registration reworked so an unverified sign-up can no longer squat a username or email: in-flight registrations live in a `pending_registrations` table and only become a real account once the emailed code is verified. Legacy unverified rows purged; uniqueness constraints hardened.
+- Email-existence oracle closed on the registration form — registering an already-registered email is indistinguishable from a new registration. Concurrent registrations for the same name resolve at the promotion INSERT (first to verify wins) instead of a 500.
+
+### Added
+- Admin → Users: summary cards for registered / active / new-signup / API-linked counts with ▲/▼ trends over a selectable 7/30/90-day window; in-flight registrations surfaced.
+
+### Changed
+- Admin → Users table is click-to-sort; the email-hash column removed.
 
 ## [1.5.7] - 2026-06-17
-- Server-wide outbound API throttle: all GPRO calls leave from one host IP, so a shared token bucket (flock'd state file in `var/cache/`, shared across PHP workers) now caps the aggregate outbound rate. Cache hits are unaffected; under a sync burst, calls are paced by a bounded sleep rather than failing. Configurable via `GPRO_API_RATE` / `GPRO_API_BURST` / `GPRO_API_MAX_BLOCK_MS` (rate 0 disables).
-- FOBY note added to the README and landing page (section + FAQ entry): GPRO's "Find Out By Yourself" culture is acknowledged, framing Pitwall as a transparent second opinion rather than a replacement for the manager's own analysis.
+
+### Added
+- Server-wide outbound API throttle: a shared token bucket (flock'd state file, shared across PHP workers) caps the aggregate call rate from the host IP; under bursts, calls are paced by a bounded sleep rather than failing. Env-tunable; rate `0` disables.
+- FOBY note on the README and landing page: GPRO's "Find Out By Yourself" culture acknowledged, framing Pitwall as a transparent second opinion.
 
 ## [1.5.6] - 2026-06-14
-- Race Weekend Pitwall: the Car Wear cockpit card gains a collapsible "PHA contribution per part" reference table. It lists each car part's Power/Handling/Acceleration contribution per level so managers can manually calculate the PHA shift of a part swap when forcing a track-car match.
+
+### Added
+- Cockpit car-wear card: collapsible reference table of each part's Power/Handling/Acceleration contribution per level, for manually working out the PHA shift of a swap.
 
 ## [1.5.5] - 2026-06-13
-- Race Strategy: the Race Engineer's race-distance note now only appears for short and long races. Normal-length races (the bulk of the field) show nothing — the note added no signal there. Short and long advice is unchanged.
+
+### Changed
+- The Race Engineer's race-distance note now appears only for short and long races — it added no signal on normal-length ones.
 
 ## [1.5.4] - 2026-06-13
-- Race Strategy: reworded the Race Engineer's race-distance note to read narratively instead of analytically. It no longer quotes the race length or the field average — it just tells the manager whether this is a short, normal or long race and what that means for driver energy (carry more clear-track risk and boost freely on a short one; trim both on a long one, more so when stamina is thin). The short/normal/long tiers are unchanged under the hood.
+
+### Changed
+- Race-distance note reworded to read narratively: no raw kilometres or field averages, just short/normal/long and what that means for driver energy.
 
 ## [1.5.3] - 2026-06-13
-- Race Strategy: the Race Engineer now always shows a race-distance note. It places the race against the field average (~301 km across all 64 tracks) and sorts it into short / normal / long — bands set at the mean ± half a standard deviation (under 293 km, 293–310 km, over 310 km). A shorter race drains less driver energy, so it advises carrying higher clear-track risk and placing boost laps freely; a longer race bleeds energy, so it advises trimming both, more so when stamina is thin. Replaces the previous long-race-only energy reminder.
+
+### Added
+- Race Engineer race-distance note: the race is sorted into short / normal / long (field mean ± half a standard deviation across all 64 tracks) with energy advice — carry more clear-track risk on a short race, trim on a long one, more so when stamina is thin.
 
 ## [1.5.2] - 2026-06-12
-- Race Strategy: the Race Engineer accordion no longer re-opens when a slider or select re-runs the calculation — the collapsed/expanded choice is remembered for the session (sessionStorage) and reapplied after every fragment swap.
+
+### Fixed
+- The Race Engineer accordion no longer re-opens on every recalculation — the collapsed/expanded choice persists for the session and is reapplied after every fragment swap.
 
 ## [1.5.1] - 2026-06-12
-- Pitwall AI is now **"Advice from the Race Engineer"** — the AI branding is dropped across the app, landing page and README, and the sparkles icon is replaced by a race-engineer headset.
-- Race Engineer: now covers the rest of the race-setup form. Suggests the three **boost-lap** start laps placed where pace converts into something (early while the field is packed on easy-passing tracks, the in-laps before each stop to overcut through the pit cycle, the final laps to bring it home), pit-window aware via the best strategy's stint plan, with a rain caution and a reminder that boosts burn extra fuel.
-- Race Engineer: suggests the **race start approach** (one of GPRO's four options) from driver control, track overtaking and a wet-start step-down, and the **technical-problem pit threshold** ("Yes, if > N laps remain") derived from the track's pit-lane time against the 3–6 s/lap a limping car loses.
-- Race Engineer: long races (≥300 km) get an **energy reminder** — clear-track risks drive energy drain, and a driver at 0% finishes at a slow, no-risk pace. On Very Easy overtaking tracks the prose now notes the traffic dials matter less and the lap time lives in clear-track risk.
-- Race Strategy: the Fuel Required card is now a slim billboard strip (consumption, dry/wet fuel, overtaking rating) above the results. The Driver and Team cards are now compact, informative read-only panels (values come from the last sync) and sit above Race Settings, alongside the setup and strategy output.
+
+### Changed
+- Pitwall AI is now **"Advice from the Race Engineer"** — AI branding dropped across the app; the sparkles icon replaced by a race-engineer headset.
+- The Fuel Required card is a slim billboard strip above the results; Driver and Team are compact read-only panels.
+
+### Added
+- Race Engineer covers the rest of the race-setup form: **boost-lap placement** (early in traffic, in-laps to overcut, or the final laps — pit-window aware), the **race start approach** from driver control with a wet-start step-down, the **technical-problem pit threshold** derived from the track's pit-lane time, and a long-race **energy reminder**.
 
 ## [1.5.0] - 2026-06-11
-- Race Strategy: the track's overtaking rating (Very Easy → Very Hard) now shows as a colour-coded badge next to the fuel figures. Sourced from the Tracks data (new `overtaking` + `grip` columns, seeded from `data/tracks.csv`; schema version 2).
-- Race Strategy: new **Pitwall AI** box suggesting overtake/defend risk dials (0–100, snapped to fives, capped at 70) phrased as advisor prose. Heuristic inputs: track overtaking rating (hard passing → push overtake, easy passing → invest in defence), driver skills weighted on GPRO's 0–250 scale (concentration/experience/talent/motivation; talent takes the largest weight in the wet), aggressiveness both ways (backed by experience it buys attacking pace on the overtake dial; beyond experience it's the mistake trap and trims margin), wet or rain-threatened forecasts trimming both numbers, low track grip and very high tyre wear shaving both dials, and stamina on long races (≥300 km). Track downforce and suspension are deliberately excluded (collinear with the overtaking rating / no mistake mechanism).
-- Race Strategy: the Pitwall AI box adds a pit-count tie-breaker tip (fewer stops when passing is hard, the extra stop is affordable when passing is easy) — suppressed whenever the forecast says rain is likely, since a wet race rewrites the stop plan.
+
+### Added
+- Track overtaking rating (Very Easy → Very Hard) as a colour-coded badge beside the fuel figures, from new `overtaking` + `grip` track columns.
+- **Pitwall AI** advisor suggesting overtake/defend risk dials (0–100) as advisor prose, weighing the track's overtaking rating, driver skills on GPRO's 0–250 scale (talent weighted highest in the wet), aggression both ways, the forecast, track grip, tyre wear and stamina on long races.
+- Pit-count tie-breaker tip (fewer stops where passing is hard; the extra stop is affordable where it's easy) — suppressed when rain is likely.
 
 ## [1.4.0] - 2026-06-10
-- In-app contact form (`/contact`, "Send feedback" in the footer) for logged-in users: whitelisted subject dropdown + message, delivered by email with Reply-To set to the sender's account address. Guarded by authentication, CSRF and a per-user rate limit (5/hour, security-logged) — no CAPTCHA, every sender is a verified account. Inline privacy note (address used only to reply, never marketing/newsletters) with an anonymous `mailto:` alternative, plus a subtle Buy Me a Coffee link. Anonymous visitors keep the plain `mailto:` footer link. Anti-double-submit via the shared `data-disable-on-submit` guard.
-- Debug page: new **Active Users** telemetry card — users with at least one successful GPRO data sync in the last 30 days (tooltip carries the definition). Counted next to (not instead of) total registrations.
-- Footer: the two GitHub links are grouped under one icon; "Report issue" renamed to "Open GitHub Issue".
-- New `.form-textarea` component class — the shared input look without the pinned `h-9`, which collapsed textareas to a single line.
-- Dependencies: PHP `>=8.5`, PHPMailer `^7.1`, PHPUnit 13.2, PHPStan 2.2.2, PHP_CodeSniffer 4.0, symfony/var-dumper `^8.1`. Removed `rector/rector` (one-shot tool, not part of the check pipeline) and the abandoned `sserbin/twig-linter` (its `symfony/console ^5.4||^6.1` pin blocked var-dumper 8.x) — replaced by a native `bin/twig_lint.php` built on Twig's own tokenizer/parser.
-- Tests: PHPUnit 13 migration (`createStub()` for expectation-less mocks) and new ContactService + active-user-count suites — 263 tests, 656 assertions.
+
+### Added
+- In-app contact form for logged-in users: whitelisted subject dropdown, delivery with Reply-To set to the sender's account address, guarded by auth + CSRF + a security-logged per-user rate limit (5/hour) — no CAPTCHA needed, every sender is verified. Anonymous visitors keep the `mailto:` footer link.
+- Debug page **Active Users** telemetry: users with a successful GPRO sync in the last 30 days.
+- `.form-textarea` component class (the shared input look without the pinned height).
+
+### Changed
+- Dependency refresh: PHP ≥ 8.5, PHPMailer 7, PHPUnit 13 (test suite migrated), PHPStan 2.2, PHP_CodeSniffer 4. `rector/rector` and the abandoned `sserbin/twig-linter` removed — Twig linting is now a native `bin/twig_lint.php` on Twig's own parser.
+- Footer GitHub links grouped under one icon.
 
 ## [1.3.1] - 2026-06-10
-- Add `.env.example` (every key the app reads, with safe defaults; sensitive values intentionally blank) and `.deploy.env.example` (SFTP deploy template) — both were referenced by the docs and deploy tooling but missing from the repo.
-- `bin/probe_security.sh` is now WAF-friendly: every request is paced by a base delay plus random jitter (`PROBE_DELAY`/`PROBE_JITTER`, default 3s + 0–4s), the probe order is shuffled per run, each request carries a rotating real-browser User-Agent, and the four header checks share a single request — so shared-host firewalls no longer fingerprint the probe as a scanner and ban the source IP. Also probes `/.deploy.env`, `/robots.txt` and `/sitemap.xml`.
-- Docs: README no longer references the non-existent `bin/dev_mail_tail.php` and the unused `EMAIL_ENCRYPTION_KEY` (both AES keys derive from `APP_SECRET`).
+
+### Added
+- `.env.example` (every key the app reads) and `.deploy.env.example` — both referenced by docs and tooling but missing from the repo.
+
+### Changed
+- `bin/probe_security.sh` made WAF-friendly: paced + jittered requests, shuffled order, rotating browser User-Agents, one shared request for the header checks. Also probes `/.deploy.env`, `/robots.txt` and `/sitemap.xml`.
+
+### Fixed
+- README no longer references a non-existent mail-tail script or the unused `EMAIL_ENCRYPTION_KEY`.
 
 ## [1.3.0] - 2026-06-10
-- SEO pass benchmarked against comparable GPRO tooling sites (none has structured data, social cards or substantial indexable copy):
-  - Per-page `<title>` / meta description / canonical URL via Twig blocks; private pages (verify, reauth, control panel, admin, debug, errors) now `noindex`.
-  - Open Graph + Twitter cards with a generated 1200×630 `assets/og-image.png` (SVG og:images are ignored by most crawlers); `WebApplication` JSON-LD with free-offer markup on the landing page.
-  - `robots.txt` + `sitemap.xml` in the docroot (shipped automatically by `build_release.sh`'s `public/` copy).
-  - Canonical origin configurable via `APP_PUBLIC_URL` (defaults to `https://gpro-pitwall.com`).
-- Landing page promoted-up: keyword-front-loaded hero, "Up and running in two minutes" steps, section headings over the feature grid, a five-question FAQ (real long-tail copy none of the competitor sites has), and a closing CTA band.
-- New brand mark: original logo in the GPRO palette (steel-navy gradient, yellow speed swoosh, white P) across `logo.svg`, `favicon.svg`, regenerated multi-size `favicon.ico`, and the OG card.
-- Performance: static assets now ship `Cache-Control: public, max-age=31536000, immutable`; the stylesheet is cache-busted per release via `?v={version}`.
-- Brand palette: the Tailwind `blue-*` scale is re-anchored to a GPRO steel-blue ramp (logo navy at `blue-900`), so every button, link, active tab, focus ring and info banner adopts the GPRO-flavoured blue with no template changes. Semantic colours (amber caution, red error, emerald success) are untouched.
+
+### Added
+- SEO pass: per-page titles, meta descriptions and canonical URLs; `noindex` on private pages; Open Graph + Twitter cards with a generated 1200×630 OG image; `WebApplication` JSON-LD; `robots.txt` + `sitemap.xml`.
+- Landing page rework: keyword-front-loaded hero, "up and running in two minutes" steps, a five-question FAQ, and a closing CTA band.
+- New brand mark in the GPRO palette (steel-navy gradient, yellow swoosh) across logo, favicons and the OG card.
+
+### Changed
+- Static assets ship immutable year-long cache headers; the stylesheet is cache-busted per release.
+- The Tailwind `blue-*` scale re-anchored to a GPRO steel-blue ramp, so every button, link and focus ring adopts the brand blue with no template changes.
 
 ## [1.2.8] - 2026-06-10
-- **Security:** Login no longer leaks whether a username exists. An unknown username now produces a decoy pending state that routes to `/verify` identically to a real account (and can never verify), closing the redirect-based enumeration oracle — the response body was already generic.
-- **Security:** The Control Panel never sends the decrypted GPRO API token to the browser. It shows a masked last-4 hint with an empty replace field (blank submit = unchanged); the token is also stripped from the shared Twig `user` global as defence-in-depth.
-- **Security:** Filesystem cache deserializes with `allowed_classes => false`, so a tampered/poisoned cache file degrades to a miss instead of a potential PHP object-injection gadget.
-- **Security:** Outbound GPRO API calls now set connect + total curl timeouts (5s/15s for v2 endpoints, 5s/30s for the market dump) so a hung upstream can't pin a PHP worker indefinitely.
-- Performance: per-request DB migration is gated on SQLite's `user_version` — a warm database skips the full DDL + table-info scans + legacy-token re-encryption pass and does a single PRAGMA read instead.
-- Fix: `StrategyService` no longer raises an "Undefined array key id" warning when fed the next-race TrackProfile (which carries no id); it falls back to a name match.
+
+### Security
+- Login no longer leaks whether a username exists: an unknown username produces a decoy pending state that routes to `/verify` identically to a real account, closing the redirect-based enumeration oracle.
+- The Control Panel never sends the decrypted GPRO API token to the browser — masked last-4 hint, blank submit = unchanged; the token is also stripped from the shared Twig `user` global.
+- Filesystem cache deserializes with `allowed_classes => false`, so a tampered cache file degrades to a miss instead of an object-injection gadget.
+- Outbound GPRO API calls set connect + total curl timeouts so a hung upstream can't pin a PHP worker.
+
+### Changed
+- Per-request DB migration gated on SQLite's `user_version` — a warm database does a single PRAGMA read instead of the full DDL scan.
+
+### Fixed
+- `StrategyService` no longer raises an "Undefined array key" warning when fed a TrackProfile without an id; it falls back to a name match.
 
 ## [1.2.7] - 2026-06-10
-- UX/UI consistency pass across every template. New shared `.notice`/`.notice-{info,warn,error,success}` left-accent banner classes replace the ad-hoc flash/error styles on the auth pages, admin pages, and all analysis tabs; raw-utility buttons converted to the `.btn` component classes (plus new `.btn-soft-warn`/`.btn-soft-danger` variants for Undo/Clear); headings aligned to the `t-*` type tokens; yellow/green badge palettes unified to amber/emerald.
-- Fix: the landing page now renders flash messages — the "account deleted" confirmation was silently dropped before.
-- Fix: define the `fade-in` animation referenced by the tab container (was a no-op class), with `prefers-reduced-motion` respected.
-- Recruitment Analyzer pagination: windowed page list (1 … current±2 … last) instead of one link per page, and visible Previous/Next controls on mobile (there were none below the `sm` breakpoint).
-- Race Strategy: compact sidebar — driver/car/staff/TD inputs are now aligned label-left rows matching Race Settings, native number spinners removed app-wide, narrower numeric boxes; Car Setup table tightened (fixed session-column widths, denser rows) with the "enter 999" note folded into the card footer.
-- Testing tab: restructured into two flowing columns so cards stack flush — no more vertical gap between Track and Points Gained per 5 Laps.
-- Mobile nav select now uses the shared `.form-select` style; external GPRO links gained `rel="noopener noreferrer"`.
+
+### Changed
+- UX consistency pass across every template: shared `.notice-*` banner classes replace ad-hoc styles, raw-utility buttons converted to `.btn` components, headings aligned to the `t-*` type tokens, badge palettes unified to amber/emerald.
+- Race Strategy sidebar compacted (aligned label-left rows, narrower numeric boxes, native spinners removed app-wide); Testing tab restructured into two flowing columns.
+
+### Added
+- Recruitment pagination: windowed page list (1 … current±2 … last) and visible Previous/Next controls on mobile.
+
+### Fixed
+- The landing page now renders flash messages — the "account deleted" confirmation was silently dropped.
+- The `fade-in` animation referenced by the tab container is now defined, with `prefers-reduced-motion` respected.
 
 ## [1.2.6] - 2026-06-09
-- Bump CI actions off the deprecated Node.js 20 runtime: `actions/checkout@v4` → `v6`, `actions/cache@v4` → `v5`. GitHub forces Node 24 on these actions from 2026-06-16; this clears the deprecation warning ahead of that. No app or runtime behaviour change.
+
+### Changed
+- CI actions bumped off the deprecated Node.js 20 runtime (`actions/checkout@v6`, `actions/cache@v5`) ahead of GitHub's forced migration.
 
 ## [1.2.5] - 2026-06-09
-- Add **value range filters** to the Recruitment Analyzer: set inclusive minimum and/or maximum bounds per driver attribute (leave either blank for a one-sided range). Filters validate server-side, persist across sorting and pagination, and the result header shows the filtered count against the unfiltered total. (#42, thanks @HelderfV)
+
+### Added
+- Recruitment Analyzer value-range filters: inclusive min/max bounds per driver attribute (either side optional), validated server-side, persisting across sorting and pagination. (#42, thanks @HelderfV)
 
 ## [1.2.4] - 2026-06-09
-- Refine the Testing-tab car-wear `TESTING_WEAR_FACTOR` from 0.5 to **0.53**. A second real session (100 laps) independently best-fit 0.533, matching the original 30-lap calibration; the previous 0.5 ran ~6% low (the risky direction for wear). Totals now land near-exact.
+
+### Fixed
+- Testing-tab wear factor refined 0.5 → 0.53: a second real session independently best-fit 0.533, and the previous value ran ~6% low — the risky direction for wear.
 
 ## [1.2.3] - 2026-06-09
-- Mark the Testing tab's Expected Car Wear card as **Experimental** with a light-blue pill and a short note that the estimates are still being refined and will improve.
+
+### Changed
+- The Testing tab's Expected Car Wear card is marked **Experimental** while the estimates are refined.
 
 ## [1.2.2] - 2026-06-09
-- Fix Testing-tab car-wear projection reading ~2× too high. Testing laps wear the car at roughly half the per-lap rate of a race at the same track; `CarWearService::testingWearRates()` now applies a `TESTING_WEAR_FACTOR` (0.5), calibrated against a real 30-lap session where observed wear came in at a uniform ~0.53× of the unscaled estimate across all 11 parts. (Part level was ruled out: its wear factors span only ~1.6% end-to-end, far too small to explain the gap, and the game's model applies level only as a clear-track-risk modifier.)
+
+### Fixed
+- Testing-tab car-wear projection read ~2× too high: testing laps wear the car at roughly half the per-lap rate of a race, so the model now applies a factor calibrated against a real 30-lap session (uniform ~0.53× across all 11 parts).
 
 ## [1.2.1] - 2026-06-09
-- Fix the Testing tab not refreshing on re-sync: `GproSyncService` now force-warms the `GetTesting` feed alongside the other race-prep endpoints, so a manual sync updates the testing track, points, and setup instead of serving a stale cache entry until TTL.
+
+### Fixed
+- The Testing tab now refreshes on re-sync: the sync force-warms the `GetTesting` feed instead of serving a stale cache entry until TTL.
 
 ## [1.2.0] - 2026-06-09
-- New **Testing** tab: shows the current testing track and its demands, the car's points distribution across Test / R&D / Engineering / **Car Character** (highlighted), the points gained per 5 laps for each testing priority, the ideal setup for the testing track (Front/Rear Wing, Engine, Brakes, Gearbox, Suspension), and a slider-driven (5–100 laps) projection of expected car wear. Backed by the GPRO `GetTesting` feed; reuses the Race Strategy setup engine and the car-wear model.
+
+### Added
+- **Testing** tab: the current testing track and its demands, the points distribution across Test / R&D / Engineering / **Car Character**, points gained per 5 laps for each testing priority, the ideal setup for the testing track, and a slider-driven (5–100 laps) car-wear projection.
 
 ## [1.1.31] - 2026-06-09
-- Fix the track selector defaulting to "Buenos Aires" (first in the config list) on every page. With no explicit `track` in the URL it now defaults to the user's actual next-race track from the cached Office data, falling back to the first known track only pre-first-sync.
+
+### Fixed
+- The track selector defaults to your actual next-race track from the cached Office data instead of the first track in the config list.
 
 ## [1.1.30] - 2026-06-09
-- Styled error pages (403/404/500) replacing the bare-text responses. The auth gate and router now throw a typed `HttpException` that the front controller renders through the normal layout; the 500 handler still hides internals behind a reference id.
+
+### Added
+- Styled 403/404/500 error pages via a typed `HttpException` rendered through the normal layout; the 500 handler hides internals behind a reference id.
 
 ## [1.1.29] - 2026-06-09
-- **Security:** stop interpolating the username into the admin restore form's inline `confirm()`; read it from a `data-` attribute so a legacy username containing quotes can't break out and execute in an admin session.
+
+### Security
+- The admin restore form reads the username from a `data-` attribute instead of interpolating it into an inline `confirm()`, so a legacy username containing quotes can't execute in an admin session.
 
 ## [1.1.28] - 2026-06-09
-- Fix Debug → Database "Size: Not Found": resolve the SQLite path to an absolute path (single source of truth in `Database::path()`) so `filesize()` no longer depends on the process CWD.
+
+### Fixed
+- Debug → Database size: the SQLite path is resolved absolutely, so `filesize()` no longer depends on the process working directory.
 
 ## [1.1.27] - 2026-06-09
-- **Security:** server-side username whitelist (`[A-Za-z0-9_]`) at registration, mirroring the form's client pattern — attacker-controlled markup can't reach storage.
+
+### Security
+- Server-side username whitelist (`[A-Za-z0-9_]`) at registration, mirroring the form's client pattern.
 
 ## [1.1.26] - 2026-06-09
-- Login form remembers the last username on that browser (client-side, no server state).
-- Greet the signed-in user with "Hello, <username>" beside Last sync in the header.
+
+### Added
+- The login form remembers the last username on that browser (client-side, no server state); "Hello, username" greeting in the header.
 
 ## [1.1.25] - 2026-06-09
-- Add this CHANGELOG, backfilled from the release tags.
+
+### Added
+- This CHANGELOG, backfilled from the release tags.
 
 ## [1.1.24] - 2026-06-09
+
+### Added
 - Race-window cache keys for race-critical GPRO data.
 
 ## [1.1.23] - 2026-06-09
-- Render timestamps in the visitor's local timezone.
+
+### Changed
+- Timestamps render in the visitor's local timezone.
 
 ## [1.1.22] - 2026-06-09
-- Cap verification emails per account, add captcha to login, and a resend link.
+
+### Security
+- Verification emails capped per account, captcha added to login, and a resend link for missed deliveries.
 
 ## [1.1.21] - 2026-06-08
-- Recompile Tailwind CSS from source.
+
+### Changed
+- Tailwind CSS recompiled from source.
 
 ## [1.1.20] - 2026-06-08
+
+### Changed
 - Race messaging fixes, no-pilot recruitment prompt, full division display, README refresh.
 
 ## [1.1.18] - 2026-06-08
+
+### Security
 - OWASP 2025 hardening: error-leak fix, HSTS behind proxy, CSP, security logging.
 
 ## [1.1.17] - 2026-06-08
-- Add "Keep me signed in" persistent login with step-up re-auth for sensitive actions.
+
+### Added
+- "Keep me signed in" persistent login with step-up re-auth for sensitive actions.
 
 ## [1.1.16] - 2026-06-07
+
+### Fixed
 - Don't show the end-of-season error when the tyre supplier is just missing.
 
 ## [1.1.15] - 2026-06-07
-- Add the glance billboard beside Last Sync (cash, division, next race).
+
+### Added
+- Glance billboard beside Last Sync (cash, division, next race).
 
 ## [1.1.14] - 2026-06-07
-- Enable SQLite WAL + busy_timeout for better concurrency.
+
+### Changed
+- SQLite WAL + busy_timeout enabled for better concurrency.
 
 ## [1.1.13] - 2026-06-07
+
+### Fixed
 - End-of-season and no-supplier guards; last-sync API counter copy.
 
 ## [1.1.12] - 2026-06-05
-- Rename Driver Risk to Clear Track Risk on Cockpit/Car Wear; drop the Live Data pills.
+
+### Changed
+- Driver Risk renamed to Clear Track Risk on Cockpit/Car Wear; Live Data pills dropped.
 
 ## [1.1.11] - 2026-06-05
+
+### Added
 - Footer disclaimer + Contact me; mobile-friendly wrapping.
 
 ## [1.1.10] - 2026-06-05
-- Expose logged-in/admin identity as Twig globals.
+
+### Changed
+- Logged-in/admin identity exposed as Twig globals.
 
 ## [1.1.9] - 2026-06-04
+
+### Added
 - Self-service account deletion + Control Panel orientation.
 
 ## [1.1.8] - 2026-06-04
-- **Security:** namespace the per-user GPRO cache to stop a cross-user leak.
+
+### Security
+- Per-user GPRO cache namespaced to stop a cross-user leak.
 
 ## [1.1.7] - 2026-06-04
+
+### Changed
 - Clearer recruitment/training copy for non-admins.
 
 ## [1.1.6] - 2026-06-04
-- Right-size numeric inputs and polish selects.
+
+### Changed
+- Numeric inputs right-sized and selects polished.
 
 ## [1.1.5] - 2026-06-04
-- Read tyre supplier characteristics from the API instead of a hardcoded snapshot.
+
+### Changed
+- Tyre supplier characteristics read from the API instead of a hardcoded snapshot.
 
 ## [1.1.4] - 2026-06-04
+
+### Added
 - Favourite-track fit column in the Recruitment Analyzer.
 
 ## [1.1.3] - 2026-06-03
-- Drop the confirm() popup on Set your race strategy.
+
+### Removed
+- The `confirm()` popup on "Set your race strategy".
 
 ## [1.1.2] - 2026-06-03
+
+### Changed
 - Single source of truth for the app version.
 
 ## [1.1.1] - 2026-06-03
-- Sync the version string across footer, User-Agent, and composer.json.
+
+### Fixed
+- Version string synced across footer, User-Agent and composer.json.
 
 ## [1.1.0] - 2026-06-03
+
+### Added
 - Re-sync reminder before strategy + FYI notices on the wear/strategy tabs.
 
 ## [1.0.5] - 2026-06-03
+
+### Added
 - Manual API refresh, fuel-column split, boost stints in strategy.
 
-## Early releases
+## [0.2.0] - 2025-12-22
 
-### [0.2.0] - 2025-12-22
-- Clean-up; sync user data on login.
+### Changed
+- Clean-up; user data synced on login.
 
-### [0.1.0] - 2025-12-20
+## [0.1.0] - 2025-12-20
+
+### Added
 - Initial release.

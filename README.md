@@ -7,267 +7,180 @@
 [![Coverage floor](https://img.shields.io/badge/coverage-%E2%89%A545%25%20CI--enforced-yellow)](.github/workflows/ci.yml)
 [![PSR-12](https://img.shields.io/badge/code%20style-PSR--12-blue)](https://www.php-fig.org/psr/psr-12/)
 
-Race-weekend cockpit for [Grand Prix Racing Online](https://www.gpro.net) managers. Pulls your own GPRO data via the public API and turns it into the answers you actually need before qualifying: what to train, what to swap, what to set, what to bet on weather.
+![GPRO Pitwall — race strategy, setup calculator and car wear analysis for GPRO managers](public/assets/og-image.png)
 
-**New: Advice from the Race Engineer.** Your strategy screen now talks back. A race engineer that reads your driver, the track and the forecast, then tells you — in plain words — exactly how hard to attack and how hard to defend, where to place your boost laps, and when to take the strategy with fewer pit stops. No other GPRO tool does this.
+Race-weekend cockpit for [Grand Prix Racing Online](https://www.gpro.net) managers. Pitwall reads your own GPRO data through the official public API and turns it into the answers you need before qualifying: what to train, which parts to swap, what setup to run, how hard to push — and what to bet on the weather.
 
-**Live:** [gpro-pitwall.com](https://gpro-pitwall.com)
-**Contact:** admin@gpro-pitwall.com
-**Source:** [github.com/MVinhas/gpro-pitwall](https://github.com/MVinhas/gpro-pitwall)
+- **Live:** [gpro-pitwall.com](https://gpro-pitwall.com) — free for every registered user; no tiers, no paywall
+- **Contact:** admin@gpro-pitwall.com · [open an issue](https://github.com/MVinhas/gpro-pitwall/issues)
+- **Support:** voluntary, via [Buy Me a Coffee](https://buymeacoffee.com/mvinhas)
 
-Free for every registered user. No tier, no paywall. Voluntary support via [Buy Me a Coffee](https://buymeacoffee.com/mvinhas).
-
----
-
-## A note on FOBY
-
-GPRO is, by tradition, a **Find Out By Yourself** game — much of the reward comes from analysing your own data and drawing your own conclusions (fuel consumption, tyre wear, which driver stats matter, and so on). Pitwall can hand you answers the community took years to work out, and that convenience can short-circuit the discovery if you let it.
-
-The tool is built to respect that culture rather than erase it:
-
-- It's a **second opinion, not a substitute** for your own analysis.
-- Every screen **shows its inputs and reasoning** instead of hiding them, so you learn the *why*, not just the *what* — the Race Engineer advice is a transparent heuristic, not a reverse-engineered black box.
-- The actual game formulas stay private (git-ignored `config/secrets.php`); nothing here redistributes GPRO's mechanics.
-
-If working things out from scratch is the part you enjoy, do that first — then use Pitwall to check your thinking.
+Getting started takes two minutes: register with your email (passwordless — a one-time code, no password ever stored), paste your GPRO API token in the Control Panel (encrypted at rest), and every tab fills in with your driver, car, team and next race.
 
 ---
 
 ## Features
 
-Everything lives behind a **sticky top tab bar** — a horizontally scrollable pill bar on mobile (replacing the old dropdown), an underline tab bar on desktop, grouped by intent (race weekend / team building / admin). Tabs carry short labels (Strategy, Training, Recruitment) and the old full-name URLs still resolve. On the Cockpit and Race Strategy tabs a compact `① Cockpit → ② Strategy` stepper links the two connected steps. Signed-in users get a header status strip — name, last sync and a **re-sync button** beside a live billboard (cash, division, next race).
+Everything sits behind a sticky tab bar — scrollable pills on mobile, underline tabs on desktop — grouped by intent: **race weekend** (Cockpit · Strategy · Car Wear · Testing), **team building** (Training · Recruitment) and admin. Every page shares one visual system (shared cards, one-line notices, verdict-first accordions that stay informative while closed) and works at 375 px and without JavaScript.
 
-Every page shares one visual system: a common card component, one-line stale-data notices, and verdict-first accordions whose summaries stay informative while closed. Phone-first density is deliberate — key tables keep their answer column on-screen at 375 px (less-critical columns appear from tablet width up), disclosure summaries have visible keyboard-focus rings, animations respect `prefers-reduced-motion`, and every form — including the slider-driven ones — still submits without JavaScript.
+### Cockpit — the race-weekend spine
 
-### Cockpit (the race-weekend spine)
-One screen, in race-prep order. A **decision summary board** leads: one verdict tile per card (jump-links that open the matching card), so every call is readable without scrolling. Each card below is a collapsible accordion that repeats its verdict in the header — closed by default on mobile, open on first visit on desktop, your choice remembered per session. Desktop lays the cards out in two columns:
+One screen in race-prep order. A **decision summary board** leads: one verdict tile per card, so every call is readable without scrolling; each tile jumps to and opens its card.
 
-- **PHA match** — track vs car Power/Handling/Acceleration alignment, with a favourite-track badge. Highlights a match only when it's strict: **top** (your car's #1 attribute is the track's #1) or **perfect** (all three ranks line up). No push verdict here — that call now lives in the Strategy tab.
-- **Testing projection** — 100-lap forecast with 3-race decay (Test Points → R&D → Engineering → Car Character) so you see where the car actually lands.
-- **Boost-lap fuel cost** — per-track dry/wet coefficient lookup.
-- **Weather call** — Q1 / Q2 / race-start dry/wet assessment. The track and P/H/A come from Office + TrackProfile (which roll over the moment a new race opens), not the saved race setup — so the cockpit shows the correct upcoming race even before you've configured it in GPRO. Until that setup is saved, an amber notice flags it and the weather card is withheld rather than showing the previous race's forecast.
-- **Sponsors** — ongoing negotiation list with per-negotiation characteristics and the recommended answer for each of the five negotiation questions.
-- **Training picks** — gap-closer recommendations weighted against the division ideal.
-- **Car wear panel** — per-part end-of-race wear projection with a live risk slider that re-runs without a page reload. Flagged parts land in one compact status table (Part · Lvl · now% → end% · Replace/Red/Watch), and each part's ranked swap options (filtered by your group's car-level band from `MoneyLevels` and your live cash from `Menu`) collapse to their best pick. Includes a collapsible PHA-contribution reference table (each part's Power/Handling/Acceleration value per level) for manually working out the PHA shift of a swap when forcing a track-car match.
-- **"Set your race strategy" handoff** — one click to the Strategy tab pre-populated.
+- **PHA match** — car vs track Power/Handling/Acceleration alignment, with a favourite-track badge. Only strict matches count: **top** (your car's #1 attribute is the track's #1) or **perfect** (all three ranks align).
+- **Testing projection** — 100-lap forecast with 3-race decay (Test Points → R&D → Engineering → Car Character), so you see what actually lands in the car.
+- **Boost-lap fuel cost** — per-track dry/wet coefficients.
+- **Weather call** — Q1 / Q2 / race-start dry-wet assessment for the *upcoming* race. Track identity comes from feeds that roll over the moment a new race opens, so the cockpit is correct even before you've saved a setup in GPRO — and it withholds the forecast (with a notice) rather than show the previous race's weather.
+- **Sponsors** — ongoing negotiations with the recommended answer for each of the five negotiation questions.
+- **Training picks** — gap-closers weighted against your division's ideal driver.
+- **Car wear panel** — per-part end-of-race wear with a live risk slider. Flagged parts land in one status table (Part · Lvl · now% → end% · verdict); each part's swap options are ranked, filtered by your group's car-level band and your live cash, and collapse to their best pick. A reference table of each part's PHA contribution per level is one click away.
+- **Handoff** — one click to the Race Strategy tab, pre-populated.
 
 ### Race Strategy
-Fuel + tyre + setup for every compound (Extra Soft / Soft / Medium / Hard / Rain). Live risk slider; the calc auto-runs on first visit so you don't need to click Calculate. Best-compound highlighted, matched to the effective race weather: a dry race compares dry compounds only (Rain never appears as the "beats X" runner-up), a wet race recommends Rain outright with no runner-up line — there is only one wet compound. Per-compound breakdown of lost time (pits / fuel / tyre-compound difference). Setup table for Q1, Q2 and race with weather-aware tyre choices. Fuel figures and the track's overtaking rating (Very Easy → Very Hard, colour-coded) sit in a slim billboard strip above the results. The header shows your contracted **tyre supplier** beside the track name, with its dry/wet performance (out of 8) and ideal temperature read straight from the GPRO suppliers feed.
 
-### Advice from the Race Engineer ⭐
-The headline feature of the Strategy tab. The race engineer suggests your **overtake and defend risk dials (0–100)** for the next race and explains its reasoning in plain advisor prose — like having a real engineer on the pit wall who has already done the homework:
+Fuel, tyres and setup for every compound (Extra Soft / Soft / Medium / Hard / Rain), auto-run on first visit, re-run live by a risk slider. The **verdict leads**: best compound, stops, fuel per stint, total time lost and the margin over the runner-up — always compared within the same tyre type (a dry race compares dry compounds only; a wet race recommends Rain outright — it's the only wet compound). Below it: a per-compound breakdown of time lost (pits / fuel / compound difference), the Q1 / Q2 / race setup table with weather-aware tyre choices, and your contracted tyre supplier's dry/wet rating and ideal temperature beside the track name.
+
+#### Advice from the Race Engineer ⭐
+
+The headline feature. A race engineer that reads your driver, the track and the forecast, then tells you in plain words how to fill the race form:
 
 > *"Overtaking at Barcelona is hard, so I'd push overtake up to 60 to make moves stick — and since the track already makes you hard to pass, 35 on defence is plenty. Grip here is low — sliding cars punish ambition, so I've shaved both numbers."*
 
-What it weighs, every single race:
+- **Overtake and defend risk dials (0–100)** — weighed from the track's overtaking rating, the driver (concentration and experience carry dry races; talent takes the wheel in the wet), aggression both ways (backed by experience it buys pace; beyond it, it's the mistake trap), the forecast, track grip, tyre wear, and stamina on long races.
+- **Boost-lap placement** — early in traffic, on the in-laps to overcut through the pit cycle, or at the flag — pit-window aware via the best strategy's stint plan.
+- **Race start approach** and the **technical-problem pit threshold**, derived from driver control and this track's pit-lane time.
+- **Pit-count tie-breaker** when two strategies are close on paper, and a race-distance note when the length is worth flagging.
 
-- **Track overtaking rating** — hard passing means overtake risk pays and the track defends for free; easy passing flips the money to defence.
-- **The driver** — concentration, experience, talent and motivation, weighted on GPRO's full 0–250 skill scale. Concentration and experience carry dry races; **talent takes the wheel in the wet**.
-- **Aggressiveness, both edges** — aggression backed by experience buys extra attacking pace; aggression beyond it is the mistake trap and gets trimmed.
-- **The forecast** — wet or rain-threatened races pull both dials down, scaled by talent.
-- **Track grip** — low-grip circuits punish ambition; both numbers get shaved.
-- **Tyre wear** — very-high-wear tracks cost you the rubber you'd push on.
-- **Stamina on long races** — a 310 km+ race with a tired driver is not where you gamble.
+Honest by design: a transparent heuristic built from the game's own attribute semantics, not a reverse-engineered formula — and it says so right in the box.
 
-It also drops a **pit-count tie-breaker**: when two strategies are close on paper, it tells you whether this track rewards fewer stops (track position is gold where passing is hard) or makes the extra stop affordable (clean air and fresh rubber where passing is easy) — and it stays quiet about stop counts when rain is likely, because a wet race rewrites the plan anyway.
+#### Push or hold? ⭐
 
-And it now covers the rest of the race-setup form:
-
-- **Boost laps** — the three boost-set start laps, placed where pace converts into something: early while the field is packed (easy passing), the in-laps before each stop to overcut through the pit cycle, or the final laps to bring it home. Pit-window aware via the best strategy's stint plan.
-- **Race start approach** — one of GPRO's four options, scaled to the driver's control and stepped down for wet starts; the official tutorial warns start risk stacks with race risks.
-- **Technical-problem policy** — pit on a solvable problem only if more than N laps remain, with N derived from this track's pit-lane time against the 3–6 s/lap a limping car loses.
-- **Race-distance note** — shown only when distance is worth flagging, and written like an engineer talking, not a stats readout: it tells you in plain words when a race is short or long (no kilometres, no averages quoted) and what that means for energy. Short race → spends less driver energy, so carry higher clear-track risk and place boost laps freely; long race → bleeds energy, so trim both, more so when stamina is thin. Normal-length races say nothing — no point stating the obvious. Under the hood the tiers come from the 64 seeded tracks (field mean ~301 km, bands at the mean ± half a standard deviation), but the manager only ever sees the verdict.
-
-Honest by design: it's a transparent heuristic built from the game's own attribute semantics, not a reverse-engineered formula — and it says so right in the box.
-
-### Push or hold? ⭐
-A collapsible checklist below the Race Engineer that turns several binary signals into a single push/no-push read for your **Clear Track Risk** dial. The header shows how many of the signals that apply to your division are met:
-
-- **Car P/H/A matches the track** — top or perfect match (same strict rule as the Cockpit).
-- **Driver's favourite track** — one of the driver's three favourites.
-- **Tyres suit the race** — the supplier's dry (or wet, when the race is wet) rating is 4/8 or better. *Hidden in Rookie/Amateur — no supplier choice there.*
-- **Track temp near tyre ideal** — race temperature within ±3 °C of the supplier's ideal temperature. *Hidden in Rookie/Amateur.*
-- **Car level vs the group** — your car level ranked against your whole group (e.g. "#30 of 40"); above the group average is a reason to push.
-- **Driver OA vs the group** — your driver's overall ability ranked against the group (e.g. "#6 of 40"); above average is a reason to push.
-- **Car can take the push** — projects end-of-race part wear at a reference Clear Track Risk of 50; met only when no part finishes above 90%, so the car has the headroom to absorb the extra wear pushing costs.
-
-More signals met = the weekend is set up in your favour, so carry a higher Clear Track Risk; a full sweep points to a very likely win. Heuristic guidance, not a game formula — and it says so.
+A checklist that turns binary signals into one read for your **Clear Track Risk** dial: car–track PHA match, driver favourite track, tyres suiting the race, track temperature near the tyre's ideal, car level and driver ability ranked against your group, and whether the car has the wear headroom to absorb a push. More signals met → the weekend is set up in your favour, carry more risk; a full sweep points to a very likely win. Signals that don't apply to your division are hidden, not failed.
 
 ### Car Wear
-Per-part end-of-race wear forecast from your real driver attributes. Read-only driver stats pulled from the API (no manual entry). Risk slider. Per-part: level, start wear, estimated added wear, projected end wear (colour-coded by survival risk).
+
+Per-part end-of-race wear forecast from your real driver attributes (read-only, pulled from the API — no manual entry). Risk slider; per-part level, start wear, added wear and colour-coded projected end wear.
 
 ### Testing
-Everything you need before a testing session, for the dedicated **testing track**. Shows the track's demands and your car's Power/Handling/Acceleration, the points distribution across Test / R&D / Engineering / **Car Character** (highlighted — it's what actually lands in the car), and the points gained per 5 laps for each testing priority (No special priority, Top speed, Cornering, Hairpins, Braking, Overtaking, Chicanes, Test car limits, Setup tuning). Includes the ideal setup for the testing track (same engine as Race Strategy) and a slider-driven (5–100 laps) projection of expected car wear that updates live. Read-only — testing weather and temperature come straight from GPRO.
+
+Everything for a testing session: the testing track's demands vs your car, the points split across Test / R&D / Engineering / **Car Character** (highlighted — it's what actually lands in the car), points gained per 5 laps for each testing priority, the ideal setup for the track, and a slider-driven wear projection.
 
 ### Training Planner
-Multi-program schedule — combine several programs in one shot, see the cumulative effect of every (program × count) combination with a sum-then-clamp model that respects the [0, 250] attribute bounds. Projected Overall Ability before/after for contract renegotiation context. Per-attribute delta chips and a full comparison table.
+
+Combine several training programs in one shot and see the cumulative effect of every program × count combination, with attribute bounds respected and projected Overall Ability before/after — useful context for contract renegotiation.
 
 ### Recruitment Analyzer
-Scores the full GPRO driver market against your division's ideal pilot. Rating is anchored to the division baseline rather than a hand-tuned formula — the closer your ideal converges as you populate the baseline, the sharper the score gets. Self-improving feedback loop.
 
-- Attributes below ideal: −0.1 per unit.
-- Age: −2 per year older, +0.5 per year younger.
-- Weight: −0.5 per kg heavier, +0.125 per kg lighter.
-- Salary and fee don't count.
-- Floored at 0, capped at 100. `MIN_RATING = 50` filter so the result set stays bounded on a full 4–5k-driver market.
+Scores the full GPRO driver market (4–5k drivers) against your division's ideal pilot — attribute gaps, age and weight priced in; salary and fee ignored. Value-range filters per attribute persist across sorting and pagination, and a compact `Fav` column flags how many of each candidate's favourite tracks are raced this season and next — computed from data already in hand, no extra API calls.
 
-**Value range filters** — set inclusive minimum and/or maximum bounds for driver attributes, leaving either bound blank for a one-sided range. Active filters persist while sorting columns and moving between result pages.
+### Admin
 
-**Favourite-track fit** — a compact `Fav` column flags how many of each candidate's favourite tracks are raced this season (`C·n`) and next season (`N·n`), green when matched, with the track names on hover. Computed from data already in hand — the market dump carries each driver's favourite tracks, and the season calendars come from the cache the per-user sync already warms — so it adds **no extra API call** and needs no per-driver lookup.
+- **Division baseline / differences** — per-division ideal-pilot tables with OA caps (Rookie 85 / Amateur 110 / Pro 135 / Master 160 / Elite ∞), plus pairwise division insights.
+- **User management** — paginated, sortable user list with growth trends over a selectable 7/30/90-day window; admin-flag toggle with self-demotion guard, soft-delete/restore, and every mutation in an append-only audit log.
+- **Telemetry** (`/debug`) — registered vs active users (successful sync in the last 30 days), tokens set, API budget, runtime info, masked environment.
 
-### Division Baseline / Division Differences *(admin-only)*
-Per-division ideal-pilot tables with OA caps (Rookie 85 / Amateur 110 / Pro 135 / Master 160 / Elite ∞), plus pairwise comparison insights across divisions.
+### Accounts
 
-### Admin user management *(admin-only)*
-`/admin/users` — paginated, click-to-sort user list with summary cards (registered / active / new-signup / API-linked counts) and period-over-period **growth trends** over a selectable 7/30/90-day window, so an admin can see at a glance whether the app is growing. Toggle admin flag (with self-demotion guard), soft-delete/restore. Every mutation is recorded in an append-only `audit_log` table; the audit panel shows the last 50 actions.
+- **Passwordless** — register and log in with a one-time 6-digit emailed code; no passwords stored, ever. Rate-limited, TTL'd, attempt-capped, reCAPTCHA-guarded in prod.
+- **Verified-only namespace** — a registration only becomes an account once its code is verified; an unverified or bounced sign-up can never squat a username or email.
+- **Keep me signed in** — opt-in persistent login (hashed validator, rotated on every use for theft detection, rolling 30-day window), with **step-up re-authentication** for sensitive actions like account deletion or API-token changes.
+- **In-app feedback form** — whitelisted subjects, delivered with Reply-To set to your account address, used only to reply — never for marketing.
 
-The `/debug` telemetry page shows registered users, **active users** (at least one successful GPRO data sync in the last 30 days — a better activity signal than raw registrations, since players pause and return), tokens set, API budget, runtime info and masked environment.
-
-### Authentication
-Passwordless: register/login with a one-time 6-digit code emailed to you (no passwords stored, ever). Login is rate-limited per IP; codes carry a TTL and a max-attempts cap. reCaptcha guards registration in prod.
-
-- **Verified-only account namespace** — a new registration is held in a `pending_registrations` table and only becomes a real `users` row once its code is verified. An unverified or bounced sign-up can never squat a username/email; when two people race for the same name, whoever verifies email control first wins (resolved at the promotion INSERT). The registration form reveals nothing about whether an email already has an account.
-
-- **"Keep me signed in"** — opt-in persistent login backed by a selector+validator token (hashed at rest, rotated on every use for theft detection, rolling 30-day window). Survives the short PHP session and is revoked on logout.
-- **Step-up re-authentication** — sensitive actions (account deletion, API-token change) demand a fresh emailed code when the session was restored from a remember token rather than freshly verified.
-- **Username recall** — the login form remembers the last username used on that browser (client-side `localStorage`, same-origin, no server state), so persistent-login users who rarely type it don't have to remember it.
-
-### Feedback & contact
-Logged-in users get an in-app **Send Feedback** form (`/contact`, linked from the footer): pick a subject (Feature Request, Technical Issue, General Question, Bug Report, Account / Data Issue, Other), write the message, send. It's delivered by email with Reply-To set to the sender's account address, so answering is one click. The form sits behind authentication + CSRF and a per-user rate limit (5 messages/hour, security-logged) — deliberately no CAPTCHA, since every sender is a verified account. An inline privacy note states the address is used only to reply — never for marketing or newsletters — and anonymous contact stays possible via the plain `mailto:` link (which anonymous visitors keep in the footer).
-
-### No-driver prompt
-When your account has a calendar and tyre supplier but no pilot under contract, Cockpit / Race Strategy / Car Wear show a dedicated notice recommending the Recruitment Analyzer (with a direct link) instead of a cryptic error.
-
-### Health endpoint
-`GET /healthz` returns JSON with per-check status (DB reachable + cache roundtrip). 200 when both green, 503 when either fails. Built for an external uptime probe. Public responses only expose `{ok}` per check; the failure `detail` string is included only for an admin session or in `IS_DEV` — anonymous callers never see internal error text.
-
-### SEO & sharing
-Per-page titles, meta descriptions and canonical URLs via Twig blocks (override `APP_PUBLIC_URL` to change the canonical origin); Open Graph + Twitter cards with a generated 1200×630 `og-image.png`; `WebApplication` JSON-LD on the landing page; `robots.txt` + `sitemap.xml` in the docroot; private pages (verify, reauth, control panel, admin, debug, errors) carry `noindex`. Static assets ship with immutable year-long cache headers; the stylesheet is cache-busted per release via `?v={version}`.
+Also in the box: a `/healthz` endpoint for uptime probes, full SEO and social-sharing markup, styled error pages, and a friendly no-driver prompt that points new accounts at the Recruitment Analyzer instead of a cryptic error.
 
 ---
 
-## Tech stack
+## A note on FOBY
 
-- **PHP 8.5** (composer requires `>=8.5`).
-- **Twig 3** templates.
-- **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile).
-- **SQLite** via PDO. Encrypted user emails (AES-256-GCM) and API tokens at rest.
-- **PHPMailer 7** for SMTP; in dev, writes `.eml` files to `var/mail/` instead.
-- **PHPUnit 13** — 365 tests, 937 assertions, all green at **PHPStan level 8** with **type-coverage** enforced (100% return/property/constant types + `strict_types`, 99.5% param types). Twig templates linted by a native `bin/twig_lint.php` (Twig's own tokenizer/parser — no third-party linter). CI runs the suite with `pcov` and enforces a minimum statement-coverage floor via `bin/check_coverage.php` (provisional 55%, to be ratcheted up as real coverage becomes known).
-- **No framework.** Custom front controller + flat DI container in `bootstrap.php`. Routes in `config/routes.php`.
-- **Timestamps are stored and served as UTC**, then localised per-visitor in the browser (`<time data-localtime>` + `Intl`), so each user sees their own timezone with no server-side config.
+GPRO is, by tradition, a **Find Out By Yourself** game — much of the reward is analysing your own data and drawing your own conclusions. Pitwall is built to respect that culture, not erase it: it's a **second opinion, not a substitute**; every screen shows its inputs and reasoning so you learn the *why*, not just the *what*; and the actual game formulas stay private (git-ignored `config/secrets.php`) — nothing here redistributes GPRO's mechanics. If working things out from scratch is the part you enjoy, do that first — then use Pitwall to check your thinking.
 
 ---
 
-## Local development
+## Run it locally
 
 Zero-infra by design — no Docker, no Mailpit, no Redis, no APCu required.
 
 ```bash
 composer install
-cp .env.example .env             # then fill in values
+cp .env.example .env             # then fill in values (see below)
 php bin/seed_tracks.php          # bootstrap SQLite schema + seed tracks
 bin/build_tailwind.sh            # compile public/assets/app.css
 php -S localhost:8000 -t public  # dev server
 ```
 
-In dev (`IS_DEV=true`), `EmailService` writes outgoing mail to `var/mail/*.eml` instead of hitting SMTP — open the newest file to read the verification code:
+In dev (`IS_DEV=true`) outgoing mail is written to `var/mail/*.eml` instead of SMTP — open the newest file to read your verification code:
 
 ```bash
 ls -t var/mail/*.eml | head -1 | xargs cat
 ```
 
-### `.env` keys you must set
+### Configuration
+
+Required keys in `.env`:
 
 | Key | Notes |
 |---|---|
-| `APP_SECRET` | 64-hex random; root secret — HMAC for email hashes + verification codes, and derivation root for the AES-256-GCM keys (email + API-token storage) |
+| `APP_SECRET` | 64-hex random (`openssl rand -hex 32`). The single root secret: HMAC for email hashes + verification codes, and the derivation root for both AES-256-GCM keys |
 | `IS_DEV` | `true` in dev, `false` in prod |
-| `CACHE_DRIVER` | `filesystem` (default; zero infra), `apcu`, `redis`, or `none` |
-| `MAIL_HOST` / `MAIL_PORT` / `MAIL_USER` / `MAIL_PASS` | SMTP credentials in prod |
-| `MAIL_FROM` | Defaults to `admin@gpro-pitwall.com` |
-| `MAIL_FROM_NAME` | Defaults to `GPRO Pitwall` |
+| `MAIL_HOST` / `MAIL_PORT` / `MAIL_USER` / `MAIL_PASS` | SMTP credentials (prod only — dev writes `.eml` files) |
 | `RECAPTCHA_SITE_KEY` / `RECAPTCHA_SECRET_KEY` | Required in prod; bypassed when `IS_DEV=true` |
-| `SYNC_SAFETY_MARGIN` | Default 20. The sync defers when `apiRequestsRemaining < calls + margin` |
-| `GPRO_API_RATE` | Outbound API calls/sec allowed from this host (token-bucket refill). Default 2. `0` disables the throttle |
-| `GPRO_API_BURST` | Token-bucket capacity — how many calls may go out back-to-back before pacing kicks in. Default 4 |
-| `GPRO_API_MAX_BLOCK_MS` | Upper bound on how long a single call waits for a token before proceeding anyway. Default 4000 |
-| `GPRO_API_CONNECT_TIMEOUT` / `GPRO_API_TIMEOUT` | Per-call curl connect + total timeouts (seconds). Defaults 10 / 30 |
-| `GPRO_API_MARKET_TIMEOUT` | Total timeout for the larger `GetMarketFile` dump (seconds). Default 60 |
 
-Generate random keys with `openssl rand -hex 32`.
+Optional tuning (sensible defaults):
 
----
+| Key | Notes |
+|---|---|
+| `CACHE_DRIVER` | `filesystem` (default; zero infra), `apcu`, `redis`, or `none` |
+| `MAIL_FROM` / `MAIL_FROM_NAME` | Sender identity (defaults provided) |
+| `SYNC_SAFETY_MARGIN` | Sync defers when the user's remaining API budget is below calls + margin (default 20) |
+| `GPRO_API_RATE` / `GPRO_API_BURST` / `GPRO_API_MAX_BLOCK_MS` | Host-wide outbound throttle: steady calls/sec, burst size, max wait in ms (defaults 2 / 4 / 4000; rate `0` disables) |
+| `GPRO_API_CONNECT_TIMEOUT` / `GPRO_API_TIMEOUT` / `GPRO_API_MARKET_TIMEOUT` | Per-call curl timeouts in seconds (defaults 10 / 30 / 60) |
 
 ## Commands
 
 ```bash
-composer install                       # Install deps
 composer check                         # lint + analyse (PHPStan L8 + type-coverage) + twig-lint + test
 composer test                          # PHPUnit only
 composer analyse                       # PHPStan only
 composer lint                          # PSR-12
+composer audit                         # dependency security advisories
 
-bin/build_tailwind.sh                  # Compile assets/css/app.css → public/assets/app.css
-bin/build_tailwind.sh --watch          # Rebuild on every save
-bin/build_release.sh                   # Assemble dist/gpro-pitwall/ for deploy
-bin/build_release.sh --tar             # Also produce dist/gpro-pitwall.tar.gz
-bin/seed_tracks.php                    # Initialise SQLite + seed tracks (one-shot)
-bin/twig_lint.php                      # Native Twig syntax lint (also via composer twig-lint)
-bin/db_browser.php                     # Local SQLite viewer (CLI only — never served)
-bin/check_no_secrets.sh                # Pre-commit secret scan
-bin/probe_security.sh <url>            # Post-deploy leak probe (must exit 0)
+bin/build_tailwind.sh                  # compile assets/css/app.css → public/assets/app.css (--watch for dev)
+bin/build_release.sh --tar             # assemble dist/ deploy bundle (+ tarball)
+php bin/seed_tracks.php                # initialise SQLite + seed tracks (one-shot)
+php bin/db_browser.php                 # local SQLite viewer (CLI only — never served)
+bin/check_no_secrets.sh                # pre-commit secret scan
+bin/probe_security.sh <url>            # post-deploy leak probe (must exit 0)
 ```
-
----
 
 ## Deployment
 
-Source of truth is GitHub; deployment is a manual file copy to your host of choice. CI also builds this bundle automatically as a `gpro-pitwall-bundle` workflow artifact (14-day retention) on every push to `main`, for build verification only — it excludes `config/secrets.php` and `data/tracks.csv`, so an actual deploy still requires the local build below with those files present.
+Source of truth is GitHub; deployment is a manual file copy to any PHP 8.5 host. CI also builds the bundle as a workflow artifact on every push to `main` — build verification only, since it excludes the private runtime inputs.
 
-1. Locally: `bin/build_release.sh --tar`. Produces `dist/gpro-pitwall.tar.gz` — a self-contained bundle with `vendor/` already installed (no dev deps), the compiled CSS, and the writable `var/` skeleton.
-2. Upload `dist/gpro-pitwall/*` to your domain's web root.
-3. On the host, configure:
-   - **Document root** = `public/` *(the load-bearing setting — every sensitive file lives outside)*
-   - **PHP version** = 8.5
-   - **HTTPS** enabled
-4. Create `.env` on the server. Set `APP_ENV=prod`, `IS_DEV=false`, fill SMTP credentials, generate a fresh `APP_SECRET` (never reuse the dev key — `openssl rand -hex 32`; it is the single root secret from which both AES keys and the email-hash HMAC key are derived).
-5. Set file permissions:
+1. `bin/build_release.sh --tar` → `dist/gpro-pitwall.tar.gz`, self-contained: `vendor/` installed without dev deps, compiled CSS, writable `var/` skeleton.
+2. Upload `dist/gpro-pitwall/*` to the domain's web root.
+3. On the host: **document root = `public/`** (the load-bearing setting — every sensitive file lives outside it), PHP 8.5, HTTPS on.
+4. Create `.env` on the server: `IS_DEV=false`, SMTP + reCAPTCHA credentials, and a **fresh** `APP_SECRET` — never reuse the dev key.
+5. Permissions:
    ```bash
    chmod 600 .env
    chmod 640 config/secrets.php gpro_pilots.sqlite
    chmod 750 var var/cache var/mail var/log
    ```
-6. Visit `/` — should render the landing page.
-7. Run the probe:
+6. Visit `/` — the first request initialises the SQLite schema.
+7. Probe it:
    ```bash
-   bin/probe_security.sh https://gpro-pitwall.com
+   bin/probe_security.sh https://your-domain.example
    ```
-   It must exit 0. Twenty-one sensitive paths must return 4xx; seven public surfaces must return 200; four security headers must be present on `/`. Requests are paced with random jitter, shuffled per run, and carry rotating browser User-Agents so shared-host WAFs don't ban the probing IP — expect a run to take ~2–3 minutes (tune with `PROBE_DELAY` / `PROBE_JITTER`).
+   Must exit 0: 21 sensitive paths blocked, the public surface serving 200, security headers present on `/`. Requests are paced, jittered and shuffled so shared-host WAFs don't ban the probing IP — a run takes ~2–3 minutes (tune with `PROBE_DELAY` / `PROBE_JITTER`).
 
----
+## Tech stack
 
-## Security posture
-
-Reviewed against the OWASP Top 10:2025.
-
-- CSRF token on every POST (validated in `public/index.php`).
-- Email + API token encrypted at rest via AES-256-GCM with domain-separated keys derived from the single `APP_SECRET`. The decrypted API token is never sent back to the browser — the Control Panel shows only a masked last-4 hint and the field accepts a new value (blank = unchanged); the token is also stripped from the shared Twig `user` global. This protects against DB-file exfiltration; note the encryption key lives in `.env` on the same host, so it is not a defence against an attacker with arbitrary file-read on the server.
-- Login keeps full control-flow parity between known and unknown usernames: an unknown username produces a decoy pending state that routes to `/verify` identically to a real account (and can never verify), so neither the response body nor the redirect reveals whether a username exists.
-- `email_hash` (HMAC-SHA256) used for lookups so an attacker reading the DB can't enumerate users by email.
-- Security headers in `public/.htaccess`: Content-Security-Policy, HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy. HSTS + cookie Secure flag trust `X-Forwarded-Proto` so they still apply behind a TLS-terminating proxy.
-- Session cookies HttpOnly + Secure (when HTTPS) + SameSite=Lax. Persistent "remember me" tokens store only a hashed validator, rotate on use, and are revocable.
-- Login + registration are reCAPTCHA-gated and rate-limited per IP; verification codes have a TTL + max-attempts. A per-account code cap (`MAX_CODES_PER_USER_PER_HOUR`, default 3) bounds how many emails any one user can receive in an hour, so blind username-guessing on the login form can't spam real users regardless of source IP. A capped `/resend_code` link covers the rare missed-delivery case. Sensitive actions require step-up re-authentication.
-- Centralised authorisation gate (`requireAuth` / `requireAdmin` / `requireFreshAuth`); every mutating, admin, and debug route is gated server-side.
-- The contact form is authenticated-only with a whitelisted subject list (no user text ever reaches an email header), an HTML-escaped body, and a per-user rate limit (5/hour) that emits a `[security]` event when hit — layered controls that make a CAPTCHA unnecessary there.
-- Security event logging (`SecurityLogger`) emits structured `[security]` lines for failed logins, rate-limit hits, and remember-token theft detection; admin mutations recorded in `audit_log`.
-- Prod never leaks exception detail to clients: every controller-level `catch` logs the throwable server-side and shows the user a generic message instead of `$e->getMessage()` (cockpit, car wear, strategy, testing, recruitment analyzer, admin actions); anything that still bubbles past those is caught by the front controller's top-level handler in `public/index.php`, logged under a short reference id, and rendered as a generic 500 page.
-- Outbound GPRO API calls are bounded by connect + total curl timeouts so a hung upstream can't pin a PHP worker. The filesystem cache deserializes with `allowed_classes => false`, so a tampered cache file degrades to a miss rather than a PHP object-injection vector.
-- Prepared statements only (no string-concatenated SQL). Output XSS defence is Twig autoescaping (on everywhere, no `|raw`); user data is never interpolated into inline JS/event-handler attributes. New registrations additionally whitelist the username (`[A-Za-z0-9_]`, server-enforced), narrowing what can be stored — though that gate is not retroactive, so autoescaping remains the guarantee for pre-existing rows.
-- Pre-commit + CI secret scan (`bin/check_no_secrets.sh`).
-- PHPStan level 8 (with type-coverage) + PHPUnit suite, gated by a minimum statement-coverage floor (`bin/check_coverage.php`), required to pass before merge.
-
----
+- **PHP 8.5**, no framework — a custom front controller and a flat DI container in `bootstrap.php`; routes in `config/routes.php`.
+- **Twig 3** templates; **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile).
+- **SQLite** via PDO — emails and API tokens encrypted at rest (AES-256-GCM).
+- **PHPMailer 7** for SMTP; dev writes `.eml` files instead.
+- **PHPUnit 13** — 365 tests, 937 assertions — with **PHPStan level 8** and enforced type-declaration coverage (100% return/property/constant + `strict_types`; 99.5% param). Twig linted by a native `bin/twig_lint.php` built on Twig's own parser. CI measures statement coverage with `pcov` and enforces a floor (currently 45%, ratcheted up as coverage grows).
+- **Timestamps stored and served as UTC**, localised per visitor in the browser — no server-side timezone config.
 
 ## Architecture
 
@@ -275,15 +188,30 @@ Reviewed against the OWASP Top 10:2025.
 Request → public/index.php → Http\Router → Controller → Service → Repository → Twig
 ```
 
-- `bootstrap.php` wires every dependency into a flat `$container` array — adding a service means adding one line.
-- `config/routes.php` is the route table. No POST `action`-switch routing.
-- Controllers are thin. Logic lives in services. Services talk to repositories; repositories own SQL.
-- Cache adapters under `src/Cache/Adapter/` resolved by `src/Cache/CacheFactory`. Default driver `filesystem`.
-- `src/Service/GproApiFetcher` does raw HTTP. `src/Service/GproApiClient` composes it with cache + endpoint naming.
-- **Server-wide outbound throttle.** Every Pitwall instance calls the GPRO API from one host IP, so `src/Service/GproApiThrottle` caps the *aggregate* outbound rate — a token bucket shared across all PHP workers via a single `flock`'d state file in `var/cache/`. Cache hits never reach it; only real fetches do. Under a burst (many users syncing at once) it spaces calls by sleeping a bounded amount (`GPRO_API_MAX_BLOCK_MS`), never throws, and degrades to "slightly slower" rather than a failed page. Defaults: `GPRO_API_RATE=2`/s, `GPRO_API_BURST=4`; set `GPRO_API_RATE=0` to disable. This is the per-IP courtesy limit that complements the existing per-token budget guard (`SYNC_SAFETY_MARGIN`).
-- **Race-window cache keys.** Race-critical data (car wear, race setup, next-track profile) is namespaced by the current race window (`App\Support\RaceWindow`, computed from the clock against GPRO's weekly Tue/Fri schedule — no API call). The key rolls once per race weekend, so a stale read auto-refreshes a single endpoint at the boundary instead of serving last-window data within `CACHE_TTL_SHORT`. Schedule configurable via `GPRO_RACE_DAYS` / `GPRO_RACE_BOUNDARY_HOUR` / `GPRO_RACE_TZ`; empty `GPRO_RACE_DAYS` disables it.
+- Controllers are thin; logic lives in services; repositories own the SQL (prepared statements only).
+- `bootstrap.php` wires every dependency into a flat container — adding a service is one line.
+- Cache adapters (`filesystem` default, APCu, Redis, none) behind one interface, resolved by `CacheFactory`.
+- **Host-wide outbound throttle** — all GPRO API calls leave from one IP, so a token bucket shared across PHP workers (a `flock`'d state file) paces real fetches under burst load; cache hits never touch it. It never throws — worst case is "slightly slower", not a failed page. Complements the per-token budget guard (`SYNC_SAFETY_MARGIN`).
+- **Race-window cache keys** — race-critical data is namespaced by the current race window (computed from the clock against GPRO's Tue/Fri schedule, no API call), so caches roll over exactly once per race weekend instead of serving last week's data until TTL. Configurable via `GPRO_RACE_DAYS` / `GPRO_RACE_BOUNDARY_HOUR` / `GPRO_RACE_TZ`.
 
----
+## Security posture
+
+Reviewed against the OWASP Top 10:2025.
+
+- CSRF token on every POST, validated in the front controller.
+- Emails and API tokens encrypted at rest (AES-256-GCM, domain-separated keys derived from `APP_SECRET`); lookups use HMAC-SHA256 email hashes, so a stolen DB file can't enumerate users. The key lives in `.env` on the same host, so this protects a stolen database file — not against an attacker with arbitrary file read on the server.
+- The decrypted GPRO API token is never sent back to the browser: the Control Panel shows a masked last-4 hint and accepts a new value (blank = unchanged); the token is also stripped from the shared Twig `user` global.
+- Login leaks nothing about whether a username exists: unknown usernames produce a decoy pending state that routes to `/verify` identically to a real account (and can never verify).
+- Security headers in `public/.htaccess`: Content-Security-Policy, HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy — proxy-aware via `X-Forwarded-Proto`.
+- Session cookies HttpOnly + Secure + SameSite=Lax. "Remember me" tokens store only a hashed validator, rotate on every use for theft detection, and are revocable.
+- Login and registration are reCAPTCHA-gated and rate-limited per IP; verification codes carry a TTL, an attempt cap, and a per-account hourly email cap, so blind username-guessing can't spam real users. Sensitive actions require step-up re-authentication.
+- One centralised authorisation gate (`requireAuth` / `requireAdmin` / `requireFreshAuth`) — every mutating, admin and debug route is gated server-side, not just hidden in templates.
+- The contact form is authenticated-only with a whitelisted subject list (no user text ever reaches an email header) and a security-logged per-user rate limit — layered controls that make a CAPTCHA unnecessary there.
+- Structured `[security]` event logging for failed logins, rate-limit hits and token-theft detection; admin mutations recorded in an append-only `audit_log`.
+- Prod never leaks exception detail: controller-level catches log server-side and show a generic message; anything that bubbles past them is caught by the front controller, logged under a short reference id, and rendered as a generic 500 page.
+- Outbound API calls carry connect + total timeouts so a hung upstream can't pin a PHP worker; the filesystem cache deserializes with `allowed_classes => false`, so a tampered cache file degrades to a miss, not an object-injection gadget.
+- Prepared statements only; Twig autoescaping everywhere (no `|raw`); registration usernames whitelisted to `[A-Za-z0-9_]` server-side.
+- Pre-commit + CI secret scan (`bin/check_no_secrets.sh`); PHPStan level 8, the full test suite and the coverage floor all required to pass before merge.
 
 ## License
 
