@@ -36,6 +36,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    {# Theme boot: apply the stored appearance before first paint (no flash).
+       Absent/invalid value = System, which pure CSS color-scheme handles. #}
+    <script>try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
     {# Version query enables long-lived asset caching (see .htaccess) while
        guaranteeing every release busts the client cache. #}
     <link rel="stylesheet" href="/assets/app.css?v={{ app_version }}">
@@ -46,7 +49,7 @@
 <div class="min-h-full">
 
     {# HEADER #}
-    <header class="bg-white shadow-sm border-b border-slate-200">
+    <header class="bg-surface shadow-sm border-b border-slate-200">
         <div class="mx-auto max-w-7xl px-4 py-3 md:py-6 flex flex-col gap-4 md:flex-row md:justify-between md:items-center">
             <div>
                 <a href="/" class="flex items-center gap-3 hover:opacity-80 transition-opacity">
@@ -191,6 +194,21 @@
 
     <footer class="px-4 py-6">
         <div class="mx-auto flex max-w-7xl flex-col items-center gap-2 text-xs text-slate-400">
+            <div id="themePicker" hidden role="group" aria-label="Appearance"
+                 class="inline-flex items-center gap-0.5 rounded-lg bg-slate-200/60 p-0.5">
+                <button type="button" data-set-theme="light" aria-pressed="false"
+                        class="px-2.5 py-1 rounded-md text-xs font-medium text-slate-500 hover:text-slate-700 transition-colors">
+                    <span aria-hidden="true">🌞</span> Light
+                </button>
+                <button type="button" data-set-theme="dark" aria-pressed="false"
+                        class="px-2.5 py-1 rounded-md text-xs font-medium text-slate-500 hover:text-slate-700 transition-colors">
+                    <span aria-hidden="true">🌙</span> Dark
+                </button>
+                <button type="button" data-set-theme="system" aria-pressed="false"
+                        class="px-2.5 py-1 rounded-md text-xs font-medium text-slate-500 hover:text-slate-700 transition-colors">
+                    <span aria-hidden="true">💻</span> System
+                </button>
+            </div>
             <div class="flex flex-wrap items-center justify-center gap-x-3 gap-y-2">
                 <span>&copy; {{ "now"|date("Y") }} GPRO Pitwall {{ app_version }}</span>
                 <span class="opacity-50" aria-hidden="true">•</span>
@@ -269,12 +287,12 @@
 {% if is_logged_in and api_limit is defined and api_limit != '?' %}
 <div
     id="apiBudgetModal"
-    class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/40"
+    class="fixed inset-0 z-50 hidden items-center justify-center bg-scrim"
     role="dialog"
     aria-modal="true"
     aria-labelledby="apiBudgetModalTitle"
 >
-    <div class="bg-white rounded-xl shadow-xl border border-slate-200 max-w-sm w-full mx-4 p-5">
+    <div class="bg-surface rounded-xl shadow-xl border border-slate-200 max-w-sm w-full mx-4 p-5">
         <h2 id="apiBudgetModalTitle" class="t-heading mb-2">Refresh the API counter?</h2>
         <p class="t-caption mb-3">
             Reading the real current value from GPRO <strong>costs 1 API call</strong>.
@@ -452,6 +470,41 @@ document.addEventListener('submit', (e) => {
             // Leave the UTC fallback in place if Intl formatting fails.
         }
     });
+})();
+</script>
+
+<script>
+// Appearance picker: Light/Dark pin a theme via data-theme + localStorage;
+// System clears both and lets color-scheme follow the OS. The control only
+// appears when JS runs — without JS the site still follows the OS theme.
+(() => {
+    const picker = document.getElementById('themePicker');
+    if (!picker) return;
+    const ACTIVE = ['bg-surface', 'text-slate-900', 'shadow-sm'];
+    const paint = (choice) => {
+        picker.querySelectorAll('[data-set-theme]').forEach((btn) => {
+            const on = btn.dataset.setTheme === choice;
+            btn.setAttribute('aria-pressed', String(on));
+            ACTIVE.forEach((c) => btn.classList.toggle(c, on));
+        });
+    };
+    const stored = () => {
+        try { return localStorage.getItem('theme') || 'system'; } catch { return 'system'; }
+    };
+    picker.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-set-theme]');
+        if (!btn) return;
+        const choice = btn.dataset.setTheme;
+        try {
+            if (choice === 'system') localStorage.removeItem('theme');
+            else localStorage.setItem('theme', choice);
+        } catch {}
+        if (choice === 'system') delete document.documentElement.dataset.theme;
+        else document.documentElement.dataset.theme = choice;
+        paint(choice);
+    });
+    paint(stored());
+    picker.hidden = false;
 })();
 </script>
 

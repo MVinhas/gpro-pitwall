@@ -71,7 +71,7 @@
     {% endif %}
 
     {% if swap_advice is defined and swap_advice is not empty %}
-        <div class="rounded-lg border border-slate-200 bg-white p-4 space-y-4">
+        <div class="rounded-lg border border-slate-200 bg-surface p-4 space-y-4">
             <p class="t-label text-slate-700">Swap options</p>
             {% for part, opts in swap_advice %}
                 {% set cur = opts.current %}
@@ -125,7 +125,7 @@
                                     }[r.pha_tier] ?? '' %}
                                     {% set row_bg = loop.first and top_pick_qualifies
                                         ? 'bg-emerald-50 border-emerald-200'
-                                        : 'bg-white border-slate-200' %}
+                                        : 'bg-surface border-slate-200' %}
                                     <li class="rounded-md border {{ row_bg }} px-3 py-2">
                                         <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                                             <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ slot_label }}</span>

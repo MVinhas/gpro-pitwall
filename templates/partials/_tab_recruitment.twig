@@ -114,7 +114,7 @@
                             {% endif %}
                         </summary>
 
-                        <form method="GET" action="/" class="border-t border-slate-200 bg-white px-4 py-4">
+                        <form method="GET" action="/" class="border-t border-slate-200 bg-surface px-4 py-4">
                             <input type="hidden" name="main_tab" value="Recruitment Analyzer">
                             <input type="hidden" name="division_tab" value="{{ active_division }}">
                             <input type="hidden" name="sort" value="{{ sort.col }}">
@@ -189,7 +189,7 @@
                         </a>
                     {% endmacro %}
 
-                    <div class="overflow-hidden shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg">
+                    <div class="overflow-hidden shadow ring-1 ring-slate-200 sm:rounded-lg">
                         <div class="overflow-x-auto">
                             <table class="min-w-full divide-y divide-slate-300">
                                 <thead class="bg-slate-50">
@@ -229,7 +229,7 @@
                                     </tr>
                                 </thead>
                                 
-                                <tbody class="divide-y divide-slate-200 bg-white">
+                                <tbody class="divide-y divide-slate-200 bg-surface">
                                     {% for d in recruitment_results %}
                                         {% set ratingColor = d.rating >= 90 ? 'text-emerald-600' : (d.rating >= 75 ? 'text-blue-600' : 'text-slate-600') %}
                                         <tr class="hover:bg-slate-50 transition-colors">
@@ -292,7 +292,7 @@
                         
                         {# Pagination Controls #}
                         {% if pagination.total_pages > 1 %}
-                            <div class="bg-white px-4 py-3 flex items-center justify-between border-t border-slate-200 sm:px-6">
+                            <div class="bg-surface px-4 py-3 flex items-center justify-between border-t border-slate-200 sm:px-6">
                                 {% set navigationParams = 'main_tab=Recruitment%20Analyzer&division_tab=' ~ (active_division|url_encode) ~ '&sort=' ~ (sort.col|url_encode) ~ '&order=' ~ (sort.order|url_encode) %}
                                 {% if range_filter_query %}
                                     {% set navigationParams = navigationParams ~ '&' ~ range_filter_query %}
@@ -322,7 +322,7 @@
                                     <div>
                                         <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
                                             {% if pagination.current > 1 %}
-                                                <a href="?{{ navigationParams }}&page={{ pagination.current - 1 }}" aria-label="Previous page" class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-slate-300 bg-white text-sm font-medium text-slate-500 hover:bg-slate-50">
+                                                <a href="?{{ navigationParams }}&page={{ pagination.current - 1 }}" aria-label="Previous page" class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-slate-300 bg-surface text-sm font-medium text-slate-500 hover:bg-slate-50">
                                                      «
                                                 </a>
                                             {% endif %}
@@ -341,17 +341,17 @@
                                             {% endif %}
                                             {% for i in pages %}
                                                 {% if not loop.first and i > pages[loop.index0 - 1] + 1 %}
-                                                    <span class="relative inline-flex items-center px-3 py-2 border border-slate-300 bg-white text-sm text-slate-400 select-none">…</span>
+                                                    <span class="relative inline-flex items-center px-3 py-2 border border-slate-300 bg-surface text-sm text-slate-400 select-none">…</span>
                                                 {% endif %}
                                                 <a href="?{{ navigationParams }}&page={{ i }}"
                                                     {% if i == pagination.current %}aria-current="page"{% endif %}
-                                                    class="relative inline-flex items-center px-4 py-2 border text-sm font-medium {{ i == pagination.current ? 'z-10 bg-blue-50 border-blue-500 text-blue-600' : 'bg-white border-slate-300 text-slate-500 hover:bg-slate-50' }}">
+                                                    class="relative inline-flex items-center px-4 py-2 border text-sm font-medium {{ i == pagination.current ? 'z-10 bg-blue-50 border-blue-500 text-blue-600' : 'bg-surface border-slate-300 text-slate-500 hover:bg-slate-50' }}">
                                                     {{ i }}
                                                 </a>
                                             {% endfor %}
 
                                             {% if pagination.current < pagination.total_pages %}
-                                                <a href="?{{ navigationParams }}&page={{ pagination.current + 1 }}" aria-label="Next page" class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-slate-300 bg-white text-sm font-medium text-slate-500 hover:bg-slate-50">
+                                                <a href="?{{ navigationParams }}&page={{ pagination.current + 1 }}" aria-label="Next page" class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-slate-300 bg-surface text-sm font-medium text-slate-500 hover:bg-slate-50">
                                                     »
                                                 </a>
                                             {% endif %}

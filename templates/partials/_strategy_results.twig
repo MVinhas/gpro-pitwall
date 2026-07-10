@@ -34,7 +34,7 @@
         {% endif %}
         <div class="card border-l-4 border-l-emerald-500">
             <div class="bg-emerald-50 px-4 py-3 sm:px-6 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                <span class="inline-flex items-center rounded-md bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white">★ Best</span>
+                <span class="inline-flex items-center rounded-md bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-on-accent">★ Best</span>
                 <span class="text-lg font-bold text-emerald-900">{{ strategy_results.best_compound }}</span>
                 <span class="text-sm font-semibold text-emerald-900 tabular-nums">{{ best.stops }} stops · {{ best.fuel_recommended }} L/stint · {{ best.total_lost }}s lost</span>
                 {% if runner_name is not null %}
@@ -96,30 +96,30 @@
         <div class="card">
             <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-slate-200">
-                    <thead class="bg-slate-800">
+                    <thead class="bg-board">
                         <tr>
                             <th rowspan="2" class="px-3 sm:px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-white">Compound</th>
                             <th rowspan="2" class="px-2 sm:px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-white">Stops</th>
-                            <th colspan="2" class="hidden sm:table-cell px-4 py-2 text-center text-xs font-bold uppercase tracking-wide text-white border-b border-slate-700">Fuel / Stint</th>
-                            <th class="sm:hidden px-3 py-2 text-center text-xs font-bold uppercase tracking-wide text-white border-b border-slate-700">Fuel / Stint</th>
+                            <th colspan="2" class="hidden sm:table-cell px-4 py-2 text-center text-xs font-bold uppercase tracking-wide text-white border-b border-white/15">Fuel / Stint</th>
+                            <th class="sm:hidden px-3 py-2 text-center text-xs font-bold uppercase tracking-wide text-white border-b border-white/15">Fuel / Stint</th>
                             <th rowspan="2" class="hidden md:table-cell px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-white">Est. Pit</th>
-                            <th rowspan="2" class="hidden md:table-cell px-4 py-3 text-center text-xs font-medium uppercase tracking-wide text-slate-400 border-l border-slate-600">Lost (Pits)</th>
-                            <th rowspan="2" class="hidden md:table-cell px-4 py-3 text-center text-xs font-medium uppercase tracking-wide text-slate-400">Lost (Fuel)</th>
-                            <th rowspan="2" class="hidden md:table-cell px-4 py-3 text-center text-xs font-medium uppercase tracking-wide text-slate-400">Lost (TCD)</th>
-                            <th rowspan="2" class="px-2 sm:px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-white bg-slate-900">Total Lost</th>
+                            <th rowspan="2" class="hidden md:table-cell px-4 py-3 text-center text-xs font-medium uppercase tracking-wide text-white/60 border-l border-white/15">Lost (Pits)</th>
+                            <th rowspan="2" class="hidden md:table-cell px-4 py-3 text-center text-xs font-medium uppercase tracking-wide text-white/60">Lost (Fuel)</th>
+                            <th rowspan="2" class="hidden md:table-cell px-4 py-3 text-center text-xs font-medium uppercase tracking-wide text-white/60">Lost (TCD)</th>
+                            <th rowspan="2" class="px-2 sm:px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-white bg-board-strong">Total Lost</th>
                         </tr>
                         <tr>
-                            <th class="hidden sm:table-cell px-3 py-1.5 text-center text-[10px] font-medium uppercase tracking-wide text-slate-400" title="Bare-minimum fuel to finish the stint; no safety margin.">Minimum</th>
-                            <th class="px-3 py-1.5 text-center text-[10px] font-medium uppercase tracking-wide text-slate-400" title="Minimum + 1 extra lap of fuel — buffer against bad pit timing.">Recommended</th>
+                            <th class="hidden sm:table-cell px-3 py-1.5 text-center text-[10px] font-medium uppercase tracking-wide text-white/60" title="Bare-minimum fuel to finish the stint; no safety margin.">Minimum</th>
+                            <th class="px-3 py-1.5 text-center text-[10px] font-medium uppercase tracking-wide text-white/60" title="Minimum + 1 extra lap of fuel — buffer against bad pit timing.">Recommended</th>
                         </tr>
                     </thead>
-                    <tbody class="bg-white divide-y divide-slate-200">
+                    <tbody class="bg-surface divide-y divide-slate-200">
                         {% for comp, data in strategy_results.tyres %}
                             {% set is_best = (comp == strategy_results.best_compound) %}
                             <tr class="transition-colors {{ is_best ? 'bg-emerald-50 hover:bg-emerald-100' : 'hover:bg-slate-50' }}">
                                 <td class="px-3 sm:px-4 py-3 text-sm font-bold text-slate-900">
                                     {% if is_best %}
-                                        <span class="inline-flex items-center rounded-md bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white mr-2 align-middle">★ Best</span>
+                                        <span class="inline-flex items-center rounded-md bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-on-accent mr-2 align-middle">★ Best</span>
                                     {% endif %}
                                     {{ comp }}
                                 </td>
@@ -158,7 +158,7 @@
             <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-slate-200 text-sm">
                     <thead>
-                        <tr class="bg-white">
+                        <tr class="bg-surface">
                             <th class="px-4 py-3 text-left align-bottom"><span class="t-label">Part</span></th>
 
                             {# Q1 Column — API-derived, read-only #}

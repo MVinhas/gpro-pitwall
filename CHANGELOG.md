@@ -6,7 +6,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
-## [1.12.2] - 2026-07-08
+## [1.13.0] - 2026-07-10
+
+### Added
+- Dark mode with a Light / Dark / System appearance switch in the footer. System (the default) follows the operating-system preference live; an explicit choice is remembered on-device (localStorage) and applied before first paint.
+- Design-token theming: every colour in the Tailwind `@theme` block is now a CSS `light-dark()` pair switched by `color-scheme` — one stylesheet, no `dark:` variants, no duplicated rules. Semantic aliases (`surface`, `on-accent`, `on-amber`, `danger`, `board`, `scrim`) cover the spots whose meaning can't flip with the ramps.
+- Hand-tuned dark palette (steel-blue tinted, not an inversion) with every real foreground/background pairing validated against WCAG AA (4.5:1 text, 3:1 UI) before shipping; light mode is unchanged.
+
+### Changed
+- `bg-white` replaced by the `bg-surface` token tree-wide; modal backdrops use the `scrim` token; the strategy compound-table header band uses stable `board` tokens (dark in both themes); admin debug greens normalized to the emerald scale; scrollbar and focus-ring-offset colours follow the theme.
 
 ### Changed
 - README rewritten for first-time visitors: banner image, condensed per-tab feature tour, configuration split into required vs optional keys, tightened deployment/security sections.

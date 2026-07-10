@@ -42,7 +42,7 @@
             <div class="inline-flex rounded-lg ring-1 ring-inset ring-slate-300 overflow-hidden" role="group" aria-label="Trend window">
                 {% for w in trend_windows %}
                     <a href="?days={{ w }}"
-                       class="px-3 py-1 text-xs font-medium {{ w == stats.window_days ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-100' }}">
+                       class="px-3 py-1 text-xs font-medium {{ w == stats.window_days ? 'bg-blue-600 text-on-accent' : 'bg-surface text-slate-600 hover:bg-slate-100' }}">
                         {{ w }}d
                     </a>
                 {% endfor %}
@@ -195,7 +195,7 @@
                 <div class="space-x-1">
                     {% for i in 1..total_pages %}
                         <a href="?page={{ i }}"
-                           class="inline-flex items-center px-3 py-1 text-xs font-medium rounded-md {{ i == page ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-100 ring-1 ring-inset ring-slate-300' }}">
+                           class="inline-flex items-center px-3 py-1 text-xs font-medium rounded-md {{ i == page ? 'bg-blue-600 text-on-accent' : 'bg-surface text-slate-600 hover:bg-slate-100 ring-1 ring-inset ring-slate-300' }}">
                             {{ i }}
                         </a>
                     {% endfor %}
