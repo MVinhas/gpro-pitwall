@@ -42,7 +42,7 @@
             {% for div in divisions %}
                 {% set div_cap = config.secrets.division_caps[div] %}
                 <a href="?main_tab=Division Baseline&division_tab={{ div }}&track={{ active_track }}"
-                   class="flex flex-col items-center px-4 py-2 rounded-md transition-all {{ div == active_division ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700' }}">
+                   class="flex flex-col items-center px-4 py-2 rounded-md transition-all {{ div == active_division ? 'bg-surface text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700' }}">
                     <span class="text-sm font-medium leading-none">{{ div }}</span>
                     <span class="mt-0.5 text-[10px] font-medium uppercase tracking-wide opacity-70">
                         Cap {{ div_cap == 999 ? '∞' : div_cap }}

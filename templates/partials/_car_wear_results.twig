@@ -31,7 +31,7 @@
                         <th scope="col" class="px-4 py-2.5 text-center"><span class="t-label">End Wear</span></th>
                     </tr>
                 </thead>
-                <tbody class="bg-white divide-y divide-slate-200">
+                <tbody class="bg-surface divide-y divide-slate-200">
                     {% for part, data in wear_results.parts %}
                         <tr class="{{ data.end >= 90 ? 'bg-red-50' : (data.end >= 50 ? 'bg-amber-50' : '') }}">
                             <td class="px-4 py-2 whitespace-nowrap text-sm font-medium text-slate-900">{{ part }}</td>

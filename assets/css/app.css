@@ -11,22 +11,117 @@
 @theme {
     --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
 
-    /* Brand override: the blue-* scale is re-anchored to the GPRO steel-blue
-       ramp (logo navy at 900) instead of Tailwind's default blue. Every
-       blue-* utility in the templates — buttons, links, active tabs, focus
-       rings, info banners — picks this up without template changes. */
-    --color-blue-50:  #f0f5fa;
-    --color-blue-100: #dce8f3;
-    --color-blue-200: #bdd3e8;
-    --color-blue-300: #92b5d6;
-    --color-blue-400: #6293c1;
-    --color-blue-500: #3f76aa;
-    --color-blue-600: #2a5d8f;
-    --color-blue-700: #224b74;
-    --color-blue-800: #1d3f60;
-    --color-blue-900: #142f4d;
-    --color-blue-950: #0d1f33;
+    /* =========================================================
+       DESIGN TOKENS — single source of truth for both themes.
+       Every stop is a light-dark() pair: the light side is the
+       original production value (Tailwind default or the GPRO
+       steel-blue brand ramp); the dark side is a hand-tuned
+       counterpart validated for WCAG AA against the dark
+       surfaces (see CLAUDE.md "Theming"). Rebranding or theme
+       tuning happens HERE and nowhere else.
+       ========================================================= */
+
+    /* Neutrals — page structure and text. Dark side is a
+       steel-blue-tinted reflection: 50/100 become surfaces
+       (raised/canvas), 200/300 borders, 400+ ascend to text. */
+    --color-slate-50:  light-dark(oklch(.984 .003 247.858), #212b37);
+    --color-slate-100: light-dark(oklch(.968 .007 247.896), #10161d);
+    --color-slate-200: light-dark(oklch(.929 .013 255.508), #2c3948);
+    --color-slate-300: light-dark(oklch(.869 .022 252.894), #3d4d5f);
+    --color-slate-400: light-dark(oklch(.704 .04 256.788),  #8093a7);
+    --color-slate-500: light-dark(oklch(.554 .046 257.417), #97a8bb);
+    --color-slate-600: light-dark(oklch(.446 .043 257.281), #aebfd0);
+    --color-slate-700: light-dark(oklch(.372 .044 257.287), #c6d3e0);
+    --color-slate-800: light-dark(oklch(.279 .041 260.031), #dbe4ed);
+    --color-slate-900: light-dark(oklch(.208 .042 265.755), #ecf1f6);
+    --color-slate-950: light-dark(oklch(.129 .042 264.695), #f7fafc);
+
+    /* Brand: the GPRO steel-blue ramp (logo navy at 900 in light).
+       Dark side brightens the action stops so links/fills hold
+       AA on dark surfaces. */
+    --color-blue-50:  light-dark(#f0f5fa, #182c41);
+    --color-blue-100: light-dark(#dce8f3, #1e3852);
+    --color-blue-200: light-dark(#bdd3e8, #274766);
+    --color-blue-300: light-dark(#92b5d6, #33587c);
+    --color-blue-400: light-dark(#6293c1, #4a7cb0);
+    --color-blue-500: light-dark(#3f76aa, #5a8dc2);
+    --color-blue-600: light-dark(#2a5d8f, #6fa3d6);
+    --color-blue-700: light-dark(#224b74, #8db8e2);
+    --color-blue-800: light-dark(#1d3f60, #abcdec);
+    --color-blue-900: light-dark(#142f4d, #cde2f4);
+    --color-blue-950: light-dark(#0d1f33, #e6f0fa);
+
+    /* Semantic ramps — caution / danger / success (+ lime for the
+       PHA level spectrum). Same reflection idiom as slate. */
+    --color-amber-50:  light-dark(oklch(.987 .022 95.277), #2d2413);
+    --color-amber-100: light-dark(oklch(.962 .059 95.617), #3b2f16);
+    --color-amber-200: light-dark(oklch(.924 .12 95.746),  #4e3e1c);
+    --color-amber-300: light-dark(oklch(.879 .169 91.605), #6a5424);
+    --color-amber-400: light-dark(oklch(.828 .189 84.429), #b98b2e);
+    --color-amber-500: light-dark(oklch(.769 .188 70.08),  #ca9d3d);
+    --color-amber-600: light-dark(oklch(.666 .179 58.318), #d9b055);
+    --color-amber-700: light-dark(oklch(.555 .163 48.998), #e2c273);
+    --color-amber-800: light-dark(oklch(.473 .137 46.201), #ebd396);
+    --color-amber-900: light-dark(oklch(.414 .112 45.904), #f2e2b8);
+    --color-amber-950: light-dark(oklch(.279 .077 45.635), #221a0d);
+
+    --color-red-50:  light-dark(oklch(.971 .013 17.38),  #331d1f);
+    --color-red-100: light-dark(oklch(.936 .032 17.717), #422527);
+    --color-red-200: light-dark(oklch(.885 .062 18.334), #573134);
+    --color-red-300: light-dark(oklch(.808 .114 19.571), #744044);
+    --color-red-400: light-dark(oklch(.704 .191 22.216), #c96b6f);
+    --color-red-500: light-dark(oklch(.637 .237 25.331), #e2898d);
+    --color-red-600: light-dark(oklch(.577 .245 27.325), #ea9fa2);
+    --color-red-700: light-dark(oklch(.505 .213 27.518), #f0b3b5);
+    --color-red-800: light-dark(oklch(.444 .177 26.899), #f5c7c9);
+    --color-red-900: light-dark(oklch(.396 .141 25.723), #f9dbdc);
+    --color-red-950: light-dark(oklch(.258 .092 26.042), #261517);
+
+    --color-emerald-50:  light-dark(oklch(.979 .021 166.113), #14291f);
+    --color-emerald-100: light-dark(oklch(.95 .052 163.051),  #1a3529);
+    --color-emerald-200: light-dark(oklch(.905 .093 164.15),  #234636);
+    --color-emerald-300: light-dark(oklch(.845 .143 164.978), #2e5c47);
+    --color-emerald-400: light-dark(oklch(.765 .177 163.223), #3f7f61);
+    --color-emerald-500: light-dark(oklch(.696 .17 162.48),   #4c9573);
+    --color-emerald-600: light-dark(oklch(.596 .145 163.225), #5aac86);
+    --color-emerald-700: light-dark(oklch(.508 .118 165.612), #7cc4a2);
+    --color-emerald-800: light-dark(oklch(.432 .095 166.913), #a3d7c0);
+    --color-emerald-900: light-dark(oklch(.378 .077 168.94),  #c8e8da);
+    --color-emerald-950: light-dark(oklch(.262 .051 172.552), #0e1f17);
+
+    --color-lime-100: light-dark(oklch(.967 .067 122.328), #2a3312);
+    --color-lime-800: light-dark(oklch(.453 .124 130.933), #d3e5a2);
+
+    /* Semantic aliases — meanings that cannot ride the ramp flip. */
+    /* Card/control surface. bg-white cannot flip (text-white must stay
+       white over colored fills), so surfaces get their own token. */
+    --color-surface: light-dark(#fff, #1a222d);
+    /* Ink over 600-level accent fills (btn-primary, active pills,
+       stepper chips): white in light; near-black in dark because the
+       brightened accents would fail AA under white text. */
+    --color-on-accent: light-dark(#fff, #0e1622);
+    /* Ink over warm amber fills (the coffee CTA): slate-900 in light,
+       dark brown in dark — the flipped slate-900 would fail AA there. */
+    --color-on-amber: light-dark(oklch(.208 .042 265.755), #221a0d);
+    /* Destructive fills keep white text in BOTH themes, so the dark
+       side stays deep instead of riding the flipped red ramp. */
+    --color-danger:        light-dark(oklch(.637 .237 25.331), #a84e52);
+    --color-danger-strong: light-dark(oklch(.577 .245 27.325), #94454a);
+    /* The strategy table's dark "pit board" header band — dark in both
+       themes (a light band would glare in dark mode). */
+    --color-board:        light-dark(oklch(.279 .041 260.031), #243141);
+    --color-board-strong: light-dark(oklch(.208 .042 265.755), #2b3a4d);
+    /* Modal backdrop. Light side = the old bg-slate-900/40 verbatim. */
+    --color-scrim: light-dark(oklch(.208 .042 265.755 / .4), rgb(0 0 0 / .55));
 }
+
+/* Theme selection: System (default) follows the OS live via color-scheme;
+   an explicit choice pins it. data-theme is stamped by the head snippet in
+   layout.twig before first paint. light-dark() resolves from color-scheme,
+   so OS changes update the UI with zero JS. */
+:root { color-scheme: light dark; }
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"]  { color-scheme: dark; }
 
 /* =========================
    BUTTON STANDARD
@@ -35,7 +130,7 @@
 .btn {
     @apply inline-flex items-center justify-center gap-2
            rounded-md font-semibold transition-all
-           focus:outline-none focus:ring-2 focus:ring-offset-2
+           focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-surface
            disabled:opacity-50 disabled:cursor-not-allowed;
 }
 
@@ -44,7 +139,7 @@
 .btn-lg { @apply px-5 py-3 text-sm; }
 
 .btn-primary {
-    @apply bg-blue-600 text-white
+    @apply bg-blue-600 text-on-accent
            hover:bg-blue-700
            focus:ring-blue-500;
 }
@@ -56,8 +151,8 @@
 }
 
 .btn-danger {
-    @apply bg-red-500 text-white
-           hover:bg-red-600
+    @apply bg-danger text-white
+           hover:bg-danger-strong
            focus:ring-red-400;
 }
 
@@ -102,7 +197,7 @@
    p-4; sm+ keeps the original p-6 density.
 ========================= */
 
-.card    { @apply bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden; }
+.card    { @apply bg-surface rounded-xl shadow-sm border border-slate-200 overflow-hidden; }
 .card-hd { @apply px-4 py-3 sm:px-6 sm:py-4 border-b border-slate-200 bg-slate-50; }
 .card-bd { @apply p-4 sm:p-6; }
 
@@ -111,7 +206,7 @@ summary:focus-visible { @apply outline-none ring-2 ring-blue-600; }
 
 /* Compact anchor tile for the cockpit decision-summary board. */
 .tile {
-    @apply block rounded-lg border border-slate-200 bg-white p-3 shadow-sm transition-colors
+    @apply block rounded-lg border border-slate-200 bg-surface p-3 shadow-sm transition-colors
            hover:border-blue-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600;
 }
 
@@ -140,7 +235,7 @@ summary:focus-visible { @apply outline-none ring-2 ring-blue-600; }
 .form-select,
 .form-textarea {
     @apply h-9 rounded-md border-0 px-3 text-sm text-slate-900
-           bg-white ring-1 ring-inset ring-slate-300
+           bg-surface ring-1 ring-inset ring-slate-300
            placeholder:text-slate-400 transition-[box-shadow]
            focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-600
            hover:ring-slate-400;
@@ -209,6 +304,6 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
 .no-scrollbar::-webkit-scrollbar { display: none; }
 
 ::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-track { background: #f1f5f9; }
-::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+::-webkit-scrollbar-track { background: var(--color-slate-100); }
+::-webkit-scrollbar-thumb { background: var(--color-slate-300); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-slate-400); }

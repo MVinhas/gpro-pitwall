@@ -86,7 +86,7 @@ Scores the full GPRO driver market (4–5k drivers) against your division's idea
 - **Keep me signed in** — opt-in persistent login (hashed validator, rotated on every use for theft detection, rolling 30-day window), with **step-up re-authentication** for sensitive actions like account deletion or API-token changes.
 - **In-app feedback form** — whitelisted subjects, delivered with Reply-To set to your account address, used only to reply — never for marketing.
 
-Also in the box: a `/healthz` endpoint for uptime probes, full SEO and social-sharing markup, styled error pages, and a friendly no-driver prompt that points new accounts at the Recruitment Analyzer instead of a cryptic error.
+Also in the box: a **Light / Dark / System appearance switch** (a hand-tuned, WCAG-AA-validated dark theme — System follows your OS live, and your choice is remembered on-device), a `/healthz` endpoint for uptime probes, full SEO and social-sharing markup, styled error pages, and a friendly no-driver prompt that points new accounts at the Recruitment Analyzer instead of a cryptic error.
 
 ---
 
@@ -176,7 +176,7 @@ Source of truth is GitHub; deployment is a manual file copy to any PHP 8.5 host.
 ## Tech stack
 
 - **PHP 8.5**, no framework — a custom front controller and a flat DI container in `bootstrap.php`; routes in `config/routes.php`.
-- **Twig 3** templates; **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile).
+- **Twig 3** templates; **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile). Light and dark themes ship in one stylesheet: every design token is a CSS `light-dark()` pair switched by `color-scheme`, so System mode tracks the OS with zero JavaScript.
 - **SQLite** via PDO — emails and API tokens encrypted at rest (AES-256-GCM).
 - **PHPMailer 7** for SMTP; dev writes `.eml` files instead.
 - **PHPUnit 13** — 365 tests, 937 assertions — with **PHPStan level 8** and enforced type-declaration coverage (100% return/property/constant + `strict_types`; 99.5% param). Twig linted by a native `bin/twig_lint.php` built on Twig's own parser. CI measures statement coverage with `pcov` and enforces a floor (currently 45%, ratcheted up as coverage grows).

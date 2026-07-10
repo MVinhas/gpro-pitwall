@@ -138,7 +138,7 @@
                         {% endif %}
 
                         {# Key Stat Changes #}
-                        <div class="md:col-span-1 bg-white border border-slate-100 rounded-lg p-4">
+                        <div class="md:col-span-1 bg-surface border border-slate-100 rounded-lg p-4">
                             <p class="text-xs text-slate-500 uppercase tracking-wide mb-2">Attribute Changes</p>
                             <div class="flex flex-wrap gap-2">
                                 {% for key, startVal in training_results.start %}
@@ -155,7 +155,7 @@
                     </div>
 
                     {# Comparison Table #}
-                    <div class="overflow-hidden shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg">
+                    <div class="overflow-hidden shadow ring-1 ring-slate-200 sm:rounded-lg">
                         <table class="min-w-full divide-y divide-slate-300">
                             <thead class="bg-slate-50">
                                 <tr>
@@ -165,7 +165,7 @@
                                     <th scope="col" class="px-3 py-3.5 text-center text-sm font-semibold text-slate-900">Change</th>
                                 </tr>
                             </thead>
-                            <tbody class="divide-y divide-slate-200 bg-white">
+                            <tbody class="divide-y divide-slate-200 bg-surface">
                                 {% for key, startVal in training_results.start %}
                                     {% set endVal = training_results.end[key] %}
                                     {% set diff = endVal - startVal %}
