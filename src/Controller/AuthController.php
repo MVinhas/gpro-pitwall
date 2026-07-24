@@ -23,6 +23,7 @@ class AuthController
 
         echo $this->twig->render('auth/login.twig', [
             'flash' => $_SESSION['flash'] ?? null,
+            'expired' => isset($_GET['expired']),
             'csrf_token' => $_SESSION['csrf_token'] ?? '',
             'recaptcha_site_key' => $this->recaptchaSiteKey,
         ]);

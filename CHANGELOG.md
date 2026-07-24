@@ -6,6 +6,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.13.1] - 2026-07-24
+
+### Fixed
+- Expired-session sync no longer shows a misleading "⚠ Network error". AJAX calls (`/api/warmup` re-sync, `/api/refresh_budget`) that hit an expired session now receive a small JSON `401`/`403` — from either the CSRF gate or the auth gate — and the frontend redirects to the login page with a "Session expired" notice instead of a dead-end error.
+
+### Security
+- **Security:** Dynamic responses now send `Cache-Control: no-store`, so authenticated pages can't be retained in the browser's back-forward/disk cache and redisplayed after logout on a shared machine. Static assets keep their immutable cache header.
+- **Security:** Auth and CSRF failure responses to AJAX callers carry only a status string — no internal detail.
+
 ## [1.13.0] - 2026-07-10
 
 ### Added

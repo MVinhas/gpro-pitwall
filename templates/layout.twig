@@ -350,9 +350,13 @@
         try {
             const res = await fetch('/api/refresh_budget', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'},
                 body: new URLSearchParams({ csrf_token: csrf })
             });
+            if (res.status === 401 || res.status === 403) {
+                window.location = '/login?expired=1';
+                return;
+            }
             const data = await res.json();
             if (data.success && typeof data.remaining === 'number') {
                 if (valueEl) valueEl.textContent = data.remaining.toLocaleString();
@@ -381,9 +385,13 @@ document.getElementById('apiWarmupBtn')?.addEventListener('click', async functio
     try {
         const res = await fetch('/api/warmup', {
             method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'},
             body: new URLSearchParams({ csrf_token: '{{ csrf_token }}' })
         });
+        if (res.status === 401 || res.status === 403) {
+            window.location = '/login?expired=1';
+            return;
+        }
         const data = await res.json();
         text.textContent = (data.success ? '✔ ' : '⚠ ') + (data.message || 'Done');
         // Reload so the freshly-synced data shows on the current tab.

@@ -8,6 +8,12 @@ use App\Support\RequestContext;
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
+// Every response through the front controller is dynamic (static assets are
+// served by Apache directly and keep their immutable cache header via
+// .htaccess). Never let an authenticated page linger in bfcache/disk cache to
+// be redisplayed after logout on a shared machine.
+header('Cache-Control: no-store');
+
 $lifetime = 60 * 60 * 24 * 7;
 session_set_cookie_params([
     'lifetime' => $lifetime,
@@ -66,6 +72,16 @@ $renderError = static function (int $status, ?string $message = null, ?string $r
 
 try {
     if ($request->getMethod() === 'POST' && !$csrf->validate($request->post('csrf_token'))) {
+        // On a fully expired session the stale page posts a token that no longer
+        // matches the regenerated one — so CSRF fails before auth even runs. For
+        // AJAX callers, answer with a small JSON 403 (no internal detail) they can
+        // turn into a login redirect, rather than an HTML page fetch().json() breaks on.
+        if (RequestContext::wantsJson($_SERVER)) {
+            http_response_code(403);
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'status' => 'expired']);
+            exit;
+        }
         throw new HttpException(403, 'Your session or form expired. Go back, reload the page, and try again.');
     }
 
