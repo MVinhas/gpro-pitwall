@@ -8,6 +8,10 @@
 <div class="max-w-md mx-auto mt-10">
     <h1 class="t-display mb-4">Sign in</h1>
 
+    {% if expired %}
+        <div class="notice notice-info mb-4"><strong>Session expired.</strong> Sign in again to pick up where you left off.</div>
+    {% endif %}
+
     {% if flash %}
         <div class="notice notice-warn mb-4">{{ flash }}</div>
     {% endif %}

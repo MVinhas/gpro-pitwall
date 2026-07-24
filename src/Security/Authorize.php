@@ -6,6 +6,7 @@ namespace App\Security;
 
 use App\Http\HttpException;
 use App\Repository\UserRepository;
+use App\Support\RequestContext;
 
 /**
  * Single authorisation gate. Controllers call requireAuth() / requireAdmin()
@@ -38,7 +39,7 @@ final readonly class Authorize
     {
         $id = $this->currentUserId();
         if ($id === null) {
-            $this->redirect('/login');
+            $this->denyUnauthenticated();
         }
 
         $user = $this->users->findById((int)$id);
@@ -46,7 +47,7 @@ final readonly class Authorize
             // Session points at a deleted user — log it out cleanly.
             session_unset();
             session_destroy();
-            $this->redirect('/login');
+            $this->denyUnauthenticated();
         }
 
         return $user;
@@ -105,6 +106,23 @@ final readonly class Authorize
 
         $user = $this->users->findById($id);
         return $user !== null && self::hasAdminAccess($user);
+    }
+
+    /**
+     * No valid session. AJAX/fetch callers get a small JSON 401 they can act on
+     * (redirect to login); browsers get the usual 302 to the login page. The
+     * JSON body carries only a status string — never any internal detail.
+     */
+    private function denyUnauthenticated(): never
+    {
+        if (RequestContext::wantsJson($_SERVER)) {
+            http_response_code(401);
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'status' => 'unauthenticated']);
+            exit;
+        }
+
+        $this->redirect('/login?expired=1');
     }
 
     private function redirect(string $path): never

@@ -179,7 +179,7 @@ Source of truth is GitHub; deployment is a manual file copy to any PHP 8.5 host.
 - **Twig 3** templates; **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile). Light and dark themes ship in one stylesheet: every design token is a CSS `light-dark()` pair switched by `color-scheme`, so System mode tracks the OS with zero JavaScript.
 - **SQLite** via PDO — emails and API tokens encrypted at rest (AES-256-GCM).
 - **PHPMailer 7** for SMTP; dev writes `.eml` files instead.
-- **PHPUnit 13** — 365 tests, 937 assertions — with **PHPStan level 8** and enforced type-declaration coverage (100% return/property/constant + `strict_types`; 99.5% param). Twig linted by a native `bin/twig_lint.php` built on Twig's own parser. CI measures statement coverage with `pcov` and enforces a floor (currently 45%, ratcheted up as coverage grows).
+- **PHPUnit 13** — 369 tests, 947 assertions — with **PHPStan level 8** and enforced type-declaration coverage (100% return/property/constant + `strict_types`; 99.5% param). Twig linted by a native `bin/twig_lint.php` built on Twig's own parser. CI measures statement coverage with `pcov` and enforces a floor (currently 45%, ratcheted up as coverage grows).
 - **Timestamps stored and served as UTC**, localised per visitor in the browser — no server-side timezone config.
 
 ## Architecture
@@ -203,7 +203,7 @@ Reviewed against the OWASP Top 10:2025.
 - The decrypted GPRO API token is never sent back to the browser: the Control Panel shows a masked last-4 hint and accepts a new value (blank = unchanged); the token is also stripped from the shared Twig `user` global.
 - Login leaks nothing about whether a username exists: unknown usernames produce a decoy pending state that routes to `/verify` identically to a real account (and can never verify).
 - Security headers in `public/.htaccess`: Content-Security-Policy, HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy — proxy-aware via `X-Forwarded-Proto`.
-- Session cookies HttpOnly + Secure + SameSite=Lax. "Remember me" tokens store only a hashed validator, rotate on every use for theft detection, and are revocable.
+- Session cookies HttpOnly + Secure + SameSite=Lax. "Remember me" tokens store only a hashed validator, rotate on every use for theft detection, and are revocable. Dynamic responses send `Cache-Control: no-store`, so authenticated pages aren't retained in the browser cache after logout on a shared machine.
 - Login and registration are reCAPTCHA-gated and rate-limited per IP; verification codes carry a TTL, an attempt cap, and a per-account hourly email cap, so blind username-guessing can't spam real users. Sensitive actions require step-up re-authentication.
 - One centralised authorisation gate (`requireAuth` / `requireAdmin` / `requireFreshAuth`) — every mutating, admin and debug route is gated server-side, not just hidden in templates.
 - The contact form is authenticated-only with a whitelisted subject list (no user text ever reaches an email header) and a security-logged per-user rate limit — layered controls that make a CAPTCHA unnecessary there.
