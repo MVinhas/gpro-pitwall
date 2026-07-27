@@ -84,6 +84,15 @@ class PageController
         $isAdmin   = !empty($user['is_admin']);
 
         if (!$isLoggedIn) {
+            // A fragment request with no session means auth evaporated mid-page
+            // (expired or revoked) — 401 instead of a landing page the caller
+            // would inject into a card.
+            if ((string) $request->get('fragment', '') !== '') {
+                http_response_code(401);
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'status' => 'unauthenticated']);
+                return;
+            }
             echo $this->twig->render('landing.twig', [
                 'csrf_token'   => $_SESSION['csrf_token'] ?? '',
                 'is_logged_in' => false,

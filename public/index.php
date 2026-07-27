@@ -41,6 +41,14 @@ if (isset($_SESSION['user_id'])) {
     if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity'] > $lifetime)) {
         session_unset();
         session_destroy();
+        // AJAX callers must never be redirect-chained into a full HTML page
+        // they would inject into a card — give them a 401 they can act on.
+        if (RequestContext::wantsJson($_SERVER)) {
+            http_response_code(401);
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'status' => 'expired']);
+            exit;
+        }
         header("Location: /login?expired=1");
         exit;
     }

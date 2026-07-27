@@ -6,6 +6,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.13.2] - 2026-07-27
+
+### Fixed
+- Moving the Clear Track Risk slider on the Cockpit car-wear card no longer resets it to zero and jumps the page. On a long-idle session the fragment refresh was redirect-chained (`/` → `/login?expired=1` → `/`, the last hop silently signed back in by the remember-me cookie) into a full HTML page served `200`, which the card then injected into itself. The inactivity gate now answers AJAX callers with a JSON `401` instead of a redirect, and the three fragment refreshers (cockpit wear, race strategy, car wear) reload the page on an expired session rather than swapping in whatever came back.
+- `RequestContext::wantsJson()` now recognises `X-Requested-With: fetch`, not just `XMLHttpRequest`. The fragment refreshers have always sent `fetch`, so every session boundary — inactivity timeout, auth gate, CSRF gate — had been answering them with HTML redirects meant for browser navigation.
+
+### Security
+- **Security:** A fragment request arriving without a session gets a JSON `401` instead of the rendered landing page, so an unauthenticated response can never be grafted into an authenticated page's DOM. The fragment refreshers additionally refuse to inject any response containing a full document.
+
 ## [1.13.1] - 2026-07-24
 
 ### Fixed
