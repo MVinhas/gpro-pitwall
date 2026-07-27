@@ -464,8 +464,20 @@
                 signal: pending.signal,
                 headers: { 'X-Requested-With': 'fetch' },
             });
+            if (res.redirected || res.status === 401) {
+                // Session expired mid-page — reload; the remember-me restore signs back in.
+                window.location.reload();
+                return;
+            }
             if (!res.ok) return;
-            card.innerHTML = await res.text();
+            const html = await res.text();
+            // A whole document here means something other than the fragment
+            // endpoint answered — never nest it inside the card.
+            if (/<!doctype/i.test(html)) {
+                window.location.reload();
+                return;
+            }
+            card.innerHTML = html;
             window.applyAccState(card);
             mirrorWear();
         } catch (err) {

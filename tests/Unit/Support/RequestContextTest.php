@@ -16,6 +16,8 @@ final class RequestContextTest extends TestCase
         $this->assertTrue(RequestContext::wantsJson(['HTTP_X_REQUESTED_WITH' => 'XMLHttpRequest']));
         // Header comparison is case-insensitive — some clients lowercase it.
         $this->assertTrue(RequestContext::wantsJson(['HTTP_X_REQUESTED_WITH' => 'xmlhttprequest']));
+        // Fragment-refresh callers mark themselves with 'fetch' (see templates/partials).
+        $this->assertTrue(RequestContext::wantsJson(['HTTP_X_REQUESTED_WITH' => 'fetch']));
     }
 
     public function testJsonAcceptHeaderMarksJson(): void
@@ -30,7 +32,6 @@ final class RequestContextTest extends TestCase
         $this->assertFalse(RequestContext::wantsJson([
             'HTTP_ACCEPT' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         ]));
-        $this->assertFalse(RequestContext::wantsJson(['HTTP_X_REQUESTED_WITH' => 'fetch']));
     }
 
     public function testHttpsDetectionUnaffected(): void

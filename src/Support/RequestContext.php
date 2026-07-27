@@ -38,14 +38,16 @@ final class RequestContext
      * redirect) instead of an HTML 302/403 that fetch().json() would choke on and
      * mislabel as a "Network error".
      *
-     * The frontend fetch callers set X-Requested-With explicitly; the Accept
-     * check is a defensive fallback for any programmatic JSON client.
+     * The frontend fetch callers set X-Requested-With explicitly — 'XMLHttpRequest'
+     * from the /api/* callers, 'fetch' from the fragment-refresh callers; the
+     * Accept check is a defensive fallback for any programmatic JSON client.
      *
      * @param array<string, mixed> $server
      */
     public static function wantsJson(array $server): bool
     {
-        if (strtolower((string) ($server['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest') {
+        $requestedWith = strtolower((string) ($server['HTTP_X_REQUESTED_WITH'] ?? ''));
+        if ($requestedWith === 'xmlhttprequest' || $requestedWith === 'fetch') {
             return true;
         }
 
