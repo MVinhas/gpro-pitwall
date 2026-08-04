@@ -31,7 +31,9 @@ final class PersistentLoginServiceTest extends TestCase
                 selector TEXT NOT NULL UNIQUE,
                 validator_hash TEXT NOT NULL,
                 expires_at TEXT NOT NULL,
-                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                previous_validator_hash TEXT DEFAULT NULL,
+                rotated_at TEXT DEFAULT NULL
             )
         ");
 
@@ -65,9 +67,76 @@ final class PersistentLoginServiceTest extends TestCase
         // Rotation: the validator (hence the cookie) changed after use.
         $this->assertNotSame($firstCookie, $secondCookie);
 
-        // The OLD cookie must no longer authenticate (replay protection).
+        // The OLD cookie must no longer authenticate once the rotation grace
+        // window has passed (replay protection).
+        $this->ageRotation(120);
         $this->jar->store[PersistentLoginService::COOKIE_NAME] = $firstCookie;
         $this->assertNull($this->service->restore());
+    }
+
+    public function testSupersededValidatorStillWorksInsideGraceWindow(): void
+    {
+        // A page fires several requests at once; the first rotates, the rest
+        // arrive holding the validator it just replaced. That must not be read
+        // as theft, or the whole "keep me signed in" token gets revoked.
+        $this->service->issue(7);
+        $firstCookie = $this->jar->store[PersistentLoginService::COOKIE_NAME];
+        [$selector] = explode(':', $firstCookie, 2);
+
+        $this->assertSame(7, $this->service->restore());
+
+        $this->jar->store[PersistentLoginService::COOKIE_NAME] = $firstCookie;
+        $this->assertSame(7, $this->service->restore());
+
+        // Crucially, the token survives — the racing request revoked nothing.
+        $this->assertNotNull($this->repo->findBySelector($selector));
+    }
+
+    public function testGraceAcceptanceDoesNotRotateAgain(): void
+    {
+        // The winning request already issued the current cookie; a raced one
+        // must not overwrite it, or the browser ends up holding a validator
+        // the next request can't use.
+        $this->service->issue(7);
+        $firstCookie = $this->jar->store[PersistentLoginService::COOKIE_NAME];
+
+        $this->service->restore();
+        $rotatedCookie = $this->jar->store[PersistentLoginService::COOKIE_NAME];
+
+        $this->jar->store[PersistentLoginService::COOKIE_NAME] = $firstCookie;
+        $this->service->restore();
+
+        $row = $this->repo->findBySelector(explode(':', $firstCookie, 2)[0]);
+        $this->assertNotNull($row);
+        $this->assertSame(
+            hash('sha256', explode(':', $rotatedCookie, 2)[1]),
+            $row['validator_hash'],
+        );
+    }
+
+    public function testSupersededValidatorIsRevokedAfterGraceWindow(): void
+    {
+        $this->service->issue(7);
+        $firstCookie = $this->jar->store[PersistentLoginService::COOKIE_NAME];
+        [$selector] = explode(':', $firstCookie, 2);
+
+        $this->assertSame(7, $this->service->restore());
+
+        // Same replay, but late — that's a stolen cookie, not a race.
+        $this->ageRotation(120);
+        $this->jar->store[PersistentLoginService::COOKIE_NAME] = $firstCookie;
+
+        $this->assertNull($this->service->restore());
+        $this->assertNull($this->repo->findBySelector($selector));
+    }
+
+    /** Backdate the last rotation so the grace window has elapsed. */
+    private function ageRotation(int $seconds): void
+    {
+        $stmt = $this->db->prepare('UPDATE persistent_tokens SET rotated_at = :ts');
+        $stmt->execute([
+            'ts' => date('Y-m-d H:i:s', time() - $seconds),
+        ]);
     }
 
     public function testExpiredTokenIsRejected(): void

@@ -27,7 +27,9 @@ final class PersistentTokenRepositoryTest extends TestCase
                 selector TEXT NOT NULL UNIQUE,
                 validator_hash TEXT NOT NULL,
                 expires_at TEXT NOT NULL,
-                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                previous_validator_hash TEXT DEFAULT NULL,
+                rotated_at TEXT DEFAULT NULL
             )
         ");
 
