@@ -25,6 +25,13 @@ final class PersistentLoginService
     public const string COOKIE_NAME = 'gpro_remember';
     private const string COOKIE_PATH = '/';
 
+    /**
+     * How long a just-rotated validator stays acceptable, so parallel requests
+     * from the same page aren't mistaken for a replay. Seconds, not minutes: it
+     * only has to cover one page's in-flight fetches.
+     */
+    private const int ROTATION_GRACE_SECONDS = 30;
+
     public function __construct(
         private readonly PersistentTokenRepository $tokens,
         private readonly CookieJar $cookies,
@@ -74,8 +81,22 @@ final class PersistentLoginService
             return null;
         }
 
-        // Known selector but wrong validator → treat as theft and revoke.
-        if (!hash_equals((string) $row['validator_hash'], hash('sha256', $validator))) {
+        $presented = hash('sha256', $validator);
+
+        if (!hash_equals((string) $row['validator_hash'], $presented)) {
+            // A page issues several requests at once (navigation plus its
+            // fragment/warmup fetches), all carrying the same cookie. Whichever
+            // lands first rotates the validator, so the others arrive holding
+            // the one it just replaced — identical on the wire to a replay.
+            // Honour the superseded validator briefly so that race isn't
+            // punished as theft; genuine replay still fails, just outside the
+            // window. Nothing is rotated here — the winning request already did
+            // it, and its Set-Cookie is what the browser keeps.
+            if ($this->withinRotationGrace($row, $presented)) {
+                return (int) $row['user_id'];
+            }
+
+            // Known selector but wrong validator → treat as theft and revoke.
             $this->tokens->delete((int) $row['id']);
             $this->cookies->clear(self::COOKIE_NAME, self::COOKIE_PATH);
             $this->securityLog?->event('token_theft_detected', [
@@ -97,6 +118,31 @@ final class PersistentLoginService
         $this->writeCookie($selector, $newValidator);
 
         return (int) $row['user_id'];
+    }
+
+    /**
+     * Whether the presented validator is the one this token rotated away from,
+     * within the grace window. Deliberately narrow: it accepts exactly one
+     * superseded validator, for a few seconds, and never extends the token.
+     *
+     * @param array<string, mixed> $row
+     */
+    private function withinRotationGrace(array $row, string $presented): bool
+    {
+        $previous = (string) ($row['previous_validator_hash'] ?? '');
+        $rotatedAt = (string) ($row['rotated_at'] ?? '');
+        if ($previous === '' || $rotatedAt === '') {
+            return false;
+        }
+
+        if (!hash_equals($previous, $presented)) {
+            return false;
+        }
+
+        $age = (new DateTimeImmutable())->getTimestamp()
+            - (new DateTimeImmutable($rotatedAt))->getTimestamp();
+
+        return $age >= 0 && $age <= self::ROTATION_GRACE_SECONDS;
     }
 
     public function clearForUser(int $userId): void

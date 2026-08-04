@@ -26,6 +26,24 @@ session_set_cookie_params([
 ]);
 session_start();
 
+// Idle past the window: drop the session, but do NOT reject the request yet.
+// A valid "keep me signed in" cookie should silently re-establish it — and the
+// restore in bootstrap.php only runs while user_id is empty, so this has to
+// happen before that include, not after it. Rejecting here instead is what made
+// a long-idle tab lose its session even though a 30-day token was sitting in
+// the cookie jar.
+$sessionExpired = false;
+if (
+    isset($_SESSION['user_id'], $_SESSION['last_activity'])
+    && (time() - $_SESSION['last_activity'] > $lifetime)
+) {
+    session_unset();
+    session_destroy();
+    session_start();
+    session_regenerate_id(true);
+    $sessionExpired = true;
+}
+
 
 $container = require_once __DIR__ . '/../bootstrap.php';
 
@@ -37,22 +55,22 @@ $request = Request::createFromGlobals();
 $container['twig']->addGlobal('csrf_token', $csrf->getToken());
 
 
-if (isset($_SESSION['user_id'])) {
-    if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity'] > $lifetime)) {
-        session_unset();
-        session_destroy();
-        // AJAX callers must never be redirect-chained into a full HTML page
-        // they would inject into a card — give them a 401 they can act on.
-        if (RequestContext::wantsJson($_SERVER)) {
-            http_response_code(401);
-            header('Content-Type: application/json');
-            echo json_encode(['success' => false, 'status' => 'expired']);
-            exit;
-        }
-        header("Location: /login?expired=1");
+// bootstrap.php has now had its chance to restore from the remember cookie.
+// Still no identity means the idle session really is over.
+if ($sessionExpired && empty($_SESSION['user_id'])) {
+    // AJAX callers must never be redirect-chained into a full HTML page
+    // they would inject into a card — give them a 401 they can act on.
+    if (RequestContext::wantsJson($_SERVER)) {
+        http_response_code(401);
+        header('Content-Type: application/json');
+        echo json_encode(['success' => false, 'status' => 'expired']);
         exit;
     }
+    header("Location: /login?expired=1");
+    exit;
+}
 
+if (isset($_SESSION['user_id'])) {
     $_SESSION['last_activity'] = time();
 }
 

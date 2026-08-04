@@ -16,7 +16,7 @@ class DatabaseSeeder
      * calls migrate() on every request; this version lets a warm database skip
      * the entire DDL + scan + legacy-encryption pass.
      */
-    private const int SCHEMA_VERSION = 5;
+    private const int SCHEMA_VERSION = 6;
 
     /**
      * @param array<string, string> $statsSchema
@@ -374,6 +374,25 @@ class DatabaseSeeder
             CREATE INDEX IF NOT EXISTS idx_persistent_tokens_selector
             ON persistent_tokens(selector)
         ");
+
+        // Rotation-grace columns. Guarded because first-request init runs
+        // against the live database, which already holds issued tokens.
+        $stmt = $this->db->query('PRAGMA table_info(persistent_tokens)');
+        $cols = $stmt === false ? [] : $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $existingCols = array_column($cols, 'name');
+
+        if (!in_array('previous_validator_hash', $existingCols, true)) {
+            $this->db->exec(
+                "ALTER TABLE persistent_tokens
+                 ADD COLUMN previous_validator_hash TEXT DEFAULT NULL"
+            );
+        }
+
+        if (!in_array('rotated_at', $existingCols, true)) {
+            $this->db->exec(
+                "ALTER TABLE persistent_tokens ADD COLUMN rotated_at TEXT DEFAULT NULL"
+            );
+        }
     }
 
     /**

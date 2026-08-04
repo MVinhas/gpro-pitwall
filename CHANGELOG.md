@@ -6,6 +6,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.13.3] - 2026-08-04
+
+### Fixed
+- The Cockpit Clear Track Risk slider no longer resets to zero and jumps the page. The real cause was the "keep me signed in" token being revoked as a suspected theft: a page issues several requests at once (navigation plus its fragment and warmup fetches), all carrying the same cookie, and whichever landed first rotated the validator — so the others arrived holding the one it had just replaced and were judged replays. The token was deleted, the session could no longer be restored, and the next fragment request came back unauthenticated. A just-replaced validator is now honoured for 30 seconds, which covers a page's in-flight requests while leaving genuine replay detection intact outside that window.
+- A session idle past its window is no longer rejected before the remember-me cookie is consulted. The restore in `bootstrap.php` only runs while `user_id` is empty, so the expiry check had to move ahead of it; previously a long-idle tab lost its session despite a valid 30-day token sitting in the cookie jar.
+- The cockpit slider now retries once on an auth-shaped response and, if it still can't recover, re-enters the page carrying the chosen risk value and anchored on the wear card — so recovery never silently rewinds the slider to zero or throws the reader back to the top.
+
+### Added
+- The admin debug page reports session storage (save handler, path, GC lifetime) and APCu shared-memory use, entry count and expunge count. Sessions held in a cache that evicts under memory pressure read as random mid-page logouts, which is invisible without these numbers.
+
+### Changed
+- Schema version 6: `persistent_tokens` gains `previous_validator_hash` and `rotated_at` (guarded, idempotent migration against the live database).
+
 ## [1.13.2] - 2026-07-27
 
 ### Fixed

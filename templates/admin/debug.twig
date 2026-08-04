@@ -132,6 +132,63 @@
                 </div>
             </div>
 
+            {# Session storage — a session evicted from a full APCu segment
+               reads as a random mid-page logout, so surface the backend. #}
+            <div class="card">
+                <div class="px-4 py-3 bg-slate-50 border-b border-slate-200">
+                    <h3 class="text-sm font-semibold text-slate-800">Session Storage</h3>
+                </div>
+                <div class="p-4 grid grid-cols-2 gap-y-2 text-sm">
+                    <div class="text-slate-500">Save Handler</div>
+                    <div class="text-right font-mono {{ session_info.save_handler in ['apcu', 'apc', 'memcached', 'redis'] ? 'text-red-700 font-bold' : '' }}">{{ session_info.save_handler }}</div>
+
+                    <div class="text-slate-500">Save Path</div>
+                    <div class="text-right font-mono text-xs break-all">{{ session_info.save_path }}</div>
+
+                    <div class="text-slate-500">GC Max Lifetime</div>
+                    <div class="text-right font-mono">{{ session_info.gc_maxlifetime }}</div>
+
+                    <div class="text-slate-500">Cookie Lifetime</div>
+                    <div class="text-right font-mono">{{ session_info.cookie_lifetime }}</div>
+                </div>
+                {% if session_info.save_handler in ['apcu', 'apc'] %}
+                    <div class="px-4 pb-4">
+                        <div class="notice notice-error notice-slim">
+                            <strong>Sessions live in APCu.</strong> They are evicted when the shared segment fills, which logs users out mid-page.
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+
+            {# APCu memory — fills over days, then evicts #}
+            {% if apcu_info %}
+                <div class="card">
+                    <div class="px-4 py-3 bg-slate-50 border-b border-slate-200">
+                        <h3 class="text-sm font-semibold text-slate-800">APCu Shared Memory</h3>
+                    </div>
+                    <div class="p-4 grid grid-cols-2 gap-y-2 text-sm">
+                        <div class="text-slate-500">Used</div>
+                        <div class="text-right font-mono {{ apcu_info.used_pct > 85 ? 'text-red-700 font-bold' : (apcu_info.used_pct > 60 ? 'text-amber-700' : '') }}">{{ apcu_info.used_pct }}%</div>
+
+                        <div class="text-slate-500">Free / Total</div>
+                        <div class="text-right font-mono text-xs">{{ apcu_info.free }} / {{ apcu_info.total }}</div>
+
+                        <div class="text-slate-500">Entries</div>
+                        <div class="text-right font-mono">{{ apcu_info.entries }}</div>
+
+                        <div class="text-slate-500">Expunges</div>
+                        <div class="text-right font-mono {{ apcu_info.expunges > 0 ? 'text-amber-700 font-bold' : '' }}">{{ apcu_info.expunges }}</div>
+                    </div>
+                    {% if apcu_info.expunges > 0 %}
+                        <div class="px-4 pb-4">
+                            <div class="notice notice-warn notice-slim">
+                                <strong>APCu has expunged entries.</strong> The segment filled and dropped cached data — raise <code>apc.shm_size</code>.
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+            {% endif %}
+
             {# Extensions #}
             <div class="card">
                 <div class="px-4 py-3 bg-slate-50 border-b border-slate-200">

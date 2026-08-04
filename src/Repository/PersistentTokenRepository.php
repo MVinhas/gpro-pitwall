@@ -45,12 +45,27 @@ class PersistentTokenRepository
         return $row ?: null;
     }
 
+    /**
+     * Rotate the validator, keeping the one it replaces. The previous hash is
+     * what lets a concurrent request that raced this rotation be told apart
+     * from a genuine replay (see PersistentLoginService::restore).
+     */
     public function rotate(int $id, string $validatorHash, string $expiresAt): void
     {
         $stmt = $this->pdo->prepare(
-            'UPDATE persistent_tokens SET validator_hash = :hash, expires_at = :exp WHERE id = :id'
+            'UPDATE persistent_tokens
+                SET previous_validator_hash = validator_hash,
+                    rotated_at = :now,
+                    validator_hash = :hash,
+                    expires_at = :exp
+              WHERE id = :id'
         );
-        $stmt->execute(['hash' => $validatorHash, 'exp' => $expiresAt, 'id' => $id]);
+        $stmt->execute([
+            'now'  => (new \DateTimeImmutable())->format('Y-m-d H:i:s'),
+            'hash' => $validatorHash,
+            'exp'  => $expiresAt,
+            'id'   => $id,
+        ]);
     }
 
     public function delete(int $id): void
