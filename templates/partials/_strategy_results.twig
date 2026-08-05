@@ -74,6 +74,10 @@
                 <span class="px-3">
                     <span class="text-slate-400">Fuel (wet)</span>
                     <span class="ml-1 text-slate-700">{{ strategy_results.fuel.wet }} L</span>
+                    {% if strategy_results.fuel.wet_estimated %}
+                        <span class="ml-1 font-bold text-amber-700"
+                              title="This track has never run a wet race, so there is no measured wet consumption. The wet figure assumes dry consumption — safe, but over-fuelled.">est.</span>
+                    {% endif %}
                 </span>
                 {% if strategy_results.overtaking %}
                     {% set ot_class = {
@@ -90,6 +94,11 @@
                     </span>
                 {% endif %}
             </div>
+            {% if strategy_results.fuel.wet_estimated %}
+                <div class="notice notice-warn notice-slim mt-2">
+                    <strong>Wet fuel is an estimate.</strong> This track has never run a wet race, so no measured wet consumption exists — the wet figures assume dry consumption and will over-fuel you rather than strand you.
+                </div>
+            {% endif %}
         </div>
 
         {# COMPOUND TABLE #}

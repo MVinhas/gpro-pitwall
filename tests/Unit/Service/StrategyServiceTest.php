@@ -63,7 +63,7 @@ final class StrategyServiceTest extends TestCase
         ],
     ];
 
-    private function db(): PDO
+    private function db(float $fuelPerLapWet = 2.5): PDO
     {
         $db = new PDO('sqlite::memory:');
         $db->exec(
@@ -82,10 +82,11 @@ final class StrategyServiceTest extends TestCase
                 overtaking TEXT
             )"
         );
-        $db->exec(
+        $stmt = $db->prepare(
             "INSERT INTO tracks VALUES
-             (1, 'Imola', 50, 250.0, 2.0, 2.5, 'Medium', 100.0, 22.0, 12, 5.0, 'Hard')"
+             (1, 'Imola', 50, 250.0, 2.0, :wet, 'Medium', 100.0, 22.0, 12, 5.0, 'Hard')"
         );
+        $stmt->execute([':wet' => $fuelPerLapWet]);
         return $db;
     }
 
@@ -193,6 +194,61 @@ final class StrategyServiceTest extends TestCase
 
         $this->assertSame(500.0, (float) $result['fuel']['dry']);
         $this->assertSame(625.0, (float) $result['fuel']['wet']);
+    }
+
+    /** @return array<string, mixed> */
+    private function runWith(PDO $db): array
+    {
+        return $this->service($db)->calculateStrategy(
+            ['id' => 1, 'name' => 'Imola'],
+            ['lvlEngine' => 1, 'lvlElectronics' => 1, 'lvlSusp' => 1],
+            ['concentration' => 50, 'aggressiveness' => 50, 'experience' => 50,
+             'technical_insight' => 50, 'weight' => 75],
+            ['concentration' => 0, 'stressHandling' => 0],
+            ['id' => 0, 'ownTD' => 0, 'experience' => 0, 'pitCoordination' => 0],
+            $this->inputs(),
+        );
+    }
+
+    public function testTrackWithAWetRateIsNotFlaggedAsEstimated(): void
+    {
+        $this->assertFalse($this->runWith($this->db(2.5))['fuel']['wet_estimated']);
+    }
+
+    public function testTrackWithNoWetSampleFallsBackToTheDryRate(): void
+    {
+        // Baku City and Jeddah have never run a wet race, so the CSV carries 0.
+        $result = $this->runWith($this->db(0.0));
+
+        $this->assertTrue($result['fuel']['wet_estimated']);
+        $this->assertSame(
+            (float) $result['fuel']['dry'],
+            (float) $result['fuel']['wet'],
+            'A missing wet rate must fall back to the dry rate, not a clamp floor.',
+        );
+    }
+
+    public function testMissingWetRateNoLongerCollapsesToTheClampFloor(): void
+    {
+        // Regression: 0 + fuelAdj used to hit max(0.1, …), recommending ~25 L
+        // for a 250 km race instead of ~500 L — a race-ending under-fuel.
+        $result = $this->runWith($this->db(0.0));
+
+        $this->assertGreaterThan(
+            250.0 * 0.1,
+            (float) $result['fuel']['wet'],
+            'Wet total must not collapse to the 0.1 L/km clamp floor.',
+        );
+    }
+
+    public function testMissingWetRateAlsoFeedsTheRainCompoundFuelLoad(): void
+    {
+        // The Rain row reads its own per-lap rate; the fallback has to reach it
+        // too, or the headline total and the per-stint load disagree.
+        $clamped = $this->runWith($this->db(0.0))['tyres']['Rain'];
+        $dry     = $this->runWith($this->db(2.0))['tyres']['Rain'];
+
+        $this->assertSame($dry['fuel_recommended'], $clamped['fuel_recommended']);
     }
 
     public function testPitTimeFloorsAtFifteenSecondsEvenWithNegativeStaffEffects(): void

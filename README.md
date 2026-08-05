@@ -40,6 +40,8 @@ One screen in race-prep order. A **decision summary board** leads: one verdict t
 
 Fuel, tyres and setup for every compound (Extra Soft / Soft / Medium / Hard / Rain), auto-run on first visit, re-run live by a risk slider. The **verdict leads**: best compound, stops, fuel per stint, total time lost and the margin over the runner-up — always compared within the same tyre type (a dry race compares dry compounds only; a wet race recommends Rain outright — it's the only wet compound). Below it: a per-compound breakdown of time lost (pits / fuel / compound difference), the Q1 / Q2 / race setup table with weather-aware tyre choices, and your contracted tyre supplier's dry/wet rating and ideal temperature beside the track name.
 
+Wet consumption is measured per track rather than derived — GPRO publishes no wet-fuel rule. A handful of tracks have never run a wet race and so have no sample at all; there the wet figures fall back to the dry rate and are labelled **est.** with a caution banner, so the number over-fuels you rather than stranding the car.
+
 #### Advice from the Race Engineer ⭐
 
 The headline feature. A race engineer that reads your driver, the track and the forecast, then tells you in plain words how to fill the race form:
@@ -179,7 +181,7 @@ Source of truth is GitHub; deployment is a manual file copy to any PHP 8.5 host.
 - **Twig 3** templates; **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile). Light and dark themes ship in one stylesheet: every design token is a CSS `light-dark()` pair switched by `color-scheme`, so System mode tracks the OS with zero JavaScript.
 - **SQLite** via PDO — emails and API tokens encrypted at rest (AES-256-GCM).
 - **PHPMailer 7** for SMTP; dev writes `.eml` files instead.
-- **PHPUnit 13** — 372 tests, 955 assertions — with **PHPStan level 8** and enforced type-declaration coverage (100% return/property/constant + `strict_types`; 99.5% param). Twig linted by a native `bin/twig_lint.php` built on Twig's own parser. CI measures statement coverage with `pcov` and enforces a floor (currently 45%, ratcheted up as coverage grows).
+- **PHPUnit 13** — 376 tests, 960 assertions — with **PHPStan level 8** and enforced type-declaration coverage (100% return/property/constant + `strict_types`; 99.5% param). Twig linted by a native `bin/twig_lint.php` built on Twig's own parser. CI measures statement coverage with `pcov` and enforces a floor (currently 45%, ratcheted up as coverage grows).
 - **Timestamps stored and served as UTC**, localised per visitor in the browser — no server-side timezone config.
 
 ## Architecture

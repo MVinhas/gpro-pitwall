@@ -70,6 +70,18 @@ class StrategyService
         $fplBaseDry = (float)$trackDb['fuel_per_lap'];
         $fplBaseWet = (float)$trackDb['fuel_per_lap_wet'];
 
+        // GPRO publishes no wet-consumption rule, so every wet rate is measured
+        // race by race — and tracks that have never run a wet race have no
+        // sample at all (0 in the CSV). Left alone, the max(0.1, …) clamp below
+        // turns that into ~0.1 L/km and under-fuels the race roughly 7-fold.
+        // The dry rate is the safe substitute: wet is always the lighter of the
+        // two, so it over-fuels rather than stranding the car. Flagged to the
+        // caller so the UI can say the number is an estimate.
+        $wetRateEstimated = $fplBaseWet <= 0.0;
+        if ($wetRateEstimated) {
+            $fplBaseWet = $fplBaseDry;
+        }
+
         $ff = $this->secrets['fuel_factors'] ?? [];
 
         $dConc = (float)($driver['concentration']);
@@ -211,10 +223,7 @@ class StrategyService
             $pitLaneLoss = (float)$trackDb['pit_time'];
             $lostPits = $stops * ($pitTime + $pitLaneLoss);
 
-            $fuel_per_lap_val =
-                ($comp === 'Rain') ? (float)$trackDb['fuel_per_lap_wet']
-                :
-                (float)$trackDb['fuel_per_lap'];
+            $fuel_per_lap_val = ($comp === 'Rain') ? $fplBaseWet : $fplBaseDry;
 
             $tables_h47 =
                 $ff['conc']
@@ -293,6 +302,7 @@ class StrategyService
             'fuel' => [
                 'dry' => ceil($totalFuelDry),
                 'wet' => ceil($totalFuelWet),
+                'wet_estimated' => $wetRateEstimated,
                 'l_per_lap' => round($lapLen * $lkmDry, 2)
             ],
             'tyres' => $tyreResults,

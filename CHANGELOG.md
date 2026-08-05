@@ -6,6 +6,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.13.4] - 2026-08-05
+
+### Fixed
+- Spa's wet fuel consumption was 12% too low, under-fuelling every wet race there. Measured against the S111 R11 race analysis: the recommended 46 L ran dry on lap 19 of a 22-lap stint. The same file's dry stint pins the driver/car adjustment to within 0.13% of the model, so the formula was sound and only the track constant was wrong — corrected from 0.45191 to 0.51428 L/km, which now recommends 56 L for that stint.
+- Tracks that have never run a wet race (Baku City, Jeddah) carry no measured wet rate, and the `max(0.1, …)` clamp turned that into 0.1 L/km — roughly a sevenfold under-fuel across a full race. They now fall back to the dry rate, which over-fuels rather than stranding the car, and the strategy card labels the figure `est.` with a caution banner explaining why.
+
+### Changed
+- Schema version 7, so warm databases re-seed `tracks` from the corrected CSV (production is SFTP-only; this gate is the only thing that re-runs the track seed).
+
 ## [1.13.3] - 2026-08-04
 
 ### Fixed
