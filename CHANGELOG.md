@@ -6,6 +6,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.13.5] - 2026-08-06
+
+### Added
+- Admin user rename. Login matches the username byte-for-byte and case-sensitively, so an account created before the letters/digits/underscore whitelist — one holding an accent, a space or unusual capitalisation — becomes unreachable the moment its owner misremembers the exact spelling, and the enumeration decoy makes that failure indistinguishable from a code being sent. Renaming to a conforming name is the supported repair; it validates through the same rule registration uses, confirms with the target named, and is audited from/to.
+- Admin "Send reminder": emails a user their own username and last API sync, to the address already on the account. This is the credential they are missing — the app stores no plaintext email, so an admin cannot simply read it back to them.
+
+### Changed
+- The admin resend-code action is gone. It could never work: a code is only redeemable against `auth_pending_user_id`, which is set solely by the user's own login POST, so redeeming it required first doing the thing they were stuck on — and that request minted a newer code regardless. The username reminder replaces it.
+- Username validation moved to a single `UsernameRule`, shared by registration and rename, so the two cannot drift apart.
+
+### Fixed
+- **Security:** usernames are now HTML-escaped before being embedded in the welcome and reminder emails. Rows predating the whitelist may contain markup, which the mail template interpolated raw.
+
 ## [1.13.4] - 2026-08-05
 
 ### Fixed

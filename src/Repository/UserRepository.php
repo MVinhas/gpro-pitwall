@@ -183,6 +183,17 @@ class UserRepository
         $stmt->execute(['v' => $isAdmin ? 1 : 0, 'id' => $userId]);
     }
 
+    /**
+     * Rename a user. The UNIQUE index on username is the authority on
+     * collisions — a caller's availability check can always lose a race to a
+     * concurrent registration, so the PDOException it throws is the real guard.
+     */
+    public function rename(int $userId, string $username): void
+    {
+        $stmt = $this->pdo->prepare("UPDATE users SET username = :u WHERE id = :id");
+        $stmt->execute(['u' => $username, 'id' => $userId]);
+    }
+
     public function softDelete(int $userId): void
     {
         $stmt = $this->pdo->prepare(
