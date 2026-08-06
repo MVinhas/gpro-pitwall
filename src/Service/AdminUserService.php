@@ -7,7 +7,9 @@ namespace App\Service;
 use App\Repository\AuditLogRepository;
 use App\Repository\PendingRegistrationRepository;
 use App\Repository\UserRepository;
+use App\Support\UsernameRule;
 use DateTimeImmutable;
+use PDOException;
 use RuntimeException;
 
 /**
@@ -113,6 +115,59 @@ final class AdminUserService
     }
 
     /**
+     * Rename a user, applying the same whitelist registration enforces.
+     *
+     * This is the supported repair for accounts created before that whitelist
+     * existed. The login lookup is a byte-exact, case-sensitive match, so a
+     * username holding an accent, a space or mixed case is unreachable to
+     * anyone who misremembers its exact spelling — and the enumeration decoy
+     * makes that failure look identical to a successful send. Renaming to a
+     * conforming username is the only fix that restores access.
+     *
+     * The user must be told their new username out of band: it is their sole
+     * login credential, and nothing here emails them.
+     */
+    public function rename(int $actorId, int $targetId, string $newUsername): void
+    {
+        $newUsername = trim($newUsername);
+
+        $error = UsernameRule::check($newUsername);
+        if ($error !== null) {
+            throw new RuntimeException($error);
+        }
+
+        $target = $this->users->findById($targetId);
+        if ($target === null) {
+            throw new RuntimeException('User not found.');
+        }
+
+        $current = (string) ($target['username'] ?? '');
+        if ($current === $newUsername) {
+            throw new RuntimeException('That is already the username.');
+        }
+
+        $holder = $this->users->findByUsername($newUsername);
+        if ($holder !== null) {
+            throw new RuntimeException('Username is already taken.');
+        }
+
+        try {
+            $this->users->rename($targetId, $newUsername);
+        } catch (PDOException) {
+            // The UNIQUE index is the authority; the check above is only a
+            // friendlier path to the same answer. It misses two cases this
+            // catches: a soft-deleted row still holding the name (findByUsername
+            // filters those out) and a concurrent registration winning the race.
+            throw new RuntimeException('Username is already taken.');
+        }
+
+        $this->audit->record($actorId, 'rename_user', $targetId, [
+            'from' => $current,
+            'to'   => $newUsername,
+        ]);
+    }
+
+    /**
      * Soft-delete a user: marks deleted_at, hides them from the list,
      * leaves the row in place so the audit log stays joinable.
      */
@@ -155,22 +210,27 @@ final class AdminUserService
     }
 
     /**
-     * Sends a fresh login code to an existing user. (Since registration moved to
-     * the pending_registrations table, every `users` row is already verified, so
-     * this is effectively an admin-triggered login code rather than a
-     * registration resend.) Delegates to AuthService::resendCode(), which skips
-     * the public captcha gate (the admin is already authorised) but still honours
-     * the per-account code cap and TTL.
+     * Emails a user their own username and last sync time.
+     *
+     * This replaced an admin-triggered login code, which could not work: a code
+     * is only redeemable against auth_pending_user_id, and that session key is
+     * set solely by the user's own login POST — so redeeming it required first
+     * doing the thing the user was stuck on, and their login would mint a newer
+     * code anyway. Telling them what to type is the support action that helps;
+     * sending a code was never one.
      */
-    public function resendVerification(int $actorId, int $targetId, string $ip): void
+    public function sendUsernameReminder(int $actorId, int $targetId): void
     {
         $target = $this->users->findById($targetId);
         if ($target === null) {
             throw new RuntimeException('User not found.');
         }
 
-        $this->auth->resendCode($targetId);
-        $this->audit->record($actorId, 'resend_verification', $targetId);
+        if (!$this->auth->sendUsernameReminder($targetId)) {
+            throw new RuntimeException('Could not send the reminder — check the mail log.');
+        }
+
+        $this->audit->record($actorId, 'username_reminder', $targetId);
     }
 
     /**

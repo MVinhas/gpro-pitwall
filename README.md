@@ -79,6 +79,7 @@ Scores the full GPRO driver market (4–5k drivers) against your division's idea
 
 - **Division baseline / differences** — per-division ideal-pilot tables with OA caps (Rookie 85 / Amateur 110 / Pro 135 / Master 160 / Elite ∞), plus pairwise division insights.
 - **User management** — paginated, sortable user list with growth trends over a selectable 7/30/90-day window; admin-flag toggle with self-demotion guard, soft-delete/restore, and every mutation in an append-only audit log.
+- **Account support tools** — rename a user whose username predates the current whitelist, plus a per-user email delivery check. Login matches the username byte-for-byte and case-sensitively, so an account created with an accent or a space becomes unreachable to anyone who misremembers its exact spelling — renaming to a conforming name is the supported repair. Both actions confirm first and are audited.
 - **Telemetry** (`/debug`) — registered vs active users (successful sync in the last 30 days), tokens set, API budget, runtime info, masked environment.
 
 ### Accounts
@@ -181,7 +182,7 @@ Source of truth is GitHub; deployment is a manual file copy to any PHP 8.5 host.
 - **Twig 3** templates; **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile). Light and dark themes ship in one stylesheet: every design token is a CSS `light-dark()` pair switched by `color-scheme`, so System mode tracks the OS with zero JavaScript.
 - **SQLite** via PDO — emails and API tokens encrypted at rest (AES-256-GCM).
 - **PHPMailer 7** for SMTP; dev writes `.eml` files instead.
-- **PHPUnit 13** — 376 tests, 960 assertions — with **PHPStan level 8** and enforced type-declaration coverage (100% return/property/constant + `strict_types`; 99.5% param). Twig linted by a native `bin/twig_lint.php` built on Twig's own parser. CI measures statement coverage with `pcov` and enforces a floor (currently 45%, ratcheted up as coverage grows).
+- **PHPUnit 13** — 390 tests, 1005 assertions — with **PHPStan level 8** and enforced type-declaration coverage (100% return/property/constant + `strict_types`; 99.5% param). Twig linted by a native `bin/twig_lint.php` built on Twig's own parser. CI measures statement coverage with `pcov` and enforces a floor (currently 45%, ratcheted up as coverage grows).
 - **Timestamps stored and served as UTC**, localised per visitor in the browser — no server-side timezone config.
 
 ## Architecture

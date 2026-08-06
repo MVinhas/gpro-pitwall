@@ -33,12 +33,45 @@ class EmailService
         return $this->send($toEmail, $subject, $body, $altBody);
     }
 
+    /**
+     * Reminds an account holder of the one credential they have.
+     *
+     * Login matches the username byte-for-byte and case-sensitively, so anyone
+     * who misremembers an accent, a space or the capitalisation is locked out
+     * with no feedback — the login form deliberately cannot tell them whether a
+     * username exists. Only the account's own registered address ever receives
+     * this, so it discloses nothing the recipient isn't entitled to.
+     *
+     * The last sync is included as proof of identity: it lets the reader
+     * recognise their own account without any of their data being restated.
+     */
+    public function sendUsernameReminder(string $toEmail, string $username, ?string $lastSyncedAt): bool
+    {
+        $subject = 'Your GPRO Pitwall username';
+        $lastSync = ($lastSyncedAt === null || $lastSyncedAt === '')
+            ? 'This account has never synced with the GPRO API.'
+            : 'Last GPRO API sync: ' . $lastSyncedAt . ' UTC.';
+        $note = 'Type it exactly as shown — it is case-sensitive, and spaces and '
+            . 'accents count. ' . $lastSync;
+
+        // Legacy usernames predate the letters/digits/underscore whitelist and
+        // may contain markup; renderHtml interpolates raw.
+        $body = $this->renderHtml(
+            'Your username — the only way to log in — is:',
+            htmlspecialchars($username, ENT_QUOTES, 'UTF-8'),
+            htmlspecialchars($note, ENT_QUOTES, 'UTF-8')
+        );
+        $altBody = "Your GPRO Pitwall username is: {$username}\n\n{$note}";
+
+        return $this->send($toEmail, $subject, $body, $altBody);
+    }
+
     public function sendWelcomeEmail(string $toEmail, string $username): bool
     {
         $subject = "Welcome to GPRO Pitwall!";
         $body = $this->renderHtml(
             "Welcome! Your account is now active. Your username — and the only way to log in — is:",
-            $username,
+            htmlspecialchars($username, ENT_QUOTES, 'UTF-8'),
             "Memorise it. We store your email encrypted at the application layer (zero-knowledge), "
             . "so you cannot log in or recover access with your email address — only with this username."
         );

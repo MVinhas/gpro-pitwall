@@ -38,7 +38,8 @@ return function (Router $router): void {
     // ========== ADMIN ==========
     $router->add('GET',  '/admin/users', 'controller.admin_users', 'index');
     $router->add('POST', '/admin/users/toggle_admin', 'controller.admin_users', 'toggleAdmin');
-    $router->add('POST', '/admin/users/resend_verification', 'controller.admin_users', 'resendVerification');
+    $router->add('POST', '/admin/users/send_reminder', 'controller.admin_users', 'sendUsernameReminder');
+    $router->add('POST', '/admin/users/rename', 'controller.admin_users', 'rename');
     $router->add('POST', '/admin/users/delete', 'controller.admin_users', 'delete');
     $router->add('POST', '/admin/users/restore', 'controller.admin_users', 'restore');
 

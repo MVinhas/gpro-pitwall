@@ -7,6 +7,7 @@ namespace App\Controller;
 use App\Http\Request;
 use App\Security\Authorize;
 use App\Service\AdminUserService;
+use App\Support\UsernameRule;
 use Twig\Environment;
 
 final readonly class AdminUserController
@@ -44,6 +45,8 @@ final readonly class AdminUserController
             'flash_error'  => $_SESSION['flash_error'] ?? null,
             'csrf_token'   => $_SESSION['csrf_token'] ?? '',
             'api_limit'    => $_SESSION['api_limit'] ?? '?',
+            'username_min' => UsernameRule::MIN_LENGTH,
+            'username_max' => UsernameRule::MAX_LENGTH,
         ]);
 
         unset($_SESSION['flash'], $_SESSION['flash_error']);
@@ -97,15 +100,32 @@ final readonly class AdminUserController
         exit;
     }
 
-    public function resendVerification(Request $request): void
+    public function rename(Request $request): void
     {
         $actor = $this->authorize->requireAdmin();
         $targetId = (int) $request->post('user_id');
-        $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+        $username = (string) $request->post('username');
 
         try {
-            $this->service->resendVerification((int) $actor['id'], $targetId, $ip);
-            $_SESSION['flash'] = "Verification email re-sent to #{$targetId}.";
+            $this->service->rename((int) $actor['id'], $targetId, $username);
+            $_SESSION['flash'] = "Renamed #{$targetId} to " . trim($username)
+                . ' — tell them, it is their only way to log in.';
+        } catch (\Throwable $e) {
+            $_SESSION['flash_error'] = $e->getMessage();
+        }
+
+        header('Location: /admin/users');
+        exit;
+    }
+
+    public function sendUsernameReminder(Request $request): void
+    {
+        $actor = $this->authorize->requireAdmin();
+        $targetId = (int) $request->post('user_id');
+
+        try {
+            $this->service->sendUsernameReminder((int) $actor['id'], $targetId);
+            $_SESSION['flash'] = "Username reminder emailed to #{$targetId}.";
         } catch (\Throwable $e) {
             $_SESSION['flash_error'] = $e->getMessage();
         }

@@ -9,7 +9,9 @@ use App\Repository\PendingRegistrationRepository;
 use App\Repository\UserRepository;
 use App\Service\AdminUserService;
 use App\Service\AuthService;
+use PDOException;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
@@ -153,7 +155,7 @@ final class AdminUserServiceTest extends TestCase
         $this->service($users, $this->createStub(AuditLogRepository::class))->restore(1, 5);
     }
 
-    public function testResendVerificationDelegatesToAuthResendCodeAndAudits(): void
+    public function testUsernameReminderDelegatesToAuthAndAudits(): void
     {
         $users = $this->createStub(UserRepository::class);
         $users->method('findById')->willReturn(['id' => 5, 'username' => 'carol']);
@@ -161,31 +163,180 @@ final class AdminUserServiceTest extends TestCase
         $audit = $this->createMock(AuditLogRepository::class);
         $audit->expects($this->once())
               ->method('record')
-              ->with(1, 'resend_verification', 5);
+              ->with(1, 'username_reminder', 5);
 
-        // Admin resend goes through resendCode (no captcha, but still capped),
-        // not the public login() flow.
+        // No code is minted: the reminder tells the user what to type, it does
+        // not hand them a credential.
         $auth = $this->createMock(AuthService::class);
-        $auth->expects($this->once())
-             ->method('resendCode')
-             ->with(5);
+        $auth->expects($this->never())->method('resendCode');
+        $auth->expects($this->once())->method('sendUsernameReminder')->with(5)->willReturn(true);
 
         $this->service($users, $audit, $auth)
-             ->resendVerification(actorId: 1, targetId: 5, ip: '10.0.0.5');
+             ->sendUsernameReminder(actorId: 1, targetId: 5);
     }
 
-    public function testResendVerificationFailsWhenUserMissing(): void
+    public function testUsernameReminderFailsWhenUserMissing(): void
     {
         $users = $this->createStub(UserRepository::class);
         $users->method('findById')->willReturn(null);
 
-        $audit = $this->createStub(AuditLogRepository::class);
         $auth = $this->createMock(AuthService::class);
-        $auth->expects($this->never())->method('login');
+        $auth->expects($this->never())->method('sendUsernameReminder');
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('User not found');
+
+        $this->service($users, $this->createStub(AuditLogRepository::class), $auth)
+             ->sendUsernameReminder(1, 99);
+    }
+
+    /** A send that fails must surface, not be audited as if it worked. */
+    public function testUsernameReminderDoesNotAuditAFailedSend(): void
+    {
+        $users = $this->createStub(UserRepository::class);
+        $users->method('findById')->willReturn(['id' => 5, 'username' => 'carol']);
+
+        $audit = $this->createMock(AuditLogRepository::class);
+        $audit->expects($this->never())->method('record');
+
+        $auth = $this->createStub(AuthService::class);
+        $auth->method('sendUsernameReminder')->willReturn(false);
 
         $this->expectException(RuntimeException::class);
 
-        $this->service($users, $audit, $auth)->resendVerification(1, 99, '127.0.0.1');
+        $this->service($users, $audit, $auth)->sendUsernameReminder(1, 5);
+    }
+
+    public function testRenameUpdatesUsernameAndAudits(): void
+    {
+        $users = $this->createMock(UserRepository::class);
+        $users->method('findById')->willReturn(['id' => 3, 'username' => 'Tëst Üser']);
+        $users->method('findByUsername')->willReturn(null);
+        $users->expects($this->once())->method('rename')->with(3, 'legacy_user');
+
+        $audit = $this->createMock(AuditLogRepository::class);
+        $audit->expects($this->once())
+              ->method('record')
+              ->with(1, 'rename_user', 3, ['from' => 'Tëst Üser', 'to' => 'legacy_user']);
+
+        $this->service($users, $audit)->rename(actorId: 1, targetId: 3, newUsername: 'legacy_user');
+    }
+
+    /**
+     * The whole point of the rename: a legacy username the current whitelist
+     * would reject must still be renameable *away from*. Only the new name is
+     * validated — never the one being replaced.
+     */
+    public function testRenameAcceptsATargetWhoseCurrentNameBreaksTheWhitelist(): void
+    {
+        $users = $this->createMock(UserRepository::class);
+        $users->method('findById')->willReturn(['id' => 3, 'username' => 'Tëst Üser']);
+        $users->method('findByUsername')->willReturn(null);
+        $users->expects($this->once())->method('rename');
+
+        $this->service($users, $this->createStub(AuditLogRepository::class))
+             ->rename(1, 3, 'legacy_user');
+    }
+
+    public function testRenameTrimsSurroundingWhitespace(): void
+    {
+        $users = $this->createMock(UserRepository::class);
+        $users->method('findById')->willReturn(['id' => 3, 'username' => 'old_name']);
+        $users->method('findByUsername')->willReturn(null);
+        $users->expects($this->once())->method('rename')->with(3, 'legacy_user');
+
+        $this->service($users, $this->createStub(AuditLogRepository::class))
+             ->rename(1, 3, '  legacy_user  ');
+    }
+
+    /** @return list<array{0: string}> */
+    public static function invalidUsernameProvider(): array
+    {
+        return [
+            ['ab'],
+            ['this_name_is_far_too_long'],
+            ['Tëst Üser'],
+            ['has space'],
+            ['<script>x</script>'],
+            ['dash-not-allowed'],
+            [''],
+        ];
+    }
+
+    #[DataProvider('invalidUsernameProvider')]
+    public function testRenameRejectsNamesRegistrationWouldReject(string $candidate): void
+    {
+        $users = $this->createMock(UserRepository::class);
+        $users->expects($this->never())->method('rename');
+
+        $audit = $this->createMock(AuditLogRepository::class);
+        $audit->expects($this->never())->method('record');
+
+        $this->expectException(RuntimeException::class);
+
+        $this->service($users, $audit)->rename(1, 3, $candidate);
+    }
+
+    public function testRenameRejectsANameAlreadyHeldBySomeoneElse(): void
+    {
+        $users = $this->createMock(UserRepository::class);
+        $users->method('findById')->willReturn(['id' => 3, 'username' => 'old_name']);
+        $users->method('findByUsername')->willReturn(['id' => 9, 'username' => 'legacy_user']);
+        $users->expects($this->never())->method('rename');
+
+        $audit = $this->createMock(AuditLogRepository::class);
+        $audit->expects($this->never())->method('record');
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('already taken');
+
+        $this->service($users, $audit)->rename(1, 3, 'legacy_user');
+    }
+
+    /**
+     * findByUsername hides soft-deleted rows, so the availability check clears
+     * a name the UNIQUE index still refuses. The PDOException is the real guard
+     * and must surface as the same friendly message.
+     */
+    public function testRenameReportsUniqueViolationAsTaken(): void
+    {
+        $users = $this->createStub(UserRepository::class);
+        $users->method('findById')->willReturn(['id' => 3, 'username' => 'old_name']);
+        $users->method('findByUsername')->willReturn(null);
+        $users->method('rename')->willThrowException(new PDOException('UNIQUE constraint failed'));
+
+        $audit = $this->createMock(AuditLogRepository::class);
+        $audit->expects($this->never())->method('record');
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('already taken');
+
+        $this->service($users, $audit)->rename(1, 3, 'legacy_user');
+    }
+
+    public function testRenameRejectsANoOp(): void
+    {
+        $users = $this->createMock(UserRepository::class);
+        $users->method('findById')->willReturn(['id' => 3, 'username' => 'legacy_user']);
+        $users->expects($this->never())->method('rename');
+
+        $this->expectException(RuntimeException::class);
+
+        $this->service($users, $this->createStub(AuditLogRepository::class))
+             ->rename(1, 3, 'legacy_user');
+    }
+
+    public function testRenameFailsWhenUserMissing(): void
+    {
+        $users = $this->createMock(UserRepository::class);
+        $users->method('findById')->willReturn(null);
+        $users->expects($this->never())->method('rename');
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('User not found');
+
+        $this->service($users, $this->createStub(AuditLogRepository::class))
+             ->rename(1, 99, 'legacy_user');
     }
 
     public function testStatsComputesPeriodOverPeriodTrends(): void

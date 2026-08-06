@@ -161,7 +161,10 @@
                             <td data-sort="{{ u.created_at }}" class="px-4 py-3 text-xs text-slate-500 tabular-nums">
                                 {{ t.localtime(u.created_at, 'date') }}
                             </td>
-                            <td class="px-4 py-3 text-right space-x-2 whitespace-nowrap">
+                            <td class="px-4 py-3 whitespace-nowrap">
+                              {# items-start keeps Send code level with the Rename
+                                 summary once the rename disclosure is expanded. #}
+                              <div class="flex items-start justify-end gap-2">
                                 {% if is_deleted %}
                                     <form method="POST" action="/admin/users/restore" class="inline"
                                           data-confirm-restore="{{ u.username }}">
@@ -170,16 +173,37 @@
                                         <button class="btn btn-sm btn-secondary" type="submit">Restore</button>
                                     </form>
                                 {% else %}
-                                    {% if not u.verified_at %}
-                                        <form method="POST" action="/admin/users/resend_verification" class="inline">
+                                    {# Emails the user their own username and last sync.
+                                       Replaced an admin-sent login code, which could never
+                                       be redeemed: the code checks auth_pending_user_id,
+                                       set only by the user's own login POST. #}
+                                    <form method="POST" action="/admin/users/send_reminder" class="inline"
+                                          data-confirm-send="{{ u.username }}">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                        <input type="hidden" name="user_id" value="{{ u.id }}">
+                                        <button class="btn btn-sm btn-secondary" type="submit"
+                                                title="Email this user their username and last API sync">Send reminder</button>
+                                    </form>
+
+                                    <details class="group inline-block align-middle text-left">
+                                        <summary class="btn btn-sm btn-secondary cursor-pointer list-none">Rename</summary>
+                                        <form method="POST" action="/admin/users/rename"
+                                              class="mt-2 flex items-center gap-2"
+                                              data-confirm-rename="{{ u.username }}">
                                             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                                             <input type="hidden" name="user_id" value="{{ u.id }}">
-                                            <button class="btn btn-sm btn-secondary" type="submit">Resend</button>
+                                            <input type="text" name="username" required
+                                                   value="{{ u.username }}"
+                                                   minlength="{{ username_min }}" maxlength="{{ username_max }}"
+                                                   pattern="[A-Za-z0-9_]+"
+                                                   title="Letters, numbers and underscores only"
+                                                   aria-label="New username for {{ u.username }}"
+                                                   class="form-input w-40 text-sm">
+                                            <button class="btn btn-sm btn-primary" type="submit">Save</button>
                                         </form>
-                                    {% else %}
-                                        <span class="t-caption">—</span>
-                                    {% endif %}
+                                    </details>
                                 {% endif %}
+                              </div>
                             </td>
                         </tr>
                     {% else %}
@@ -247,6 +271,32 @@ document.querySelectorAll('form[data-confirm-restore]').forEach((form) => {
     form.addEventListener('submit', (e) => {
         const name = form.dataset.confirmRestore;
         if (!confirm('Restore ' + name + '? They will be able to log in again.')) {
+            e.preventDefault();
+        }
+    });
+});
+
+// Both of these reach a real person — one emails them, one changes the only
+// credential they have — so each confirms and names the target. Same
+// data-attribute discipline as the restore confirm above.
+document.querySelectorAll('form[data-confirm-send]').forEach((form) => {
+    form.addEventListener('submit', (e) => {
+        const name = form.dataset.confirmSend;
+        if (!confirm('Email ' + name + ' their username and last sync time?')) {
+            e.preventDefault();
+        }
+    });
+});
+
+document.querySelectorAll('form[data-confirm-rename]').forEach((form) => {
+    form.addEventListener('submit', (e) => {
+        const name = form.dataset.confirmRename;
+        const next = form.querySelector('input[name="username"]').value.trim();
+        if (!confirm(
+            'Rename ' + name + ' to ' + next + '?\n\n'
+            + 'This is their only login credential — they cannot sign in again '
+            + 'until you tell them the new name. This cannot be undone from their side.'
+        )) {
             e.preventDefault();
         }
     });

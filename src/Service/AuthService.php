@@ -8,6 +8,7 @@ use App\Repository\UserRepository;
 use App\Repository\TokenRepository;
 use App\Repository\PendingRegistrationRepository;
 use App\Security\EmailCrypto;
+use App\Support\UsernameRule;
 use DateTimeImmutable;
 use PDOException;
 
@@ -78,16 +79,10 @@ class AuthService
         $username = trim($username);
         $email = strtolower(trim($email));
 
-        if (strlen($username) < 3 || strlen($username) > 20) {
-            return ['success' => false, 'error' => 'Username must be 3–20 characters.'];
-        }
-
-        // Whitelist mirrors the register form's client pattern (letters, digits,
-        // underscore). Excludes every HTML/JS metacharacter and avoids Unicode
-        // homoglyph/bidi spoofing, so stored XSS can't depend on a missed escape
-        // downstream. Server is the authority; the client pattern is only UX.
-        if (preg_match('/^[A-Za-z0-9_]+$/', $username) !== 1) {
-            return ['success' => false, 'error' => 'Username may only contain letters, numbers, and underscores.'];
+        // Server is the authority; the register form's client pattern is only UX.
+        $usernameError = UsernameRule::check($username);
+        if ($usernameError !== null) {
+            return ['success' => false, 'error' => $usernameError];
         }
 
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -281,6 +276,30 @@ class AuthService
         }
 
         return $this->generateAndSendCode($user);
+    }
+
+    /**
+     * Email a user their own username, to the address already on the account.
+     *
+     * The recipient is never supplied by the caller — it is decrypted from the
+     * target row — so this cannot be pointed at an arbitrary address. It sends
+     * no code and grants no session: the reader still logs in normally, they
+     * just now know what to type.
+     */
+    public function sendUsernameReminder(int $userId): bool
+    {
+        $user = $this->users->findById($userId);
+        if (!$user) {
+            return false;
+        }
+
+        $lastSynced = $user['last_synced_at'] ?? null;
+
+        return $this->mailer->sendUsernameReminder(
+            $this->getDecryptedEmail($userId),
+            (string) $user['username'],
+            is_string($lastSynced) && $lastSynced !== '' ? $lastSynced : null
+        );
     }
 
     /**
