@@ -11,6 +11,7 @@ Every release is published as an annotated git tag of the same name.
 ### Fixed
 - Training costs were stale. GPRO repriced the Fitness class to $750,000 and the planner still charged $700,000, understating every plan that included it. All seven costs are now verified against the official wiki.
 - Seeding a training row used `INSERT OR IGNORE`, so a price change could never reach a database that already held the old row — every existing install would have kept the wrong figure indefinitely. Seeding now upserts the cost while leaving the attribute gains untouched, and the schema version bump makes warm databases re-run it.
+- **Security:** updated `squizlabs/php_codesniffer` 4.0.1 → 4.0.4 (CVE-2026-67434, OS command injection, high). Dev-only tooling excluded from the release bundle by `composer install --no-dev`, so no shipped code was affected.
 
 ### Added
 - Spa resort, the seventh training session ($500,000), which the planner never modelled. It carries the same +16.7 motivation as the sports psychologist; its energy restore is not a modelled attribute, so the planner flags it instead of projecting it — otherwise Spa reads as strictly worse than the $100k-cheaper psychologist.
