@@ -16,7 +16,7 @@ class DatabaseSeeder
      * calls migrate() on every request; this version lets a warm database skip
      * the entire DDL + scan + legacy-encryption pass.
      */
-    private const int SCHEMA_VERSION = 7;
+    private const int SCHEMA_VERSION = 8;
 
     /**
      * @param array<string, string> $statsSchema
@@ -626,13 +626,20 @@ class DatabaseSeeder
     {
         $trainings = $this->secrets['trainings_seed'] ?? [];
 
+        // Costs are set by GPRO and change between seasons, so the seed must be
+        // able to reprice a row that already exists in a live DB — a plain
+        // INSERT OR IGNORE would leave the old price in place forever. Only the
+        // cost is overwritten: the gains are spreadsheet-verified and a session
+        // whose effects we haven't confirmed carries NULL gains we must not
+        // stomp on a later run.
         $stmt = $this->db->prepare(
-            "INSERT OR IGNORE INTO trainings (
+            "INSERT INTO trainings (
                 name, cost,
                 gain_concentration, gain_talent, gain_aggressiveness,
                 gain_experience, gain_technical_insight, gain_stamina,
                 gain_charisma, gain_motivation, gain_weight
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(name) DO UPDATE SET cost = excluded.cost"
         );
 
         foreach ($trainings as $training) {

@@ -36,7 +36,7 @@ final class TrainingServiceTest extends TestCase
         ");
         // Spreadsheet-verified rows. Fitness drops motivation; Psycho raises it.
         $this->db->exec("INSERT INTO trainings VALUES (
-            'Fitness', 700000, 0, 0, 0, 0, 0, 2, 0, -7.4, -1
+            'Fitness', 750000, 0, 0, 0, 0, 0, 2, 0, -7.4, -1
         )");
         $this->db->exec("INSERT INTO trainings VALUES (
             'Psycho', 400000, 0, 0, 0, 0, 0, 0, 0, 16.7, 0

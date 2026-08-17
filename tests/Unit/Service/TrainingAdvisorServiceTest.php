@@ -26,7 +26,7 @@ final class TrainingAdvisorServiceTest extends TestCase
 
     /** @var list<array<string, mixed>> */
     private const array TRAININGS = [
-        ['name' => 'Fitness',   'cost' => 700000, 'gain_concentration' => 0,  'gain_talent' => 0, 'gain_aggressiveness' => 0,  'gain_experience' => 0, 'gain_technical_insight' => 0, 'gain_stamina' => 2,  'gain_charisma' => 0, 'gain_motivation' => -7.4,  'gain_weight' => -1],
+        ['name' => 'Fitness',   'cost' => 750000, 'gain_concentration' => 0,  'gain_talent' => 0, 'gain_aggressiveness' => 0,  'gain_experience' => 0, 'gain_technical_insight' => 0, 'gain_stamina' => 2,  'gain_charisma' => 0, 'gain_motivation' => -7.4,  'gain_weight' => -1],
         ['name' => 'Yoga',      'cost' => 700000, 'gain_concentration' => 5,  'gain_talent' => 0, 'gain_aggressiveness' => -2, 'gain_experience' => 0, 'gain_technical_insight' => 0, 'gain_stamina' => -2, 'gain_charisma' => 0, 'gain_motivation' => 7.2,   'gain_weight' => 0],
         ['name' => 'Technical', 'cost' => 600000, 'gain_concentration' => 0,  'gain_talent' => 0, 'gain_aggressiveness' => 0,  'gain_experience' => 0, 'gain_technical_insight' => 5, 'gain_stamina' => 0,  'gain_charisma' => 0, 'gain_motivation' => -24.5, 'gain_weight' => 0],
         ['name' => 'PR',        'cost' => 500000, 'gain_concentration' => -3, 'gain_talent' => 0, 'gain_aggressiveness' => 0,  'gain_experience' => 0, 'gain_technical_insight' => 0, 'gain_stamina' => 0,  'gain_charisma' => 6, 'gain_motivation' => 0,     'gain_weight' => 0],
@@ -70,6 +70,31 @@ final class TrainingAdvisorServiceTest extends TestCase
         $ranked = $this->svc->rank(self::TRAININGS, self::CURRENT, self::IDEAL);
         $byName = array_column($ranked, null, 'name');
         $this->assertGreaterThan($byName['PR']['score'], $byName['Fitness']['score']);
+    }
+
+    /**
+     * Spa carries the same +16.7 motivation as Psycho, so the two must score
+     * identically. Spa's extra benefit (driver energy) is not a modelled
+     * attribute and must not leak into the score as a phantom bonus — the
+     * $100k price gap is the only thing separating them here.
+     */
+    public function testSpaScoresLevelWithPsychoOnMotivation(): void
+    {
+        $psycho = [
+            'name' => 'Psycho', 'cost' => 400000, 'gain_concentration' => 0, 'gain_talent' => 0,
+            'gain_aggressiveness' => 0, 'gain_experience' => 0, 'gain_technical_insight' => 0,
+            'gain_stamina' => 0, 'gain_charisma' => 0, 'gain_motivation' => 16.7, 'gain_weight' => 0,
+        ];
+        $spa = ['name' => 'Spa', 'cost' => 500000] + array_diff_key($psycho, ['name' => 0, 'cost' => 0]);
+
+        // Motivation is below ideal (100 vs 120), so both should score positive.
+        $ranked = $this->svc->rank([$psycho, $spa], self::CURRENT, self::IDEAL);
+        $byName = array_column($ranked, null, 'name');
+
+        $this->assertSame($byName['Psycho']['score'], $byName['Spa']['score']);
+        $this->assertGreaterThan(0.0, $byName['Spa']['score']);
+        $this->assertSame(['motivation' => 16.7], $byName['Spa']['gains']);
+        $this->assertSame(500000, $byName['Spa']['cost']);
     }
 
     public function testSurplusOverIdealDoesNotPenalise(): void

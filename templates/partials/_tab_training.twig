@@ -56,10 +56,17 @@
                             </p>
                             <div class="space-y-2">
                                 {% for t in trainings %}
+                                    {# Spa matches Psycho's motivation gain but costs $100k more, so on
+                                       the projected numbers alone it looks strictly worse. The energy
+                                       restore is the difference and isn't a modelled attribute — say so,
+                                       or the planner silently argues against ever picking it. #}
                                     <div class="flex items-center justify-between gap-3 rounded-md border border-slate-200 px-3 py-2">
                                         <div>
                                             <p class="text-sm font-medium text-slate-800">{{ t.name }}</p>
                                             <p class="t-caption">${{ t.cost|number_format }} / session</p>
+                                            {% if t.name == 'Spa' %}
+                                                <p class="t-caption">Also restores driver energy — not projected below</p>
+                                            {% endif %}
                                         </div>
                                         <input type="number"
                                                name="sessions[{{ t.name }}]"
