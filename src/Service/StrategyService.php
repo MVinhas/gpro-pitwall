@@ -165,25 +165,15 @@ class StrategyService
                 $lapsPerSet = 1;
             }
 
-            $stops = (int)ceil($laps / $lapsPerSet) - 1;
-            if ($stops < 0) {
-                $stops = 0;
+            // Tyre life sets the floor: fewer stops than this and the set is
+            // worn past target before the stint ends.
+            $minStopsForWear = (int)ceil($laps / $lapsPerSet) - 1;
+            if ($minStopsForWear < 0) {
+                $minStopsForWear = 0;
             }
 
 
             $relevantTotalFuel = ($comp === 'Rain') ? $totalFuelWet : $totalFuelDry;
-            $fuelPerStint = $relevantTotalFuel / ($stops + 1);
-            $maxFuel = 180.0;
-
-            $safety = 0;
-            while ($fuelPerStint > $maxFuel && $safety < $laps) {
-                $stops++;
-                $fuelPerStint = $relevantTotalFuel / ($stops + 1);
-                $safety++;
-            }
-
-            $lapsPerSetForced = floor($laps / ($stops + 1));
-
 
             $hasTd = false;
             if (isset($td['ownTD']) && $td['ownTD'] == 1) {
@@ -210,18 +200,13 @@ class StrategyService
             $fSStress = $hasTd ? ($pc['factor_staff_stress_td']) : ($pc['factor_staff_stress_no_td']);
             $baseTime = $pc['base_time'];
 
-            $pitTime = ($fuelPerStint * $fFuel)
-                     + $baseTime
+            $pitTimeFixed = $baseTime
                      + ($vStaffConc * $fSConc)
                      + ($vStaffStress * $fSStress)
                      + ($vTdExp * ($pc['factor_td_exp']))
                      + ($vTdPit * ($pc['factor_td_pit']));
 
-            $pitTime = max(15.0, $pitTime);
-
-
             $pitLaneLoss = (float)$trackDb['pit_time'];
-            $lostPits = $stops * ($pitTime + $pitLaneLoss);
 
             $fuel_per_lap_val = ($comp === 'Rain') ? $fplBaseWet : $fplBaseDry;
 
@@ -239,7 +224,8 @@ class StrategyService
                 + $ff['ele_lvl']
                 * $cEle;
 
-            $fuelCost = 0.005 * (
+            // Fuel-weight loss for a whole race run in ($stops + 1) stints.
+            $fuelCostFor = static fn (int $stops): float => 0.005 * (
                 ((float)$trackDb['distance'] * ($fuel_per_lap_val + $tables_h47))
                 * (float)$trackDb['distance'] / ($stops + 1)
             ) / 2;
@@ -276,19 +262,89 @@ class StrategyService
             $boostExtraTotal = ($boostLaps > 0 && $boostCoeff > 0 && $lapLen > 0)
                 ? $boostLaps * $lapLen * $boostCoeff
                 : 0.0;
-            $boostExtraPerStint = $boostExtraTotal / ($stops + 1);
-            $stintFuelInclusive = $fuelPerStint + $boostExtraPerStint;
+
+            // Search the stop counts the tyres allow and keep the cheapest.
+            // Pit losses climb with every stop while fuel-weight loss falls,
+            // so the total has an interior minimum: assuming fewer stops is
+            // always better silently overshoots it. The tank cap is a
+            // feasibility filter on the *recommended* load — the figure the
+            // manager actually fuels — not on the bare minimum, so boost fuel
+            // and the safety lap can force an extra stop on their own.
+            $maxFuel = 180.0;
+
+            /**
+             * @return array{stops: int, feasible: bool, total: float,
+             *     stint_fuel: float, recommended: float, pit_time: float,
+             *     lost_pits: float, fuel_cost: float}
+             */
+            $planFor = function (int $stops) use (
+                $relevantTotalFuel,
+                $boostExtraTotal,
+                $fuelPerLapAdj,
+                $fFuel,
+                $pitTimeFixed,
+                $pitLaneLoss,
+                $fuelCostFor,
+                $tcdVal,
+                $maxFuel
+            ): array {
+                $fuelPerStint = $relevantTotalFuel / ($stops + 1);
+                $stintFuel = $fuelPerStint + ($boostExtraTotal / ($stops + 1));
+                $recommended = ceil($stintFuel + $fuelPerLapAdj);
+                $pitTime = max(15.0, ($fuelPerStint * $fFuel) + $pitTimeFixed);
+                $lostPits = $stops * ($pitTime + $pitLaneLoss);
+                $fuelCost = $fuelCostFor($stops);
+
+                return [
+                    'stops' => $stops,
+                    'feasible' => $recommended <= $maxFuel,
+                    'total' => $lostPits + $fuelCost + $tcdVal,
+                    'stint_fuel' => $stintFuel,
+                    'recommended' => $recommended,
+                    'pit_time' => $pitTime,
+                    'lost_pits' => $lostPits,
+                    'fuel_cost' => $fuelCost,
+                ];
+            };
+
+            $best = $planFor($minStopsForWear);
+
+            for ($cand = $minStopsForWear + 1; $cand <= $laps; $cand++) {
+                $plan = $planFor($cand);
+                $hadFeasible = $best['feasible'];
+
+                // Prefer any feasible plan over an infeasible one; among plans
+                // of equal feasibility, the cheapest total wins.
+                if (
+                    ($plan['feasible'] && !$best['feasible'])
+                    || ($plan['feasible'] === $best['feasible'] && $plan['total'] < $best['total'])
+                ) {
+                    $best = $plan;
+                    continue;
+                }
+
+                // Once a feasible plan is in hand and adding a stop stopped
+                // paying off, further stops only cost more: pit losses grow
+                // linearly while the fuel saving shrinks as 1/(stops+1).
+                if ($plan['feasible'] && $hadFeasible) {
+                    break;
+                }
+            }
+
+            $stops = $best['stops'];
+            $lapsPerSetForced = floor($laps / ($stops + 1));
 
             $tyreResults[$comp] = [
                 'stops' => $stops,
                 'laps_set' => ($stops > 0 && $lapsPerSetForced < $lapsPerSet) ? $lapsPerSetForced : $lapsPerSet,
-                'fuel_load' => ceil($stintFuelInclusive),
-                'fuel_recommended' => ceil($stintFuelInclusive + $fuelPerLapAdj),
-                'pit_time_est' => round($pitTime, 2),
-                'lost_pits' => round($lostPits, 2),
-                'lost_fuel' => round($fuelCost, 2),
+                'fuel_load' => ceil($best['stint_fuel']),
+                'fuel_recommended' => $best['recommended'],
+                'fuel_over_capacity' => !$best['feasible'],
+                'pit_time_est' => round($best['pit_time'], 2),
+                'lost_pits' => round($best['lost_pits'], 2),
+                'lost_fuel' => round($best['fuel_cost'], 2),
                 'lost_tcd' => round($tcdVal, 2),
-                'total_lost' => round($lostPits + $fuelCost + $tcdVal, 2)
+                'total_lost' => round($best['lost_pits'] + $best['fuel_cost'] + $tcdVal, 2)
             ];
         }
 

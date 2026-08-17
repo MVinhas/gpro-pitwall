@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.13.8] - 2026-08-17
+
+### Fixed
+- Race strategy could recommend a fuel load the car cannot physically hold. The 180 L tank check was applied to the bare per-stint minimum, while the figure the manager actually fuels — recommended load, including the boost surcharge and the one-lap safety margin — was added afterwards and never re-checked. A wet Bremgarten asked for 183 L at 3 boost stints, and 179 L with no boost at all. Feasibility is now tested against the recommended load, so boost fuel or the safety lap can force an extra stop on their own.
+- The stop count was taken from tyre wear alone and never priced against the alternatives, so the planner behaved as though fewer stops were always better. Pit losses rise with each stop while fuel-weight loss falls as `1/(stops+1)`, so the total has an interior minimum the old code could overshoot: the same wet Bremgarten lost 133.32s over a no-stop race when a single stop cost 109.02s. Every stop count the tyres allow is now costed (pits + fuel weight + compound difference) and the cheapest feasible plan wins. Dry compounds share the code path and are fixed with it.
+
 ## [1.13.7] - 2026-08-17
 
 ### Fixed

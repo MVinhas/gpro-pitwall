@@ -36,7 +36,7 @@
             <div class="bg-emerald-50 px-4 py-3 sm:px-6 flex flex-wrap items-baseline gap-x-3 gap-y-1">
                 <span class="inline-flex items-center rounded-md bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-on-accent">★ Best</span>
                 <span class="text-lg font-bold text-emerald-900">{{ strategy_results.best_compound }}</span>
-                <span class="text-sm font-semibold text-emerald-900 tabular-nums">{{ best.stops }} stops · {{ best.fuel_recommended }} L/stint · {{ best.total_lost }}s lost</span>
+                <span class="text-sm font-semibold text-emerald-900 tabular-nums">{{ best.stops }} stop{{ best.stops == 1 ? '' : 's' }} · {{ best.fuel_recommended }} L/stint · {{ best.total_lost }}s lost</span>
                 {% if runner_name is not null %}
                     <span class="text-xs text-emerald-700 tabular-nums">beats {{ runner_name }} by {{ (strategy_results.tyres[runner_name].total_lost - best.total_lost)|round(1) }}s</span>
                 {% endif %}
