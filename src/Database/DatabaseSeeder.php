@@ -16,7 +16,7 @@ class DatabaseSeeder
      * calls migrate() on every request; this version lets a warm database skip
      * the entire DDL + scan + legacy-encryption pass.
      */
-    private const int SCHEMA_VERSION = 8;
+    private const int SCHEMA_VERSION = 9;
 
     /**
      * @param array<string, string> $statsSchema
@@ -666,10 +666,15 @@ class DatabaseSeeder
 
     private function seedGameConstants(): void
     {
+        // Upsert, not INSERT OR IGNORE: GPRO re-tunes these between seasons
+        // (tyre supplier durability especially), and a warm database would
+        // otherwise keep the first value it ever saw — the constants here are
+        // a snapshot to correct, never user data to preserve.
         $stmt = $this->db->prepare(
-            "INSERT OR IGNORE INTO game_constants
+            "INSERT INTO game_constants
              (category, name, value)
-             VALUES (:cat, :name, :val)"
+             VALUES (:cat, :name, :val)
+             ON CONFLICT(category, name) DO UPDATE SET value = excluded.value"
         );
 
         $compounds = $this->secrets['tyre_calc']['tyre_risk_factors'] ?? [];
