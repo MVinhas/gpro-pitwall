@@ -236,6 +236,7 @@
                                                         {% for attr, g in t.gains %}
                                                             <span>{{ g > 0 ? '+' : '' }}{{ g }} {{ attr|replace({'_': ' '}) }}</span>{% if not loop.last %} · {% endif %}
                                                         {% endfor %}
+                                                        {% if t.name == 'Spa' %}<span> · +energy</span>{% endif %}
                                                     </div>
                                                 </div>
                                                 <span class="text-sm font-bold {{ t.score > 0 ? 'text-emerald-700' : 'text-slate-400' }}">{{ t.score > 0 ? '+' : '' }}{{ t.score }}</span>

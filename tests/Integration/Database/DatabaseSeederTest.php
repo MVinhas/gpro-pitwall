@@ -13,13 +13,14 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(DatabaseSeeder::class)]
 final class DatabaseSeederTest extends TestCase
 {
-    private function makeSeeder(PDO $db): DatabaseSeeder
+    /** @param array<string, mixed> $secrets */
+    private function makeSeeder(PDO $db, array $secrets = []): DatabaseSeeder
     {
         return new DatabaseSeeder(
             $db,
             ['Concentration' => 'concentration', 'Talent' => 'talent'],
             ['Rookie', 'Amateur'],
-            [],
+            $secrets,
             new ApiTokenCrypto('seeder-test-secret'),
         );
     }
@@ -95,6 +96,52 @@ final class DatabaseSeederTest extends TestCase
         $seeder->migrate();
 
         $this->assertSame(0, $seeder->seedTracksFromCsv('/nonexistent/tracks.csv'));
+    }
+
+    /**
+     * GPRO repriced Fitness (700k → 750k) and added a seventh session. An
+     * existing prod DB already holds the old rows, so INSERT OR IGNORE alone
+     * leaves them stale forever — the reprice has to be an explicit update.
+     */
+    public function testSeedTrainingsRepricesExistingRows(): void
+    {
+        $db = new PDO('sqlite::memory:');
+        $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+        $old = ['trainings_seed' => [['Fitness', 700000, 0, 0, 0, 0, 0, 2, 0, -7.4, -1]]];
+        $this->makeSeeder($db, $old)->migrate();
+
+        $this->assertSame(700000, (int) $db->query("SELECT cost FROM trainings WHERE name = 'Fitness'")
+            ->fetchColumn());
+
+        // New release ships the corrected price; a bumped schema version reruns
+        // the seed against the existing row.
+        $new = ['trainings_seed' => [['Fitness', 750000, 0, 0, 0, 0, 0, 2, 0, -7.4, -1]]];
+        $db->exec('PRAGMA user_version = 0');
+        $this->makeSeeder($db, $new)->migrate();
+
+        $this->assertSame(750000, (int) $db->query("SELECT cost FROM trainings WHERE name = 'Fitness'")
+            ->fetchColumn(), 'a repriced session must overwrite the stale cost on an existing DB');
+    }
+
+    /**
+     * The reprice must not clobber the attribute gains, which are the
+     * spreadsheet-verified half of the row.
+     */
+    public function testSeedTrainingsPreservesGainsWhenRepricing(): void
+    {
+        $db = new PDO('sqlite::memory:');
+        $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+        $seed = ['trainings_seed' => [['Yoga', 700000, 5, 0, -2, 0, 0, -2, 0, 7.2, 0]]];
+        $this->makeSeeder($db, $seed)->migrate();
+        $db->exec('PRAGMA user_version = 0');
+        $this->makeSeeder($db, $seed)->migrate();
+
+        $row = $db->query("SELECT * FROM trainings WHERE name = 'Yoga'")->fetch(PDO::FETCH_ASSOC);
+        $this->assertSame(5.0, (float) $row['gain_concentration']);
+        $this->assertSame(7.2, (float) $row['gain_motivation']);
+        $this->assertSame(-2.0, (float) $row['gain_stamina']);
     }
 
     public function testMigrateRerunsWhenVersionIsBehind(): void

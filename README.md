@@ -69,7 +69,7 @@ Everything for a testing session: the testing track's demands vs your car, the p
 
 ### Training Planner
 
-Combine several training programs in one shot and see the cumulative effect of every program × count combination, with attribute bounds respected and projected Overall Ability before/after — useful context for contract renegotiation.
+Combine several training programs in one shot and see the cumulative effect of every program × count combination, with attribute bounds respected and projected Overall Ability before/after — useful context for contract renegotiation. All seven GPRO sessions are covered (Fitness, Yoga, PR, Technical, Psycho, Ninja, Spa) at current in-game prices; Spa also restores driver energy, which isn't a modelled attribute and so is flagged rather than projected.
 
 ### Recruitment Analyzer
 
@@ -182,7 +182,7 @@ Source of truth is GitHub; deployment is a manual file copy to any PHP 8.5 host.
 - **Twig 3** templates; **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile). Light and dark themes ship in one stylesheet: every design token is a CSS `light-dark()` pair switched by `color-scheme`, so System mode tracks the OS with zero JavaScript.
 - **SQLite** via PDO — emails and API tokens encrypted at rest (AES-256-GCM).
 - **PHPMailer 7** for SMTP; dev writes `.eml` files instead.
-- **PHPUnit 13** — 390 tests, 1005 assertions — with **PHPStan level 8** and enforced type-declaration coverage (100% return/property/constant + `strict_types`; 99.5% param). Twig linted by a native `bin/twig_lint.php` built on Twig's own parser. CI measures statement coverage with `pcov` and enforces a floor (currently 45%, ratcheted up as coverage grows).
+- **PHPUnit 13** — 394 tests, 1017 assertions — with **PHPStan level 8** and enforced type-declaration coverage (100% return/property/constant + `strict_types`; 99.5% param). Twig linted by a native `bin/twig_lint.php` built on Twig's own parser. CI measures statement coverage with `pcov` and enforces a floor (currently 45%, ratcheted up as coverage grows).
 - **Timestamps stored and served as UTC**, localised per visitor in the browser — no server-side timezone config.
 
 ## Architecture
