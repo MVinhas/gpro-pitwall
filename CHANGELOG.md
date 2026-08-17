@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.13.7] - 2026-08-17
+
+### Fixed
+- Tyre supplier durability fallback had drifted from the live game on 4 of 9 suppliers (Pipirelli, Yokomama, Contimental, Michelini), refreshed from the `TyreSuppliers` feed. This map is only read when the feed is unavailable — the feed remains the source of truth for every supplier characteristic — but durability drives the tyre wear exponent, so a stale value skewed strategy whenever the fallback was in play.
+- Game constants were seeded with `INSERT OR IGNORE`, so a database that had already been seeded could never pick up a corrected value — GPRO re-tunes these between seasons. Seeding now upserts, and the schema version bump makes warm databases re-run it. Same class of bug as the training reprice in 1.13.6, in a second place.
+
 ## [1.13.6] - 2026-08-17
 
 ### Fixed

@@ -144,6 +144,33 @@ final class DatabaseSeederTest extends TestCase
         $this->assertSame(-2.0, (float) $row['gain_stamina']);
     }
 
+    /**
+     * Same class of bug as the training reprice: GPRO re-tunes tyre supplier
+     * durability between seasons, and INSERT OR IGNORE would pin an existing
+     * database to whatever value it first saw. These drive the wear exponent,
+     * so a stale value silently skews every strategy the fallback touches.
+     */
+    public function testSeedGameConstantsRefreshesChangedValues(): void
+    {
+        $db = new PDO('sqlite::memory:');
+        $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+        $old = ['tyre_suppliers_durabilities' => ['Yokomama' => 2]];
+        $this->makeSeeder($db, $old)->migrate();
+
+        $read = static fn(PDO $d): int => (int) $d->query(
+            "SELECT value FROM game_constants WHERE category = 'tyre_brand' AND name = 'Yokomama'"
+        )->fetchColumn();
+
+        $this->assertSame(2, $read($db));
+
+        $new = ['tyre_suppliers_durabilities' => ['Yokomama' => 7]];
+        $db->exec('PRAGMA user_version = 0');
+        $this->makeSeeder($db, $new)->migrate();
+
+        $this->assertSame(7, $read($db), 're-tuned durability must overwrite the stale constant');
+    }
+
     public function testMigrateRerunsWhenVersionIsBehind(): void
     {
         $db = new PDO('sqlite::memory:');
