@@ -16,7 +16,7 @@ class DatabaseSeeder
      * calls migrate() on every request; this version lets a warm database skip
      * the entire DDL + scan + legacy-encryption pass.
      */
-    private const int SCHEMA_VERSION = 9;
+    private const int SCHEMA_VERSION = 10;
 
     /**
      * @param array<string, string> $statsSchema
@@ -57,6 +57,7 @@ class DatabaseSeeder
         $this->createTrainingsTable();
         $this->createCarPartCoefficientsTable();
         $this->createGameConstantsTable();
+        $this->createRaceTelemetryTable();
         $this->dropDeprecatedTables();
 
 
@@ -321,6 +322,157 @@ class DatabaseSeeder
             )
         ";
         $this->db->exec($sql);
+    }
+
+
+    /**
+     * Anonymous race-telemetry corpus. One row per observed race.
+     *
+     * DELIBERATELY has no user_id, no username, and no user-derived hash: the
+     * dataset must not permit tracing a row back to the account that produced
+     * it, so there is nothing here to correlate against. De-duplication rides
+     * on the race's own natural key (season/race/track/group/driver/result)
+     * instead of a per-user submission token, which would be a pseudonym.
+     *
+     * Everything stored is sourced from the RaceAnalysis payload the app
+     * already fetches, plus the TD profile already warmed by the sync.
+     */
+    private function createRaceTelemetryTable(): void
+    {
+        $sql = "
+            CREATE TABLE IF NOT EXISTS race_telemetry (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+                -- Race identity (no user identity).
+                season INTEGER NOT NULL,
+                race INTEGER NOT NULL,
+                level TEXT NOT NULL,
+                group_label TEXT,
+                track_id INTEGER,
+                track_name TEXT,
+
+                -- Result.
+                final_pos INTEGER,
+                start_pos INTEGER,
+                points INTEGER,
+                q1_pos INTEGER,
+                q2_pos INTEGER,
+                q1_time_ms INTEGER,
+                q2_time_ms INTEGER,
+                positions_gained INTEGER,
+                dnf INTEGER NOT NULL DEFAULT 0,
+                laps_completed INTEGER,
+
+                -- Driver attributes at race time.
+                driver_id INTEGER,
+                driver_oa INTEGER,
+                driver_con INTEGER,
+                driver_tal INTEGER,
+                driver_agg INTEGER,
+                driver_exp INTEGER,
+                driver_tei INTEGER,
+                driver_sta INTEGER,
+                driver_cha INTEGER,
+                driver_mot INTEGER,
+                driver_rep INTEGER,
+                driver_wei INTEGER,
+
+                -- Risks.
+                q1_risk TEXT,
+                q2_risk TEXT,
+                start_risk TEXT,
+                overtake_risk INTEGER,
+                defend_risk INTEGER,
+                clear_dry_risk INTEGER,
+                clear_wet_risk INTEGER,
+                problem_risk INTEGER,
+
+                -- Mistakes / racecraft.
+                mistake_seconds REAL,
+                ot_attempts INTEGER,
+                overtakes INTEGER,
+                ot_attempts_on_you INTEGER,
+                overtakes_on_you INTEGER,
+
+                -- Technical director (0/1 + attributes when present).
+                has_td INTEGER NOT NULL DEFAULT 0,
+                td_overall INTEGER,
+                td_leadership INTEGER,
+                td_mechanics INTEGER,
+                td_electronics INTEGER,
+                td_aerodynamics INTEGER,
+                td_pit_coord INTEGER,
+                td_experience INTEGER,
+                td_motivation INTEGER,
+
+                -- Tyres.
+                race_tyre TEXT,
+                tyre_supplier TEXT,
+                tyre_peak_temp INTEGER,
+                tyre_dry_perf INTEGER,
+                tyre_wet_perf INTEGER,
+                tyre_durability INTEGER,
+                tyre_warmup INTEGER,
+
+                -- Weather.
+                was_wet INTEGER NOT NULL DEFAULT 0,
+                wet_lap_share REAL,
+                avg_temp REAL,
+                avg_humidity REAL,
+                q1_weather TEXT,
+                q2_weather TEXT,
+
+                -- Strategy.
+                pit_stops INTEGER,
+                start_fuel INTEGER,
+                finish_fuel INTEGER,
+                finish_tyres INTEGER,
+                avg_pit_time REAL,
+                boost_laps INTEGER,
+
+                -- Car.
+                car_power INTEGER,
+                car_handling INTEGER,
+                car_accel INTEGER,
+                avg_part_level REAL,
+                total_wear_gain INTEGER,
+                problems_count INTEGER,
+
+                -- Setup actually raced.
+                setup_fwing INTEGER,
+                setup_rwing INTEGER,
+                setup_engine INTEGER,
+                setup_brakes INTEGER,
+                setup_gear INTEGER,
+                setup_susp INTEGER,
+
+                -- Energy.
+                race_energy_from INTEGER,
+                race_energy_to INTEGER,
+
+                collected_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        ";
+        $this->db->exec($sql);
+
+        // Natural-key uniqueness: the race's own facts, never a user token.
+        $this->db->exec(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_race_telemetry_natural
+             ON race_telemetry (
+                season, race, track_id, group_label,
+                driver_id, final_pos, q1_time_ms, q2_time_ms
+             )"
+        );
+
+        // The analytics screen always segments by level first.
+        $this->db->exec(
+            "CREATE INDEX IF NOT EXISTS idx_race_telemetry_level
+             ON race_telemetry (level)"
+        );
+        $this->db->exec(
+            "CREATE INDEX IF NOT EXISTS idx_race_telemetry_level_wet
+             ON race_telemetry (level, was_wet)"
+        );
     }
 
     private function createVerificationTokensTable(): void

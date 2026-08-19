@@ -171,6 +171,36 @@ final class GproApiClient
         }
     }
 
+    /**
+     * Most recent race analysis for the authenticated manager. Called with no
+     * SR query parameter so GPRO returns the latest available race — the spec
+     * warns that omitting it can be slow for long-tenured supporters, but the
+     * alternative (walking racesToSelect) costs one call per race.
+     *
+     * Keyed to the race window so a new weekend rolls the entry; a manager who
+     * never races again simply keeps serving the same cached payload, and the
+     * telemetry ingest de-duplicates it away.
+     *
+     * @return array<string, mixed>
+     */
+    public function getRaceAnalysis(bool $forceRefresh = false): array
+    {
+        try {
+            return $this->getCached(
+                'race_analysis',
+                '/gb/backend/api/v2/RaceAnalysis',
+                $this->ttlShort(),
+                $forceRefresh,
+                epoch: $this->raceWindow(),
+            );
+        } catch (\Throwable) {
+            // A manager who is not a supporter, or has not raced, gets an
+            // error or an NA payload here. Telemetry is strictly best-effort:
+            // never let it break a sync.
+            return [];
+        }
+    }
+
     /** @return array<string, mixed> */
     public function getTyreSuppliers(bool $forceRefresh = false): array
     {
