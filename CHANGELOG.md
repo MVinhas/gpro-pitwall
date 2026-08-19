@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.13.9] - 2026-08-19
+
+### Fixed
+- Training Planner showed stale driver attributes after training in GPRO. The tab cached the mapped driver in the PHP session on first visit and only re-fetched when that key was empty, so a stat trained in-game (e.g. motivation +18) kept rendering its pre-training value no matter how many times the manager re-synced — and because the stale copy lived in the session rather than the API cache, clearing APCu could not shift it either. The driver is now read from the API client on every render, like every other tab, so a re-sync updates the form and already-affected sessions heal without logging out.
+
 ## [1.13.8] - 2026-08-17
 
 ### Fixed

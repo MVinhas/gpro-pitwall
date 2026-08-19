@@ -154,4 +154,22 @@ final class PageControllerTest extends TestCase
         $this->assertSame('Nonsense', PageController::canonicalMainTab('Nonsense'));
         $this->assertSame('', PageController::canonicalMainTab(''));
     }
+
+    /**
+     * Regression: the Training Planner used to cache the mapped driver in
+     * $_SESSION['imported_driver'] and only fetch when that key was empty, so
+     * training a stat in GPRO then re-syncing still rendered the pre-training
+     * value — the session copy outlived every cache flush. The driver must be
+     * read from the API client on each render, never pinned in the session.
+     */
+    public function testTrainingPlannerDoesNotPinTheDriverInTheSession(): void
+    {
+        $source = file_get_contents(
+            dirname(__DIR__, 3) . '/src/Controller/PageController.php',
+        );
+
+        self::assertIsString($source);
+        $sessionPin = '$_SESSION[' . chr(39) . 'imported_driver' . chr(39) . ']';
+        self::assertStringNotContainsString($sessionPin, $source);
+    }
 }
