@@ -421,19 +421,18 @@ class PageController
                 $viewData['trainings'] = $this->trainingService->getAllTrainings();
 
                 // Pre-fill the driver from the API so the user doesn't have to
-                // "Import Driver" on first visit. Cached as session state for
-                // subsequent renders.
-                $imported = $_SESSION['imported_driver'] ?? null;
-                if (!$imported) {
-                    try {
-                        $this->apiClient->setToken($user['api_token']);
-                        $pilotRaw = $this->apiClient->getMyPilotDetails();
-                        $imported = $this->mapper->mapDriver($pilotRaw);
-                        $_SESSION['imported_driver'] = $imported;
-                    } catch (\Throwable $e) {
-                        // Show the form unpopulated; the explicit Import button
-                        // is still there as a fallback.
-                    }
+                // enter the 9 attributes by hand. Read live on every render
+                // (the API client's own cache absorbs the cost): pinning this
+                // into the session made a re-sync unable to refresh the form,
+                // so a trained attribute kept showing its pre-training value.
+                $imported = null;
+                try {
+                    $this->apiClient->setToken($user['api_token']);
+                    $imported = $this->mapper->mapDriver(
+                        $this->apiClient->getMyPilotDetails(),
+                    );
+                } catch (\Throwable $e) {
+                    // Show the form unpopulated; the fields stay editable.
                 }
                 $viewData['imported_driver'] = $imported;
 
