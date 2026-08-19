@@ -219,10 +219,19 @@ $container['service.api_client'] = new GproApiClient(
     $container['service.api_fetcher'],
     $container['service.cache']
 );
+$container['repo.race_telemetry'] = new \App\Repository\RaceTelemetryRepository($container['db']);
+$container['service.race_telemetry'] = new \App\Service\RaceTelemetryService(
+    $container['repo.race_telemetry'],
+    new \App\Telemetry\RaceTelemetryMapper(),
+);
+$container['service.race_intelligence'] = new \App\Service\RaceIntelligenceService(
+    $container['repo.race_telemetry'],
+);
 $container['service.gpro_sync'] = new GproSyncService(
     $container['service.api_client'],
     $container['service.user_repo'],
     $container['service.cache'],
+    $container['service.race_telemetry'],
     Env::int('SYNC_SAFETY_MARGIN', 20),
 );
 $container['service.auth_service']  = new \App\Service\AuthService(
@@ -445,6 +454,12 @@ $container['service.admin_users'] = new \App\Service\AdminUserService(
 
 $container['controller.admin_users'] = new \App\Controller\AdminUserController(
     $container['service.admin_users'],
+    $container['service.authorize'],
+    $container['twig'],
+);
+
+$container['controller.admin_telemetry'] = new \App\Controller\AdminTelemetryController(
+    $container['service.race_intelligence'],
     $container['service.authorize'],
     $container['twig'],
 );

@@ -82,6 +82,7 @@ Scores the full GPRO driver market (4–5k drivers) against your division's idea
 - **Division baseline / differences** — per-division ideal-pilot tables with OA caps (Rookie 85 / Amateur 110 / Pro 135 / Master 160 / Elite ∞), plus pairwise division insights.
 - **User management** — paginated, sortable user list with growth trends over a selectable 7/30/90-day window; admin-flag toggle with self-demotion guard, soft-delete/restore, and every mutation in an append-only audit log.
 - **Account support tools** — rename a user whose username predates the current whitelist, plus a per-user email delivery check. Login matches the username byte-for-byte and case-sensitively, so an account created with an accent or a space becomes unreachable to anyone who misremembers its exact spelling — renaming to a conforming name is the supported repair. Both actions confirm first and are audited.
+- **Race Intelligence** (`/admin/telemetry`) — a collective, **anonymous** race corpus built from the `RaceAnalysis` data managers already sync, with no extra per-page API cost. Segmented by GPRO level (Rookie → Elite) throughout: driver-attribute correlations against finishing position, the podium "driver prototype" against the rest of the field, tyre performance split by wet/dry, Technical Director with/without comparison, qualifying and race risk settings, pit strategy, and driver-mistake impact. Slices thinner than a minimum sample are withheld rather than shown as findings. Rows carry **no user identifier of any kind** — see *Security posture*.
 - **Telemetry** (`/debug`) — registered vs active users (successful sync in the last 30 days), tokens set, API budget, runtime info, masked environment.
 
 ### Accounts
@@ -184,7 +185,7 @@ Source of truth is GitHub; deployment is a manual file copy to any PHP 8.5 host.
 - **Twig 3** templates; **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile). Light and dark themes ship in one stylesheet: every design token is a CSS `light-dark()` pair switched by `color-scheme`, so System mode tracks the OS with zero JavaScript.
 - **SQLite** via PDO — emails and API tokens encrypted at rest (AES-256-GCM).
 - **PHPMailer 7** for SMTP; dev writes `.eml` files instead.
-- **PHPUnit 13** — 400 tests, 1071 assertions — with **PHPStan level 8** and enforced type-declaration coverage (100% return/property/constant + `strict_types`; 99.5% param). Twig linted by a native `bin/twig_lint.php` built on Twig's own parser. CI measures statement coverage with `pcov` and enforces a floor (currently 45%, ratcheted up as coverage grows).
+- **PHPUnit 13** — 440 tests, 1338 assertions — with **PHPStan level 8** and enforced type-declaration coverage (100% return/property/constant + `strict_types`; 99.5% param). Twig linted by a native `bin/twig_lint.php` built on Twig's own parser. CI measures statement coverage with `pcov` and enforces a floor (currently 45%, ratcheted up as coverage grows).
 - **Timestamps stored and served as UTC**, localised per visitor in the browser — no server-side timezone config.
 
 ## Architecture
@@ -210,6 +211,7 @@ Reviewed against the OWASP Top 10:2025.
 - Security headers in `public/.htaccess`: Content-Security-Policy, HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy — proxy-aware via `X-Forwarded-Proto`.
 - Session cookies HttpOnly + Secure + SameSite=Lax. "Remember me" tokens store only a hashed validator, rotate on every use for theft detection, and are revocable. Dynamic responses send `Cache-Control: no-store`, so authenticated pages aren't retained in the browser cache after logout on a shared machine.
 - Login and registration are reCAPTCHA-gated and rate-limited per IP; verification codes carry a TTL, an attempt cap, and a per-account hourly email cap, so blind username-guessing can't spam real users. Sensitive actions require step-up re-authentication.
+- Race telemetry is **anonymous at the data model**: the `race_telemetry` table carries no user id, username, or account-derived key, and de-duplicates on the race's own natural key rather than a per-user token — so an admin (or anyone with the DB file and `APP_SECRET`) cannot attribute a row to the manager who produced it. The admin intelligence screen reads only whole-dataset aggregates.
 - One centralised authorisation gate (`requireAuth` / `requireAdmin` / `requireFreshAuth`) — every mutating, admin and debug route is gated server-side, not just hidden in templates.
 - The contact form is authenticated-only with a whitelisted subject list (no user text ever reaches an email header) and a security-logged per-user rate limit — layered controls that make a CAPTCHA unnecessary there.
 - Structured `[security]` event logging for failed logins, rate-limit hits and token-theft detection; admin mutations recorded in an append-only `audit_log`.

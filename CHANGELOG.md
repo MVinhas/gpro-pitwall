@@ -6,6 +6,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.14.0] - 2026-08-19
+
+### Added
+- **Race Intelligence (admin-only)** — a central, anonymous corpus of race data that turns the collective player base into an answer to "what actually wins at this level?". Each sync contributes its most recent race from the GPRO `RaceAnalysis` endpoint, and the admin screen at `/admin/telemetry` reports, always segmented by GPRO level (Rookie → Elite): driver-attribute correlations against finishing position, the podium driver prototype against the rest of the field, tyre performance split by wet/dry, Technical Director with/without comparison, Q1/Q2/overtake/defend/clear-track risk settings, pit strategy, and driver-mistake impact. Slices below a minimum sample size are withheld instead of being presented as findings, and a correlation under 0.2 reports as "none" rather than being dressed up as a signal.
+- Telemetry captures the full race picture from data the app already retrieves — no new per-page API calls: result and grid position, points, qualifying positions and lap times, all eleven driver attributes, every risk setting, practice mistake seconds, tyre compound and supplier characteristics, weather taken from the laps actually run (not the forecast), pit stops and fuel, car part levels and wear, the setup actually raced, and Technical Director attributes (reused from the already-cached TD profile).
+
+### Security
+- The telemetry corpus is **anonymous at the data-model level, not by UI filtering**: `race_telemetry` stores no `user_id`, username, email, account id, or account-derived hash, and de-duplicates races on the race's own natural key rather than a per-user submission token — a keyed hash of the user would have been a pseudonym that anyone holding `APP_SECRET` could re-identify. There is deliberately no query path from a stored race back to the manager who produced it. Regression tests assert the absence of any user-identifying column and that the rendered report exposes none.
+- The new screen and route are gated by the existing `requireAdmin` authorisation gate; verified at runtime that anonymous requests redirect to login and authenticated non-admin requests receive a 403 with no content leak.
+
+### Fixed
+- Aggregation queries silently returned zero rows: PDO bound the `HAVING COUNT(*) >= :min` threshold as a string, and SQLite will not compare an integer against a string bound parameter. Thresholds are now bound explicitly as `PARAM_INT`.
+
 ## [1.13.9] - 2026-08-19
 
 ### Fixed

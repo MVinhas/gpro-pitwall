@@ -118,7 +118,15 @@ final class AuthServiceTest extends TestCase
             new \App\Service\GproApiFetcher(['base_url' => 'http://127.0.0.1:9']),
             $cache,
         );
-        $sync = new GproSyncService($apiClient, $userRepo, $cache);
+        $sync = new GproSyncService(
+            $apiClient,
+            $userRepo,
+            $cache,
+            new \App\Service\RaceTelemetryService(
+                new \App\Repository\RaceTelemetryRepository($this->db),
+                new \App\Telemetry\RaceTelemetryMapper(),
+            ),
+        );
 
         $persistentRepo = new \App\Repository\PersistentTokenRepository($this->db);
         $persistentLogin = new \App\Service\PersistentLoginService(
@@ -456,7 +464,15 @@ final class AuthServiceTest extends TestCase
             new \App\Service\GproApiFetcher(['base_url' => 'http://127.0.0.1:9']),
             $cache,
         );
-        $sync = new GproSyncService($apiClient, $userRepo, $cache);
+        $sync = new GproSyncService(
+            $apiClient,
+            $userRepo,
+            $cache,
+            new \App\Service\RaceTelemetryService(
+                new \App\Repository\RaceTelemetryRepository($this->db),
+                new \App\Telemetry\RaceTelemetryMapper(),
+            ),
+        );
         $persistentLogin = new \App\Service\PersistentLoginService(
             new \App\Repository\PersistentTokenRepository($this->db),
             new \App\Tests\Support\ArrayCookieJar(),

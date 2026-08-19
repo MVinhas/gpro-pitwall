@@ -1,0 +1,410 @@
+{% extends "layout.twig" %}
+{% import _self as ui %}
+
+{# Sample-size chip. Every table in this page is an aggregate, so the reader
+   must always see how many races a number rests on before trusting it. #}
+{% macro n(count) %}
+    <span class="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+        n={{ count }}
+    </span>
+{% endmacro %}
+
+{# Correlation strength. Colour is paired with the word and the number so the
+   reading never depends on hue alone. #}
+{% macro strength(row) %}
+    {% set cls = row.strength == 'strong'
+        ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/20'
+        : (row.strength == 'moderate'
+            ? 'bg-blue-50 text-blue-700 ring-blue-600/20'
+            : (row.strength == 'weak'
+                ? 'bg-amber-50 text-amber-700 ring-amber-600/20'
+                : 'bg-slate-100 text-slate-500 ring-slate-400/20')) %}
+    <span class="inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset {{ cls }}">
+        {{ row.advantage > 0 ? '+' : '' }}{{ row.advantage }}
+        <span class="ml-1 hidden sm:inline">· {{ row.strength }}</span>
+    </span>
+{% endmacro %}
+
+{% block title %}Race Intelligence — GPRO Pitwall{% endblock %}
+{% block robots %}<meta name="robots" content="noindex,nofollow">{% endblock %}
+{% block canonical_path %}/admin/telemetry{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 py-6 space-y-6">
+
+    <div>
+        <h1 class="t-display">Race Intelligence</h1>
+        <p class="t-caption mt-1">
+            {{ total }} race{{ total == 1 ? '' : 's' }} in the anonymous corpus
+        </p>
+    </div>
+
+    <div class="notice notice-info">
+        <p>
+            <strong>Anonymous by construction.</strong>
+            Rows carry race facts only — no user id, username, or account-derived
+            key is stored, so no record here can be traced back to the manager who
+            produced it.
+        </p>
+    </div>
+
+    {% if not has_data %}
+        <div class="notice notice-warn">
+            <p>
+                <strong>No races collected yet.</strong>
+                The corpus fills as managers sync — each sync contributes its most
+                recent race, de-duplicated against what is already stored.
+            </p>
+        </div>
+    {% else %}
+
+    {# ========== COVERAGE ========== #}
+    <section class="card">
+        <div class="card-hd">
+            <h2 class="t-heading">Coverage by level</h2>
+        </div>
+        <div class="card-bd overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-board text-white">
+                    <tr>
+                        <th class="px-3 py-2 text-left">Level</th>
+                        <th class="px-3 py-2 text-right">Races</th>
+                        <th class="px-3 py-2 text-right hidden sm:table-cell">Drivers</th>
+                        <th class="px-3 py-2 text-right hidden md:table-cell">Tracks</th>
+                        <th class="px-3 py-2 text-right">Avg pos</th>
+                        <th class="px-3 py-2 text-right hidden sm:table-cell">Avg pts</th>
+                        <th class="px-3 py-2 text-right hidden md:table-cell">Wet</th>
+                        <th class="px-3 py-2 text-right hidden md:table-cell">DNF</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200">
+                    {% for row in levels %}
+                        <tr>
+                            <td class="px-3 py-2 font-medium">{{ row.level }}</td>
+                            <td class="px-3 py-2 text-right">{{ row.races }}</td>
+                            <td class="px-3 py-2 text-right hidden sm:table-cell">{{ row.drivers }}</td>
+                            <td class="px-3 py-2 text-right hidden md:table-cell">{{ row.tracks }}</td>
+                            <td class="px-3 py-2 text-right">{{ row.avg_pos ?? '—' }}</td>
+                            <td class="px-3 py-2 text-right hidden sm:table-cell">{{ row.avg_points ?? '—' }}</td>
+                            <td class="px-3 py-2 text-right hidden md:table-cell">{{ row.wet_races }}</td>
+                            <td class="px-3 py-2 text-right hidden md:table-cell">{{ row.dnfs }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    {# ========== DRIVER ATTRIBUTES ========== #}
+    <section class="card">
+        <div class="card-hd">
+            <h2 class="t-heading">Driver attribute → finishing position</h2>
+            <p class="t-caption mt-1">
+                Positive means more of the attribute goes with a better finish.
+                Shown once a level has {{ min_corr }}+ races.
+            </p>
+        </div>
+        <div class="card-bd space-y-5">
+            {% for level, rows in attributes %}
+                <div>
+                    <h3 class="t-section mb-2">{{ level }}</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead class="bg-board text-white">
+                                <tr>
+                                    <th class="px-3 py-2 text-left">Attribute</th>
+                                    <th class="px-3 py-2 text-right hidden md:table-cell">Mean</th>
+                                    <th class="px-3 py-2 text-right hidden sm:table-cell">Races</th>
+                                    <th class="px-3 py-2 text-right">Advantage</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-200">
+                                {% for row in rows %}
+                                    <tr>
+                                        <td class="px-3 py-2 font-medium">{{ row.label }}</td>
+                                        <td class="px-3 py-2 text-right hidden md:table-cell">{{ row.avg_attr }}</td>
+                                        <td class="px-3 py-2 text-right hidden sm:table-cell">{{ row.n }}</td>
+                                        <td class="px-3 py-2 text-right">{{ ui.strength(row) }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            {% else %}
+                <p class="t-caption">Not enough races yet to compute correlations.</p>
+            {% endfor %}
+        </div>
+    </section>
+
+    {# ========== DRIVER PROTOTYPE ========== #}
+    <section class="card">
+        <div class="card-hd">
+            <h2 class="t-heading">Podium driver prototype</h2>
+            <p class="t-caption mt-1">
+                Mean attributes of top-3 finishes against everything else.
+            </p>
+        </div>
+        <div class="card-bd space-y-5">
+            {% for block in prototype %}
+                <div>
+                    <h3 class="t-section mb-2">
+                        {{ block.level }}
+                        {{ ui.n(block.podium_n) }}
+                    </h3>
+                    {% if block.comparable %}
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead class="bg-board text-white">
+                                    <tr>
+                                        <th class="px-3 py-2 text-left">Attribute</th>
+                                        <th class="px-3 py-2 text-right">Podium</th>
+                                        <th class="px-3 py-2 text-right hidden sm:table-cell">Rest</th>
+                                        <th class="px-3 py-2 text-right">Gap</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-200">
+                                    {% for attr in block.attributes %}
+                                        <tr>
+                                            <td class="px-3 py-2 font-medium">{{ attr.label }}</td>
+                                            <td class="px-3 py-2 text-right">{{ attr.podium }}</td>
+                                            <td class="px-3 py-2 text-right hidden sm:table-cell">{{ attr.rest ?? '—' }}</td>
+                                            <td class="px-3 py-2 text-right font-medium">
+                                                {{ attr.gap > 0 ? '+' : '' }}{{ attr.gap ?? '—' }}
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <p class="t-caption">No non-podium races at this level to compare against yet.</p>
+                    {% endif %}
+                </div>
+            {% else %}
+                <p class="t-caption">Not enough races yet.</p>
+            {% endfor %}
+        </div>
+    </section>
+
+    {# ========== TYRES ========== #}
+    <section class="card">
+        <div class="card-hd">
+            <h2 class="t-heading">Tyre performance by level and conditions</h2>
+        </div>
+        <div class="card-bd space-y-5">
+            {% for level, rows in tyres %}
+                <div>
+                    <h3 class="t-section mb-2">{{ level }}</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead class="bg-board text-white">
+                                <tr>
+                                    <th class="px-3 py-2 text-left">Tyre</th>
+                                    <th class="px-3 py-2 text-left">Conditions</th>
+                                    <th class="px-3 py-2 text-right">Races</th>
+                                    <th class="px-3 py-2 text-right">Avg pos</th>
+                                    <th class="px-3 py-2 text-right hidden sm:table-cell">Avg pts</th>
+                                    <th class="px-3 py-2 text-right hidden md:table-cell">Avg gained</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-200">
+                                {% for row in rows %}
+                                    <tr>
+                                        <td class="px-3 py-2 font-medium">{{ row.race_tyre }}</td>
+                                        <td class="px-3 py-2">{{ row.was_wet ? 'Wet' : 'Dry' }}</td>
+                                        <td class="px-3 py-2 text-right">{{ row.n }}</td>
+                                        <td class="px-3 py-2 text-right">{{ row.avg_pos }}</td>
+                                        <td class="px-3 py-2 text-right hidden sm:table-cell">{{ row.avg_points }}</td>
+                                        <td class="px-3 py-2 text-right hidden md:table-cell">{{ row.avg_gained ?? '—' }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            {% else %}
+                <p class="t-caption">Not enough races yet.</p>
+            {% endfor %}
+        </div>
+    </section>
+
+    {# ========== TECHNICAL DIRECTOR ========== #}
+    <section class="card">
+        <div class="card-hd">
+            <h2 class="t-heading">Technical Director effect</h2>
+            <p class="t-caption mt-1">
+                Position delta is how many places better the with-TD arm finishes.
+            </p>
+        </div>
+        <div class="card-bd overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-board text-white">
+                    <tr>
+                        <th class="px-3 py-2 text-left">Level</th>
+                        <th class="px-3 py-2 text-right">With TD</th>
+                        <th class="px-3 py-2 text-right">Without TD</th>
+                        <th class="px-3 py-2 text-right">Pos delta</th>
+                        <th class="px-3 py-2 text-right hidden sm:table-cell">Pts delta</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200">
+                    {% for row in td %}
+                        <tr>
+                            <td class="px-3 py-2 font-medium">{{ row.level }}</td>
+                            <td class="px-3 py-2 text-right">
+                                {% if row.with %}
+                                    {{ row.with.avg_pos }} {{ ui.n(row.with.n) }}
+                                {% else %}—{% endif %}
+                            </td>
+                            <td class="px-3 py-2 text-right">
+                                {% if row.without %}
+                                    {{ row.without.avg_pos }} {{ ui.n(row.without.n) }}
+                                {% else %}—{% endif %}
+                            </td>
+                            <td class="px-3 py-2 text-right font-medium">
+                                {{ row.comparable ? (row.pos_delta > 0 ? '+' : '') ~ row.pos_delta : '—' }}
+                            </td>
+                            <td class="px-3 py-2 text-right hidden sm:table-cell">
+                                {{ row.comparable ? (row.points_delta > 0 ? '+' : '') ~ row.points_delta : '—' }}
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr><td colspan="5" class="px-3 py-2 t-caption">Not enough races yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    {# ========== RISKS ========== #}
+    <section class="card">
+        <div class="card-hd">
+            <h2 class="t-heading">Risk settings → performance</h2>
+        </div>
+        <div class="card-bd space-y-6">
+            {% for dimension, byLevel in risks %}
+                <div>
+                    <h3 class="t-section mb-2">{{ dimension }}</h3>
+                    {% for level, rows in byLevel %}
+                        <p class="t-caption mt-3 mb-1">{{ level }}</p>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead class="bg-board text-white">
+                                    <tr>
+                                        <th class="px-3 py-2 text-left">Setting</th>
+                                        <th class="px-3 py-2 text-right">Races</th>
+                                        <th class="px-3 py-2 text-right">Avg pos</th>
+                                        <th class="px-3 py-2 text-right hidden sm:table-cell">Avg Q2</th>
+                                        <th class="px-3 py-2 text-right hidden md:table-cell">Overtakes</th>
+                                        <th class="px-3 py-2 text-right hidden md:table-cell">DNF</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-200">
+                                    {% for row in rows %}
+                                        <tr>
+                                            <td class="px-3 py-2 font-medium">{{ row.risk_value }}</td>
+                                            <td class="px-3 py-2 text-right">{{ row.n }}</td>
+                                            <td class="px-3 py-2 text-right">{{ row.avg_pos ?? '—' }}</td>
+                                            <td class="px-3 py-2 text-right hidden sm:table-cell">{{ row.avg_q2_pos ?? '—' }}</td>
+                                            <td class="px-3 py-2 text-right hidden md:table-cell">{{ row.avg_overtakes ?? '—' }}</td>
+                                            <td class="px-3 py-2 text-right hidden md:table-cell">{{ row.dnfs }}</td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p class="t-caption">Not enough races yet.</p>
+            {% endfor %}
+        </div>
+    </section>
+
+    {# ========== STRATEGY ========== #}
+    <section class="card">
+        <div class="card-hd">
+            <h2 class="t-heading">Pit strategy by level and conditions</h2>
+        </div>
+        <div class="card-bd space-y-5">
+            {% for level, rows in strategy %}
+                <div>
+                    <h3 class="t-section mb-2">{{ level }}</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead class="bg-board text-white">
+                                <tr>
+                                    <th class="px-3 py-2 text-left">Stops</th>
+                                    <th class="px-3 py-2 text-left">Conditions</th>
+                                    <th class="px-3 py-2 text-right">Races</th>
+                                    <th class="px-3 py-2 text-right">Avg pos</th>
+                                    <th class="px-3 py-2 text-right hidden sm:table-cell">Avg pts</th>
+                                    <th class="px-3 py-2 text-right hidden md:table-cell">Start fuel</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-200">
+                                {% for row in rows %}
+                                    <tr>
+                                        <td class="px-3 py-2 font-medium">{{ row.pit_stops }}</td>
+                                        <td class="px-3 py-2">{{ row.was_wet ? 'Wet' : 'Dry' }}</td>
+                                        <td class="px-3 py-2 text-right">{{ row.n }}</td>
+                                        <td class="px-3 py-2 text-right">{{ row.avg_pos }}</td>
+                                        <td class="px-3 py-2 text-right hidden sm:table-cell">{{ row.avg_points }}</td>
+                                        <td class="px-3 py-2 text-right hidden md:table-cell">{{ row.avg_start_fuel ?? '—' }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            {% else %}
+                <p class="t-caption">Not enough races yet.</p>
+            {% endfor %}
+        </div>
+    </section>
+
+    {# ========== MISTAKES ========== #}
+    <section class="card">
+        <div class="card-hd">
+            <h2 class="t-heading">Driver mistakes → performance</h2>
+            <p class="t-caption mt-1">Practice mistake time, bucketed.</p>
+        </div>
+        <div class="card-bd space-y-5">
+            {% for level, rows in mistakes %}
+                <div>
+                    <h3 class="t-section mb-2">{{ level }}</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead class="bg-board text-white">
+                                <tr>
+                                    <th class="px-3 py-2 text-left">Mistake time</th>
+                                    <th class="px-3 py-2 text-right">Races</th>
+                                    <th class="px-3 py-2 text-right hidden sm:table-cell">Mean</th>
+                                    <th class="px-3 py-2 text-right">Avg pos</th>
+                                    <th class="px-3 py-2 text-right hidden md:table-cell">Avg Q2</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-200">
+                                {% for row in rows %}
+                                    <tr>
+                                        <td class="px-3 py-2 font-medium">{{ row.bucket }}</td>
+                                        <td class="px-3 py-2 text-right">{{ row.n }}</td>
+                                        <td class="px-3 py-2 text-right hidden sm:table-cell">{{ row.avg_mistake }}s</td>
+                                        <td class="px-3 py-2 text-right">{{ row.avg_pos }}</td>
+                                        <td class="px-3 py-2 text-right hidden md:table-cell">{{ row.avg_q2_pos ?? '—' }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            {% else %}
+                <p class="t-caption">Not enough races yet.</p>
+            {% endfor %}
+        </div>
+    </section>
+
+    {% endif %}
+</div>
+{% endblock %}

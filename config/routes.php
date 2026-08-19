@@ -42,6 +42,7 @@ return function (Router $router): void {
     $router->add('POST', '/admin/users/rename', 'controller.admin_users', 'rename');
     $router->add('POST', '/admin/users/delete', 'controller.admin_users', 'delete');
     $router->add('POST', '/admin/users/restore', 'controller.admin_users', 'restore');
+    $router->add('GET',  '/admin/telemetry', 'controller.admin_telemetry', 'index');
 
     // ========== CALCULATIONS & ANALYSIS ==========
     // Baseline management

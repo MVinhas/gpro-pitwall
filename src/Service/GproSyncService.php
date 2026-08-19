@@ -18,12 +18,13 @@ final class GproSyncService
     private const int LOCK_TTL_SECONDS = 60;
 
     /** Number of GPRO API calls one full sync spends. */
-    private const int CALLS_PER_SYNC = 12;
+    private const int CALLS_PER_SYNC = 14;
 
     public function __construct(
         private readonly GproApiClient $apiClient,
         private readonly UserRepository $users,
         private readonly CacheInterface $cache,
+        private readonly RaceTelemetryService $telemetry,
         private readonly int $safetyMargin = 20,
     ) {
     }
@@ -85,6 +86,14 @@ final class GproSyncService
             $this->apiClient->getMoneyLevels($force);
             $this->apiClient->getSponsorNegotiations($force);
             $this->apiClient->getCalendar($force);
+
+            // Anonymous telemetry: both payloads are already warm at this
+            // point, so this contributes race data to the shared corpus
+            // without a per-user identifier ever being involved.
+            $this->telemetry->ingest(
+                $this->apiClient->getRaceAnalysis($force),
+                $this->apiClient->getTechnicalDirector(),
+            );
 
             $this->users->markSynced($userId);
             return 'synced';
