@@ -8,6 +8,7 @@ use App\Cache\Adapter\ApcuCache;
 use App\Cache\Adapter\FilesystemCache;
 use App\Cache\Adapter\NullCache;
 use App\Cache\Adapter\RedisCache;
+use App\Support\Version;
 use RuntimeException;
 
 class CacheFactory
@@ -16,6 +17,20 @@ class CacheFactory
      * @param array<string, mixed> $config
      */
     public static function create(array $config): CacheInterface
+    {
+        // Wrapped here rather than at the call site so no future caller can
+        // obtain a raw, un-namespaced driver and reintroduce the cross-deploy
+        // stale-shape bug. See NamespacedCache for the full why.
+        return new NamespacedCache(
+            self::createDriver($config),
+            (string)($config['CACHE_NAMESPACE'] ?? Version::current()),
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     */
+    private static function createDriver(array $config): CacheInterface
     {
         $driver = strtolower((string)($config['CACHE_DRIVER'] ?? 'filesystem'));
 

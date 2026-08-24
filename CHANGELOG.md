@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.14.1] - 2026-08-24
+
+### Fixed
+- **Cache entries are now namespaced by app version**, so a release never reads the previous release's payload shape. Previously the Clear Track Risk slider on the Race Weekend Cockpit (and any other view whose cached payload changed shape) could keep serving pre-deploy data until APCu was flushed by hand — `var/cache/` can be wiped by a release, but the APCu/Redis segment survives it. Keys now carry a version-derived prefix, turning "deploy, then remember to flush" into an ordinary cache miss. `CACHE_NAMESPACE` overrides the prefix to force a rotation without a version bump.
+
 ## [1.14.0] - 2026-08-19
 
 ### Added
