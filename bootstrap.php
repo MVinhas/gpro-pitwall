@@ -60,6 +60,10 @@ $cacheConfig = [
     'REDIS_HOST'     => Env::get('REDIS_HOST', '127.0.0.1'),
     'REDIS_PORT'     => Env::int('REDIS_PORT', 6379),
     'REDIS_PASSWORD' => Env::get('REDIS_PASSWORD'),
+    // Cache keys are namespaced by app version so a release never reads a
+    // previous release's payload shape out of a segment it cannot wipe (APCu,
+    // Redis). Override to force an early rotation without a version bump.
+    'CACHE_NAMESPACE' => Env::get('CACHE_NAMESPACE', $container['version']),
 ];
 
 $container['service.cache'] = CacheFactory::create($cacheConfig);

@@ -185,7 +185,7 @@ Source of truth is GitHub; deployment is a manual file copy to any PHP 8.5 host.
 - **Twig 3** templates; **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile). Light and dark themes ship in one stylesheet: every design token is a CSS `light-dark()` pair switched by `color-scheme`, so System mode tracks the OS with zero JavaScript.
 - **SQLite** via PDO — emails and API tokens encrypted at rest (AES-256-GCM).
 - **PHPMailer 7** for SMTP; dev writes `.eml` files instead.
-- **PHPUnit 13** — 440 tests, 1338 assertions — with **PHPStan level 8** and enforced type-declaration coverage (100% return/property/constant + `strict_types`; 99.5% param). Twig linted by a native `bin/twig_lint.php` built on Twig's own parser. CI measures statement coverage with `pcov` and enforces a floor (currently 45%, ratcheted up as coverage grows).
+- **PHPUnit 13** — 447 tests, 1351 assertions — with **PHPStan level 8** and enforced type-declaration coverage (100% return/property/constant + `strict_types`; 99.5% param). Twig linted by a native `bin/twig_lint.php` built on Twig's own parser. CI measures statement coverage with `pcov` and enforces a floor (currently 45%, ratcheted up as coverage grows).
 - **Timestamps stored and served as UTC**, localised per visitor in the browser — no server-side timezone config.
 
 ## Architecture
@@ -196,7 +196,7 @@ Request → public/index.php → Http\Router → Controller → Service → Repo
 
 - Controllers are thin; logic lives in services; repositories own the SQL (prepared statements only).
 - `bootstrap.php` wires every dependency into a flat container — adding a service is one line.
-- Cache adapters (`filesystem` default, APCu, Redis, none) behind one interface, resolved by `CacheFactory`.
+- Cache adapters (`filesystem` default, APCu, Redis, none) behind one interface, resolved by `CacheFactory`. Every key is namespaced by app version, so a deploy can never serve a previous release's payload shape out of a cache segment it cannot wipe.
 - **Host-wide outbound throttle** — all GPRO API calls leave from one IP, so a token bucket shared across PHP workers (a `flock`'d state file) paces real fetches under burst load; cache hits never touch it. It never throws — worst case is "slightly slower", not a failed page. Complements the per-token budget guard (`SYNC_SAFETY_MARGIN`).
 - **Race-window cache keys** — race-critical data is namespaced by the current race window (computed from the clock against GPRO's Tue/Fri schedule, no API call), so caches roll over exactly once per race weekend instead of serving last week's data until TTL. Configurable via `GPRO_RACE_DAYS` / `GPRO_RACE_BOUNDARY_HOUR` / `GPRO_RACE_TZ`.
 
