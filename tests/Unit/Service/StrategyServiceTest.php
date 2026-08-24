@@ -49,6 +49,7 @@ final class StrategyServiceTest extends TestCase
             ],
             'base_wear_constant' => 1.0,
             'tyre_compound_difference' => ['Pipirelli' => 0.0],
+            'clear_track_risk_gain_per_lap' => 0.1,
         ],
         'pit_stop' => [
             'factor_fuel_td'         => 0.0,
@@ -466,6 +467,89 @@ final class StrategyServiceTest extends TestCase
                 (float) $row['total_lost'],
                 "$comp total_lost must be the sum of its own components.",
             );
+        }
+    }
+
+    public function testZeroRiskProducesNoClearTrackGain(): void
+    {
+        $result = $this->service()->calculateStrategy(
+            ['id' => 1, 'name' => 'Imola'],
+            ['lvlEngine' => 1, 'lvlElectronics' => 1, 'lvlSusp' => 1],
+            ['concentration' => 50, 'aggressiveness' => 50, 'experience' => 50,
+             'technical_insight' => 50, 'weight' => 75],
+            ['concentration' => 0, 'stressHandling' => 0],
+            ['id' => 0, 'ownTD' => 0, 'experience' => 0, 'pitCoordination' => 0],
+            $this->inputs(),
+        );
+
+        foreach ($result['tyres'] as $row) {
+            self::assertSame(0.0, $row['ctr_gain']);
+            self::assertSame($row['total_lost'], $row['net_lost']);
+        }
+    }
+
+    public function testClearTrackGainIsLapsTimesRiskTimesCoefficient(): void
+    {
+        $inputs = $this->inputs();
+        $inputs['risk'] = 20;
+
+        $result = $this->service()->calculateStrategy(
+            ['id' => 1, 'name' => 'Imola'],
+            ['lvlEngine' => 1, 'lvlElectronics' => 1, 'lvlSusp' => 1],
+            ['concentration' => 50, 'aggressiveness' => 50, 'experience' => 50,
+             'technical_insight' => 50, 'weight' => 75],
+            ['concentration' => 0, 'stressHandling' => 0],
+            ['id' => 0, 'ownTD' => 0, 'experience' => 0, 'pitCoordination' => 0],
+            $inputs,
+        );
+
+        // 50 laps x 20 CTR x 0.1 s = 100.0 s
+        foreach ($result['tyres'] as $row) {
+            self::assertSame(100.0, $row['ctr_gain']);
+            self::assertSame(round($row['total_lost'] - 100.0, 2), $row['net_lost']);
+        }
+    }
+
+    public function testNetLostSubtractsTheGainFromTotalLost(): void
+    {
+        $inputs = $this->inputs();
+        $inputs['risk'] = 5;
+
+        $result = $this->service()->calculateStrategy(
+            ['id' => 1, 'name' => 'Imola'],
+            ['lvlEngine' => 1, 'lvlElectronics' => 1, 'lvlSusp' => 1],
+            ['concentration' => 50, 'aggressiveness' => 50, 'experience' => 50,
+             'technical_insight' => 50, 'weight' => 75],
+            ['concentration' => 0, 'stressHandling' => 0],
+            ['id' => 0, 'ownTD' => 0, 'experience' => 0, 'pitCoordination' => 0],
+            $inputs,
+        );
+
+        $row = $result['tyres']['Soft'];
+        self::assertSame(25.0, $row['ctr_gain']);
+        self::assertEqualsWithDelta($row['total_lost'] - 25.0, $row['net_lost'], 0.01);
+    }
+
+    public function testMissingCoefficientMeansNoGainRatherThanAnError(): void
+    {
+        $secrets = self::SECRETS;
+        unset($secrets['tyre_calc']['clear_track_risk_gain_per_lap']);
+
+        $inputs = $this->inputs();
+        $inputs['risk'] = 30;
+
+        $result = (new StrategyService($this->db(), $secrets))->calculateStrategy(
+            ['id' => 1, 'name' => 'Imola'],
+            ['lvlEngine' => 1, 'lvlElectronics' => 1, 'lvlSusp' => 1],
+            ['concentration' => 50, 'aggressiveness' => 50, 'experience' => 50,
+             'technical_insight' => 50, 'weight' => 75],
+            ['concentration' => 0, 'stressHandling' => 0],
+            ['id' => 0, 'ownTD' => 0, 'experience' => 0, 'pitCoordination' => 0],
+            $inputs,
+        );
+
+        foreach ($result['tyres'] as $row) {
+            self::assertSame(0.0, $row['ctr_gain']);
         }
     }
 }
