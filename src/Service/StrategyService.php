@@ -141,76 +141,121 @@ class StrategyService
         $factors_val = $f_Track * $f_Temp * $f_Dur * $f_Susp * $f_Agg * $f_Exp * $f_Wgt;
 
         $compounds = ['Extra Soft', 'Soft', 'Medium', 'Hard', 'Rain'];
-        $tyreResults = [];
 
-        foreach ($compounds as $comp) {
-            $typeVal = $tyreSecrets['tyre_type_values'][$comp];
-            $f_Type = ($factors['tyre_type_base']) ** $typeVal;
+        // Lap time bought back per point of Clear Track Risk. Lives in secrets
+        // with the other game formulas; absent means "unknown", which must read
+        // as no gain rather than a guess.
+        $ctrGainPerLap = (float) ($tyreSecrets['clear_track_risk_gain_per_lap'] ?? 0.0);
 
-            $riskBase = $tyreSecrets['tyre_risk_factors'][$comp];
-            $f_Risk = $riskBase ** $risk;
+        /**
+         * Every compound's plan at one risk level. Extracted so the CTR sweep
+         * below can re-run the identical maths at each risk instead of
+         * approximating it — the whole point is telling the manager where the
+         * plan actually flips.
+         *
+         * @return array<string, array<string, mixed>>
+         */
+        $planAtRisk = function (int $risk) use (
+            $compounds,
+            $tyreSecrets,
+            $factors,
+            $factors_val,
+            $trackDb,
+            $targetWear,
+            $lapLen,
+            $laps,
+            $temp,
+            $totalFuelWet,
+            $totalFuelDry,
+            $td,
+            $staff,
+            $supplierName,
+            $ff,
+            $dConc,
+            $dAgg,
+            $dExp,
+            $dTe,
+            $cEng,
+            $cEle,
+            $lkmWet,
+            $lkmDry,
+            $fplBaseWet,
+            $fplBaseDry,
+            $boostLaps,
+            $boostCoeffWet,
+            $boostCoeffDry,
+            $ctrGainPerLap
+        ): array {
+            $tyreResults = [];
 
-            $tyreWearMultiplier = $factors_val * $f_Type * $f_Risk;
+            foreach ($compounds as $comp) {
+                $typeVal = $tyreSecrets['tyre_type_values'][$comp];
+                $f_Type = ($factors['tyre_type_base']) ** $typeVal;
 
-            $trackBaseWear = (float)$trackDb['tyre_wear_factor'];
-            $rainMod = ($comp === 'Rain') ? 0.73 : 1.0;
-            $constant = $tyreSecrets['base_wear_constant'];
+                $riskBase = $tyreSecrets['tyre_risk_factors'][$comp];
+                $f_Risk = $riskBase ** $risk;
 
-            $maxKm = $tyreWearMultiplier * $trackBaseWear * $constant * $rainMod;
+                $tyreWearMultiplier = $factors_val * $f_Type * $f_Risk;
 
-            $usableKm = $maxKm * ((100 - $targetWear) / 100);
+                $trackBaseWear = (float)$trackDb['tyre_wear_factor'];
+                $rainMod = ($comp === 'Rain') ? 0.73 : 1.0;
+                $constant = $tyreSecrets['base_wear_constant'];
 
-            $lapsPerSet = $usableKm / $lapLen;
-            if ($lapsPerSet < 1) {
-                $lapsPerSet = 1;
-            }
+                $maxKm = $tyreWearMultiplier * $trackBaseWear * $constant * $rainMod;
+
+                $usableKm = $maxKm * ((100 - $targetWear) / 100);
+
+                $lapsPerSet = $usableKm / $lapLen;
+                if ($lapsPerSet < 1) {
+                    $lapsPerSet = 1;
+                }
 
             // Tyre life sets the floor: fewer stops than this and the set is
             // worn past target before the stint ends.
-            $minStopsForWear = (int)ceil($laps / $lapsPerSet) - 1;
-            if ($minStopsForWear < 0) {
-                $minStopsForWear = 0;
-            }
+                $minStopsForWear = (int)ceil($laps / $lapsPerSet) - 1;
+                if ($minStopsForWear < 0) {
+                    $minStopsForWear = 0;
+                }
 
 
-            $relevantTotalFuel = ($comp === 'Rain') ? $totalFuelWet : $totalFuelDry;
+                $relevantTotalFuel = ($comp === 'Rain') ? $totalFuelWet : $totalFuelDry;
 
-            $hasTd = false;
-            if (isset($td['ownTD']) && $td['ownTD'] == 1) {
-                $hasTd = true;
-            } elseif (isset($td['id']) && is_numeric($td['id']) && $td['id'] > 0) {
-                $hasTd = true;
-            }
+                $hasTd = false;
+                if (isset($td['ownTD']) && $td['ownTD'] == 1) {
+                    $hasTd = true;
+                } elseif (isset($td['id']) && is_numeric($td['id']) && $td['id'] > 0) {
+                    $hasTd = true;
+                }
 
-            $vStaffConc = is_numeric($staff['concentration'] ?? null) ? (float)$staff['concentration'] : 0.0;
-            $vStaffStress = is_numeric($staff['stressHandling'] ?? null) ? (float)$staff['stressHandling'] : 0.0;
+                $vStaffConc = is_numeric($staff['concentration'] ?? null) ? (float)$staff['concentration'] : 0.0;
+                $vStaffStress = is_numeric($staff['stressHandling'] ?? null) ? (float)$staff['stressHandling'] : 0.0;
 
-            $vTdExp = 0.0;
-            $vTdPit = 0.0;
-            if ($hasTd) {
-                $vTdExp = is_numeric($td['experience'] ?? null) ? (float)$td['experience'] : 0.0;
-                $rawPit = $td['pitCoordination'] ?? ($td['pitCoord'] ?? 0);
-                $vTdPit = is_numeric($rawPit) ? (float)$rawPit : 0.0;
-            }
+                $vTdExp = 0.0;
+                $vTdPit = 0.0;
+                if ($hasTd) {
+                    $vTdExp = is_numeric($td['experience'] ?? null) ? (float)$td['experience'] : 0.0;
+                    $rawPit = $td['pitCoordination'] ?? ($td['pitCoord'] ?? 0);
+                    $vTdPit = is_numeric($rawPit) ? (float)$rawPit : 0.0;
+                }
 
-            $pc = $this->secrets['pit_stop'] ?? [];
+                $pc = $this->secrets['pit_stop'] ?? [];
 
-            $fFuel = $hasTd ? ($pc['factor_fuel_td']) : ($pc['factor_fuel_no_td']);
-            $fSConc = $hasTd ? ($pc['factor_staff_conc_td']) : ($pc['factor_staff_conc_no_td']);
-            $fSStress = $hasTd ? ($pc['factor_staff_stress_td']) : ($pc['factor_staff_stress_no_td']);
-            $baseTime = $pc['base_time'];
+                $fFuel = $hasTd ? ($pc['factor_fuel_td']) : ($pc['factor_fuel_no_td']);
+                $fSConc = $hasTd ? ($pc['factor_staff_conc_td']) : ($pc['factor_staff_conc_no_td']);
+                $fSStress = $hasTd ? ($pc['factor_staff_stress_td']) : ($pc['factor_staff_stress_no_td']);
+                $baseTime = $pc['base_time'];
 
-            $pitTimeFixed = $baseTime
+                $pitTimeFixed = $baseTime
                      + ($vStaffConc * $fSConc)
                      + ($vStaffStress * $fSStress)
                      + ($vTdExp * ($pc['factor_td_exp']))
                      + ($vTdPit * ($pc['factor_td_pit']));
 
-            $pitLaneLoss = (float)$trackDb['pit_time'];
+                $pitLaneLoss = (float)$trackDb['pit_time'];
 
-            $fuel_per_lap_val = ($comp === 'Rain') ? $fplBaseWet : $fplBaseDry;
+                $fuel_per_lap_val = ($comp === 'Rain') ? $fplBaseWet : $fplBaseDry;
 
-            $tables_h47 =
+                $tables_h47 =
                 $ff['conc']
                 * $dConc
                 + $ff['agg']
@@ -225,15 +270,15 @@ class StrategyService
                 * $cEle;
 
             // Fuel-weight loss for a whole race run in ($stops + 1) stints.
-            $fuelCostFor = static fn (int $stops): float => 0.005 * (
+                $fuelCostFor = static fn (int $stops): float => 0.005 * (
                 ((float)$trackDb['distance'] * ($fuel_per_lap_val + $tables_h47))
                 * (float)$trackDb['distance'] / ($stops + 1)
-            ) / 2;
+                ) / 2;
 
-            $tcdVal = 0.0;
-            $tcdDiff = $tyreSecrets['tyre_compound_difference'][$supplierName] ?? 0.0;
+                $tcdVal = 0.0;
+                $tcdDiff = $tyreSecrets['tyre_compound_difference'][$supplierName] ?? 0.0;
 
-            $lostTcd =
+                $lostTcd =
                 $laps
                 * ((int)$trackDb['corners']
                 * (float)$trackDb['lap_length']
@@ -241,25 +286,25 @@ class StrategyService
                 * (50 - $temp)
                 + $tcdDiff);
 
-            if ($comp === 'Soft') {
-                $tcdVal = $lostTcd;
-            } elseif ($comp === 'Medium') {
-                $tcdVal = $lostTcd * 2;
-            } elseif ($comp === 'Hard') {
-                $tcdVal = $lostTcd * 3;
-            }
+                if ($comp === 'Soft') {
+                    $tcdVal = $lostTcd;
+                } elseif ($comp === 'Medium') {
+                    $tcdVal = $lostTcd * 2;
+                } elseif ($comp === 'Hard') {
+                    $tcdVal = $lostTcd * 3;
+                }
 
             // Per-lap fuel cost already includes the car+driver adjustment;
             // 'fuel_recommended' is the minimum-per-stint plus one extra
             // lap's worth, ceil-rounded once. Gives the user a 1-lap
             // safety net without re-running on a different worst case.
-            $fuelPerLapAdj = (($comp === 'Rain') ? $lkmWet : $lkmDry) * $lapLen;
+                $fuelPerLapAdj = (($comp === 'Rain') ? $lkmWet : $lkmDry) * $lapLen;
 
             // Boost laps add extra fuel. We don't know which race stint will
             // host them, so spread evenly across stints — gives the manager
             // enough buffer regardless of when they actually press the boost.
-            $boostCoeff = ($comp === 'Rain') ? $boostCoeffWet : $boostCoeffDry;
-            $boostExtraTotal = ($boostLaps > 0 && $boostCoeff > 0 && $lapLen > 0)
+                $boostCoeff = ($comp === 'Rain') ? $boostCoeffWet : $boostCoeffDry;
+                $boostExtraTotal = ($boostLaps > 0 && $boostCoeff > 0 && $lapLen > 0)
                 ? $boostLaps * $lapLen * $boostCoeff
                 : 0.0;
 
@@ -270,32 +315,32 @@ class StrategyService
             // feasibility filter on the *recommended* load — the figure the
             // manager actually fuels — not on the bare minimum, so boost fuel
             // and the safety lap can force an extra stop on their own.
-            $maxFuel = 180.0;
+                $maxFuel = 180.0;
 
             /**
              * @return array{stops: int, feasible: bool, total: float,
              *     stint_fuel: float, recommended: float, pit_time: float,
              *     lost_pits: float, fuel_cost: float}
              */
-            $planFor = function (int $stops) use (
-                $relevantTotalFuel,
-                $boostExtraTotal,
-                $fuelPerLapAdj,
-                $fFuel,
-                $pitTimeFixed,
-                $pitLaneLoss,
-                $fuelCostFor,
-                $tcdVal,
-                $maxFuel
-            ): array {
-                $fuelPerStint = $relevantTotalFuel / ($stops + 1);
-                $stintFuel = $fuelPerStint + ($boostExtraTotal / ($stops + 1));
-                $recommended = ceil($stintFuel + $fuelPerLapAdj);
-                $pitTime = max(15.0, ($fuelPerStint * $fFuel) + $pitTimeFixed);
-                $lostPits = $stops * ($pitTime + $pitLaneLoss);
-                $fuelCost = $fuelCostFor($stops);
+                $planFor = function (int $stops) use (
+                    $relevantTotalFuel,
+                    $boostExtraTotal,
+                    $fuelPerLapAdj,
+                    $fFuel,
+                    $pitTimeFixed,
+                    $pitLaneLoss,
+                    $fuelCostFor,
+                    $tcdVal,
+                    $maxFuel
+                ): array {
+                    $fuelPerStint = $relevantTotalFuel / ($stops + 1);
+                    $stintFuel = $fuelPerStint + ($boostExtraTotal / ($stops + 1));
+                    $recommended = ceil($stintFuel + $fuelPerLapAdj);
+                    $pitTime = max(15.0, ($fuelPerStint * $fFuel) + $pitTimeFixed);
+                    $lostPits = $stops * ($pitTime + $pitLaneLoss);
+                    $fuelCost = $fuelCostFor($stops);
 
-                return [
+                    return [
                     'stops' => $stops,
                     'feasible' => $recommended <= $maxFuel,
                     'total' => $lostPits + $fuelCost + $tcdVal,
@@ -304,37 +349,44 @@ class StrategyService
                     'pit_time' => $pitTime,
                     'lost_pits' => $lostPits,
                     'fuel_cost' => $fuelCost,
-                ];
-            };
+                    ];
+                };
 
-            $best = $planFor($minStopsForWear);
+                $best = $planFor($minStopsForWear);
 
-            for ($cand = $minStopsForWear + 1; $cand <= $laps; $cand++) {
-                $plan = $planFor($cand);
-                $hadFeasible = $best['feasible'];
+                for ($cand = $minStopsForWear + 1; $cand <= $laps; $cand++) {
+                    $plan = $planFor($cand);
+                    $hadFeasible = $best['feasible'];
 
-                // Prefer any feasible plan over an infeasible one; among plans
-                // of equal feasibility, the cheapest total wins.
-                if (
-                    ($plan['feasible'] && !$best['feasible'])
-                    || ($plan['feasible'] === $best['feasible'] && $plan['total'] < $best['total'])
-                ) {
-                    $best = $plan;
-                    continue;
+                    // Prefer any feasible plan over an infeasible one; among plans
+                    // of equal feasibility, the cheapest total wins.
+                    if (
+                        ($plan['feasible'] && !$best['feasible'])
+                        || ($plan['feasible'] === $best['feasible'] && $plan['total'] < $best['total'])
+                    ) {
+                        $best = $plan;
+                        continue;
+                    }
+
+                    // Once a feasible plan is in hand and adding a stop stopped
+                    // paying off, further stops only cost more: pit losses grow
+                    // linearly while the fuel saving shrinks as 1/(stops+1).
+                    if ($plan['feasible'] && $hadFeasible) {
+                        break;
+                    }
                 }
 
-                // Once a feasible plan is in hand and adding a stop stopped
-                // paying off, further stops only cost more: pit losses grow
-                // linearly while the fuel saving shrinks as 1/(stops+1).
-                if ($plan['feasible'] && $hadFeasible) {
-                    break;
-                }
-            }
+                $stops = $best['stops'];
+                $lapsPerSetForced = floor($laps / ($stops + 1));
 
-            $stops = $best['stops'];
-            $lapsPerSetForced = floor($laps / ($stops + 1));
+                $totalLost = round($best['lost_pits'] + $best['fuel_cost'] + $tcdVal, 2);
 
-            $tyreResults[$comp] = [
+            // The gain is whole-race: seconds per lap x laps x risk. It is a
+            // clear-air figure — a driver stuck behind someone banks none of
+            // it, which is why the UI keeps the blocking caveat.
+                $ctrGain = round($ctrGainPerLap * $laps * $risk, 2);
+
+                $tyreResults[$comp] = [
                 'stops' => $stops,
                 'laps_set' => ($stops > 0 && $lapsPerSetForced < $lapsPerSet) ? $lapsPerSetForced : $lapsPerSet,
                 'fuel_load' => ceil($best['stint_fuel']),
@@ -344,9 +396,17 @@ class StrategyService
                 'lost_pits' => round($best['lost_pits'], 2),
                 'lost_fuel' => round($best['fuel_cost'], 2),
                 'lost_tcd' => round($tcdVal, 2),
-                'total_lost' => round($best['lost_pits'] + $best['fuel_cost'] + $tcdVal, 2)
-            ];
-        }
+                'total_lost' => $totalLost,
+                'ctr_gain' => $ctrGain,
+                'net_lost' => round($totalLost - $ctrGain, 2),
+                ];
+            }
+
+            return $tyreResults;
+        };
+
+        $tyreResults = $planAtRisk($risk);
+
 
         return [
             'track' => $trackDb['name'],
@@ -362,6 +422,7 @@ class StrategyService
                 'l_per_lap' => round($lapLen * $lkmDry, 2)
             ],
             'tyres' => $tyreResults,
+            'ctr_gain_per_lap' => $ctrGainPerLap,
             'supplier' => $supplierName,
             'stats' => [
                 'driver' => $driver,

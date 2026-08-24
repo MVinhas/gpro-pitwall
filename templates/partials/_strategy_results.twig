@@ -115,7 +115,11 @@
                             <th rowspan="2" class="hidden md:table-cell px-4 py-3 text-center text-xs font-medium uppercase tracking-wide text-white/60 border-l border-white/15">Lost (Pits)</th>
                             <th rowspan="2" class="hidden md:table-cell px-4 py-3 text-center text-xs font-medium uppercase tracking-wide text-white/60">Lost (Fuel)</th>
                             <th rowspan="2" class="hidden md:table-cell px-4 py-3 text-center text-xs font-medium uppercase tracking-wide text-white/60">Lost (TCD)</th>
-                            <th rowspan="2" class="px-2 sm:px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-white bg-board-strong">Total Lost</th>
+                            <th rowspan="2" class="hidden md:table-cell px-4 py-3 text-center text-xs font-medium uppercase tracking-wide text-white/60">Total Lost</th>
+                            {% if strategy_results.ctr_gain_per_lap > 0 %}
+                                <th rowspan="2" class="hidden sm:table-cell px-4 py-3 text-center text-xs font-medium uppercase tracking-wide text-white/60" title="Clear-air time saved by your Clear Track Risk setting. Not banked when you are stuck behind another car.">CTR Gain</th>
+                            {% endif %}
+                            <th rowspan="2" class="px-2 sm:px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-white bg-board-strong">{{ strategy_results.ctr_gain_per_lap > 0 ? 'Net' : 'Total Lost' }}</th>
                         </tr>
                         <tr>
                             <th class="hidden sm:table-cell px-3 py-1.5 text-center text-[10px] font-medium uppercase tracking-wide text-white/60" title="Bare-minimum fuel to finish the stint; no safety margin.">Minimum</th>
@@ -148,16 +152,38 @@
                                 <td class="hidden md:table-cell px-4 py-3 text-center text-xs text-slate-500 tabular-nums">
                                     {{ data.lost_tcd }}
                                 </td>
+                                <td class="hidden md:table-cell px-4 py-3 text-center text-xs text-slate-500 tabular-nums">
+                                    {{ data.total_lost }}s
+                                </td>
+                                {% if strategy_results.ctr_gain_per_lap > 0 %}
+                                    <td class="hidden sm:table-cell px-4 py-3 text-center text-xs font-semibold tabular-nums {{ data.ctr_gain > 0 ? 'text-emerald-600' : 'text-slate-400' }}">
+                                        {{ data.ctr_gain > 0 ? '−' ~ data.ctr_gain ~ 's' : '—' }}
+                                    </td>
+                                {% endif %}
 
                                 <td class="px-2 sm:px-4 py-3 text-center text-sm font-bold tabular-nums border-l border-slate-200 {{ is_best ? 'text-emerald-700 bg-emerald-100' : 'text-slate-900 bg-slate-50' }}">
-                                    {{ data.total_lost }}s
+                                    {{ data.net_lost }}s
                                 </td>
                             </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
+            {% if strategy_results.ctr_gain_per_lap > 0 and (strategy_results.inputs.risk ?? 0) > 0 %}
+                <div class="px-4 pb-4 sm:px-6 sm:pb-6 pt-3 space-y-2">
+                    <div class="notice notice-warn notice-slim">
+                        <strong>Keep in mind time lost due to blocking.</strong>
+                        The CTR gain is clear-air only — stuck behind another car you wear
+                        the tyres harder without banking the lap time.
+                    </div>
+                    <p class="t-caption">
+                        Gain modelled at {{ strategy_results.ctr_gain_per_lap }}s per lap per CTR point,
+                        measured at Zolder. Other tracks may differ.
+                    </p>
+                </div>
+            {% endif %}
         </div>
+
 
         {# SETUP CALCULATOR TABLE #}
         <div class="card">

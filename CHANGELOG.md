@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.14.2] - 2026-08-24
+
+### Added
+- **Clear Track Risk time gain on the race strategy table.** A new *CTR Gain* column shows the clear-air lap time your risk setting buys back (laps x CTR x rate), and the final column now reports **Net** — total time lost minus that gain — so the compound comparison reflects both sides of the trade. Updates live as the slider moves, alongside the existing wear effect: raising CTR can now visibly flip the cheapest plan onto a harder compound. A standing caution keeps the caveat in view — the gain is clear-air only, and a driver stuck behind another car wears the tyres harder without banking the lap time.
+
 ## [1.14.1] - 2026-08-24
 
 ### Fixed
