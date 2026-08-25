@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.14.3] - 2026-08-25
+
+### Changed
+- **The Clear Track Risk gain now scales with each track's lap time** instead of being one flat figure for the whole calendar. A second in-game measurement identified the law: calibrated on one track it predicts the other to within 0.0%, while a per-kilometre law is off by 8.9% and a per-corner law by 43.3%. A slow lap is therefore worth more per point of risk than a fast lap of the same length — the strategy table's *CTR Gain* and *Net* columns reflect that per track, and the caption states the rate in use. Tracks whose source data carries no average speed report no gain rather than an invented one.
+
 ## [1.14.2] - 2026-08-24
 
 ### Added

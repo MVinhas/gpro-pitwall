@@ -142,10 +142,18 @@ class StrategyService
 
         $compounds = ['Extra Soft', 'Soft', 'Medium', 'Hard', 'Rain'];
 
-        // Lap time bought back per point of Clear Track Risk. Lives in secrets
-        // with the other game formulas; absent means "unknown", which must read
-        // as no gain rather than a guess.
-        $ctrGainPerLap = (float) ($tyreSecrets['clear_track_risk_gain_per_lap'] ?? 0.0);
+        // Lap time bought back per point of Clear Track Risk. The gain is a
+        // fraction of LAP TIME, not of distance — two measured tracks fix the
+        // constant, and a per-km or per-corner law mispredicts the second one
+        // badly (see config/secrets.php for the derivation).
+        //
+        // Both the constant and the track's average speed can be absent
+        // (Grobnik ships avg_speed = 0), and either way there is no gain to
+        // state — report none rather than inventing one.
+        $ctrGainFraction = (float) ($tyreSecrets['clear_track_risk_gain_lap_fraction'] ?? 0.0);
+        $trackAvgSpeed = (float) ($trackDb['avg_speed'] ?? 0.0);
+        $lapTimeSec = $trackAvgSpeed > 0.0 ? ($lapLen / $trackAvgSpeed) * 3600.0 : 0.0;
+        $ctrGainPerLap = $lapTimeSec * $ctrGainFraction;
 
         /**
          * Every compound's plan at one risk level. Extracted so the CTR sweep
