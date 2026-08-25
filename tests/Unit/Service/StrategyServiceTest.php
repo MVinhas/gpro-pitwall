@@ -49,7 +49,7 @@ final class StrategyServiceTest extends TestCase
             ],
             'base_wear_constant' => 1.0,
             'tyre_compound_difference' => ['Pipirelli' => 0.0],
-            'clear_track_risk_gain_per_lap' => 0.1,
+            'clear_track_risk_gain_lap_fraction' => 0.001,
         ],
         'pit_stop' => [
             'factor_fuel_td'         => 0.0,
@@ -82,12 +82,13 @@ final class StrategyServiceTest extends TestCase
                 lap_length REAL,
                 overtaking TEXT,
                 boost_dry REAL,
-                boost_wet REAL
+                boost_wet REAL,
+                avg_speed REAL
             )"
         );
         $stmt = $db->prepare(
             "INSERT INTO tracks VALUES
-             (1, 'Imola', 50, 250.0, 2.0, :wet, 'Medium', 100.0, 22.0, 12, 5.0, 'Hard', 0.0, 0.0)"
+             (1, 'Imola', 50, 250.0, 2.0, :wet, 'Medium', 100.0, 22.0, 12, 5.0, 'Hard', 0.0, 0.0, 180.0)"
         );
         $stmt->execute([':wet' => $fuelPerLapWet]);
         return $db;
@@ -348,12 +349,13 @@ final class StrategyServiceTest extends TestCase
                 id INTEGER PRIMARY KEY, name TEXT, laps INTEGER, distance REAL,
                 fuel_per_lap REAL, fuel_per_lap_wet REAL, tyre_wear TEXT,
                 tyre_wear_factor REAL, pit_time REAL, corners INTEGER,
-                lap_length REAL, overtaking TEXT, boost_dry REAL, boost_wet REAL
+                lap_length REAL, overtaking TEXT, boost_dry REAL, boost_wet REAL,
+                avg_speed REAL
             )"
         );
         $stmt = $db->prepare(
             "INSERT INTO tracks VALUES
-             (1, 'Thirsty', 60, 300.0, 1.15, 1.15, 'Low', 1000.0, 20.0, 10, 5.0, 'Hard', :b, :b)"
+             (1, 'Thirsty', 60, 300.0, 1.15, 1.15, 'Low', 1000.0, 20.0, 10, 5.0, 'Hard', :b, :b, 180.0)"
         );
         $stmt->execute([':b' => $boost]);
         return $db;
@@ -414,14 +416,15 @@ final class StrategyServiceTest extends TestCase
                 id INTEGER PRIMARY KEY, name TEXT, laps INTEGER, distance REAL,
                 fuel_per_lap REAL, fuel_per_lap_wet REAL, tyre_wear TEXT,
                 tyre_wear_factor REAL, pit_time REAL, corners INTEGER,
-                lap_length REAL, overtaking TEXT, boost_dry REAL, boost_wet REAL
+                lap_length REAL, overtaking TEXT, boost_dry REAL, boost_wet REAL,
+                avg_speed REAL
             )"
         );
         // Huge tyre_wear_factor => tyres last the whole race (0 stops on wear).
         // Small pit_time => a stop is cheap relative to the fuel it saves.
         $db->exec(
             "INSERT INTO tracks VALUES
-             (1, 'PitWorth', 70, 300.0, 0.55, 0.55, 'Low', 100000.0, 1.0, 14, 4.2857, 'Easy', 0.0, 0.0)"
+             (1, 'PitWorth', 70, 300.0, 0.55, 0.55, 'Low', 100000.0, 1.0, 14, 4.2857, 'Easy', 0.0, 0.0, 180.0)"
         );
         return $db;
     }
@@ -533,7 +536,7 @@ final class StrategyServiceTest extends TestCase
     public function testMissingCoefficientMeansNoGainRatherThanAnError(): void
     {
         $secrets = self::SECRETS;
-        unset($secrets['tyre_calc']['clear_track_risk_gain_per_lap']);
+        unset($secrets['tyre_calc']['clear_track_risk_gain_lap_fraction']);
 
         $inputs = $this->inputs();
         $inputs['risk'] = 30;
@@ -550,6 +553,77 @@ final class StrategyServiceTest extends TestCase
 
         foreach ($result['tyres'] as $row) {
             self::assertSame(0.0, $row['ctr_gain']);
+        }
+    }
+
+    /** A track DB whose lap time is set purely by avg_speed. */
+    private function dbAtSpeed(float $avgSpeed): PDO
+    {
+        $db = new PDO('sqlite::memory:');
+        $db->exec(
+            "CREATE TABLE tracks (
+                id INTEGER PRIMARY KEY, name TEXT, laps INTEGER, distance REAL,
+                fuel_per_lap REAL, fuel_per_lap_wet REAL, tyre_wear TEXT,
+                tyre_wear_factor REAL, pit_time REAL, corners INTEGER,
+                lap_length REAL, overtaking TEXT, boost_dry REAL, boost_wet REAL,
+                avg_speed REAL
+            )"
+        );
+        $stmt = $db->prepare(
+            "INSERT INTO tracks VALUES
+             (1, 'Imola', 50, 250.0, 2.0, 2.5, 'Medium', 100.0, 22.0, 12, 5.0, 'Hard', 0.0, 0.0, :s)"
+        );
+        $stmt->execute([':s' => $avgSpeed]);
+        return $db;
+    }
+
+    /** @return array<string, mixed> */
+    private function runAtSpeed(float $avgSpeed, int $risk): array
+    {
+        $inputs = $this->inputs();
+        $inputs['risk'] = $risk;
+
+        return (new StrategyService($this->dbAtSpeed($avgSpeed), self::SECRETS))->calculateStrategy(
+            ['id' => 1, 'name' => 'Imola'],
+            ['lvlEngine' => 1, 'lvlElectronics' => 1, 'lvlSusp' => 1],
+            ['concentration' => 50, 'aggressiveness' => 50, 'experience' => 50,
+             'technical_insight' => 50, 'weight' => 75],
+            ['concentration' => 0, 'stressHandling' => 0],
+            ['id' => 0, 'ownTD' => 0, 'experience' => 0, 'pitCoordination' => 0],
+            $inputs,
+        );
+    }
+
+    public function testGainScalesWithLapTimeNotDistance(): void
+    {
+        // Same 5 km lap, half the speed => double the lap time => double the
+        // gain. This is the whole point of the law: a slow lap is worth more
+        // per point of risk than a fast one of identical length.
+        $fast = $this->runAtSpeed(180.0, 10);   // 100s lap
+        $slow = $this->runAtSpeed(90.0, 10);    // 200s lap
+
+        self::assertSame(50.0, $fast['tyres']['Soft']['ctr_gain']);
+        self::assertSame(100.0, $slow['tyres']['Soft']['ctr_gain']);
+    }
+
+    public function testGainPerLapIsReportedForTheResolvedTrack(): void
+    {
+        // 5 km at 180 km/h = 100s lap; 100s x 0.001 = 0.1s per lap per CTR.
+        self::assertEqualsWithDelta(0.1, $this->runAtSpeed(180.0, 0)['ctr_gain_per_lap'], 1e-9);
+        self::assertEqualsWithDelta(0.2, $this->runAtSpeed(90.0, 0)['ctr_gain_per_lap'], 1e-9);
+    }
+
+    public function testTrackWithNoAverageSpeedYieldsNoGainRatherThanAGuess(): void
+    {
+        // Grobnik really does ship avg_speed = 0 in the source data. With no
+        // lap time there is no gain to state, and inventing one would be worse
+        // than showing none.
+        $result = $this->runAtSpeed(0.0, 40);
+
+        self::assertSame(0.0, $result['ctr_gain_per_lap']);
+        foreach ($result['tyres'] as $row) {
+            self::assertSame(0.0, $row['ctr_gain']);
+            self::assertSame($row['total_lost'], $row['net_lost']);
         }
     }
 }

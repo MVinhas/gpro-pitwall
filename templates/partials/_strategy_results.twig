@@ -177,8 +177,8 @@
                         the tyres harder without banking the lap time.
                     </div>
                     <p class="t-caption">
-                        Gain modelled at {{ strategy_results.ctr_gain_per_lap }}s per lap per CTR point,
-                        measured at Zolder. Other tracks may differ.
+                        Gain modelled at {{ strategy_results.ctr_gain_per_lap|round(4) }}s per lap per CTR point —
+                        scaled to this track's lap time, from readings at Zolder and Anderstorp.
                     </p>
                 </div>
             {% endif %}
