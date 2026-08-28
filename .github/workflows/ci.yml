@@ -54,10 +54,12 @@ jobs:
         run: vendor/bin/phpunit --coverage-text --coverage-clover var/coverage/clover.xml
 
       - name: Enforce coverage threshold
-        # Floor sits just under the measured baseline (46.2% statements,
-        # first pcov run 2026-07-04). Ratchet UP as coverage grows — never
-        # down.
-        run: php bin/check_coverage.php var/coverage/clover.xml 45
+        # Floor sits just under the measured figure, never above one CI has
+        # actually printed. 61.58% measured on run 33165032178 (2026-08-28,
+        # the 1.15.0 merge); the ~2-point margin absorbs the APCu suite, which
+        # skips when the extension is absent. Ratchet UP as coverage grows —
+        # never down.
+        run: php bin/check_coverage.php var/coverage/clover.xml 59
 
       - name: Composer audit (security check)
         run: composer audit --no-interaction

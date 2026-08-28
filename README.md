@@ -4,7 +4,7 @@
 [![Release](https://img.shields.io/github/v/tag/MVinhas/gpro-pitwall?sort=semver&label=release&color=blue)](https://github.com/MVinhas/gpro-pitwall/tags)
 [![PHP 8.5](https://img.shields.io/badge/PHP-8.5-777BB4?logo=php&logoColor=white)](composer.json)
 [![PHPStan level 8](https://img.shields.io/badge/PHPStan-level%208-4F5B93)](phpstan.neon)
-[![Coverage floor](https://img.shields.io/badge/coverage-%E2%89%A545%25%20CI--enforced-yellow)](.github/workflows/ci.yml)
+[![Coverage floor](https://img.shields.io/badge/coverage-%E2%89%A559%25%20CI--enforced-yellow)](.github/workflows/ci.yml)
 [![PSR-12](https://img.shields.io/badge/code%20style-PSR--12-blue)](https://www.php-fig.org/psr/psr-12/)
 
 ![GPRO Pitwall — race strategy, setup calculator and car wear analysis for GPRO managers](public/assets/og-image.png)
@@ -142,7 +142,7 @@ Source of truth is GitHub; deployment is a manual file copy to any PHP 8.5 host.
 - **Twig 3** templates; **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile). Light and dark themes ship in one stylesheet: every design token is a CSS `light-dark()` pair switched by `color-scheme`, so System mode tracks the OS with zero JavaScript.
 - **SQLite** via PDO — emails and API tokens encrypted at rest (AES-256-GCM).
 - **PHPMailer 7** for SMTP; dev writes `.eml` files instead.
-- **PHPUnit 13** — 726 tests, 1991 assertions — with **PHPStan level 8** and enforced type-declaration coverage (100% return/property/constant + `strict_types`; 99.5% param). Twig linted by a native `bin/twig_lint.php` built on Twig's own parser. CI measures statement coverage with `pcov` and enforces a floor (currently 45%, ratcheted up as coverage grows).
+- **PHPUnit 13** — 726 tests, 1991 assertions — with **PHPStan level 8** and enforced type-declaration coverage (100% return/property/constant + `strict_types`; 99.5% param). Twig linted by a native `bin/twig_lint.php` built on Twig's own parser. CI measures statement coverage with `pcov` and enforces a floor (currently 59%, ratcheted up as coverage grows).
 - **Timestamps stored and served as UTC**, localised per visitor in the browser — no server-side timezone config.
 
 ## Architecture
