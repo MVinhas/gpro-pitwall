@@ -188,4 +188,233 @@ final class DatabaseSeederTest extends TestCase
             ->fetchColumn();
         $this->assertSame('pilots', $exists, 'a behind version must rerun migrate and rebuild the table');
     }
+
+    /**
+     * A pre-1.x users table: no username, no api_token, no soft-delete column,
+     * and carrying the dropped is_premium flag plus the old boolean
+     * is_verified. Prod migrates a table exactly like this on first request,
+     * so every ALTER below runs against live rows, not a clean seed.
+     */
+    private function legacyDb(): PDO
+    {
+        $db = new PDO('sqlite::memory:');
+        $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $db->exec(
+            "CREATE TABLE users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT,
+                is_premium INTEGER NOT NULL DEFAULT 0,
+                is_verified INTEGER NOT NULL DEFAULT 0
+            )"
+        );
+
+        return $db;
+    }
+
+    /** @return list<string> */
+    private function columnsOf(PDO $db, string $table): array
+    {
+        $stmt = $db->query("PRAGMA table_info({$table})");
+        $this->assertNotFalse($stmt);
+
+        /** @var list<array<string, mixed>> $cols */
+        $cols = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        return array_map(strval(...), array_column($cols, 'name'));
+    }
+
+    public function testMigratingALegacyUsersTableAddsEveryMissingColumn(): void
+    {
+        $db = $this->legacyDb();
+
+        $this->makeSeeder($db)->migrate();
+
+        $columns = $this->columnsOf($db, 'users');
+        foreach (
+            ['username', 'api_token', 'verified_at', 'is_admin', 'email_encrypted',
+             'email_hash', 'last_synced_at', 'sync_status', 'deleted_at'] as $expected
+        ) {
+            $this->assertContains($expected, $columns, "missing migrated column {$expected}");
+        }
+    }
+
+    /** Premium was removed 2026-06-01; the column must not survive a migrate. */
+    public function testMigratingDropsTheRemovedPremiumColumn(): void
+    {
+        $db = $this->legacyDb();
+
+        $this->makeSeeder($db)->migrate();
+
+        $this->assertNotContains('is_premium', $this->columnsOf($db, 'users'));
+    }
+
+    public function testTheOldBooleanVerifiedFlagIsCarriedIntoTheTimestamp(): void
+    {
+        $db = $this->legacyDb();
+        $db->exec("INSERT INTO users (email, is_verified) VALUES ('kept@example.test', 1)");
+
+        $this->makeSeeder($db)->migrate();
+
+        $verifiedAt = $db->query("SELECT verified_at FROM users WHERE email = 'kept@example.test'")
+            ->fetchColumn();
+        $this->assertIsString($verifiedAt);
+        $this->assertNotSame('', $verifiedAt);
+    }
+
+    /**
+     * Unverified rows are ghosts of abandoned signups; leaving them would let
+     * one squat a username the UNIQUE index is about to start enforcing.
+     */
+    public function testUnverifiedLegacyUsersArePurgedWhileVerifiedOnesSurvive(): void
+    {
+        $db = $this->legacyDb();
+        $db->exec("INSERT INTO users (email, is_verified) VALUES ('kept@example.test', 1)");
+        $db->exec("INSERT INTO users (email, is_verified) VALUES ('ghost@example.test', 0)");
+
+        $this->makeSeeder($db)->migrate();
+
+        $this->assertSame(1, (int) $db->query('SELECT COUNT(*) FROM users')->fetchColumn());
+        $this->assertSame(
+            'kept@example.test',
+            $db->query('SELECT email FROM users')->fetchColumn()
+        );
+    }
+
+    public function testLegacyUsersWithoutAUsernameGetADerivedOne(): void
+    {
+        $db = $this->legacyDb();
+        $db->exec("INSERT INTO users (email, is_verified) VALUES ('kept@example.test', 1)");
+
+        $this->makeSeeder($db)->migrate();
+
+        $username = $db->query('SELECT username FROM users')->fetchColumn();
+        $this->assertIsString($username);
+        $this->assertStringStartsWith('User_', $username);
+    }
+
+    /**
+     * The unique indexes are what make the registration race safe. A migrated
+     * table gets its columns by ALTER, which carries no constraint — so the
+     * seeder has to create them separately.
+     */
+    public function testMigrationHardensTheUniqueIndexesOnAMigratedTable(): void
+    {
+        $db = $this->legacyDb();
+
+        $this->makeSeeder($db)->migrate();
+
+        $db->exec("INSERT INTO users (username, email_hash) VALUES ('dup', 'hash-a')");
+
+        $this->expectException(\PDOException::class);
+        $db->exec("INSERT INTO users (username, email_hash) VALUES ('dup', 'hash-b')");
+    }
+
+    public function testMigratingIsIdempotentAcrossAFreshSeederInstance(): void
+    {
+        $db = $this->legacyDb();
+        $db->exec("INSERT INTO users (email, is_verified) VALUES ('kept@example.test', 1)");
+
+        $this->makeSeeder($db)->migrate();
+        $columnsAfterFirst = $this->columnsOf($db, 'users');
+
+        $db->exec('PRAGMA user_version = 0');
+        $this->makeSeeder($db)->migrate();
+
+        $this->assertSame($columnsAfterFirst, $this->columnsOf($db, 'users'));
+        $this->assertSame(1, (int) $db->query('SELECT COUNT(*) FROM users')->fetchColumn());
+    }
+
+    /**
+     * A plaintext api_token left by a pre-encryption release must be encrypted
+     * in place on migrate, and must still decrypt to the original value.
+     */
+    public function testLegacyPlaintextApiTokensAreEncryptedInPlace(): void
+    {
+        $db = $this->legacyDb();
+        $db->exec("INSERT INTO users (email, is_verified) VALUES ('kept@example.test', 1)");
+        $this->makeSeeder($db)->migrate();
+
+        $db->exec("UPDATE users SET api_token = 'plaintext-token'");
+        $db->exec('PRAGMA user_version = 0');
+
+        $this->makeSeeder($db)->migrate();
+
+        $stored = $db->query('SELECT api_token FROM users')->fetchColumn();
+        $this->assertIsString($stored);
+        $this->assertNotSame('plaintext-token', $stored);
+        $this->assertSame(
+            'plaintext-token',
+            (new ApiTokenCrypto('seeder-test-secret'))->decrypt($stored)
+        );
+    }
+
+    public function testAlreadyEncryptedApiTokensAreNotDoubleEncrypted(): void
+    {
+        $db = $this->legacyDb();
+        $db->exec("INSERT INTO users (email, is_verified) VALUES ('kept@example.test', 1)");
+        $this->makeSeeder($db)->migrate();
+
+        $crypto = new ApiTokenCrypto('seeder-test-secret');
+        $stmt = $db->prepare('UPDATE users SET api_token = :t');
+        $stmt->execute(['t' => $crypto->encrypt('plaintext-token')]);
+
+        $db->exec('PRAGMA user_version = 0');
+        $this->makeSeeder($db)->migrate();
+
+        $stored = $db->query('SELECT api_token FROM users')->fetchColumn();
+        $this->assertIsString($stored);
+        $this->assertSame('plaintext-token', $crypto->decrypt($stored));
+    }
+
+    public function testAnEmptyApiTokenIsLeftAloneRatherThanEncrypted(): void
+    {
+        $db = $this->legacyDb();
+        $db->exec("INSERT INTO users (email, is_verified) VALUES ('kept@example.test', 1)");
+        $this->makeSeeder($db)->migrate();
+
+        $db->exec("UPDATE users SET api_token = ''");
+        $db->exec('PRAGMA user_version = 0');
+        $this->makeSeeder($db)->migrate();
+
+        $this->assertSame('', $db->query('SELECT api_token FROM users')->fetchColumn());
+    }
+
+    /**
+     * A tracks table from before the boost/overtaking columns existed. Built by
+     * migrating a full modern table and dropping the four late additions, so the
+     * fixture stays valid for the CSV reseed that runs in the same migrate().
+     */
+    public function testTracksGainTheirMigratedColumnsOnAnOlderSchema(): void
+    {
+        $db = new PDO('sqlite::memory:');
+        $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $this->makeSeeder($db)->migrate();
+
+        $late = ['boost_dry', 'boost_wet', 'overtaking', 'grip'];
+        foreach ($late as $column) {
+            $db->exec("ALTER TABLE tracks DROP COLUMN {$column}");
+        }
+        $this->assertSame([], array_intersect($late, $this->columnsOf($db, 'tracks')));
+
+        $db->exec('PRAGMA user_version = 0');
+        $this->makeSeeder($db)->migrate();
+
+        $columns = $this->columnsOf($db, 'tracks');
+        foreach ($late as $expected) {
+            $this->assertContains($expected, $columns, "missing migrated track column {$expected}");
+        }
+    }
+
+    public function testDeprecatedTablesAreDroppedOnMigrate(): void
+    {
+        $db = new PDO('sqlite::memory:');
+        $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $db->exec('CREATE TABLE track_risks (id INTEGER PRIMARY KEY AUTOINCREMENT)');
+
+        $this->makeSeeder($db)->migrate();
+
+        $stmt = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='track_risks'");
+        $this->assertNotFalse($stmt);
+        $this->assertFalse($stmt->fetchColumn());
+    }
 }

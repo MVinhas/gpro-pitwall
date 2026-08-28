@@ -117,4 +117,104 @@ final class FilesystemCacheTest extends TestCase
         $this->assertIsObject($result);
         $this->assertInstanceOf('__PHP_Incomplete_Class', $result);
     }
+
+    public function testTheCacheDirectoryIsCreatedOnDemandIncludingParents(): void
+    {
+        $nested = $this->dir . '/deep/nested/path';
+
+        new FilesystemCache($nested);
+
+        $this->assertDirectoryExists($nested);
+
+        rmdir($nested);
+        rmdir($this->dir . '/deep/nested');
+        rmdir($this->dir . '/deep');
+    }
+
+    public function testAnUncreatableDirectoryIsRefusedLoudly(): void
+    {
+        $this->expectException(\RuntimeException::class);
+
+        // A path under an existing *file* can never become a directory.
+        $file = $this->dir . '/blocker';
+        file_put_contents($file, 'x');
+
+        new FilesystemCache($file . '/subdir');
+    }
+
+    public function testATrailingSlashInTheDirectoryIsHarmless(): void
+    {
+        $cache = new FilesystemCache($this->dir . '/');
+
+        $cache->set('k', 'v');
+
+        $this->assertSame('v', $cache->get('k'));
+        $this->assertSame('v', $this->cache->get('k'));
+    }
+
+    /** A truncated or garbage file must read as a miss, never as a fatal. */
+    public function testACorruptCacheFileReadsAsAMiss(): void
+    {
+        $this->cache->set('k', 'v');
+
+        $files = glob($this->dir . '/*.cache') ?: [];
+        $this->assertNotEmpty($files);
+        file_put_contents($files[0], 'not-serialized-data');
+
+        $this->assertNull($this->cache->get('k'));
+        $this->assertFalse($this->cache->has('k'));
+    }
+
+    public function testAWellFormedPayloadMissingItsValueKeyReadsAsAMiss(): void
+    {
+        $this->cache->set('k', 'v');
+
+        $files = glob($this->dir . '/*.cache') ?: [];
+        file_put_contents($files[0], serialize(['expires' => 0]));
+
+        $this->assertNull($this->cache->get('k'));
+    }
+
+    public function testDeletingAnAbsentKeyReportsSuccess(): void
+    {
+        $this->assertTrue($this->cache->delete('never-existed'));
+    }
+
+    public function testClearOnAnEmptyDirectoryReportsSuccess(): void
+    {
+        $this->assertTrue($this->cache->clear());
+    }
+
+    /** Keys that aren't filesystem-safe must still round-trip. */
+    public function testKeysWithPathSeparatorsAndOddCharactersRoundTrip(): void
+    {
+        foreach (['a/b/c', '../escape', 'key with spaces', 'ünïcøde:key'] as $key) {
+            $this->cache->set($key, "value-for-{$key}");
+
+            $this->assertSame("value-for-{$key}", $this->cache->get($key));
+        }
+    }
+
+    public function testDistinctKeysDoNotCollide(): void
+    {
+        $this->cache->set('a/b', 'first');
+        $this->cache->set('a_b', 'second');
+
+        $this->assertSame('first', $this->cache->get('a/b'));
+        $this->assertSame('second', $this->cache->get('a_b'));
+    }
+
+    public function testANegativeTtlIsTreatedAsNoExpiryRatherThanInstantExpiry(): void
+    {
+        $this->cache->set('k', 'v', -10);
+
+        $this->assertSame('v', $this->cache->get('k'));
+    }
+
+    public function testTwoInstancesOnTheSameDirectoryShareEntries(): void
+    {
+        $this->cache->set('k', 'v');
+
+        $this->assertSame('v', (new FilesystemCache($this->dir))->get('k'));
+    }
 }
