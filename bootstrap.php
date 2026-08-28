@@ -341,6 +341,11 @@ $container['service.testing_projection'] = new \App\Service\TestingProjectionSer
 );
 $container['service.sponsor_advisor'] = new \App\Service\SponsorAdvisorService();
 $container['service.testing_targets'] = new \App\Service\TestingTargetsService();
+$container['service.season_calendar'] = new \App\Service\SeasonCalendarService();
+$container['service.training_wear_projection'] = new \App\Service\TrainingWearProjectionService(
+    $container['service.car_wear'],
+    $container['service.wear_advisor'],
+);
 
 $container['controller.testing'] = new \App\Controller\TestingController(
     $container['service.api_client'],
@@ -356,6 +361,7 @@ $container['controller.car_wear'] = new CarWearController(
     $container['service.car_wear'],
     $container['service.api_client'],
     $container['service.data_mapper'],
+    $container['service.training_wear_projection'],
     $container['service.authorize'],
     $container['twig'],
 );
@@ -375,6 +381,7 @@ $container['controller.page'] = new PageController(
     $container['service.testing_projection'],
     $container['service.sponsor_advisor'],
     $container['service.testing_targets'],
+    $container['service.season_calendar'],
     $container['service.training_advisor'],
     $container['controller.strategy'],
     $container['controller.car_wear'],
