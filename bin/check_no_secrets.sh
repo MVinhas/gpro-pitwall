@@ -32,10 +32,13 @@ for path in "${forbidden_paths[@]}"; do
   fi
 done
 
-# Any *.sqlite anywhere.
-if grep -E '\.sqlite$' <<<"$tracked" >/dev/null; then
+# Any SQLite artefact anywhere. The -wal/-shm sidecars carry the same live
+# rows as the database itself and are NOT matched by a plain '\.sqlite$' —
+# that gap let a WAL containing real usernames reach a public commit
+# (2026-08-28). Match the journal suffixes explicitly.
+if grep -E '\.sqlite(-wal|-shm|-journal)?$' <<<"$tracked" >/dev/null; then
   flag "SQLite database file is tracked"
-  grep -E '\.sqlite$' <<<"$tracked" | while read -r f; do note "$f"; done
+  grep -E '\.sqlite(-wal|-shm|-journal)?$' <<<"$tracked" | while read -r f; do note "$f"; done
 fi
 
 # Anything under /data, /var, or the unnamed local-planning directory.

@@ -5,6 +5,11 @@
 /vendor
 gpro_pilots.sqlite
 *.sqlite
+# SQLite WAL/SHM sidecars: same live data as the .sqlite file, and *.sqlite
+# does not match them. They were committed once (2026-08-28) by a `git add -A`.
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite-journal
 /bin/act
 /var/
 
