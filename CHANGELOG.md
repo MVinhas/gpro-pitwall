@@ -6,6 +6,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.15.0] - 2026-08-28
+
+### Added
+- **Season calendar with each track's P/H/A demand.** A new cockpit card lists every round of the season with the track's Power / Handling / Acceleration demand and highlights your next race. It carries no car-vs-track verdict by design — the PHA card above already answers that for the next race, and a second implementation of the same judgement would drift from it.
+- **Car wear projected through training laps.** The Car Wear screen gains a *Training laps first* slider (0–100) that answers "if I train N laps and then race, where does my wear end up?". The projection chains the existing calculators — training ages the car at the testing per-lap rate, then the race is priced on top — and the within-limits verdict reuses the same thresholds that drive the wear and swap advisors. A new *Training* column shows what the session costs per part, and the headline leads with which parts end up over the limit.
+
+### Changed
+- **The landing page now shows the product.** The six-card feature grid is replaced by a carousel of real screenshots — cockpit, race strategy, car wear and training — captured from a purpose-built demo account with entirely fabricated data, so nothing real is published on a public page. Both light and dark versions ship and swap with your theme. It is a CSS scroll-snap strip: no JavaScript, no library, nothing auto-advances, and every image carries real alt text. The FAQ drops from seven questions to the three that answer a genuine pre-registration objection.
+- **The README is no longer a second feature catalogue.** Its Features band collapses from eight subsections of prose to a short list (229 lines to 184), with the persuasive detail living on the landing page where visitors actually read it. Every remaining claim was verified against the working tree, and the test count line corrected.
+
+### Fixed
+- **First-request schema migration could fail on an upgrading database.** `migrate()` left the `PRAGMA user_version` cursor open, so SQLite refused the subsequent `DROP TABLE` with "database table is locked" — on exactly the upgrade path that drop exists to serve. The cursor is now released before any DDL runs.
+
+### Internal
+- Test coverage raised substantially: 454 tests to **726** (1,991 assertions). New suites cover the six previously untested repositories, the pure calculation services and mapper, the security primitives (`EmailCrypto`, `Csrf`), cache driver resolution and adapters, the auth step-up flow, and the guarded schema migrations that run against live production data. The CI coverage floor is unchanged pending a measured figure from the merged run.
+- GitHub Actions updated to current majors (checkout v7, cache v6, upload-artifact v7), clearing the deprecated-Node-runtime warnings.
+
 ## [1.14.3] - 2026-08-25
 
 ### Changed
