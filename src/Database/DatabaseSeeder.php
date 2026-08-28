@@ -40,6 +40,13 @@ class DatabaseSeeder
         // re-encryption into a single cheap PRAGMA read on the hot path.
         $stmt = $this->db->query('PRAGMA user_version');
         $current = $stmt === false ? 0 : (int) $stmt->fetchColumn();
+        // Release the cursor before any DDL runs. SQLite refuses to DROP a
+        // table while a statement still holds a read lock on the connection,
+        // which made dropDeprecatedTables() fail with "database table is
+        // locked" on exactly the upgrade path it exists to serve.
+        if ($stmt !== false) {
+            $stmt->closeCursor();
+        }
         if ($current >= self::SCHEMA_VERSION) {
             return;
         }

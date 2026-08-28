@@ -9,6 +9,7 @@ use App\Security\Authorize;
 use App\Service\CarWearService;
 use App\Service\GproApiClient;
 use App\Service\GproDataMapper;
+use App\Service\TrainingWearProjectionService;
 use Twig\Environment;
 
 class CarWearController
@@ -17,6 +18,7 @@ class CarWearController
         private readonly CarWearService $service,
         private readonly GproApiClient $api,
         private readonly GproDataMapper $mapper,
+        private readonly TrainingWearProjectionService $trainingWear,
         private readonly Authorize $authorize,
         private readonly Environment $twig,
     ) {
@@ -28,15 +30,17 @@ class CarWearController
         $this->api->setToken($user['api_token']);
 
         $risk = (int) $request->post('risk', 0);
-        $result = $this->runCalc($risk);
+        $trainingLaps = (int) $request->post('training_laps', 0);
+        $result = $this->runCalc($risk, $trainingLaps);
 
         if (isset($result['error'])) {
             $_SESSION['wear_error'] = $result['error'];
         } else {
             $_SESSION['wear_results'] = $result['results'];
             $_SESSION['wear_inputs'] = [
-                'risk'   => $risk,
-                'driver' => $result['driver'],
+                'risk'          => $risk,
+                'training_laps' => $trainingLaps,
+                'driver'        => $result['driver'],
             ];
             $_SESSION['wear_error'] = null;
         }
@@ -52,14 +56,16 @@ class CarWearController
         $this->api->setToken($user['api_token']);
 
         $risk = (int) $request->post('risk', 0);
-        $result = $this->runCalc($risk);
+        $trainingLaps = (int) $request->post('training_laps', 0);
+        $result = $this->runCalc($risk, $trainingLaps);
 
         echo $this->twig->render('partials/_car_wear_results.twig', [
             'wear_results' => $result['results'] ?? null,
             'wear_error'   => $result['error'] ?? null,
             'wear_inputs'  => [
-                'risk'   => $risk,
-                'driver' => $result['driver'] ?? null,
+                'risk'          => $risk,
+                'training_laps' => $trainingLaps,
+                'driver'        => $result['driver'] ?? null,
             ],
         ]);
     }
@@ -75,7 +81,7 @@ class CarWearController
      *
      * @return array<string, mixed>
      */
-    public function runCalc(int $risk): array
+    public function runCalc(int $risk, int $trainingLaps = 0): array
     {
         try {
             $office       = $this->api->getOfficeData();
@@ -106,7 +112,14 @@ class CarWearController
                 $trackProfile['name'] = $office['trackName'];
             }
 
-            $results = $this->service->calculateWear($trackProfile, $carData, $driver, $risk);
+            $results = $trainingLaps > 0
+                ? $this->trainingWear->project($trackProfile, $carData, $driver, $risk, $trainingLaps)
+                : $this->service->calculateWear($trackProfile, $carData, $driver, $risk);
+
+            if (isset($results['error'])) {
+                return ['error' => $results['error']];
+            }
+
             $results['season'] = $office['seasonNb'] ?? '?';
             $results['race']   = $office['raceNb'] ?? '?';
 

@@ -60,12 +60,25 @@
                         <label class="t-label block mb-2">Clear Track Risk</label>
                         <div class="flex items-center gap-4">
                             <input type="range" name="risk" min="0" max="100" value="{{ wear_inputs.risk ?? 0 }}"
-                                   data-wear-risk-slider
+                                   data-wear-risk-slider data-wear-refresh
                                    class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"
                                    oninput="document.getElementById('riskVal').innerText = this.value">
                             <span id="riskVal" class="text-sm font-bold text-blue-600 w-8 tabular-nums">{{ wear_inputs.risk ?? 0 }}</span>
                         </div>
                         <p class="t-caption mt-2">Move the slider — projection refreshes automatically.</p>
+                    </div>
+
+                    <div class="mb-6">
+                        <label class="t-label block mb-2" for="trainingLaps">Training laps first</label>
+                        <div class="flex items-center gap-4">
+                            <input type="range" id="trainingLaps" name="training_laps" min="0" max="100" step="5"
+                                   value="{{ wear_inputs.training_laps ?? 0 }}"
+                                   data-wear-refresh
+                                   class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"
+                                   oninput="document.getElementById('trainingLapsVal').innerText = this.value">
+                            <span id="trainingLapsVal" class="text-sm font-bold text-blue-600 w-8 tabular-nums">{{ wear_inputs.training_laps ?? 0 }}</span>
+                        </div>
+                        <p class="t-caption mt-2">Wear from training laps run before this race.</p>
                     </div>
 
                     <noscript><button type="submit" class="btn btn-sm btn-secondary w-full mt-2">Update projection</button></noscript>
@@ -86,14 +99,14 @@
 
 <script>
 (() => {
-    const slider = document.querySelector('[data-wear-risk-slider]');
+    const inputs = document.querySelectorAll('[data-wear-refresh]');
     const card = document.getElementById('wear-results-card');
     const form = document.getElementById('wearForm');
-    if (!slider || !card || !form) return;
+    if (!inputs.length || !card || !form) return;
 
     let pending = null;
 
-    slider.addEventListener('change', async () => {
+    const refresh = async () => {
         if (pending) pending.abort();
         pending = new AbortController();
         const data = new FormData(form);
@@ -121,6 +134,8 @@
         } catch (err) {
             if (err.name !== 'AbortError') console.error(err);
         }
-    });
+    };
+
+    inputs.forEach((input) => input.addEventListener('change', refresh));
 })();
 </script>

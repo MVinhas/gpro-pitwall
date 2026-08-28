@@ -21,80 +21,35 @@ Getting started takes two minutes: register with your email (passwordless — a 
 
 ## Features
 
-Everything sits behind a sticky tab bar — scrollable pills on mobile, underline tabs on desktop — grouped by intent: **race weekend** (Cockpit · Strategy · Car Wear · Testing), **team building** (Training · Recruitment) and admin. Every page shares one visual system (shared cards, one-line notices, verdict-first accordions that stay informative while closed) and works at 375 px and without JavaScript.
+Every screen reads your own GPRO data and answers one race-weekend question. Full
+detail and screenshots live on [gpro-pitwall.com](https://gpro-pitwall.com).
 
-### Cockpit — the race-weekend spine
+- **Cockpit** — the race-weekend spine. A decision board of verdict tiles over cards for
+  PHA match, testing projection, boost-lap fuel, the weather call, sponsor answers,
+  training picks and per-part car wear with ranked swap options. Also carries the season
+  calendar with each track's P/H/A demand.
+- **Race Strategy** — fuel, tyres and setup per compound, with the best plan chosen by
+  total time cost rather than tyre life alone. Clear Track Risk is priced as a trade:
+  added wear against clear-air time gained. Includes the **Race Engineer**, which reads
+  the driver, track and forecast and says in plain words how to fill the race form, and a
+  **push-or-hold checklist** for the risk dial.
+- **Car Wear** — per-part end-of-race wear from your real driver attributes, with a risk
+  slider and an optional projection through training laps run beforehand.
+- **Testing** — the testing track's demands vs your car, the points split across Test /
+  R&D / Engineering / Car Character, gains per 5 laps per priority, and the ideal setup.
+- **Training Planner** — cumulative effect of every program × count combination, with
+  attribute bounds respected and projected Overall Ability before and after.
+- **Recruitment Analyzer** — scores the full driver market (4–5k) against your division's
+  ideal pilot, with per-attribute filters and a favourite-tracks-this-season column.
+- **Admin** — division baselines, user management with an append-only audit log, and
+  **Race Intelligence**: an anonymous collective race corpus segmented by level, built
+  from data managers already sync. Rows carry no user identifier of any kind.
+- **Accounts** — passwordless one-time-code login, a verified-only username namespace,
+  opt-in persistent login with rotation and theft detection, and step-up
+  re-authentication for sensitive actions.
 
-One screen in race-prep order. A **decision summary board** leads: one verdict tile per card, so every call is readable without scrolling; each tile jumps to and opens its card.
-
-- **PHA match** — car vs track Power/Handling/Acceleration alignment, with a favourite-track badge. Only strict matches count: **top** (your car's #1 attribute is the track's #1) or **perfect** (all three ranks align).
-- **Testing projection** — 100-lap forecast with 3-race decay (Test Points → R&D → Engineering → Car Character), so you see what actually lands in the car.
-- **Boost-lap fuel cost** — per-track dry/wet coefficients.
-- **Weather call** — Q1 / Q2 / race-start dry-wet assessment for the *upcoming* race. Track identity comes from feeds that roll over the moment a new race opens, so the cockpit is correct even before you've saved a setup in GPRO — and it withholds the forecast (with a notice) rather than show the previous race's weather.
-- **Sponsors** — ongoing negotiations with the recommended answer for each of the five negotiation questions.
-- **Training picks** — gap-closers weighted against your division's ideal driver.
-- **Car wear panel** — per-part end-of-race wear with a live risk slider. Flagged parts land in one status table (Part · Lvl · now% → end% · verdict); each part's swap options are ranked, filtered by your group's car-level band and your live cash, and collapse to their best pick. A reference table of each part's PHA contribution per level is one click away.
-- **Handoff** — one click to the Race Strategy tab, pre-populated.
-
-### Race Strategy
-
-Fuel, tyres and setup for every compound (Extra Soft / Soft / Medium / Hard / Rain), auto-run on first visit, re-run live by a risk slider. The **verdict leads**: best compound, stops, fuel per stint, total time lost and the margin over the runner-up — always compared within the same tyre type (a dry race compares dry compounds only; a wet race recommends Rain outright — it's the only wet compound). Below it: a per-compound breakdown of time lost (pits / fuel / compound difference), the Q1 / Q2 / race setup table with weather-aware tyre choices, and your contracted tyre supplier's dry/wet rating and ideal temperature beside the track name.
-
-Clear Track Risk is shown as a trade, not just a cost. Raising it wears the tyres faster (which can force a harder compound or an extra stop) while buying back clear-air lap time; a **CTR Gain** column prices that gain and the table's final column reports **Net** — time lost minus time gained — so both halves land in the same comparison as you drag the slider. The gain scales with the track's lap time, so a slow lap is worth more per point of risk than a fast lap of the same length. The gain is clear-air only, and the table says so: a driver stuck in traffic pays the wear without banking the time.
-
-The stop count is chosen by cost, not by tyre life alone: every stop count the tyres allow is priced (pit losses against the fuel-weight saving of a lighter car and the compound difference) and the cheapest wins, so an extra stop is recommended whenever it actually saves time. Plans are filtered for feasibility first — the *recommended* load, boost fuel and safety lap included, must fit the 180 L tank, so a strategy you couldn't physically fuel is never offered.
-
-Wet consumption is measured per track rather than derived — GPRO publishes no wet-fuel rule. A handful of tracks have never run a wet race and so have no sample at all; there the wet figures fall back to the dry rate and are labelled **est.** with a caution banner, so the number over-fuels you rather than stranding the car.
-
-#### Advice from the Race Engineer ⭐
-
-The headline feature. A race engineer that reads your driver, the track and the forecast, then tells you in plain words how to fill the race form:
-
-> *"Overtaking at Barcelona is hard, so I'd push overtake up to 60 to make moves stick — and since the track already makes you hard to pass, 35 on defence is plenty. Grip here is low — sliding cars punish ambition, so I've shaved both numbers."*
-
-- **Overtake and defend risk dials (0–100)** — weighed from the track's overtaking rating, the driver (concentration and experience carry dry races; talent takes the wheel in the wet), aggression both ways (backed by experience it buys pace; beyond it, it's the mistake trap), the forecast, track grip, tyre wear, and stamina on long races.
-- **Boost-lap placement** — early in traffic, on the in-laps to overcut through the pit cycle, or at the flag — pit-window aware via the best strategy's stint plan.
-- **Race start approach** and the **technical-problem pit threshold**, derived from driver control and this track's pit-lane time.
-- **Pit-count tie-breaker** when two strategies are close on paper, and a race-distance note when the length is worth flagging.
-
-Honest by design: a transparent heuristic built from the game's own attribute semantics, not a reverse-engineered formula — and it says so right in the box.
-
-#### Push or hold? ⭐
-
-A checklist that turns binary signals into one read for your **Clear Track Risk** dial: car–track PHA match, driver favourite track, tyres suiting the race, track temperature near the tyre's ideal, car level and driver ability ranked against your group, and whether the car has the wear headroom to absorb a push. More signals met → the weekend is set up in your favour, carry more risk; a full sweep points to a very likely win. Signals that don't apply to your division are hidden, not failed.
-
-### Car Wear
-
-Per-part end-of-race wear forecast from your real driver attributes (read-only, pulled from the API — no manual entry). Risk slider; per-part level, start wear, added wear and colour-coded projected end wear.
-
-### Testing
-
-Everything for a testing session: the testing track's demands vs your car, the points split across Test / R&D / Engineering / **Car Character** (highlighted — it's what actually lands in the car), points gained per 5 laps for each testing priority, the ideal setup for the track, and a slider-driven wear projection.
-
-### Training Planner
-
-Combine several training programs in one shot and see the cumulative effect of every program × count combination, with attribute bounds respected and projected Overall Ability before/after — useful context for contract renegotiation. All seven GPRO sessions are covered (Fitness, Yoga, PR, Technical, Psycho, Ninja, Spa) at current in-game prices; Spa also restores driver energy, which isn't a modelled attribute and so is flagged rather than projected.
-
-### Recruitment Analyzer
-
-Scores the full GPRO driver market (4–5k drivers) against your division's ideal pilot — attribute gaps, age and weight priced in; salary and fee ignored. Value-range filters per attribute persist across sorting and pagination, and a compact `Fav` column flags how many of each candidate's favourite tracks are raced this season and next — computed from data already in hand, no extra API calls.
-
-### Admin
-
-- **Division baseline / differences** — per-division ideal-pilot tables with OA caps (Rookie 85 / Amateur 110 / Pro 135 / Master 160 / Elite ∞), plus pairwise division insights.
-- **User management** — paginated, sortable user list with growth trends over a selectable 7/30/90-day window; admin-flag toggle with self-demotion guard, soft-delete/restore, and every mutation in an append-only audit log.
-- **Account support tools** — rename a user whose username predates the current whitelist, plus a per-user email delivery check. Login matches the username byte-for-byte and case-sensitively, so an account created with an accent or a space becomes unreachable to anyone who misremembers its exact spelling — renaming to a conforming name is the supported repair. Both actions confirm first and are audited.
-- **Race Intelligence** (`/admin/telemetry`) — a collective, **anonymous** race corpus built from the `RaceAnalysis` data managers already sync, with no extra per-page API cost. Segmented by GPRO level (Rookie → Elite) throughout: driver-attribute correlations against finishing position, the podium "driver prototype" against the rest of the field, tyre performance split by wet/dry, Technical Director with/without comparison, qualifying and race risk settings, pit strategy, and driver-mistake impact. Slices thinner than a minimum sample are withheld rather than shown as findings. Rows carry **no user identifier of any kind** — see *Security posture*.
-- **Telemetry** (`/debug`) — registered vs active users (successful sync in the last 30 days), tokens set, API budget, runtime info, masked environment.
-
-### Accounts
-
-- **Passwordless** — register and log in with a one-time 6-digit emailed code; no passwords stored, ever. Rate-limited, TTL'd, attempt-capped, reCAPTCHA-guarded in prod.
-- **Verified-only namespace** — a registration only becomes an account once its code is verified; an unverified or bounced sign-up can never squat a username or email.
-- **Keep me signed in** — opt-in persistent login (hashed validator, rotated on every use for theft detection, rolling 30-day window, with a 30-second grace on the just-replaced validator so a page's parallel requests aren't mistaken for a replay), with **step-up re-authentication** for sensitive actions like account deletion or API-token changes.
-- **In-app feedback form** — whitelisted subjects, delivered with Reply-To set to your account address, used only to reply — never for marketing.
-
-Also in the box: a **Light / Dark / System appearance switch** (a hand-tuned, WCAG-AA-validated dark theme — System follows your OS live, and your choice is remembered on-device), a `/healthz` endpoint for uptime probes, full SEO and social-sharing markup, styled error pages, and a friendly no-driver prompt that points new accounts at the Recruitment Analyzer instead of a cryptic error.
+Everything works at 375 px and without JavaScript, with a Light / Dark / System
+appearance switch and a WCAG-AA-validated dark theme.
 
 ---
 
@@ -187,7 +142,7 @@ Source of truth is GitHub; deployment is a manual file copy to any PHP 8.5 host.
 - **Twig 3** templates; **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile). Light and dark themes ship in one stylesheet: every design token is a CSS `light-dark()` pair switched by `color-scheme`, so System mode tracks the OS with zero JavaScript.
 - **SQLite** via PDO — emails and API tokens encrypted at rest (AES-256-GCM).
 - **PHPMailer 7** for SMTP; dev writes `.eml` files instead.
-- **PHPUnit 13** — 454 tests, 1393 assertions — with **PHPStan level 8** and enforced type-declaration coverage (100% return/property/constant + `strict_types`; 99.5% param). Twig linted by a native `bin/twig_lint.php` built on Twig's own parser. CI measures statement coverage with `pcov` and enforces a floor (currently 45%, ratcheted up as coverage grows).
+- **PHPUnit 13** — 726 tests, 1991 assertions — with **PHPStan level 8** and enforced type-declaration coverage (100% return/property/constant + `strict_types`; 99.5% param). Twig linted by a native `bin/twig_lint.php` built on Twig's own parser. CI measures statement coverage with `pcov` and enforces a floor (currently 45%, ratcheted up as coverage grows).
 - **Timestamps stored and served as UTC**, localised per visitor in the browser — no server-side timezone config.
 
 ## Architecture

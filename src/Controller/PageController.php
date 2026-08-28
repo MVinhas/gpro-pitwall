@@ -21,6 +21,7 @@ use App\Service\WearAdvisorService;
 use App\Service\PartSwapAdvisorService;
 use App\Service\TestingProjectionService;
 use App\Service\SponsorAdvisorService;
+use App\Service\SeasonCalendarService;
 use App\Service\TestingTargetsService;
 use App\Service\TrainingAdvisorService;
 use App\Controller\CarWearController;
@@ -57,6 +58,7 @@ class PageController
         private readonly TestingProjectionService $testingProjection,
         private readonly SponsorAdvisorService $sponsorAdvisor,
         private readonly TestingTargetsService $testingTargets,
+        private readonly SeasonCalendarService $seasonCalendar,
         private readonly TrainingAdvisorService $trainingAdvisor,
         private readonly StrategyController $strategyController,
         private readonly CarWearController $carWearController,
@@ -310,6 +312,11 @@ class PageController
                     $currentRace = (int) ($office['raceNb'] ?? 0);
                     if ($currentRace > 0) {
                         $allTracks = $this->apiClient->getAllTracksPreview();
+                        $viewData['season_calendar'] = $this->seasonCalendar->season(
+                            $calendar,
+                            $allTracks,
+                            $currentRace,
+                        );
                         $targets = $this->testingTargets->targetsFor(
                             $currentRace,
                             $calendar,

@@ -410,6 +410,55 @@
             </div>
         </div>
 
+        {# SEASON CALENDAR — one row per round with that track's P/H/A demand.
+           No car-vs-track verdict here by design: the PHA card above already
+           answers that for the next race. #}
+        {% if season_calendar is defined and season_calendar is not empty %}
+            {% embed 'partials/_acc.twig' with {
+                id: 'calendar',
+                title: 'Season calendar',
+                caption: 'Each round and what that track demands.',
+                season_calendar: season_calendar,
+            } only %}
+                {% block verdict %}
+                    <span class="t-caption tabular-nums">{{ season_calendar|length }} rounds</span>
+                {% endblock %}
+                {% block body %}
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full text-sm">
+                            <caption class="sr-only">Season calendar with each track's Power, Handling and Acceleration demand</caption>
+                            <thead>
+                                <tr class="t-label border-b border-slate-200">
+                                    <th scope="col" class="py-2 pr-2 text-left">#</th>
+                                    <th scope="col" class="py-2 px-2 text-left">Track</th>
+                                    <th scope="col" class="py-2 px-2 text-right">P</th>
+                                    <th scope="col" class="py-2 px-2 text-right">H</th>
+                                    <th scope="col" class="py-2 pl-2 text-right">A</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                {% for round in season_calendar %}
+                                    <tr class="{{ round.is_current ? 'bg-blue-50 font-semibold' : '' }}">
+                                        <td class="py-1.5 pr-2 tabular-nums text-slate-500">
+                                            {{ round.race }}
+                                            {%- if round.is_current %}<span class="sr-only"> (next race)</span>{% endif -%}
+                                        </td>
+                                        <td class="py-1.5 px-2 text-slate-900 truncate max-w-[10rem] sm:max-w-none">
+                                            {{ round.track_name|default('—') }}
+                                        </td>
+                                        <td class="py-1.5 px-2 text-right tabular-nums">{{ round.power is null ? '—' : round.power }}</td>
+                                        <td class="py-1.5 px-2 text-right tabular-nums">{{ round.handling is null ? '—' : round.handling }}</td>
+                                        <td class="py-1.5 pl-2 text-right tabular-nums">{{ round.acceleration is null ? '—' : round.acceleration }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="t-caption mt-3">Higher means the track demands more of that attribute. The highlighted row is your next race.</p>
+                {% endblock %}
+            {% endembed %}
+        {% endif %}
+
         {# JUMP TO STRATEGY #}
         <div class="text-center space-y-2">
             <a href="?main_tab=Race Strategy&track={{ active_track|url_encode }}"

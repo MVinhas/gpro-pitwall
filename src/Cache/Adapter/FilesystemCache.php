@@ -18,7 +18,7 @@ final class FilesystemCache implements CacheInterface
 
     public function __construct(string $directory)
     {
-        if (!is_dir($directory) && !mkdir($directory, 0750, true) && !is_dir($directory)) {
+        if (!is_dir($directory) && !@mkdir($directory, 0750, true) && !is_dir($directory)) {
             throw new RuntimeException("Cache directory is not writable: {$directory}");
         }
 

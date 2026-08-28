@@ -506,4 +506,155 @@ final class AuthServiceTest extends TestCase
         }
         return $m[1];
     }
+
+    /** Register + verify a user, returning their id. */
+    private function makeVerifiedUser(string $username = 'stepup'): int
+    {
+        $result = $this->auth->register($username, $username . '@example.invalid', '', '127.0.0.1');
+        $this->assertTrue($result['success']);
+
+        $res = $this->auth->verifyRegistration($result['registration_id'], $this->codeFromLatestEmail());
+        $this->assertTrue($res['success']);
+
+        return $res['user_id'];
+    }
+
+    public function testSendReauthCodeEmailsAFreshCodeToAKnownUser(): void
+    {
+        $userId = $this->makeVerifiedUser();
+        $before = $this->codeSendCount();
+
+        $this->assertTrue($this->auth->sendReauthCode($userId));
+        $this->assertGreaterThan($before, $this->codeSendCount());
+    }
+
+    public function testSendReauthCodeForAnUnknownUserIsASilentNoOp(): void
+    {
+        $before = $this->codeSendCount();
+
+        $this->assertFalse($this->auth->sendReauthCode(4242));
+        $this->assertSame($before, $this->codeSendCount());
+    }
+
+    /**
+     * Step-up promotes the *existing* session to fresh; it must not mint a new
+     * login or change who is signed in.
+     */
+    public function testVerifyReauthPromotesTheSessionToFresh(): void
+    {
+        $userId = $this->makeVerifiedUser();
+        $_SESSION['auth_fresh'] = false;
+
+        $this->auth->sendReauthCode($userId);
+
+        $this->assertTrue($this->auth->verifyReauth($userId, $this->codeFromLatestEmail()));
+        $this->assertTrue($_SESSION['auth_fresh']);
+        $this->assertSame($userId, $_SESSION['user_id']);
+    }
+
+    public function testAWrongReauthCodeLeavesTheSessionStale(): void
+    {
+        $userId = $this->makeVerifiedUser();
+        $_SESSION['auth_fresh'] = false;
+        $this->auth->sendReauthCode($userId);
+
+        $this->assertFalse($this->auth->verifyReauth($userId, '000000'));
+        $this->assertFalse($_SESSION['auth_fresh']);
+    }
+
+    public function testAReauthCodeIsOneShot(): void
+    {
+        $userId = $this->makeVerifiedUser();
+        $this->auth->sendReauthCode($userId);
+        $code = $this->codeFromLatestEmail();
+
+        $this->assertTrue($this->auth->verifyReauth($userId, $code));
+
+        $_SESSION['auth_fresh'] = false;
+        $this->assertFalse($this->auth->verifyReauth($userId, $code));
+    }
+
+    public function testReauthWithNoOutstandingCodeIsRejected(): void
+    {
+        $userId = $this->makeVerifiedUser();
+
+        $this->assertFalse($this->auth->verifyReauth($userId, '123456'));
+    }
+
+    public function testAnExpiredReauthCodeIsRejected(): void
+    {
+        $userId = $this->makeVerifiedUser();
+        $this->auth->sendReauthCode($userId);
+        $code = $this->codeFromLatestEmail();
+
+        $this->db->exec(
+            "UPDATE verification_tokens SET expires_at = datetime('now', '-1 hour') WHERE user_id = {$userId}"
+        );
+
+        $this->assertFalse($this->auth->verifyReauth($userId, $code));
+    }
+
+    public function testReauthCodeIsRejectedOnceMaxAttemptsReached(): void
+    {
+        $userId = $this->makeVerifiedUser();
+        $this->auth->sendReauthCode($userId);
+        $code = $this->codeFromLatestEmail();
+
+        $this->db->exec(
+            "UPDATE verification_tokens SET attempts = 99 WHERE user_id = {$userId}"
+        );
+
+        $this->assertFalse($this->auth->verifyReauth($userId, $code));
+        $this->assertFalse($this->auth->verifyReauth($userId, $code));
+    }
+
+    public function testResendCodeIssuesAFreshCodeForAKnownUser(): void
+    {
+        $userId = $this->makeVerifiedUser();
+        $before = $this->codeSendCount();
+
+        $this->assertTrue($this->auth->resendCode($userId));
+        $this->assertGreaterThan($before, $this->codeSendCount());
+    }
+
+    public function testResendCodeForAnUnknownUserIsASilentNoOp(): void
+    {
+        $before = $this->codeSendCount();
+
+        $this->assertFalse($this->auth->resendCode(4242));
+        $this->assertSame($before, $this->codeSendCount());
+    }
+
+    public function testUsernameReminderIsSentToTheAddressOnTheAccount(): void
+    {
+        $userId = $this->makeVerifiedUser('reminder');
+
+        $this->assertTrue($this->auth->sendUsernameReminder($userId));
+
+        $files = glob($this->mailDir . '/*.eml') ?: [];
+        usort($files, static fn(string $a, string $b): int => filemtime($b) <=> filemtime($a));
+        $content = (string) file_get_contents($files[0]);
+
+        $this->assertStringContainsString('reminder@example.invalid', $content);
+        $this->assertStringContainsString('reminder', $content);
+    }
+
+    /**
+     * The reminder carries no code and grants no session — the reader still has
+     * to log in normally.
+     */
+    public function testUsernameReminderSendsNoVerificationCode(): void
+    {
+        $userId = $this->makeVerifiedUser('reminder');
+        $before = $this->codeSendCount();
+
+        $this->auth->sendUsernameReminder($userId);
+
+        $this->assertSame($before, $this->codeSendCount());
+    }
+
+    public function testUsernameReminderForAnUnknownUserIsASilentNoOp(): void
+    {
+        $this->assertFalse($this->auth->sendUsernameReminder(4242));
+    }
 }

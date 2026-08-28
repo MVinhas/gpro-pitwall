@@ -123,6 +123,19 @@
 :root[data-theme="light"] { color-scheme: light; }
 :root[data-theme="dark"]  { color-scheme: dark; }
 
+/* Landing screenshots ship one image per theme. light-dark() can't switch an
+   <img> src, so mirror the same three states the tokens use: System follows the
+   OS via the media query, an explicit data-theme pins it either way. */
+.shot-dark { display: none; }
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .shot-light { display: none; }
+    :root:not([data-theme="light"]) .shot-dark  { display: block; }
+}
+:root[data-theme="dark"] .shot-light { display: none; }
+:root[data-theme="dark"] .shot-dark  { display: block; }
+:root[data-theme="light"] .shot-light { display: block; }
+:root[data-theme="light"] .shot-dark  { display: none; }
+
 /* =========================
    BUTTON STANDARD
 ========================= */
@@ -302,6 +315,11 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
    it wins for elements that opt in. */
 .no-scrollbar { scrollbar-width: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* Scroll-snap strips keep their scrollbar (it's the affordance that says
+   "there's more") but must not paint a light track on a dark page. */
+.snap-strip { scrollbar-width: thin; scrollbar-color: var(--color-slate-300) transparent; }
+.snap-strip::-webkit-scrollbar-track { background: transparent; }
 
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: var(--color-slate-100); }

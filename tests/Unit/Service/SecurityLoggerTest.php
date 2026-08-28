@@ -50,4 +50,53 @@ final class SecurityLoggerTest extends TestCase
         $this->assertStringContainsString('user_id=0', $this->sink[0]);
         $this->assertStringContainsString('note=', $this->sink[0]);
     }
+
+    public function testBooleanContextValuesAreStringified(): void
+    {
+        $this->logger->event('rate_limited', ['blocked' => true, 'retry' => false]);
+
+        $this->assertStringContainsString('blocked=1', $this->sink[0]);
+        $this->assertStringContainsString('retry=', $this->sink[0]);
+    }
+
+    public function testAnEventWithNoContextStillEmitsALine(): void
+    {
+        $this->logger->event('session_regenerated');
+
+        $this->assertSame('[security] action=session_regenerated', $this->sink[0]);
+    }
+
+    public function testEachEventEmitsExactlyOneLine(): void
+    {
+        $this->logger->event('a');
+        $this->logger->event('b');
+        $this->logger->event('c');
+
+        $this->assertCount(3, $this->sink);
+    }
+
+    /**
+     * The production default routes through error_log. Point error_log at a
+     * file so the default sink is exercised without a custom callable.
+     */
+    public function testTheDefaultSinkWritesThroughErrorLog(): void
+    {
+        $file = tempnam(sys_get_temp_dir(), 'pitwall-seclog-');
+        $this->assertIsString($file);
+
+        $previous = ini_set('error_log', $file);
+
+        try {
+            (new SecurityLogger())->event('login_failed', ['user_id' => 7]);
+        } finally {
+            if (is_string($previous)) {
+                ini_set('error_log', $previous);
+            }
+        }
+
+        $contents = (string) file_get_contents($file);
+        unlink($file);
+
+        $this->assertStringContainsString('[security] action=login_failed user_id=7', $contents);
+    }
 }
