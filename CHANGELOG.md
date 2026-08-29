@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.15.3] - 2026-08-29
+
+### Fixed
+- **The cockpit wear sliders silently stopped reaching the server, freezing the card on stale numbers.** The fragment refresh built its URL by concatenating a query onto `form.action`, which on a `<form action="">` resolves to the whole document URL — query string *and* `#hash`. With a `#wear` anchor in the address bar (which is what the board tiles put there), every appended parameter landed inside the fragment, and browsers never send that. The request arrived without `fragment=cockpit_wear`, the server answered with the full page, the recovery path appended the same garbage again, and the address bar grew one `?…#wear` segment per slider move while Clear Track Risk and Training laps were stuck at zero. The URL is now rebuilt through the URL API, which replaces the query outright instead of appending, so repeated refreshes are idempotent — verified in a browser across three recovery round-trips.
+
 ## [1.15.2] - 2026-08-29
 
 ### Added
