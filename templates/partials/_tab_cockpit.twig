@@ -511,7 +511,23 @@
         pending = new AbortController();
         const params = new URLSearchParams(new FormData(form));
         params.set('fragment', 'cockpit_wear');
-        const url = form.action + '?' + params.toString();
+        // NEVER build this URL from form.action. On <form action=""> that
+        // property resolves to the whole document URL -- query string and
+        // #hash included -- so '?' + params appended to it yields a second
+        // '?', and once a #wear anchor is in the address bar every appended
+        // parameter lands inside the fragment, which browsers do not send.
+        // The request then arrives without fragment=cockpit_wear, the server
+        // answers with the full page, recover() appends the same garbage
+        // again, and the address bar grows one ?...#wear segment per slider
+        // move while the sliders silently stop reaching the server. Rebuilding
+        // from the URL API replaces the query outright, so it cannot compound.
+        const at = (search, hash) => {
+            const u = new URL(window.location.href);
+            u.search = search;
+            u.hash = hash;
+            return u.toString();
+        };
+        const url = at(params.toString(), '');
         const opts = { signal: pending.signal, headers: { 'X-Requested-With': 'fetch' } };
         // Last resort: re-enter the page carrying the settings the user chose
         // (and anchored on the wear card) so a recovery never silently rewinds
@@ -519,7 +535,7 @@
         const recover = () => {
             const next = new URLSearchParams(params);
             next.delete('fragment');
-            window.location.replace(form.action + '?' + next.toString() + '#wear');
+            window.location.replace(at(next.toString(), 'wear'));
         };
         const lapsed = (r) => r.redirected || r.status === 401 || r.status === 403;
         try {
