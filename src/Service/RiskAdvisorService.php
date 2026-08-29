@@ -11,9 +11,17 @@ namespace App\Service;
  * 0-250 scale and are normalised before weighting. Inputs, per the in-game
  * tooltip semantics: overtake risk pays on hard-overtaking tracks while the
  * track itself protects your position; defending matters where passing is
- * easy; talent carries wet races; aggressiveness without experience invites
- * mistakes; stamina fades on long races; low grip and heavy tyre wear both
- * raise the cost of pushing.
+ * easy; talent carries wet races; stamina fades on long races; low grip and
+ * heavy tyre wear both raise the cost of pushing.
+ *
+ * Aggressiveness is the primary lever on both dials, not a trim. A risk
+ * setting is an instruction to fight for a position, and a driver who will
+ * not fight banks the mistakes without cashing the places — so it enters
+ * twice: as an appetite factor scaling both numbers, and as a hard per-driver
+ * ceiling no track and no other attribute can push through. Everything else
+ * modulates inside that envelope. Experience is what buys the appetite back:
+ * the backed share adds attacking pace, the unbacked share is the mistake
+ * trap and eats into overall margin.
  *
  * Driver energy is deliberately not an input — it only affects clear-track
  * risk, which this advisor doesn't cover. Long races still get a static
@@ -73,6 +81,29 @@ class RiskAdvisorService
     private const int MIN_RISK = 5;
     private const int MAX_RISK = 70;
 
+    /**
+     * Appetite factor = APPETITE_FLOOR + APPETITE_SPAN * (aggressiveness/250).
+     * Calibrated against the situation that used to advise ~50: aggressiveness
+     * 0 lands near 10, 50 near 20, and only a maxed 250 reaches the sixties.
+     */
+    private const float APPETITE_FLOOR = 0.20;
+    private const float APPETITE_SPAN = 1.05;
+
+    /**
+     * Per-driver ceiling = CEILING_FLOOR + CEILING_SPAN * normalised
+     * aggressiveness, snapped down to a multiple of 5. Nothing — not Monaco,
+     * not a maxed driver, not dry weather — lifts a dial above it, so
+     * aggressiveness 0 tops out at 15 and 250 at 65.
+     */
+    private const float CEILING_FLOOR = 15.0;
+    private const float CEILING_SPAN = 0.50;
+
+    /** Normalised aggressiveness at or below which the driver reads as passive. */
+    private const float PASSIVE_AGGRESSION = 25.0;
+
+    /** Normalised aggressiveness from which the driver can genuinely spend a high dial. */
+    private const float EAGER_AGGRESSION = 70.0;
+
     /** Lap-time loss with a solvable car problem (s/lap) — official tutorial says 3-6. */
     private const float PROBLEM_LAP_LOSS = 4.5;
 
@@ -107,8 +138,9 @@ class RiskAdvisorService
         // Aggression is "hit or miss, depends on experience": the share backed
         // by experience buys extra attacking pace (overtake only); the share
         // beyond it is the mistake trap and trims overall margin.
-        $aggGap = max(0.0, $n('aggressiveness') - $n('experience'));
-        $aggCovered = min($n('aggressiveness'), $n('experience'));
+        $aggN = $n('aggressiveness');
+        $aggGap = max(0.0, $aggN - $n('experience'));
+        $aggCovered = min($aggN, $n('experience'));
         $composure = max(0.0, min(100.0, $composure - 0.3 * $aggGap));
 
         $mult = 0.55 + 0.80 * $composure / 100;
@@ -127,8 +159,15 @@ class RiskAdvisorService
             $mult *= 0.90 + 0.10 * $n('stamina') / 100;
         }
 
-        $overtake = $this->finalise(self::OVERTAKE_BASE[$rating] * $mult * (1 + 0.10 * $aggCovered / 100));
-        $defend   = $this->finalise(self::DEFEND_BASE[$rating] * $mult);
+        // Appetite scales both dials; the ceiling then caps whatever comes out.
+        $appetite = self::APPETITE_FLOOR + self::APPETITE_SPAN * $aggN / 100;
+        $ceiling = $this->driverCeiling($aggN);
+
+        $overtake = $this->finalise(
+            self::OVERTAKE_BASE[$rating] * $mult * $appetite * (1 + 0.10 * $aggCovered / 100),
+            $ceiling,
+        );
+        $defend = $this->finalise(self::DEFEND_BASE[$rating] * $mult * $appetite, $ceiling);
 
         return [
             'overtake' => $overtake,
@@ -143,6 +182,7 @@ class RiskAdvisorService
                 $raceWet,
                 $rainAvg,
                 $composure,
+                $aggN,
                 $aggGap,
                 $longRace,
                 $driver,
@@ -150,7 +190,14 @@ class RiskAdvisorService
             'tip' => $this->strategyTip($rating, $raceWet, $rainAvg),
             'distance_tip' => $this->distanceTip($distanceKm, (float)($driver['stamina'] ?? 0)),
             'settings' => [
-                'start_approach' => $this->startApproach($rating, $composure, $aggCovered, $raceWet, $n('talent')),
+                'start_approach' => $this->startApproach(
+                    $rating,
+                    $composure,
+                    $aggN,
+                    $aggCovered,
+                    $raceWet,
+                    $n('talent'),
+                ),
                 'problem_pit_laps' => $this->problemPitLaps((float)($track['pit_lane_loss'] ?? 0)),
             ],
         ];
@@ -236,6 +283,7 @@ class RiskAdvisorService
     private function startApproach(
         string $rating,
         float $composure,
+        float $aggN,
         float $aggCovered,
         bool $raceWet,
         float $talentN,
@@ -253,12 +301,28 @@ class RiskAdvisorService
             $score -= 15.0;
         }
 
-        return match (true) {
-            $score >= 75 => 'Force his way to the front',
-            $score >= 55 => 'Overtake where possible',
-            $score >= 35 => 'Maintain his position',
-            default => 'Avoid trouble',
+        $tier = match (true) {
+            $score >= 75 => 3,
+            $score >= 55 => 2,
+            $score >= 35 => 1,
+            default => 0,
         };
+
+        // The start is a fight too. However composed the driver, one who won't
+        // race wheel-to-wheel can't be sent to force his way through — that
+        // would contradict the risk dials this same advisor just suggested.
+        $tier = min($tier, match (true) {
+            $aggN >= 40.0 => 3,
+            $aggN >= 20.0 => 2,
+            default => 1,
+        });
+
+        return [
+            0 => 'Avoid trouble',
+            1 => 'Maintain his position',
+            2 => 'Overtake where possible',
+            3 => 'Force his way to the front',
+        ][$tier];
     }
 
     /**
@@ -272,11 +336,23 @@ class RiskAdvisorService
         return (int) max(5, min(12, ceil($stopCost / self::PROBLEM_LAP_LOSS)));
     }
 
+    /**
+     * The highest dial this driver is ever advised, from aggressiveness alone.
+     * Snapped *down* to a multiple of 5 so the cap is itself a legal answer
+     * rather than something `finalise()` would round back above it.
+     */
+    private function driverCeiling(float $aggN): int
+    {
+        $ceiling = (int)(floor((self::CEILING_FLOOR + self::CEILING_SPAN * $aggN) / 5) * 5);
+
+        return max(self::MIN_RISK, min(self::MAX_RISK, $ceiling));
+    }
+
     /** Snap to a multiple of 5 inside the sane band — risks are coarse dials. */
-    private function finalise(float $value): int
+    private function finalise(float $value, int $ceiling): int
     {
         $snapped = (int)(round($value / 5) * 5);
-        return max(self::MIN_RISK, min(self::MAX_RISK, $snapped));
+        return max(self::MIN_RISK, min($ceiling, $snapped));
     }
 
     /**
@@ -346,6 +422,7 @@ class RiskAdvisorService
         bool $raceWet,
         float $rainAvg,
         float $composure,
+        float $aggN,
         float $aggGap,
         bool $longRace,
         array $driver,
@@ -384,7 +461,32 @@ class RiskAdvisorService
             ),
         };
 
+        // Aggressiveness sets the envelope, so when it's the binding constraint
+        // it replaces the track lead outright — "push overtake up to 10 to make
+        // moves stick" reads as nonsense next to a number that low.
+        $passive = $aggN <= self::PASSIVE_AGGRESSION;
+        if ($passive) {
+            $lead = sprintf(
+                'Aggressiveness %.0f is what sets these numbers, not %s. He won\'t race for a '
+                . 'place he has to take, so %d overtake / %d defend is as far as I\'d go — '
+                . 'anything bigger just buys mistakes. Train aggressiveness before you dial '
+                . 'these up.',
+                (float)($driver['aggressiveness'] ?? 0),
+                $track,
+                $overtake,
+                $defend,
+            );
+        }
+
         $caveats = [];
+
+        if (!$passive && $aggN >= self::EAGER_AGGRESSION && $aggGap <= 15) {
+            $caveats[] = sprintf(
+                'Aggressiveness %.0f with the experience to back it — he can actually spend '
+                . 'numbers this big.',
+                (float)($driver['aggressiveness'] ?? 0),
+            );
+        }
 
         if ($raceWet) {
             $tal = (float)($driver['talent'] ?? 0);
@@ -440,7 +542,10 @@ class RiskAdvisorService
             );
         }
 
-        if ($caveats === []) {
+        // A passive driver's lead already says why the numbers are what they
+        // are; the composure fallback would contradict it ("plenty of margin"
+        // next to 10/5), so it only fires when the track set the lead.
+        if ($caveats === [] && !$passive) {
             $caveats[] = $composure >= 70
                 ? sprintf(
                     'Concentration %.0f and experience %.0f give plenty of margin for these numbers.',
@@ -451,6 +556,6 @@ class RiskAdvisorService
                     . 'before pushing these dials higher.';
         }
 
-        return $lead . ' ' . implode(' ', array_slice($caveats, 0, 2));
+        return rtrim($lead . ' ' . implode(' ', array_slice($caveats, 0, 2)));
     }
 }

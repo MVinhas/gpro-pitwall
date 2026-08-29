@@ -98,8 +98,10 @@ final class RiskAdvisorServiceTest extends TestCase
 
     public function testAggressionBeyondExperienceTrimsSuggestions(): void
     {
-        $steady = $this->service()->suggest(
-            $this->driver(['aggressiveness' => 100, 'experience' => 175]),
+        // Aggressiveness held fixed so this isolates the mistake trap: the
+        // same appetite backed by experience earns more of it.
+        $backed = $this->service()->suggest(
+            $this->driver(['aggressiveness' => 240, 'experience' => 200]),
             $this->track(['overtaking' => 'Hard']),
             false,
             10.0,
@@ -111,11 +113,11 @@ final class RiskAdvisorServiceTest extends TestCase
             10.0,
         );
 
-        $this->assertLessThan($steady['overtake'], $hothead['overtake']);
+        $this->assertLessThan($backed['overtake'], $hothead['overtake']);
         $this->assertStringContainsString('aggressiveness 240', $hothead['phrase']);
     }
 
-    public function testExperiencedAggressionBuysOvertakeButNotDefend(): void
+    public function testExperiencedAggressionLiftsBothDialsAndFavoursOvertake(): void
     {
         $timid = $this->service()->suggest(
             $this->driver(['aggressiveness' => 25, 'experience' => 200]),
@@ -131,7 +133,103 @@ final class RiskAdvisorServiceTest extends TestCase
         );
 
         $this->assertGreaterThan($timid['overtake'], $attacker['overtake']);
-        $this->assertSame($timid['defend'], $attacker['defend']);
+        $this->assertGreaterThan($timid['defend'], $attacker['defend']);
+
+        // Experience-backed aggression buys attacking pace on top of the
+        // appetite both dials share, so overtake pulls further clear of
+        // defend. Compared as a gap, not a ratio — the 5-point snapping
+        // distorts ratios badly down at the timid driver's magnitudes.
+        $this->assertGreaterThan(
+            $timid['overtake'] - $timid['defend'],
+            $attacker['overtake'] - $attacker['defend'],
+        );
+    }
+
+    public function testZeroAggressionNeverAdvisesAboveFifteen(): void
+    {
+        // The hard rail: whatever the track and however good the driver, a
+        // pilot who will not fight is never told to dial risk up.
+        foreach (['Very Easy', 'Easy', 'Normal', 'Hard', 'Very Hard'] as $rating) {
+            $r = $this->service()->suggest(
+                $this->driver([
+                    'aggressiveness' => 0, 'concentration' => 250, 'talent' => 250,
+                    'experience' => 250, 'motivation' => 250, 'stamina' => 250,
+                ]),
+                $this->track(['overtaking' => $rating, 'grip' => 'Very High', 'distance' => 250.0]),
+                false,
+                0.0,
+            );
+
+            $this->assertLessThanOrEqual(15, $r['overtake'], $rating);
+            $this->assertLessThanOrEqual(15, $r['defend'], $rating);
+        }
+    }
+
+    public function testAggressivenessAnchorsTheSuggestedBand(): void
+    {
+        // Micael's calibration, on the neutral reference situation: a passive
+        // driver sits around 10, a timid one around 20, and only a maxed-out
+        // aggressor is told to run in the sixties.
+        $at = function (int $agg): array {
+            return $this->service()->suggest(
+                $this->driver(['aggressiveness' => $agg, 'experience' => 250]),
+                $this->track(['overtaking' => 'Hard']),
+                false,
+                10.0,
+            );
+        };
+
+        $this->assertLessThanOrEqual(15, $at(0)['overtake']);
+        $this->assertGreaterThanOrEqual(15, $at(50)['overtake']);
+        $this->assertLessThanOrEqual(30, $at(50)['overtake']);
+        $this->assertGreaterThanOrEqual(55, $at(250)['overtake']);
+        $this->assertLessThanOrEqual(65, $at(250)['overtake']);
+    }
+
+    public function testBothDialsRiseMonotonicallyWithAggressiveness(): void
+    {
+        $prev = null;
+        foreach ([0, 50, 100, 150, 200, 250] as $agg) {
+            $r = $this->service()->suggest(
+                $this->driver(['aggressiveness' => $agg, 'experience' => 250]),
+                $this->track(),
+                false,
+                10.0,
+            );
+
+            if ($prev !== null) {
+                $this->assertGreaterThanOrEqual($prev['overtake'], $r['overtake']);
+                $this->assertGreaterThanOrEqual($prev['defend'], $r['defend']);
+            }
+            $prev = $r;
+        }
+    }
+
+    public function testPassiveDriverPhraseNamesAggressivenessAsTheLimit(): void
+    {
+        $r = $this->service()->suggest(
+            $this->driver(['aggressiveness' => 20]),
+            $this->track(['overtaking' => 'Hard']),
+            false,
+            10.0,
+        );
+
+        $this->assertStringContainsString('aggressiveness 20', strtolower($r['phrase']));
+    }
+
+    public function testPassiveDriverIsNeverToldToForceHisWayAtTheStart(): void
+    {
+        $r = $this->service()->suggest(
+            $this->driver([
+                'aggressiveness' => 0, 'concentration' => 250, 'talent' => 250,
+                'experience' => 250, 'motivation' => 250,
+            ]),
+            $this->track(['overtaking' => 'Very Hard']),
+            false,
+            0.0,
+        );
+
+        $this->assertSame('Maintain his position', $r['settings']['start_approach']);
     }
 
     public function testLowGripTrimsBothRisks(): void
