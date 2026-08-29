@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.15.1] - 2026-08-29
+
+### Changed
+- **Overtake and defend risk suggestions are now driven by aggressiveness.** A risk dial is an instruction to fight for a position, and the advisor previously read the driver's composure for that while treating aggressiveness as a ±10% trim — so a placid driver was told to run the same numbers as an attacker. Aggressiveness now enters twice: as an appetite factor scaling both dials, and as a hard per-driver ceiling that no track, attribute or forecast can push through. A driver on 0 aggressiveness is never advised above 15 (and typically lands on 10), 50 tops out at 25, and only a maxed 250 reaches the sixties. Track passing rating, composure, grip, tyre wear, rain and stamina all still modulate inside that envelope. The start-approach suggestion is gated to match — a driver who won't race wheel-to-wheel is no longer told to force his way to the front — and a passive driver's write-up now leads with aggressiveness as the binding constraint instead of urging a push to a single-digit number.
+
 ## [1.15.0] - 2026-08-28
 
 ### Added
