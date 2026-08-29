@@ -6,6 +6,9 @@
     <span class="flex items-center gap-3">
         <span>
             <h4 class="t-section">Car wear</h4>
+            {% if cockpit_training_laps > 0 %}
+                <span class="t-caption block mt-0.5">after {{ cockpit_training_laps }} training laps</span>
+            {% endif %}
         </span>
     </span>
     <span class="flex items-center gap-6 text-right">
@@ -17,12 +20,25 @@
     <form method="GET" action="" class="space-y-2" data-cockpit-wear-form>
         <input type="hidden" name="main_tab" value="Cockpit">
         {% if active_track %}<input type="hidden" name="track" value="{{ active_track }}">{% endif %}
-        <label class="t-label block">Clear Track Risk</label>
-        <div class="flex items-center gap-3">
-            <input type="range" name="cockpit_risk" min="0" max="100" value="{{ cockpit_risk }}"
-                   data-cockpit-risk-slider
-                   class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer">
-            <span data-cockpit-risk-value class="text-sm font-bold text-blue-600 w-10 text-right">{{ cockpit_risk }}</span>
+        <div>
+            <label class="t-label block mb-1" for="cockpitRisk">Clear Track Risk</label>
+            <div class="flex items-center gap-3">
+                <input type="range" id="cockpitRisk" name="cockpit_risk" min="0" max="100" value="{{ cockpit_risk }}"
+                       data-cockpit-wear-slider
+                       class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer">
+                <span data-slider-value class="text-sm font-bold text-blue-600 w-10 text-right tabular-nums">{{ cockpit_risk }}</span>
+            </div>
+        </div>
+        <div>
+            <label class="t-label block mb-1" for="cockpitTrainingLaps">Training laps first</label>
+            <div class="flex items-center gap-3">
+                <input type="range" id="cockpitTrainingLaps" name="cockpit_training_laps" min="0" max="100" step="5"
+                       value="{{ cockpit_training_laps }}"
+                       data-cockpit-wear-slider
+                       class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer">
+                <span data-slider-value class="text-sm font-bold text-blue-600 w-10 text-right tabular-nums">{{ cockpit_training_laps }}</span>
+            </div>
+            <p class="t-caption mt-1">Wear from training laps run before this race.</p>
         </div>
         <noscript><button type="submit" class="btn btn-sm btn-secondary w-full">Update</button></noscript>
     </form>
@@ -151,8 +167,8 @@
     {% endif %}
 
     <p class="t-caption">
-        Move the slider to model different driver-risk levels. The Car Wear tab
-        gives the full breakdown.
+        Move the sliders to model different risk levels and training sessions.
+        The Car Wear tab gives the full breakdown.
     </p>
 
     <details class="group rounded-lg border border-slate-200">
