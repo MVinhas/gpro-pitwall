@@ -398,6 +398,16 @@ class PageController
 
                         $forcedSwaps = array_merge($advice['swap'], $advice['risky']);
                         if ($forcedSwaps !== []) {
+                            // A replacement fitted now runs the planned testing
+                            // session too, so the swap advisor has to price that
+                            // in — otherwise it recommends a part that dies
+                            // before the flag. Empty when no session is planned.
+                            $trainingWearByPart = [];
+                            foreach ($wear['parts'] as $label => $row) {
+                                if (isset($row['training'])) {
+                                    $trainingWearByPart[(string) $label] = (float) $row['training'];
+                                }
+                            }
                             $viewData['swap_advice'] = $this->swapAdvisor->advise(
                                 $forcedSwaps,
                                 $carData,
@@ -412,6 +422,7 @@ class PageController
                                 $cockpitRisk,
                                 $groupCarLevels,
                                 $cash,
+                                $trainingWearByPart,
                             );
                         }
                     }

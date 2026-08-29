@@ -54,6 +54,11 @@ final class PartSwapAdvisorService
      * @param int $risk driver risk used in the wear projection
      * @param list<int> $groupCarLevels peers' carLevel; empty / small samples skip the band filter
      * @param int $cash manager's available cash; paid options above this are dropped
+     * @param array<string, float> $trainingWear per-part wear (%) from a planned testing
+     *     session, keyed by part label. A replacement fitted now runs that session too,
+     *     so it is charged on every option — including the survivability filter, which
+     *     would otherwise green-light a part that dies before the flag. Testing wear is
+     *     independent of part level, so the same flat figure applies to every option.
      * @return array<string, array{
      *     current: array{level: int, start: int, end: float},
      *     picks: list<array{
@@ -77,6 +82,7 @@ final class PartSwapAdvisorService
         int $risk,
         array $groupCarLevels,
         int $cash,
+        array $trainingWear = [],
     ): array {
         $driverFactor = $this->carWear->driverFactor($driver);
         $band = $this->operatingBand($groupCarLevels);
@@ -105,6 +111,7 @@ final class PartSwapAdvisorService
                 $car,
                 $cash,
                 $band,
+                $trainingWear[$part] ?? 0.0,
             );
 
             $out[$part] = [
@@ -141,6 +148,7 @@ final class PartSwapAdvisorService
         array $car,
         int $cash,
         array $band,
+        float $trainingWear,
     ): array {
         $currentTier = $this->pha->tierFor($track, $car);
         $candidates = [];
@@ -157,7 +165,8 @@ final class PartSwapAdvisorService
             $level = (int) ($opt['newLvl'] ?? 0);
             $cost  = (int) ($opt['value']['cost'] ?? 0);
             $start = (float) ($opt['newWear'] ?? 0);
-            $end   = $this->carWear->projectEndWear($trackBase, $level, $start, $driverFactor, $risk);
+            $end   = $this->carWear->projectEndWear($trackBase, $level, $start, $driverFactor, $risk)
+                + $trainingWear;
 
             if ($cost > $cash) {
                 continue;

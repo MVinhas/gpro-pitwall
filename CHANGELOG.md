@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.15.4] - 2026-08-29
+
+### Fixed
+- **Cockpit swap options ignored the training laps you had planned.** The card priced every replacement part on the race alone, so with a testing session set it could recommend a spare that survives the race but dies during testing — and it compared that race-only figure against a current part whose projection *did* include the session. Testing wear is independent of part level, so the planned session's wear is now charged flat onto every option, including the survivability filter that decides which options are offered at all. On a heavy track at 100 laps this visibly changes the advice: pre-worn high-level spares drop out and the advisor reaches for a cleaner one instead.
+
 ## [1.15.3] - 2026-08-29
 
 ### Fixed

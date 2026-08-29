@@ -126,6 +126,118 @@ final class PartSwapAdvisorServiceTest extends TestCase
         $this->assertSame(7, $bySlot['upgrade']);
     }
 
+    public function testPlannedTrainingLapsRaiseEveryOptionsProjectedEndWear(): void
+    {
+        $track = ['power' => 10, 'handling' => 10, 'acceleration' => 10];
+        $car   = ['power' => 90, 'handling' => 80, 'acceleration' => 85];
+
+        $carData = $this->carData([
+            ['level' => 5, 'wear' => 0, 'cost' => 700_000, 'action' => 5],
+        ]);
+
+        $noTraining = $this->svc->advise(
+            $this->flaggedEngine(),
+            $carData,
+            $this->wearParts(),
+            [],
+            $track,
+            $car,
+            0,
+            [],
+            10_000_000,
+        );
+        $withTraining = $this->svc->advise(
+            $this->flaggedEngine(),
+            $carData,
+            $this->wearParts(),
+            [],
+            $track,
+            $car,
+            0,
+            [],
+            10_000_000,
+            ['Engine' => 12.5],
+        );
+
+        $before = $noTraining['Engine']['picks'][0]['end'];
+        $after  = $withTraining['Engine']['picks'][0]['end'];
+
+        // A fitted replacement runs the planned session too, so the training
+        // wear lands on it at the same flat rate (testing wear is independent
+        // of part level) as on the part it replaces.
+        $this->assertEqualsWithDelta($before + 12.5, $after, 0.001);
+    }
+
+    public function testAnOptionThatCannotSurviveTrainingPlusRaceIsDropped(): void
+    {
+        $track = ['power' => 10, 'handling' => 10, 'acceleration' => 10];
+        $car   = ['power' => 90, 'handling' => 80, 'acceleration' => 85];
+
+        // Starts pre-worn: comfortably survivable on its own, doomed once a
+        // long testing session is charged on top.
+        $carData = $this->carData([
+            ['level' => 5, 'wear' => 85, 'cost' => 700_000, 'action' => 5],
+        ]);
+        $args = fn(array $training): array => [
+            $this->flaggedEngine(),
+            $carData,
+            $this->wearParts(),
+            [],
+            $track,
+            $car,
+            0,
+            [],
+            10_000_000,
+            $training,
+        ];
+
+        $noTraining = $this->svc->advise(...$args([]));
+        $withTraining = $this->svc->advise(...$args(['Engine' => 40.0]));
+
+        $this->assertNotSame([], $noTraining['Engine']['picks']);
+        $this->assertSame([], $withTraining['Engine']['picks']);
+    }
+
+    public function testTrainingWearDefaultsToNothingForPartsWithNoPlannedSession(): void
+    {
+        $track = ['power' => 10, 'handling' => 10, 'acceleration' => 10];
+        $car   = ['power' => 90, 'handling' => 80, 'acceleration' => 85];
+
+        $carData = $this->carData([
+            ['level' => 5, 'wear' => 0, 'cost' => 700_000, 'action' => 5],
+        ]);
+
+        $omitted = $this->svc->advise(
+            $this->flaggedEngine(),
+            $carData,
+            $this->wearParts(),
+            [],
+            $track,
+            $car,
+            0,
+            [],
+            10_000_000,
+        );
+        // A map that simply doesn't mention Engine must behave identically.
+        $unrelated = $this->svc->advise(
+            $this->flaggedEngine(),
+            $carData,
+            $this->wearParts(),
+            [],
+            $track,
+            $car,
+            0,
+            [],
+            10_000_000,
+            ['Gearbox' => 30.0],
+        );
+
+        $this->assertSame(
+            $omitted['Engine']['picks'][0]['end'],
+            $unrelated['Engine']['picks'][0]['end'],
+        );
+    }
+
     public function testFreeDowngradeOmittedWhenNoneSurvives(): void
     {
         $track = ['power' => 10, 'handling' => 10, 'acceleration' => 10];
