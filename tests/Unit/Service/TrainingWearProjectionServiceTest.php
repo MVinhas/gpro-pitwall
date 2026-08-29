@@ -85,6 +85,25 @@ final class TrainingWearProjectionServiceTest extends TestCase
         );
     }
 
+    public function testPartsCarryTheTrackBaseThroughForTheSwapAdvisor(): void
+    {
+        // PartSwapAdvisorService reads track_base off every wear row to price
+        // replacement parts. The cockpit feeds it this projection's parts when
+        // a training session is planned, so the key has to survive the chain.
+        $plain = (new CarWearService($this->db, self::SECRETS))
+            ->calculateWear($this->track(), $this->car(20), [], 0);
+
+        $projected = $this->service()->project($this->track(), $this->car(20), [], 0, 40);
+
+        foreach (CarWearService::PARTS_MAP as $label => $_) {
+            $this->assertSame(
+                $plain['parts'][$label]['track_base'],
+                $projected['parts'][$label]['track_base'],
+                $label,
+            );
+        }
+    }
+
     public function testTrainingLapsRaiseTheProjectedEndWear(): void
     {
         $without = $this->service()->project($this->track(), $this->car(20), [], 0, 0);

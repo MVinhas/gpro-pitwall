@@ -70,6 +70,10 @@ final readonly class TrainingWearProjectionService
                 'start'    => (int) $row['start'],
                 'training' => $training,
                 'race'     => $raceWear,
+                // Carried through untouched: PartSwapAdvisorService prices
+                // replacement parts off it, and the cockpit hands it these
+                // rows whenever a training session is planned.
+                'track_base' => $row['track_base'],
                 // WearAdvisorService::classify() reads `est` as "what happens
                 // between now and the flag". Here that is training plus race.
                 'est'      => round($training + $raceWear, 1),

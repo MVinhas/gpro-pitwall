@@ -383,6 +383,7 @@ $container['controller.page'] = new PageController(
     $container['service.testing_targets'],
     $container['service.season_calendar'],
     $container['service.training_advisor'],
+    $container['service.training_wear_projection'],
     $container['controller.strategy'],
     $container['controller.car_wear'],
     $container['controller.testing'],

@@ -24,6 +24,7 @@ use App\Service\SponsorAdvisorService;
 use App\Service\SeasonCalendarService;
 use App\Service\TestingTargetsService;
 use App\Service\TrainingAdvisorService;
+use App\Service\TrainingWearProjectionService;
 use App\Controller\CarWearController;
 use App\Controller\StrategyController;
 use App\Controller\TestingController;
@@ -60,6 +61,7 @@ class PageController
         private readonly TestingTargetsService $testingTargets,
         private readonly SeasonCalendarService $seasonCalendar,
         private readonly TrainingAdvisorService $trainingAdvisor,
+        private readonly TrainingWearProjectionService $trainingWear,
         private readonly StrategyController $strategyController,
         private readonly CarWearController $carWearController,
         private readonly TestingController $testingController,
@@ -199,7 +201,12 @@ class PageController
         switch ($activeMainTab) {
             case 'Cockpit':
                 $cockpitRisk = max(0, min(100, (int) $request->get('cockpit_risk', 0)));
+                $cockpitTrainingLaps = max(0, min(
+                    TrainingWearProjectionService::MAX_LAPS,
+                    (int) $request->get('cockpit_training_laps', 0),
+                ));
                 $viewData['cockpit_risk'] = $cockpitRisk;
+                $viewData['cockpit_training_laps'] = $cockpitTrainingLaps;
                 try {
                     // No driver under contract: surface the friendly "hire a
                     // pilot" notice (with a Recruitment Analyzer link) instead of
@@ -278,21 +285,30 @@ class PageController
                         ];
                     }
 
-                    $wear = $this->carWear->calculateWear(
-                        // Resolve the track by name only. GPRO's track id is NOT
-                        // our local tracks.id (an autoincrement PK), so passing
-                        // it would let the "id = :id OR name = :name" lookup match
-                        // an unrelated row and read the wrong per-part base wear.
-                        // The Car Wear tab feeds id=0 and is correct — match that.
-                        [
-                            'id'   => 0,
-                            'name' => $trackName,
-                            'laps' => $nextRace['laps'] ?? $raceSetup['laps'] ?? null,
-                        ],
-                        $carData,
-                        $this->mapper->mapDriver($pilot),
-                        $cockpitRisk,
-                    );
+                    // Resolve the track by name only. GPRO's track id is NOT
+                    // our local tracks.id (an autoincrement PK), so passing
+                    // it would let the "id = :id OR name = :name" lookup match
+                    // an unrelated row and read the wrong per-part base wear.
+                    // The Car Wear tab feeds id=0 and is correct — match that.
+                    $wearTrack = [
+                        'id'   => 0,
+                        'name' => $trackName,
+                        'laps' => $nextRace['laps'] ?? $raceSetup['laps'] ?? null,
+                    ];
+                    $wear = $cockpitTrainingLaps > 0
+                        ? $this->trainingWear->project(
+                            $wearTrack,
+                            $carData,
+                            $this->mapper->mapDriver($pilot),
+                            $cockpitRisk,
+                            $cockpitTrainingLaps,
+                        )
+                        : $this->carWear->calculateWear(
+                            $wearTrack,
+                            $carData,
+                            $this->mapper->mapDriver($pilot),
+                            $cockpitRisk,
+                        );
                     $menu = $this->apiClient->getMenu();
                     $division = $this->divisionFromMenu($menu);
                     $cash = (int) ($menu['cash'] ?? 0);

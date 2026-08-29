@@ -497,12 +497,14 @@
     };
     let pending = null;
     card.addEventListener('input', (e) => {
-        if (!e.target.matches('[data-cockpit-risk-slider]')) return;
-        const label = card.querySelector('[data-cockpit-risk-value]');
+        if (!e.target.matches('[data-cockpit-wear-slider]')) return;
+        // The readout sits next to its own slider, so scope the lookup to that
+        // row — a card-wide query would drive every slider's label from one.
+        const label = e.target.parentElement.querySelector('[data-slider-value]');
         if (label) label.textContent = e.target.value;
     });
     card.addEventListener('change', async (e) => {
-        if (!e.target.matches('[data-cockpit-risk-slider]')) return;
+        if (!e.target.matches('[data-cockpit-wear-slider]')) return;
         const form = e.target.form;
         if (!form) return;
         if (pending) pending.abort();
@@ -511,9 +513,9 @@
         params.set('fragment', 'cockpit_wear');
         const url = form.action + '?' + params.toString();
         const opts = { signal: pending.signal, headers: { 'X-Requested-With': 'fetch' } };
-        // Last resort: re-enter the page carrying the risk the user chose (and
-        // anchored on the wear card) so a recovery never silently rewinds the
-        // slider to zero and throws the reader back to the top.
+        // Last resort: re-enter the page carrying the settings the user chose
+        // (and anchored on the wear card) so a recovery never silently rewinds
+        // the sliders to zero and throws the reader back to the top.
         const recover = () => {
             const next = new URLSearchParams(params);
             next.delete('fragment');

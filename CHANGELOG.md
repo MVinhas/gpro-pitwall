@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.15.2] - 2026-08-29
+
+### Added
+- **Training laps now model in the cockpit's car wear card.** The *Training laps first* slider that shipped on the Car Wear screen is now on the cockpit card too, next to Clear Track Risk — the guided pre-qualifying flow is where the training decision is actually made, and the answer used to sit one tab away from it. The verdict chip, the part table and the swap advice all reprice off the trained projection, so a session that pushes a part into the red shows up before you book it, and the closed card reads "after N training laps" so the state is legible without opening it.
+
 ## [1.15.1] - 2026-08-29
 
 ### Changed
