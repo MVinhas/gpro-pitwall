@@ -431,6 +431,26 @@
                 </div>
             </details>
         {% endif %}
+
+        {# Peak-end support ask: it renders only once a strategy has actually
+           been calculated, so it lands on the one screen where Pitwall has
+           just answered the question the user came for — never on the empty
+           or error states. #}
+        <div class="support-strip">
+            <p class="support-strip-copy">
+                <span aria-hidden="true" class="text-base leading-none">☕</span>
+                <span>
+                    <strong class="font-semibold">Strategy sorted.</strong>
+                    Pitwall is free and always will be — a coffee keeps it running.
+                </span>
+            </p>
+            <a
+                href="https://buymeacoffee.com/mvinhas"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="btn btn-sm btn-coffee shrink-0"
+            >Buy me a coffee</a>
+        </div>
     </div>
 {% else %}
     <div class="h-full flex flex-col items-center justify-center bg-slate-50 rounded-xl border border-dashed border-slate-200 p-12">
