@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.15.5] - 2026-08-30
+
+### Added
+- **Support strip at the end of the Race Strategy results.** The voluntary "buy me a coffee" ask now also appears where Pitwall has just answered the question you came for — directly under the strategy results, once a strategy has actually been calculated. It never renders on the empty or error states, and the footer link is unchanged. New shared `.support-strip` / `.btn-coffee` component classes back it; the landing-page coffee button now reuses `.btn-coffee` instead of its own utility string.
+
 ## [1.15.4] - 2026-08-29
 
 ### Fixed

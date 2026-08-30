@@ -187,6 +187,14 @@
            focus:ring-red-400;
 }
 
+/* Voluntary-support CTA. Warm amber is this project's coffee colour only —
+   it is never an action colour anywhere else in the app. */
+.btn-coffee {
+    @apply bg-amber-400 text-on-amber
+           hover:bg-amber-500
+           focus:ring-amber-500;
+}
+
 /* =========================
    NOTICE BANNERS
    The left-accent-bar idiom: info = blue, caution/stale-data = amber,
@@ -203,6 +211,19 @@
 .notice-error   { @apply bg-red-50 border-red-400 text-red-800; }
 .notice-success { @apply bg-emerald-50 border-emerald-400 text-emerald-800; }
 .notice-slim    { @apply py-2 text-xs; }
+
+/* =========================
+   SUPPORT STRIP
+   The end-of-flow "buy me a coffee" band. Deliberately NOT a .notice:
+   the amber notice tone means caution, and a thank-you must never read
+   as a warning. Soft amber card, no left accent bar.
+========================= */
+
+.support-strip {
+    @apply flex flex-wrap items-center justify-between gap-3
+           rounded-xl border border-amber-200 bg-amber-50 px-4 py-3;
+}
+.support-strip-copy { @apply flex items-start gap-2 text-xs text-amber-900; }
 
 /* =========================
    CARD STANDARD
