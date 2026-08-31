@@ -97,10 +97,10 @@
                     {% endif %}
                 {% endblock %}
                 {% block body %}
-                    <div class="grid sm:grid-cols-2 gap-x-8 gap-y-3">
+                    <div class="space-y-3">
                         <div class="space-y-1 text-xs">
                             <p class="t-label">Driver</p>
-                            <div class="grid grid-cols-2 gap-x-8 gap-y-1">
+                            <div class="space-y-1">
                                 {% for key, label in {
                                     'concentration':     'Concentration',
                                     'talent':            'Talent',
@@ -109,41 +109,41 @@
                                     'technical_insight': 'Tech Insight',
                                     'weight':            'Weight'
                                 } %}
-                                    <span class="flex justify-between gap-2">
+                                    <span class="flex justify-between gap-4">
                                         <span class="text-slate-400">{{ label }}</span>
-                                        <span class="font-semibold text-slate-700 tabular-nums">{{ stats.driver[key] }}</span>
+                                        <span class="font-semibold text-slate-700 tabular-nums">{{ stats.driver[key] }}{% if key == 'weight' %}<span class="font-normal text-slate-400"> kg</span>{% endif %}</span>
                                     </span>
                                 {% endfor %}
                             </div>
                         </div>
                         <div class="space-y-1 text-xs">
                             <p class="t-label">Car Levels</p>
-                            <div class="grid grid-cols-2 gap-x-8 gap-y-1">
+                            <div class="space-y-1">
                                 {% for key, label in { 'lvlEngine': 'Engine', 'lvlSusp': 'Suspension', 'lvlElectronics': 'Electronics' } %}
-                                    <span class="flex justify-between gap-2">
+                                    <span class="flex justify-between gap-4">
                                         <span class="text-slate-400">{{ label }}</span>
                                         <span class="font-semibold text-slate-700 tabular-nums">{{ stats.car[key] }}</span>
                                     </span>
                                 {% endfor %}
                             </div>
                             <p class="t-label pt-2">Staff</p>
-                            <div class="grid grid-cols-2 gap-x-8 gap-y-1">
-                                <span class="flex justify-between gap-2">
+                            <div class="space-y-1">
+                                <span class="flex justify-between gap-4">
                                     <span class="text-slate-400">Concentration</span>
                                     <span class="font-semibold text-slate-700 tabular-nums">{{ stats.staff.concentration }}</span>
                                 </span>
-                                <span class="flex justify-between gap-2">
+                                <span class="flex justify-between gap-4">
                                     <span class="text-slate-400">Stress Handling</span>
                                     <span class="font-semibold text-slate-700 tabular-nums">{{ stats.staff.stressHandling }}</span>
                                 </span>
                             </div>
                             <p class="t-label pt-2">Tech Director</p>
-                            <div class="grid grid-cols-2 gap-x-8 gap-y-1">
-                                <span class="flex justify-between gap-2">
+                            <div class="space-y-1">
+                                <span class="flex justify-between gap-4">
                                     <span class="text-slate-400">Experience</span>
                                     <span class="font-semibold text-slate-700 tabular-nums">{{ stats.td.experience }}</span>
                                 </span>
-                                <span class="flex justify-between gap-2">
+                                <span class="flex justify-between gap-4">
                                     <span class="text-slate-400">Pit Coordination</span>
                                     <span class="font-semibold text-slate-700 tabular-nums">{{ stats.td.pitCoordination }}</span>
                                 </span>
