@@ -6,6 +6,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.15.6] - 2026-08-31
+
+### Changed
+- **Race Strategy fuel figures now name their unit in the header.** A user reported reading "32L" for a stint and being unable to tell whether it meant litres or laps. The compound table's Fuel / Stint header now carries an explicit `(L)` caption and the cells beneath it are bare numbers, while the header band spells the unit out in full — `litres/lap`, `Fuel (dry) 196 litres`, `Fuel (wet) 152 litres`.
+- **Narrowed the compound table.** The four `Lost (…)` columns are grouped under a single `Time Lost (s)` header with short `Pits / Fuel / TCD / Total` sub-labels, and horizontal cell padding is tightened.
+- **`Est. Pit` states its unit in the header too.** It is now headed `Est. Pit (s)`, and the per-second suffix is dropped from both its cells and the `Total` column.
+- **Renamed the `CTR Gain` column to `CTR Max Gain`** — the figure is a clear-air ceiling, not a guaranteed saving.
+- **Removed the Clear Track Risk modelling caption** under the compound table.
+
 ## [1.15.5] - 2026-08-30
 
 ### Added

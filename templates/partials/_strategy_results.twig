@@ -36,7 +36,7 @@
             <div class="bg-emerald-50 px-4 py-3 sm:px-6 flex flex-wrap items-baseline gap-x-3 gap-y-1">
                 <span class="inline-flex items-center rounded-md bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-on-accent">★ Best</span>
                 <span class="text-lg font-bold text-emerald-900">{{ strategy_results.best_compound }}</span>
-                <span class="text-sm font-semibold text-emerald-900 tabular-nums">{{ best.stops }} stop{{ best.stops == 1 ? '' : 's' }} · {{ best.fuel_recommended }} L/stint · {{ best.total_lost }}s lost</span>
+                <span class="text-sm font-semibold text-emerald-900 tabular-nums">{{ best.stops }} stop{{ best.stops == 1 ? '' : 's' }} · {{ best.fuel_recommended }}L per stint · {{ best.total_lost }}s lost</span>
                 {% if runner_name is not null %}
                     <span class="text-xs text-emerald-700 tabular-nums">beats {{ runner_name }} by {{ (strategy_results.tyres[runner_name].total_lost - best.total_lost)|round(1) }}s</span>
                 {% endif %}
@@ -65,15 +65,15 @@
             <div class="mt-2 flex flex-wrap items-center divide-x divide-slate-300 text-xs font-medium tabular-nums">
                 <span class="px-3 first:pl-0">
                     <span class="text-slate-400">Consumption</span>
-                    <span class="ml-1 text-slate-700">{{ strategy_results.fuel.l_per_lap }} L/lap</span>
+                    <span class="ml-1 text-slate-700">{{ strategy_results.fuel.l_per_lap }} litres/lap</span>
                 </span>
                 <span class="px-3">
                     <span class="text-slate-400">Fuel (dry)</span>
-                    <span class="ml-1 text-slate-700">{{ strategy_results.fuel.dry }} L</span>
+                    <span class="ml-1 text-slate-700">{{ strategy_results.fuel.dry }} litres</span>
                 </span>
                 <span class="px-3">
                     <span class="text-slate-400">Fuel (wet)</span>
-                    <span class="ml-1 text-slate-700">{{ strategy_results.fuel.wet }} L</span>
+                    <span class="ml-1 text-slate-700">{{ strategy_results.fuel.wet }} litres</span>
                     {% if strategy_results.fuel.wet_estimated %}
                         <span class="ml-1 font-bold text-amber-700"
                               title="This track has never run a wet race, so there is no measured wet consumption. The wet figure assumes dry consumption — safe, but over-fuelled.">est.</span>
@@ -109,21 +109,22 @@
                         <tr>
                             <th rowspan="2" class="px-3 sm:px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-white">Compound</th>
                             <th rowspan="2" class="px-2 sm:px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-white">Stops</th>
-                            <th colspan="2" class="hidden sm:table-cell px-4 py-2 text-center text-xs font-bold uppercase tracking-wide text-white border-b border-white/15">Fuel / Stint</th>
-                            <th class="sm:hidden px-3 py-2 text-center text-xs font-bold uppercase tracking-wide text-white border-b border-white/15">Fuel / Stint</th>
-                            <th rowspan="2" class="hidden md:table-cell px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-white">Est. Pit</th>
-                            <th rowspan="2" class="hidden md:table-cell px-4 py-3 text-center text-xs font-medium uppercase tracking-wide text-white/60 border-l border-white/15">Lost (Pits)</th>
-                            <th rowspan="2" class="hidden md:table-cell px-4 py-3 text-center text-xs font-medium uppercase tracking-wide text-white/60">Lost (Fuel)</th>
-                            <th rowspan="2" class="hidden md:table-cell px-4 py-3 text-center text-xs font-medium uppercase tracking-wide text-white/60">Lost (TCD)</th>
-                            <th rowspan="2" class="hidden md:table-cell px-4 py-3 text-center text-xs font-medium uppercase tracking-wide text-white/60">Total Lost</th>
+                            <th colspan="2" class="hidden sm:table-cell px-4 py-2 text-center text-xs font-bold uppercase tracking-wide text-white border-b border-white/15">Fuel / Stint <span class="font-normal normal-case text-white/60">(L)</span></th>
+                            <th class="sm:hidden px-3 py-2 text-center text-xs font-bold uppercase tracking-wide text-white border-b border-white/15">Fuel / Stint <span class="font-normal normal-case text-white/60">(L)</span></th>
+                            <th rowspan="2" class="hidden md:table-cell px-2 py-3 text-center text-xs font-bold uppercase tracking-wide text-white">Est. Pit <span class="font-normal normal-case text-white/60">(s)</span></th>
+                            <th colspan="4" class="hidden md:table-cell px-2 py-2 text-center text-xs font-medium uppercase tracking-wide text-white/60 border-l border-white/15 border-b border-white/15">Time Lost <span class="normal-case">(s)</span></th>
                             {% if strategy_results.ctr_gain_per_lap > 0 %}
-                                <th rowspan="2" class="hidden sm:table-cell px-4 py-3 text-center text-xs font-medium uppercase tracking-wide text-white/60" title="Clear-air time saved by your Clear Track Risk setting. Not banked when you are stuck behind another car.">CTR Gain</th>
+                                <th rowspan="2" class="hidden sm:table-cell px-4 py-3 text-center text-xs font-medium uppercase tracking-wide text-white/60" title="The most your Clear Track Risk setting can save, in clear air. Not banked when you are stuck behind another car.">CTR Max Gain</th>
                             {% endif %}
                             <th rowspan="2" class="px-2 sm:px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-white bg-board-strong">{{ strategy_results.ctr_gain_per_lap > 0 ? 'Net' : 'Total Lost' }}</th>
                         </tr>
                         <tr>
-                            <th class="hidden sm:table-cell px-3 py-1.5 text-center text-[10px] font-medium uppercase tracking-wide text-white/60" title="Bare-minimum fuel to finish the stint; no safety margin.">Minimum</th>
-                            <th class="px-3 py-1.5 text-center text-[10px] font-medium uppercase tracking-wide text-white/60" title="Minimum + 1 extra lap of fuel — buffer against bad pit timing.">Recommended</th>
+                            <th class="hidden sm:table-cell px-2 py-1.5 text-center text-[10px] font-medium uppercase tracking-wide text-white/60" title="Bare-minimum litres of fuel to finish the stint; no safety margin.">Minimum</th>
+                            <th class="px-2 py-1.5 text-center text-[10px] font-medium uppercase tracking-wide text-white/60" title="Litres to put in the car: the minimum plus one extra lap's worth, as a buffer against bad pit timing.">Recommended</th>
+                            <th class="hidden md:table-cell px-2 py-1.5 text-center text-[10px] font-medium uppercase tracking-wide text-white/60 border-l border-white/15">Pits</th>
+                            <th class="hidden md:table-cell px-2 py-1.5 text-center text-[10px] font-medium uppercase tracking-wide text-white/60">Fuel</th>
+                            <th class="hidden md:table-cell px-2 py-1.5 text-center text-[10px] font-medium uppercase tracking-wide text-white/60">TCD</th>
+                            <th class="hidden md:table-cell px-2 py-1.5 text-center text-[10px] font-medium uppercase tracking-wide text-white/60">Total</th>
                         </tr>
                     </thead>
                     <tbody class="bg-surface divide-y divide-slate-200">
@@ -139,24 +140,24 @@
                                 <td class="px-2 sm:px-4 py-3 text-center text-sm font-bold tabular-nums {{ data.stops > 3 ? 'text-red-500' : (is_best ? 'text-emerald-700' : 'text-blue-600') }}">
                                     {{ data.stops }}
                                 </td>
-                                <td class="hidden sm:table-cell px-3 py-3 text-center text-sm text-slate-500 tabular-nums">{{ data.fuel_load }} L</td>
-                                <td class="px-3 py-3 text-center text-sm font-semibold tabular-nums {{ is_best ? 'text-emerald-700' : 'text-blue-600' }}">{{ data.fuel_recommended }} L</td>
-                                <td class="hidden md:table-cell px-4 py-3 text-center text-sm text-slate-500 tabular-nums">{{ data.pit_time_est }}s</td>
+                                <td class="hidden sm:table-cell px-2 py-3 text-center text-sm text-slate-500 tabular-nums">{{ data.fuel_load }}</td>
+                                <td class="px-2 py-3 text-center text-sm font-semibold tabular-nums {{ is_best ? 'text-emerald-700' : 'text-blue-600' }}">{{ data.fuel_recommended }}</td>
+                                <td class="hidden md:table-cell px-2 py-3 text-center text-sm text-slate-500 tabular-nums">{{ data.pit_time_est }}</td>
 
-                                <td class="hidden md:table-cell px-4 py-3 text-center text-xs text-slate-500 tabular-nums border-l border-slate-100">
+                                <td class="hidden md:table-cell px-2 py-3 text-center text-xs text-slate-500 tabular-nums border-l border-slate-100">
                                     {{ data.lost_pits }}
                                 </td>
-                                <td class="hidden md:table-cell px-4 py-3 text-center text-xs text-slate-500 tabular-nums">
+                                <td class="hidden md:table-cell px-2 py-3 text-center text-xs text-slate-500 tabular-nums">
                                     {{ data.lost_fuel }}
                                 </td>
-                                <td class="hidden md:table-cell px-4 py-3 text-center text-xs text-slate-500 tabular-nums">
+                                <td class="hidden md:table-cell px-2 py-3 text-center text-xs text-slate-500 tabular-nums">
                                     {{ data.lost_tcd }}
                                 </td>
-                                <td class="hidden md:table-cell px-4 py-3 text-center text-xs text-slate-500 tabular-nums">
-                                    {{ data.total_lost }}s
+                                <td class="hidden md:table-cell px-2 py-3 text-center text-xs text-slate-500 tabular-nums">
+                                    {{ data.total_lost }}
                                 </td>
                                 {% if strategy_results.ctr_gain_per_lap > 0 %}
-                                    <td class="hidden sm:table-cell px-4 py-3 text-center text-xs font-semibold tabular-nums {{ data.ctr_gain > 0 ? 'text-emerald-600' : 'text-slate-400' }}">
+                                    <td class="hidden sm:table-cell px-2 py-3 text-center text-xs font-semibold tabular-nums {{ data.ctr_gain > 0 ? 'text-emerald-600' : 'text-slate-400' }}">
                                         {{ data.ctr_gain > 0 ? '−' ~ data.ctr_gain ~ 's' : '—' }}
                                     </td>
                                 {% endif %}
@@ -170,16 +171,12 @@
                 </table>
             </div>
             {% if strategy_results.ctr_gain_per_lap > 0 and (strategy_results.inputs.risk ?? 0) > 0 %}
-                <div class="px-4 pb-4 sm:px-6 sm:pb-6 pt-3 space-y-2">
+                <div class="px-4 pb-4 sm:px-6 sm:pb-6 pt-3">
                     <div class="notice notice-warn notice-slim">
                         <strong>Keep in mind time lost due to blocking.</strong>
-                        The CTR gain is clear-air only — stuck behind another car you wear
+                        The CTR max gain is clear-air only — stuck behind another car you wear
                         the tyres harder without banking the lap time.
                     </div>
-                    <p class="t-caption">
-                        Gain modelled at {{ strategy_results.ctr_gain_per_lap|round(4) }}s per lap per CTR point —
-                        scaled to this track's lap time, from readings at Zolder and Anderstorp.
-                    </p>
                 </div>
             {% endif %}
         </div>
