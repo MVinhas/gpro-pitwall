@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.15.7] - 2026-08-31
+
+### Fixed
+- **The Race Strategy "Data used — from last sync" panel was unreadable on desktop.** Its body used `sm:grid-cols-2` with a nested `grid-cols-2 gap-x-8`, but the panel sits in the narrow `lg:col-span-3` sidebar — and `sm:` keys off the viewport, not the container, so four columns of label/value pairs were forced into roughly 250px. Labels ran into their values (`Concentration 151Talent`), long labels wrapped mid-phrase, and `Suspension` / `Pit Coordination` were clipped off the card entirely. The panel is now a single column of full-width rows at every breakpoint.
+
+### Changed
+- **Driver weight now shows its unit** (`68 kg`) in the same panel.
+
 ## [1.15.6] - 2026-08-31
 
 ### Changed
