@@ -142,6 +142,14 @@ final class PageControllerTest extends TestCase
         $this->assertSame('Recruitment Analyzer', PageController::canonicalMainTab('Recruitment'));
     }
 
+    public function testRetiredCarWearTabResolvesToTheCockpit(): void
+    {
+        // The Car Wear screen was folded into the cockpit's wear card; old
+        // bookmarks and links must land there rather than on the default tab
+        // by accident.
+        $this->assertSame('Cockpit', PageController::canonicalMainTab('Car Wear'));
+    }
+
     public function testCanonicalMainTabPassesCanonicalNamesThrough(): void
     {
         $this->assertSame('Cockpit', PageController::canonicalMainTab('Cockpit'));

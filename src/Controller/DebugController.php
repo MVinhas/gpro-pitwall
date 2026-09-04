@@ -117,8 +117,7 @@ class DebugController
             unset(
                 $_SESSION['recruitment_results'],
                 $_SESSION['training_results'],
-                $_SESSION['strategy_results'],
-                $_SESSION['wear_results']
+                $_SESSION['strategy_results']
             );
             $_SESSION['flash'] = $msg . " Session Data flushed.";
         } catch (\Exception $exception) {

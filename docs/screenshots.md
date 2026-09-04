@@ -1,8 +1,8 @@
 # Re-shooting the landing-page screenshots
 
-The carousel on `templates/landing.twig` ships eight PNGs under
+The carousel on `templates/landing.twig` ships six PNGs under
 `public/assets/screenshots/` — one light and one dark per screen (cockpit,
-strategy, wear, training). A UI change that alters any of those screens leaves
+strategy, training). A UI change that alters any of those screens leaves
 the landing page advertising a stale interface, so re-shoot them in the same
 branch.
 

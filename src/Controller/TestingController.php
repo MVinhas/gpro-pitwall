@@ -26,6 +26,16 @@ class TestingController
     public const string NO_TRACK_MESSAGE =
         'No testing track available yet. Open the Testing office in GPRO, then re-sync.';
 
+    /**
+     * GPRO's own errorMsg for this window is a raw HTML deadline notice that
+     * never says what to do about it, so it is replaced wholesale: the two
+     * situations that actually close testing are a race weekend past its
+     * deadline and a season rollover.
+     */
+    public const string CLOSED_MESSAGE =
+        'Are you mid-race, or has the season just reset? Testing closes 90 minutes before '
+        . 'the race and reopens once the next race weekend is up.';
+
     /** Default testing-session length the wear slider opens on. */
     public const int DEFAULT_LAPS = 5;
 
@@ -59,7 +69,7 @@ class TestingController
                 return ['error' => self::END_OF_SEASON_MESSAGE];
             }
             if (!empty($testing['showError'])) {
-                return ['error' => (string) ($testing['errorMsg'] ?? self::NO_TRACK_MESSAGE)];
+                return ['error' => self::CLOSED_MESSAGE];
             }
 
             $trackName = (string) ($testing['trackName'] ?? '');

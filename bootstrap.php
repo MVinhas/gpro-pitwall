@@ -293,7 +293,6 @@ $container['service.training'] = new TrainingService($container['db']);
 use App\Controller\PageController;
 use App\Controller\BaselineController;
 use App\Controller\RecruitmentController;
-use App\Controller\CarWearController;
 use App\Controller\TrainingController;
 use App\Controller\StrategyController;
 use App\Controller\AuthController;
@@ -355,17 +354,6 @@ $container['controller.testing'] = new \App\Controller\TestingController(
     $container['config']['secrets']['testing_priority_points'] ?? [],
 );
 
-// CarWearController is constructed early because PageController needs it
-// (auto-populate on first Car Wear tab visit). All deps already wired above.
-$container['controller.car_wear'] = new CarWearController(
-    $container['service.car_wear'],
-    $container['service.api_client'],
-    $container['service.data_mapper'],
-    $container['service.training_wear_projection'],
-    $container['service.authorize'],
-    $container['twig'],
-);
-
 $container['controller.page'] = new PageController(
     $container['service.ideal_pilot'],
     $container['service.insight'],
@@ -385,7 +373,6 @@ $container['controller.page'] = new PageController(
     $container['service.training_advisor'],
     $container['service.training_wear_projection'],
     $container['controller.strategy'],
-    $container['controller.car_wear'],
     $container['controller.testing'],
     $container['service.data_mapper'],
     $container['service.recruitment'],
