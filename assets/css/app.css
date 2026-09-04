@@ -238,6 +238,29 @@
 /* Keyboard focus for every disclosure summary — several templates rely on it. */
 summary:focus-visible { @apply outline-none ring-2 ring-blue-600; }
 
+/* =========================
+   COCKPIT WEAR PLAN
+   The inline replacement picker in the car-wear table. Each option is a
+   <label> wrapping its own hidden radio, so :has() reads the checked state
+   without any sibling-order constraint — the chips can wrap freely.
+========================= */
+
+.plan-opt {
+    @apply flex flex-col gap-0.5 rounded-lg border border-slate-200 bg-surface
+           px-2.5 py-1.5 cursor-pointer select-none transition-colors;
+}
+.plan-opt:hover { @apply border-slate-300 bg-slate-50; }
+.plan-opt:has(input:checked) { @apply border-blue-600 bg-blue-50 ring-1 ring-blue-600; }
+.plan-opt:has(input:focus-visible) { @apply outline-2 outline-offset-2 outline-blue-600; }
+.plan-opt input { @apply sr-only; }
+
+.plan-tag {
+    @apply inline-flex items-center rounded px-1 py-px text-[10px] font-semibold uppercase tracking-wide;
+}
+.plan-tag-best { @apply bg-emerald-100 text-emerald-800; }
+.plan-tag-free { @apply bg-blue-100 text-blue-800; }
+.plan-tag-match { @apply bg-amber-100 text-amber-900; }
+
 /* Compact anchor tile for the cockpit decision-summary board. */
 .tile {
     @apply block rounded-lg border border-slate-200 bg-surface p-3 shadow-sm transition-colors

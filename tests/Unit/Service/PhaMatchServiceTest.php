@@ -240,4 +240,47 @@ final class PhaMatchServiceTest extends TestCase
         $car   = ['power' => 90, 'handling' => 80, 'acceleration' => 70];
         $this->assertSame(PhaMatchService::TIER_TOP_MATCH, $this->svc->tierFor($track, $car));
     }
+
+    public function testAlignmentScoreIs100WhenTheCarMirrorsTheTracksProportions(): void
+    {
+        // Different scales, identical shape: 2:1:1 on both sides.
+        $track = ['power' => 20, 'handling' => 10, 'acceleration' => 10];
+        $car   = ['power' => 100, 'handling' => 50, 'acceleration' => 50];
+        $this->assertEqualsWithDelta(100.0, $this->svc->alignmentScore($track, $car), 0.0001);
+    }
+
+    public function testAlignmentScoreRewardsTheCarWhoseBalanceIsClosest(): void
+    {
+        $track = ['power' => 5, 'handling' => 15, 'acceleration' => 5];
+        $balanced = ['power' => 60, 'handling' => 160, 'acceleration' => 60];
+        $powerHeavy = ['power' => 160, 'handling' => 60, 'acceleration' => 60];
+
+        $this->assertGreaterThan(
+            $this->svc->alignmentScore($track, $powerHeavy),
+            $this->svc->alignmentScore($track, $balanced),
+        );
+    }
+
+    public function testAlignmentScoreMovesOnShapeShiftsThatDoNotFlipAnyRank(): void
+    {
+        // Rank order is P > H > A on both cars, so tierFor() cannot tell them
+        // apart — the continuous score still can.
+        $track = ['power' => 15, 'handling' => 5, 'acceleration' => 5];
+        $mild   = ['power' => 91, 'handling' => 90, 'acceleration' => 89];
+        $strong = ['power' => 150, 'handling' => 60, 'acceleration' => 50];
+
+        $this->assertSame($this->svc->tierFor($track, $mild), $this->svc->tierFor($track, $strong));
+        $this->assertGreaterThan(
+            $this->svc->alignmentScore($track, $mild),
+            $this->svc->alignmentScore($track, $strong),
+        );
+    }
+
+    public function testAlignmentScoreIsZeroWhenEitherSideHasNoShape(): void
+    {
+        $track = ['power' => 0, 'handling' => 0, 'acceleration' => 0];
+        $car   = ['power' => 90, 'handling' => 80, 'acceleration' => 85];
+        $this->assertSame(0.0, $this->svc->alignmentScore($track, $car));
+        $this->assertSame(0.0, $this->svc->alignmentScore($car, $track));
+    }
 }

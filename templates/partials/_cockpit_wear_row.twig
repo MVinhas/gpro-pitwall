@@ -1,0 +1,62 @@
+{# One flagged part in the cockpit wear table: the projection line, plus an
+   inline row of replacement options when the swap advisor found any. Included
+   once per part from _cockpit_wear.twig (replace / red), which is why the
+   status colouring arrives as parameters rather than being derived here.
+
+   Params: p (wear row), plan (swap_advice entry or null), row_bg, badge_class,
+   badge_text. #}
+<tr class="border-t border-slate-100 {{ row_bg }}">
+    <td class="py-1.5 pr-3 font-medium text-slate-900">{{ p.part }}</td>
+    <td class="py-1.5 px-2 text-right tabular-nums text-slate-600">{{ p.level }}</td>
+    <td class="py-1.5 px-2 text-right tabular-nums text-slate-700">{{ p.start }}% → {{ p.end|round }}%</td>
+    <td class="py-1.5 pl-2 text-right"><span class="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-semibold {{ badge_class }}">{{ badge_text }}</span></td>
+</tr>
+{% if plan %}
+    <tr class="{{ row_bg }}">
+        <td colspan="4" class="pb-2">
+            {% if plan.options is empty %}
+                <p class="t-caption">No affordable replacement survives the race within your group's level range.</p>
+            {% else %}
+                <div class="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Replacement for {{ p.part }}">
+                    {% for o in plan.options %}
+                        {% set fd = o.fit_delta|round(2) %}
+                        {% set fd_text = (fd > 0 ? '+' : (fd < 0 ? '−' : '±')) ~ (fd|abs|number_format(2)) %}
+                        {% set fd_class = fd > 0 ? 'text-emerald-700' : (fd < 0 ? 'text-red-700' : 'text-slate-500') %}
+                        {% set cost_text = o.cost == 0
+                            ? 'Free'
+                            : (o.cost >= 1000000
+                                ? '$' ~ (o.cost / 1000000)|number_format(1) ~ 'M'
+                                : '$' ~ (o.cost / 1000)|round ~ 'k') %}
+                        {% set move = o.delta < 0
+                            ? 'Down to L' ~ o.level
+                            : (o.delta > 0 ? 'Up to L' ~ o.level : 'Fresh L' ~ o.level) %}
+                        <label class="plan-opt" title="{{ o.rationale }}">
+                            <input type="radio"
+                                   name="plan[{{ p.part }}]"
+                                   value="{{ o.level }}"
+                                   data-plan-option
+                                   data-plan-cost="{{ o.cost }}"
+                                   data-plan-dp="{{ o.pha_delta.power }}"
+                                   data-plan-dh="{{ o.pha_delta.handling }}"
+                                   data-plan-da="{{ o.pha_delta.acceleration }}"
+                                   {{ o.recommended ? 'checked' : '' }}>
+                            <span class="flex items-center gap-1.5">
+                                <span class="text-xs font-semibold text-slate-900">{{ move }}</span>
+                                {% if o.recommended %}
+                                    <span class="plan-tag plan-tag-best">{{ o.recommend_reason == 'fit' ? 'Best fit' : 'Best value' }}</span>
+                                {% endif %}
+                                {% if o.is_free %}<span class="plan-tag plan-tag-free">Free</span>{% endif %}
+                                {% if o.match != plan.current.match and o.match != 'none' %}
+                                    <span class="plan-tag plan-tag-match">→ {{ o.match == 'perfect' ? 'Perfect' : 'Top' }}</span>
+                                {% endif %}
+                            </span>
+                            <span class="t-caption tabular-nums">
+                                {{ cost_text }} · ends {{ o.end|round }}% · <span class="{{ fd_class }} font-semibold">{{ fd_text }} fit</span>
+                            </span>
+                        </label>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </td>
+    </tr>
+{% endif %}

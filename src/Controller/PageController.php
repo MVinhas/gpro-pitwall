@@ -396,7 +396,11 @@ class PageController
                         $advice = $this->wearAdvisor->classify($wear['parts']);
                         $viewData['wear_advice'] = $advice;
 
-                        $forcedSwaps = array_merge($advice['swap'], $advice['risky']);
+                        // Only parts that cannot finish the race get a
+                        // replacement plan. A part merely finishing in the red
+                        // still finishes, and recommending a swap for it turned
+                        // the cockpit into a shopping list.
+                        $forcedSwaps = $advice['swap'];
                         if ($forcedSwaps !== []) {
                             // A replacement fitted now runs the planned testing
                             // session too, so the swap advisor has to price that
@@ -408,22 +412,33 @@ class PageController
                                     $trainingWearByPart[(string) $label] = (float) $row['training'];
                                 }
                             }
-                            $viewData['swap_advice'] = $this->swapAdvisor->advise(
+                            $carPha = [
+                                'power'        => $carData['carPower'] ?? 0,
+                                'handling'     => $carData['carHandl'] ?? 0,
+                                'acceleration' => $carData['carAccel'] ?? 0,
+                            ];
+                            $swapAdvice = $this->swapAdvisor->advise(
                                 $forcedSwaps,
                                 $carData,
                                 $wear['parts'],
                                 $this->mapper->mapDriver($pilot),
                                 $trackPha,
-                                [
-                                    'power'        => $carData['carPower'] ?? 0,
-                                    'handling'     => $carData['carHandl'] ?? 0,
-                                    'acceleration' => $carData['carAccel'] ?? 0,
-                                ],
+                                $carPha,
                                 $cockpitRisk,
                                 $groupCarLevels,
                                 $cash,
                                 $trainingWearByPart,
                             );
+                            $viewData['swap_advice'] = $swapAdvice;
+                            $viewData['swap_plan'] = $this->swapAdvisor->summarise(
+                                $swapAdvice,
+                                $trackPha,
+                                $carPha,
+                            );
+                            // The per-option cash filter only guards one part
+                            // at a time; the cockpit warns when the whole plan
+                            // adds up to more than the manager can pay.
+                            $viewData['cockpit_cash'] = $cash;
                         }
                     }
                 } catch (\Throwable $e) {

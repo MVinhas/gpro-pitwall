@@ -29,7 +29,8 @@ final class PartSwapAdvisorServiceTest extends TestCase
         ]);
         $pha = new PhaMatchService();
         $upgrade = new PartUpgradeAdvisorService($pha, [
-            'Engine' => ['power' => 6, 'handling' => 0, 'acceleration' => 2],
+            'Engine'    => ['power' => 6, 'handling' => 0, 'acceleration' => 2],
+            'Gearbox'   => ['power' => 3, 'handling' => 1, 'acceleration' => 5],
         ]);
         $this->svc = new PartSwapAdvisorService($carWear, $pha, $upgrade);
     }
@@ -72,33 +73,39 @@ final class PartSwapAdvisorServiceTest extends TestCase
     }
 
     /**
-     * @param list<array{slot: string, level: int}> $picks
-     * @return array<string, int>
+     * @param list<array<string, mixed>> $options
+     * @return list<int>
      */
-    private function bySlot(array $picks): array
+    private function levels(array $options): array
     {
-        $out = [];
-        foreach ($picks as $p) {
-            $out[$p['slot']] = $p['level'];
-        }
-        return $out;
+        return array_values(array_map(static fn(array $o): int => (int) $o['level'], $options));
     }
 
-    public function testProducesUpToFourNamedPicks(): void
+    /**
+     * @param list<array<string, mixed>> $options
+     * @return array<string, mixed>
+     */
+    private function atLevel(array $options, int $level): array
     {
-        // Track and car align (P=A=H all 10) so PHA score stays constant —
-        // we're only testing the slot selection, not scoring.
+        foreach ($options as $o) {
+            if ($o['level'] === $level) {
+                return $o;
+            }
+        }
+        self::fail('No replacement option at level ' . $level);
+    }
+
+    public function testOnlyOneLevelEitherSideOfTheCurrentLevelIsOffered(): void
+    {
         $track = ['power' => 10, 'handling' => 10, 'acceleration' => 10];
         $car   = ['power' => 90, 'handling' => 80, 'acceleration' => 85];
 
         $carData = $this->carData([
-            // Free downgrades from L6 down.
-            ['level' => 5, 'wear' => 20, 'cost' => 0,        'action' => -1],
-            ['level' => 4, 'wear' => 30, 'cost' => 0,        'action' => -2],
-            // Paid options.
-            ['level' => 5, 'wear' => 0,  'cost' => 700_000,  'action' => 5],
-            ['level' => 6, 'wear' => 0,  'cost' => 900_000,  'action' => 6],
-            ['level' => 7, 'wear' => 0,  'cost' => 1_500_000, 'action' => 7],
+            ['level' => 3, 'wear' => 0, 'cost' => 200_000,   'action' => 3],
+            ['level' => 5, 'wear' => 0, 'cost' => 700_000,   'action' => 5],
+            ['level' => 6, 'wear' => 0, 'cost' => 900_000,   'action' => 6],
+            ['level' => 7, 'wear' => 0, 'cost' => 1_500_000, 'action' => 7],
+            ['level' => 9, 'wear' => 0, 'cost' => 2_500_000, 'action' => 9],
         ]);
 
         $out = $this->svc->advise(
@@ -113,17 +120,180 @@ final class PartSwapAdvisorServiceTest extends TestCase
             10_000_000,
         );
 
-        $picks = $out['Engine']['picks'];
-        $bySlot = $this->bySlot($picks);
-        $this->assertSame(['free_downgrade', 'downgrade', 'sidegrade', 'upgrade'], array_keys($bySlot));
-        // Free downgrade picks the HIGHEST-level surviving spare.
-        $this->assertSame(5, $bySlot['free_downgrade']);
-        // Paid downgrade picks the closest-below current (L5).
-        $this->assertSame(5, $bySlot['downgrade']);
-        // Sidegrade is current level.
-        $this->assertSame(6, $bySlot['sidegrade']);
-        // Upgrade is closest-above current (L7).
-        $this->assertSame(7, $bySlot['upgrade']);
+        $levels = $this->levels($out['Engine']['options']);
+        sort($levels);
+        $this->assertSame([5, 6, 7], $levels);
+    }
+
+    public function testEachLevelYieldsExactlyOneOptionAndAFreeSpareBeatsAPaidPart(): void
+    {
+        $track = ['power' => 10, 'handling' => 10, 'acceleration' => 10];
+        $car   = ['power' => 90, 'handling' => 80, 'acceleration' => 85];
+
+        // Two ways to reach L5: a free garage spare and a paid fresh part.
+        // Both survive, so the money buys nothing and only the free one shows.
+        $carData = $this->carData([
+            ['level' => 5, 'wear' => 20, 'cost' => 0,       'action' => -1],
+            ['level' => 5, 'wear' => 0,  'cost' => 700_000, 'action' => 5],
+            ['level' => 6, 'wear' => 0,  'cost' => 900_000, 'action' => 6],
+        ]);
+
+        $out = $this->svc->advise(
+            $this->flaggedEngine(),
+            $carData,
+            $this->wearParts(),
+            [],
+            $track,
+            $car,
+            0,
+            [],
+            10_000_000,
+        );
+
+        $options = $out['Engine']['options'];
+        $atFive = array_filter($options, static fn(array $o): bool => $o['level'] === 5);
+        $this->assertCount(1, $atFive);
+
+        $l5 = $this->atLevel($options, 5);
+        $this->assertTrue($l5['is_free']);
+        $this->assertSame(0, $l5['cost']);
+    }
+
+    public function testAlignmentOutranksCostWhenChoosingTheRecommendation(): void
+    {
+        // Handling-hungry track. Engine adds power (+6) and acceleration (+2),
+        // so dropping a level moves the car's balance towards the track — even
+        // though it is by far the most expensive option here.
+        $track = ['power' => 5, 'handling' => 15, 'acceleration' => 5];
+        $car   = ['power' => 100, 'handling' => 90, 'acceleration' => 85];
+
+        $carData = $this->carData([
+            ['level' => 5, 'wear' => 0, 'cost' => 1_500_000, 'action' => 5],
+            ['level' => 6, 'wear' => 0, 'cost' => 900_000,   'action' => 6],
+            ['level' => 7, 'wear' => 0, 'cost' => 100_000,   'action' => 7],
+        ]);
+
+        $out = $this->svc->advise(
+            $this->flaggedEngine(),
+            $carData,
+            $this->wearParts(),
+            [],
+            $track,
+            $car,
+            0,
+            [],
+            10_000_000,
+        );
+
+        $options = $out['Engine']['options'];
+        $this->assertSame([5, 6, 7], $this->levels($options));
+        $this->assertTrue($options[0]['recommended']);
+        $this->assertSame(1_500_000, $options[0]['cost']);
+        $this->assertGreaterThan(0.0, $options[0]['fit_delta']);
+        $this->assertLessThan(0.0, $options[2]['fit_delta']);
+    }
+
+    public function testTheRankedLeaderIsTheRecommendation(): void
+    {
+        $track = ['power' => 5, 'handling' => 15, 'acceleration' => 5];
+        $car   = ['power' => 100, 'handling' => 90, 'acceleration' => 85];
+
+        $carData = $this->carData([
+            ['level' => 5, 'wear' => 0, 'cost' => 1_500_000, 'action' => 5],
+            ['level' => 6, 'wear' => 0, 'cost' => 900_000,   'action' => 6],
+        ]);
+
+        $out = $this->svc->advise(
+            $this->flaggedEngine(end: 104.0),
+            $carData,
+            $this->wearParts(end: 104.0),
+            [],
+            $track,
+            $car,
+            0,
+            [],
+            10_000_000,
+        );
+
+        $options = $out['Engine']['options'];
+        $this->assertTrue($options[0]['recommended']);
+        $this->assertSame('fit', $options[0]['recommend_reason']);
+        $this->assertSame([false], array_column(array_slice($options, 1), 'recommended'));
+    }
+
+    public function testTheLeaderIsFlaggedAsAValueWinWhenItOnlyBeatsTheRestOnPrice(): void
+    {
+        // A Gearbox level is worth 3 P / 1 H / 5 A, which against this track
+        // pulls the car's balance in two directions at once: L5, L6 and L7 all
+        // land in the same alignment band, so the free spare wins on price
+        // alone. Calling that "best fit" would claim a win it did not earn.
+        $track = ['power' => 17, 'handling' => 12, 'acceleration' => 9];
+        $car   = ['power' => 82, 'handling' => 84, 'acceleration' => 83];
+
+        $options = [];
+        foreach ([
+            ['level' => 5, 'wear' => 20, 'cost' => 0,       'action' => -1],
+            ['level' => 6, 'wear' => 0,  'cost' => 900_000, 'action' => 6],
+        ] as $o) {
+            $options[] = [
+                'value'    => ['value' => $o['action'], 'cost' => $o['cost']],
+                'newLvl'   => (string) $o['level'],
+                'newWear'  => (string) $o['wear'],
+                'disabled' => 'false',
+                'text'     => '',
+            ];
+        }
+
+        $out = $this->svc->advise(
+            [['part' => 'Gearbox', 'level' => 6, 'start' => 95, 'est' => 5.0, 'end' => 100.0]],
+            ['gearOptions' => $options],
+            ['Gearbox' => [
+                'level' => 6, 'start' => 95, 'est' => 5.0, 'end' => 100.0, 'track_base' => 5.0,
+            ]],
+            [],
+            $track,
+            $car,
+            0,
+            [],
+            10_000_000,
+        );
+
+        $best = $out['Gearbox']['options'][0];
+        $this->assertSame(5, $best['level']);
+        $this->assertTrue($best['is_free']);
+        $this->assertSame('value', $best['recommend_reason']);
+    }
+
+    public function testEveryOptionCarriesTheCarPhaItWouldProduce(): void
+    {
+        $track = ['power' => 10, 'handling' => 10, 'acceleration' => 10];
+        $car   = ['power' => 90, 'handling' => 80, 'acceleration' => 85];
+
+        $carData = $this->carData([
+            ['level' => 7, 'wear' => 0, 'cost' => 1_500_000, 'action' => 7],
+        ]);
+
+        $out = $this->svc->advise(
+            $this->flaggedEngine(),
+            $carData,
+            $this->wearParts(),
+            [],
+            $track,
+            $car,
+            0,
+            [],
+            10_000_000,
+        );
+
+        $this->assertSame(
+            ['power' => 90.0, 'handling' => 80.0, 'acceleration' => 85.0],
+            $out['Engine']['current']['pha'],
+        );
+
+        $up = $this->atLevel($out['Engine']['options'], 7);
+        // Engine contributes P+6 / A+2 per level.
+        $this->assertSame(['power' => 96.0, 'handling' => 80.0, 'acceleration' => 87.0], $up['pha']);
+        $this->assertSame(['power' => 6.0, 'handling' => 0.0, 'acceleration' => 2.0], $up['pha_delta']);
     }
 
     public function testPlannedTrainingLapsRaiseEveryOptionsProjectedEndWear(): void
@@ -159,8 +329,8 @@ final class PartSwapAdvisorServiceTest extends TestCase
             ['Engine' => 12.5],
         );
 
-        $before = $noTraining['Engine']['picks'][0]['end'];
-        $after  = $withTraining['Engine']['picks'][0]['end'];
+        $before = $this->atLevel($noTraining['Engine']['options'], 5)['end'];
+        $after  = $this->atLevel($withTraining['Engine']['options'], 5)['end'];
 
         // A fitted replacement runs the planned session too, so the training
         // wear lands on it at the same flat rate (testing wear is independent
@@ -194,8 +364,8 @@ final class PartSwapAdvisorServiceTest extends TestCase
         $noTraining = $this->svc->advise(...$args([]));
         $withTraining = $this->svc->advise(...$args(['Engine' => 40.0]));
 
-        $this->assertNotSame([], $noTraining['Engine']['picks']);
-        $this->assertSame([], $withTraining['Engine']['picks']);
+        $this->assertNotSame([], $noTraining['Engine']['options']);
+        $this->assertSame([], $withTraining['Engine']['options']);
     }
 
     public function testTrainingWearDefaultsToNothingForPartsWithNoPlannedSession(): void
@@ -233,20 +403,20 @@ final class PartSwapAdvisorServiceTest extends TestCase
         );
 
         $this->assertSame(
-            $omitted['Engine']['picks'][0]['end'],
-            $unrelated['Engine']['picks'][0]['end'],
+            $this->atLevel($omitted['Engine']['options'], 5)['end'],
+            $this->atLevel($unrelated['Engine']['options'], 5)['end'],
         );
     }
 
-    public function testFreeDowngradeOmittedWhenNoneSurvives(): void
+    public function testAFreeSpareThatCannotSurviveFallsBackToThePaidPartAtThatLevel(): void
     {
         $track = ['power' => 10, 'handling' => 10, 'acceleration' => 10];
         $car   = ['power' => 90, 'handling' => 80, 'acceleration' => 85];
 
-        // Free downgrade L5 starts at 95% pre-worn, won't survive a big track.
+        // Free L5 spare starts at 95 % pre-worn, won't survive a big track.
         $carData = $this->carData([
             ['level' => 5, 'wear' => 95, 'cost' => 0,       'action' => -1],
-            ['level' => 6, 'wear' => 0,  'cost' => 700_000, 'action' => 6],
+            ['level' => 5, 'wear' => 0,  'cost' => 700_000, 'action' => 5],
         ]);
 
         $out = $this->svc->advise(
@@ -261,26 +431,28 @@ final class PartSwapAdvisorServiceTest extends TestCase
             10_000_000,
         );
 
-        $bySlot = $this->bySlot($out['Engine']['picks']);
-        $this->assertArrayNotHasKey('free_downgrade', $bySlot);
-        $this->assertArrayHasKey('sidegrade', $bySlot);
+        $l5 = $this->atLevel($out['Engine']['options'], 5);
+        $this->assertFalse($l5['is_free']);
+        $this->assertSame(700_000, $l5['cost']);
     }
 
-    public function testUpgradeOmittedWhenAllAboveCurrentAreOutOfBand(): void
+    public function testLevelsOutsideTheGroupOperatingBandAreDropped(): void
     {
         $track = ['power' => 10, 'handling' => 10, 'acceleration' => 10];
         $car   = ['power' => 90, 'handling' => 80, 'acceleration' => 85];
 
-        // Group is 5..6; band is [4, 7]. L8 fresh exists but is out of band.
+        // Group is 5..6, so the band is [4, 7]... but the flagged part sits at
+        // L8, putting only L7 inside both the band and the ±1 window.
         $carData = $this->carData([
-            ['level' => 6, 'wear' => 0, 'cost' => 700_000, 'action' => 6],
-            ['level' => 8, 'wear' => 0, 'cost' => 1_500_000, 'action' => 8],
+            ['level' => 7, 'wear' => 0, 'cost' => 1_500_000, 'action' => 7],
+            ['level' => 8, 'wear' => 0, 'cost' => 1_800_000, 'action' => 8],
+            ['level' => 9, 'wear' => 0, 'cost' => 2_500_000, 'action' => 9],
         ]);
 
         $out = $this->svc->advise(
-            $this->flaggedEngine(),
+            $this->flaggedEngine(level: 8),
             $carData,
-            $this->wearParts(),
+            $this->wearParts(level: 8),
             [],
             $track,
             $car,
@@ -289,12 +461,10 @@ final class PartSwapAdvisorServiceTest extends TestCase
             10_000_000,
         );
 
-        $bySlot = $this->bySlot($out['Engine']['picks']);
-        $this->assertArrayNotHasKey('upgrade', $bySlot);
-        $this->assertArrayHasKey('sidegrade', $bySlot);
+        $this->assertSame([7], $this->levels($out['Engine']['options']));
     }
 
-    public function testCashFilterDropsUnaffordablePaidOptionsButKeepsFreeDowngrades(): void
+    public function testCashFilterDropsUnaffordablePaidOptionsButKeepsFreeSpares(): void
     {
         $track = ['power' => 11, 'handling' => 9, 'acceleration' => 10];
         $car   = ['power' => 11, 'handling' => 9, 'acceleration' => 10];
@@ -316,9 +486,8 @@ final class PartSwapAdvisorServiceTest extends TestCase
             500_000,
         );
 
-        $bySlot = $this->bySlot($out['Engine']['picks']);
-        $this->assertArrayHasKey('free_downgrade', $bySlot);
-        $this->assertArrayNotHasKey('sidegrade', $bySlot);
+        $this->assertSame([5], $this->levels($out['Engine']['options']));
+        $this->assertTrue($out['Engine']['options'][0]['is_free']);
     }
 
     public function testWearFilterDropsOptionsThatWontSurvive(): void
@@ -326,17 +495,17 @@ final class PartSwapAdvisorServiceTest extends TestCase
         $track = ['power' => 11, 'handling' => 9, 'acceleration' => 10];
         $car   = ['power' => 11, 'handling' => 9, 'acceleration' => 10];
 
-        // L1 fresh starts at 70%; the level-1 wear factor compounds at risk 100
-        // and pushes L1 past 100%. L5 stays comfortably under.
+        // The L1 fresh part starts at 70 %; the level-1 wear factor compounds
+        // at risk 100 and pushes it past 100 %. L2 stays comfortably under.
         $carData = $this->carData([
             ['level' => 1, 'wear' => 70, 'cost' => 100_000, 'action' => 1],
-            ['level' => 5, 'wear' => 0,  'cost' => 700_000, 'action' => 5],
+            ['level' => 2, 'wear' => 0,  'cost' => 200_000, 'action' => 2],
         ]);
 
         $out = $this->svc->advise(
-            $this->flaggedEngine(),
+            $this->flaggedEngine(level: 2),
             $carData,
-            $this->wearParts(trackBase: 8.0),
+            $this->wearParts(trackBase: 8.0, level: 2),
             [],
             $track,
             $car,
@@ -345,42 +514,10 @@ final class PartSwapAdvisorServiceTest extends TestCase
             10_000_000,
         );
 
-        $bySlot = $this->bySlot($out['Engine']['picks']);
-        // L1 fresh was filtered by wear; L5 fresh survives and becomes the
-        // paid downgrade. Sidegrade (L6 fresh) wasn't offered in this scenario.
-        $this->assertSame(5, $bySlot['downgrade']);
-        $this->assertArrayNotHasKey('sidegrade', $bySlot);
+        $this->assertSame([2], $this->levels($out['Engine']['options']));
     }
 
-    public function testOperatingBandSkippedWhenFewerThanThreePeers(): void
-    {
-        $track = ['power' => 11, 'handling' => 9, 'acceleration' => 10];
-        $car   = ['power' => 11, 'handling' => 9, 'acceleration' => 10];
-
-        $carData = $this->carData([
-            ['level' => 1, 'wear' => 0, 'cost' => 100_000,   'action' => 1],
-            ['level' => 9, 'wear' => 0, 'cost' => 1_500_000, 'action' => 9],
-        ]);
-
-        $out = $this->svc->advise(
-            $this->flaggedEngine(),
-            $carData,
-            $this->wearParts(),
-            [],
-            $track,
-            $car,
-            0,
-            [5, 6],
-            10_000_000,
-        );
-
-        $bySlot = $this->bySlot($out['Engine']['picks']);
-        // Both extremes available because the band filter was skipped.
-        $this->assertSame(1, $bySlot['downgrade']);
-        $this->assertSame(9, $bySlot['upgrade']);
-    }
-
-    public function testEmptyPicksWhenEverythingFiltersOut(): void
+    public function testEmptyOptionsWhenEverythingFiltersOut(): void
     {
         $track = ['power' => 11, 'handling' => 9, 'acceleration' => 10];
         $car   = ['power' => 11, 'handling' => 9, 'acceleration' => 10];
@@ -398,27 +535,28 @@ final class PartSwapAdvisorServiceTest extends TestCase
             $car,
             0,
             [],
-            100,
+            100_000,
         );
 
-        $this->assertSame([], $out['Engine']['picks']);
+        $this->assertSame([], $out['Engine']['options']);
     }
 
-    public function testActionKindLabelling(): void
+    public function testSummariseTotalsTheCostAndPhaShiftOfTheRecommendedPlan(): void
     {
-        $track = ['power' => 11, 'handling' => 9, 'acceleration' => 10];
-        $car   = ['power' => 11, 'handling' => 9, 'acceleration' => 10];
+        // Power-hungry track, so the recommendation on a must-replace part is
+        // the level up — a real cost and a real PHA shift to total up.
+        $track = ['power' => 15, 'handling' => 5, 'acceleration' => 5];
+        $car   = ['power' => 100, 'handling' => 90, 'acceleration' => 85];
 
         $carData = $this->carData([
-            ['level' => 5, 'wear' => 20, 'cost' => 0,        'action' => -1],
-            ['level' => 6, 'wear' => 0,  'cost' => 700_000,  'action' => 6],
-            ['level' => 7, 'wear' => 0,  'cost' => 900_000,  'action' => 7],
+            ['level' => 6, 'wear' => 0, 'cost' => 900_000,   'action' => 6],
+            ['level' => 7, 'wear' => 0, 'cost' => 1_500_000, 'action' => 7],
         ]);
 
-        $out = $this->svc->advise(
-            $this->flaggedEngine(),
+        $advice = $this->svc->advise(
+            $this->flaggedEngine(end: 104.0),
             $carData,
-            $this->wearParts(),
+            $this->wearParts(end: 104.0),
             [],
             $track,
             $car,
@@ -427,12 +565,15 @@ final class PartSwapAdvisorServiceTest extends TestCase
             10_000_000,
         );
 
-        $byKind = [];
-        foreach ($out['Engine']['picks'] as $p) {
-            $byKind[$p['slot']] = $p['action_kind'];
-        }
-        $this->assertSame('downgrade', $byKind['free_downgrade']);
-        $this->assertSame('refresh',   $byKind['sidegrade']);
-        $this->assertSame('upgrade',   $byKind['upgrade']);
+        $summary = $this->svc->summarise($advice, $track, $car);
+
+        $this->assertSame(1_500_000, $summary['cost']);
+        $this->assertSame(['power' => 100.0, 'handling' => 90.0, 'acceleration' => 85.0], $summary['before']['pha']);
+        $this->assertSame(['power' => 106.0, 'handling' => 90.0, 'acceleration' => 87.0], $summary['after']['pha']);
+        $this->assertGreaterThan($summary['before']['fit'], $summary['after']['fit']);
+        $this->assertSame(
+            ['power' => 15.0, 'handling' => 5.0, 'acceleration' => 5.0],
+            $summary['track'],
+        );
     }
 }
