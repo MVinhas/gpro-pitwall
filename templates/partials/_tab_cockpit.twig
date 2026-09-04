@@ -487,6 +487,60 @@
 
     const card = document.getElementById('wear');
     if (!card) return;
+
+    // Live plan summary. Mirrors PhaMatchService::alignmentScore() and
+    // ::matchLevel() so the "car after plan" row tracks the radios without a
+    // round-trip; the server renders the same numbers for the default plan, so
+    // the panel is already correct before this ever runs.
+    const money = (n) => '$' + Math.round(n).toLocaleString('en-US');
+    const ranks = (v) => v.map((x) => 1 + v.filter((y) => y > x).length);
+    const topSet = (r) => r.reduce((acc, x, i) => (x === 1 ? [...acc, i] : acc), []);
+    const matchLevel = (t, c) => {
+        const tr = ranks(t);
+        const cr = ranks(c);
+        if (tr.every((x, i) => x === cr[i])) return 'Perfect match';
+        const tt = topSet(tr);
+        const ct = topSet(cr);
+        if (tt.length === 1 && ct.length === 1 && tt[0] === ct[0]) return 'Top match';
+        return 'No match';
+    };
+    const fitScore = (t, c) => {
+        const ts = t.reduce((a, b) => a + b, 0);
+        const cs = c.reduce((a, b) => a + b, 0);
+        if (ts <= 0 || cs <= 0) return 0;
+        let d = 0;
+        for (let i = 0; i < 3; i++) d += Math.abs(t[i] / ts - c[i] / cs);
+        return 100 * (1 - d / 2);
+    };
+    const recalcPlan = () => {
+        const panel = card.querySelector('[data-plan-summary]');
+        if (!panel) return;
+        const num = (el, key) => Number(el.dataset[key]) || 0;
+        const track = [num(panel, 'trackP'), num(panel, 'trackH'), num(panel, 'trackA')];
+        const after = [num(panel, 'baseP'), num(panel, 'baseH'), num(panel, 'baseA')];
+        let cost = 0;
+        card.querySelectorAll('[data-plan-option]:checked').forEach((el) => {
+            cost += Number(el.dataset.planCost) || 0;
+            after[0] += Number(el.dataset.planDp) || 0;
+            after[1] += Number(el.dataset.planDh) || 0;
+            after[2] += Number(el.dataset.planDa) || 0;
+        });
+        const set = (sel, text) => {
+            const el = panel.querySelector(sel);
+            if (el) el.textContent = text;
+        };
+        set('[data-plan-after-p]', Math.round(after[0]));
+        set('[data-plan-after-h]', Math.round(after[1]));
+        set('[data-plan-after-a]', Math.round(after[2]));
+        set('[data-plan-after-match]', matchLevel(track, after) + ' · ' + fitScore(track, after).toFixed(1));
+        set('[data-plan-total]', money(cost));
+        const over = panel.querySelector('[data-plan-over-cash]');
+        if (over) over.classList.toggle('hidden', cost <= num(panel, 'cash'));
+    };
+    card.addEventListener('change', (e) => {
+        if (e.target.matches('[data-plan-option]')) recalcPlan();
+    });
+
     const mirrorWear = () => {
         const src = card.querySelector('[data-wear-verdict]');
         const dst = document.querySelector('[data-tile-wear]');
@@ -561,6 +615,7 @@
             card.innerHTML = html;
             window.applyAccState(card);
             mirrorWear();
+            recalcPlan();
         } catch (err) {
             if (err.name !== 'AbortError') console.error(err);
         }

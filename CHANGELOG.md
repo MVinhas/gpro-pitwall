@@ -6,6 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.15.8] - 2026-09-04
+
+### Changed
+- **The cockpit's car-wear card now plans replacements inline instead of behind per-part accordions.** With several parts flagged the old "Swap options" block stacked one open accordion per part and buried the answer under its own chrome. Each flagged part now carries a row of option chips directly under its wear line, so the whole plan is visible and pickable on one screen.
+- **Replacement options are limited to one level down, the same level, or one level up.** Anything further is not a swap a manager actually makes, and the wider list made the card harder to read than it was useful.
+- **Each level now yields exactly one option, and a free garage spare always beats a paid part at that level.** Both are already filtered for surviving the race, so paying for the same level buys nothing.
+- **Options are ranked by how closely the swap makes the car's P/H/A balance mirror the track's demand, with price as the tie-break.** A new alignment score (0–100) measures that balance on both sides as shares of their own total, so it moves on shape shifts too small to flip a rank order. Within a 0.5-point band the cheaper option wins and the badge says **Best value** rather than **Best fit**, so a price win is never dressed up as a fit win.
+- **New "What this plan does to your car" panel** showing the track's P/H/A demand, the car's now, and the car's after the selected plan — with the match verdict, the alignment score, the total cost, and a warning when the plan costs more than available cash. It recalculates live as options are re-picked, and is server-rendered so it is correct without JavaScript.
+- **Parts that merely finish in the red no longer get replacement suggestions, and "Watch" parts are no longer listed at all.** A part that finishes, finishes; suggesting a swap for it turned the cockpit into a shopping list.
+
 ## [1.15.7] - 2026-08-31
 
 ### Fixed

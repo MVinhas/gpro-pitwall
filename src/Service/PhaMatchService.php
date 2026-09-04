@@ -88,6 +88,58 @@ final class PhaMatchService
     }
 
     /**
+     * How closely the car's P/H/A *shape* mirrors the track's demand, as a
+     * 0–100 score (100 = identical proportions). Track demand and car
+     * attributes live on different scales, so both sides are reduced to
+     * shares of their own total before comparison — the score therefore
+     * measures balance, not raw performance.
+     *
+     * Unlike `tierFor()`/`matchLevel()`, which only move when a rank flips,
+     * this is continuous: a single-level part swap that nudges the car
+     * towards the track's balance without reordering anything still shows
+     * up. That is what makes it usable for ranking swap options.
+     *
+     * @param array<string, mixed> $track keys: power, handling, acceleration
+     * @param array<string, mixed> $car   keys: power, handling, acceleration
+     */
+    public function alignmentScore(array $track, array $car): float
+    {
+        $trackShares = $this->shares($this->normalise($track));
+        $carShares   = $this->shares($this->normalise($car));
+        if ($trackShares === null || $carShares === null) {
+            return 0.0;
+        }
+
+        $distance = 0.0;
+        foreach (self::ATTRS as $attr) {
+            $distance += abs($trackShares[$attr] - $carShares[$attr]);
+        }
+
+        // Total-variation distance between two 3-way splits maxes out at 2.
+        return 100.0 * (1.0 - $distance / 2.0);
+    }
+
+    /**
+     * Each attribute as a fraction of the triple's total. Null when the
+     * total is not positive — an all-zero side has no shape to compare.
+     *
+     * @param array<string, float> $vals
+     * @return array<string, float>|null
+     */
+    private function shares(array $vals): ?array
+    {
+        $total = array_sum($vals);
+        if ($total <= 0.0) {
+            return null;
+        }
+        $out = [];
+        foreach (self::ATTRS as $attr) {
+            $out[$attr] = $vals[$attr] / $total;
+        }
+        return $out;
+    }
+
+    /**
      * Strict car/track match classification — see the MATCH_* constants.
      *
      * @param array<string, mixed> $track keys: power, handling, acceleration

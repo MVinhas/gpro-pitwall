@@ -26,7 +26,7 @@ detail and screenshots live on [gpro-pitwall.com](https://gpro-pitwall.com).
 
 - **Cockpit** — the race-weekend spine. A decision board of verdict tiles over cards for
   PHA match, testing projection, boost-lap fuel, the weather call, sponsor answers,
-  training picks and per-part car wear with ranked swap options. Also carries the season
+  training picks and per-part car wear with an inline replacement plan. Also carries the season
   calendar with each track's P/H/A demand.
 - **Race Strategy** — fuel, tyres and setup per compound, with the best plan chosen by
   total time cost rather than tyre life alone. Clear Track Risk is priced as a trade:
@@ -142,7 +142,7 @@ Source of truth is GitHub; deployment is a manual file copy to any PHP 8.5 host.
 - **Twig 3** templates; **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile). Light and dark themes ship in one stylesheet: every design token is a CSS `light-dark()` pair switched by `color-scheme`, so System mode tracks the OS with zero JavaScript.
 - **SQLite** via PDO — emails and API tokens encrypted at rest (AES-256-GCM).
 - **PHPMailer 7** for SMTP; dev writes `.eml` files instead.
-- **PHPUnit 13** — 738 tests, 2068 assertions — with **PHPStan level 8** and enforced type-declaration coverage (100% return/property/constant + `strict_types`; 99.5% param). Twig linted by a native `bin/twig_lint.php` built on Twig's own parser. CI measures statement coverage with `pcov` and enforces a floor (currently 59%, ratcheted up as coverage grows).
+- **PHPUnit 13** — 746 tests, 2085 assertions — with **PHPStan level 8** and enforced type-declaration coverage (100% return/property/constant + `strict_types`; 99.5% param). Twig linted by a native `bin/twig_lint.php` built on Twig's own parser. CI measures statement coverage with `pcov` and enforces a floor (currently 59%, ratcheted up as coverage grows).
 - **Timestamps stored and served as UTC**, localised per visitor in the browser — no server-side timezone config.
 
 ## Architecture
