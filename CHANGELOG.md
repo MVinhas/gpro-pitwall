@@ -6,6 +6,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.15.9] - 2026-09-04
+
+### Removed
+- **The Car Wear tab is retired.** Its calculator lives on the Race Weekend Cockpit's car-wear card, which is where the wear decision is actually made — one screen fewer to bounce between during pre-qualifying. Old links and bookmarks to `?main_tab=Car Wear` now land on the cockpit.
+
+### Added
+- **"All parts — full projection" on the cockpit's wear card.** A collapsed disclosure with every part's level, start wear, projected addition and end-of-race wear — plus the training-laps column when a session is planned, and the driver attributes the model runs on. Nothing the retired tab showed is gone.
+
+### Changed
+- **The Testing tab's unavailable notice says what actually happened.** GPRO's raw deadline HTML is replaced with "Are you mid-race, or has the season just reset? Testing closes 90 minutes before the race and reopens once the next race weekend is up."
+
 ## [1.15.8] - 2026-09-04
 
 ### Changed

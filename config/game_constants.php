@@ -9,7 +9,6 @@ return [
     'main_sections' => [
         'Cockpit',
         'Race Strategy',
-        'Car Wear',
         'Testing',
         'Training Planner',
         'Recruitment Analyzer',

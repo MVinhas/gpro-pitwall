@@ -25,7 +25,6 @@ use App\Service\SeasonCalendarService;
 use App\Service\TestingTargetsService;
 use App\Service\TrainingAdvisorService;
 use App\Service\TrainingWearProjectionService;
-use App\Controller\CarWearController;
 use App\Controller\StrategyController;
 use App\Controller\TestingController;
 use Twig\Environment;
@@ -41,6 +40,9 @@ class PageController
         'Strategy'    => 'Race Strategy',
         'Training'    => 'Training Planner',
         'Recruitment' => 'Recruitment Analyzer',
+        // Retired 1.15.9 — the wear calculator lives on the cockpit card now,
+        // so old links and bookmarks land there instead of the default tab.
+        'Car Wear'    => 'Cockpit',
     ];
 
     /** @param array<string, mixed> $config */
@@ -63,7 +65,6 @@ class PageController
         private readonly TrainingAdvisorService $trainingAdvisor,
         private readonly TrainingWearProjectionService $trainingWear,
         private readonly StrategyController $strategyController,
-        private readonly CarWearController $carWearController,
         private readonly TestingController $testingController,
         private readonly GproDataMapper $mapper,
         private readonly RecruitmentService $recruitmentService,
@@ -289,7 +290,7 @@ class PageController
                     // our local tracks.id (an autoincrement PK), so passing
                     // it would let the "id = :id OR name = :name" lookup match
                     // an unrelated row and read the wrong per-part base wear.
-                    // The Car Wear tab feeds id=0 and is correct — match that.
+                    // Feed id=0 so the lookup resolves by name alone.
                     $wearTrack = [
                         'id'   => 0,
                         'name' => $trackName,
@@ -396,6 +397,16 @@ class PageController
                         $advice = $this->wearAdvisor->classify($wear['parts']);
                         $viewData['wear_advice'] = $advice;
 
+                        // Full per-part table + the inputs behind it. The wear
+                        // card only lists parts at risk, so without these the
+                        // healthy parts and the driver attributes driving the
+                        // model would have nowhere left to be seen (they used
+                        // to live on the retired Car Wear tab).
+                        $viewData['wear_parts']      = $wear['parts'];
+                        $viewData['wear_track_name'] = $wear['track_name'] ?? $trackName;
+                        $viewData['wear_laps']       = $wear['laps'] ?? null;
+                        $viewData['wear_driver']     = $this->mapper->mapDriver($pilot);
+
                         // Only parts that cannot finish the race get a
                         // replacement plan. A part merely finishing in the red
                         // still finishes, and recommending a swap for it turned
@@ -493,34 +504,6 @@ class PageController
                     $viewData['schedule'] = $_SESSION['training_schedule'];
                     unset($_SESSION['training_schedule']);
                 }
-                break;
-
-            case 'Car Wear':
-                // Auto-populate on first visit (mirrors Race Strategy). The
-                // calc reads exactly what GproApiClient has already cached
-                // for the cockpit pass, so no extra API call is spent.
-                $existing = $_SESSION['wear_results'] ?? null;
-
-                if (!is_array($existing)) {
-                    $risk = (int) ($_SESSION['wear_inputs']['risk'] ?? 0);
-                    $this->apiClient->setToken($user['api_token']);
-                    $result = $this->carWearController->runCalc($risk);
-                    if (isset($result['error'])) {
-                        $viewData['wear_error'] = $result['error'];
-                    } else {
-                        $viewData['wear_results'] = $result['results'];
-                        $_SESSION['wear_inputs'] = [
-                            'risk'   => $risk,
-                            'driver' => $result['driver'],
-                        ];
-                    }
-                } else {
-                    $viewData['wear_results'] = $existing;
-                }
-
-                $viewData['wear_inputs'] = $_SESSION['wear_inputs'] ?? [];
-                $viewData['wear_error']  = $_SESSION['wear_error'] ?? $viewData['wear_error'] ?? null;
-                unset($_SESSION['wear_error']);
                 break;
 
             case 'Race Strategy':
