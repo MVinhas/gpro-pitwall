@@ -288,23 +288,46 @@ class UserRepository
     }
 
     /**
-     * Users last active (synced) in the window [olderDays, newerDays) ago — the
-     * prior-period counterpart of countActiveSince() for the activity trend.
+     * Users who synced at least once in the window [olderDays, newerDays) ago —
+     * the prior-period counterpart of countActiveSince() for the activity trend.
+     *
+     * Reads the append-only user_sync_events log, not users.last_synced_at:
+     * that column holds only the most recent sync, so a user active in both the
+     * prior and the current window would be missing from the prior count and
+     * every trend would read as growth. DISTINCT keeps repeat syncers at one.
      */
     public function countActiveBetween(int $olderDays, int $newerDays): int
     {
         $stmt = $this->pdo->prepare(
-            "SELECT COUNT(*) FROM users
-             WHERE deleted_at IS NULL
-               AND last_synced_at IS NOT NULL
-               AND last_synced_at >= datetime('now', :older)
-               AND last_synced_at <  datetime('now', :newer)"
+            "SELECT COUNT(DISTINCT e.user_id)
+             FROM user_sync_events e
+             JOIN users u ON u.id = e.user_id
+             WHERE u.deleted_at IS NULL
+               AND e.synced_at >= datetime('now', :older)
+               AND e.synced_at <  datetime('now', :newer)"
         );
         $stmt->execute([
             'older' => sprintf('-%d days', max(0, $olderDays)),
             'newer' => sprintf('-%d days', max(0, $newerDays)),
         ]);
         return (int) $stmt->fetchColumn();
+    }
+
+    /**
+     * Drop sync-log rows older than the retention window. The log only feeds
+     * period-over-period trends over TREND_WINDOWS, so anything beyond twice
+     * the longest window is dead weight.
+     *
+     * @return int rows removed
+     */
+    public function pruneSyncEvents(int $retentionDays): int
+    {
+        $stmt = $this->pdo->prepare(
+            "DELETE FROM user_sync_events
+             WHERE synced_at < datetime('now', :cutoff)"
+        );
+        $stmt->execute(['cutoff' => sprintf('-%d days', max(0, $retentionDays))]);
+        return $stmt->rowCount();
     }
 
     public function updateSyncStatus(int $userId, string $status): void
@@ -318,6 +341,10 @@ class UserRepository
         ]);
     }
 
+    /**
+     * Stamps the latest sync on `users` (what the app reads) and appends to the
+     * sync log (what period-over-period activity trends read).
+     */
     public function markSynced(int $userId): void
     {
         $stmt = $this->pdo->prepare(
@@ -327,5 +354,11 @@ class UserRepository
             WHERE id = :id"
         );
         $stmt->execute(['id' => $userId]);
+
+        $log = $this->pdo->prepare(
+            "INSERT INTO user_sync_events (user_id, synced_at)
+             VALUES (:id, datetime('now'))"
+        );
+        $log->execute(['id' => $userId]);
     }
 }

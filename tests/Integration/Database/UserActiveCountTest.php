@@ -41,6 +41,13 @@ final class UserActiveCountTest extends TestCase
                 deleted_at TEXT DEFAULT NULL
             )"
         );
+        $this->db->exec(
+            "CREATE TABLE user_sync_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                synced_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )"
+        );
         $secret = 'active-count-test-secret-not-prod';
         $this->repo = new UserRepository($this->db, new EmailCrypto($secret), new ApiTokenCrypto($secret));
     }

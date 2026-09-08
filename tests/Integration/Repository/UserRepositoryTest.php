@@ -41,6 +41,13 @@ final class UserRepositoryTest extends TestCase
             )"
         );
         $this->db->exec("CREATE UNIQUE INDEX idx_users_username ON users(username)");
+        $this->db->exec(
+            "CREATE TABLE user_sync_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                synced_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )"
+        );
 
         $this->apiTokenCrypto = new ApiTokenCrypto(self::SECRET);
         $this->repo = new UserRepository(
@@ -353,9 +360,82 @@ final class UserRepositoryTest extends TestCase
     {
         $id = $this->makeUser();
         $this->db->exec("UPDATE users SET last_synced_at = datetime('now', '-40 days') WHERE id = {$id}");
+        $this->recordSync($id, '-40 days');
 
         $this->assertSame(1, $this->repo->countActiveBetween(60, 30));
         $this->assertSame(0, $this->repo->countActiveSince(30));
+    }
+
+    /**
+     * The bug this guards: a user active in BOTH periods must still count
+     * towards the prior period. Reading only users.last_synced_at dropped them,
+     * because the latest sync overwrites the older one.
+     */
+    public function testCountActiveBetweenCountsUsersAlsoActiveInTheCurrentWindow(): void
+    {
+        $id = $this->makeUser();
+        $this->recordSync($id, '-40 days');
+        $this->recordSync($id, '-2 days');
+        $this->db->exec("UPDATE users SET last_synced_at = datetime('now', '-2 days') WHERE id = {$id}");
+
+        $this->assertSame(1, $this->repo->countActiveSince(30));
+        $this->assertSame(1, $this->repo->countActiveBetween(60, 30));
+    }
+
+    public function testCountActiveBetweenCountsEachUserOncePerWindow(): void
+    {
+        $id = $this->makeUser();
+        $this->recordSync($id, '-35 days');
+        $this->recordSync($id, '-40 days');
+        $this->recordSync($id, '-50 days');
+
+        $this->assertSame(1, $this->repo->countActiveBetween(60, 30));
+    }
+
+    public function testCountActiveBetweenExcludesSoftDeletedUsers(): void
+    {
+        $id = $this->makeUser();
+        $this->recordSync($id, '-40 days');
+        $this->db->exec("UPDATE users SET deleted_at = datetime('now') WHERE id = {$id}");
+
+        $this->assertSame(0, $this->repo->countActiveBetween(60, 30));
+    }
+
+    public function testRecordSyncEventLogsEverySyncNotJustTheLatest(): void
+    {
+        $id = $this->makeUser();
+
+        $this->repo->markSynced($id);
+        $this->repo->markSynced($id);
+
+        $stmt = $this->db->query(
+            "SELECT COUNT(*) FROM user_sync_events WHERE user_id = {$id}"
+        );
+        $this->assertNotFalse($stmt);
+        $this->assertSame(2, (int) $stmt->fetchColumn());
+    }
+
+    public function testPruneSyncEventsDropsRowsBeyondRetention(): void
+    {
+        $id = $this->makeUser();
+        $this->recordSync($id, '-400 days');
+        $this->recordSync($id, '-10 days');
+
+        $this->assertSame(1, $this->repo->pruneSyncEvents(365));
+
+        $stmt = $this->db->query(
+            "SELECT COUNT(*) FROM user_sync_events WHERE user_id = {$id}"
+        );
+        $this->assertNotFalse($stmt);
+        $this->assertSame(1, (int) $stmt->fetchColumn());
+    }
+
+    private function recordSync(int $userId, string $modifier): void
+    {
+        $this->db->exec(
+            "INSERT INTO user_sync_events (user_id, synced_at)
+             VALUES ({$userId}, datetime('now', '{$modifier}'))"
+        );
     }
 
     public function testUpdateSyncStatusIsPersisted(): void

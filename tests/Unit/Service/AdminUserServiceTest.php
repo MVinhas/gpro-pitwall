@@ -386,6 +386,18 @@ final class AdminUserServiceTest extends TestCase
         $this->assertSame('flat', $stats['active']['direction']);
     }
 
+    public function testStatsPrunesTheSyncLogToItsRetentionWindow(): void
+    {
+        $users = $this->createMock(UserRepository::class);
+        $users->expects($this->once())
+            ->method('pruneSyncEvents')
+            ->with(180);
+
+        $pending = $this->createStub(PendingRegistrationRepository::class);
+
+        $this->statsService($users, $pending)->stats(30);
+    }
+
     public function testStatsRejectsUnknownWindowAndFallsBackTo30(): void
     {
         $users = $this->createStub(UserRepository::class);
