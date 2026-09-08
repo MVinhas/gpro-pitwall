@@ -22,6 +22,12 @@ final class AdminUserService
     /** Window lengths (days) the dashboard trend can be viewed over. */
     public const array TREND_WINDOWS = [7, 30, 90];
 
+    /**
+     * How long sync-log rows are kept. Twice the longest trend window is all
+     * any comparison on this page can reach back to.
+     */
+    private const int SYNC_LOG_RETENTION_DAYS = 180;
+
     public function __construct(
         private readonly UserRepository $users,
         private readonly AuditLogRepository $audit,
@@ -51,6 +57,11 @@ final class AdminUserService
         }
 
         $now = (new DateTimeImmutable())->format('Y-m-d H:i:s');
+
+        // Opportunistic housekeeping: the dashboard is the only reader of the
+        // sync log and is hit rarely, so pruning here keeps the table bounded
+        // without a cron the shared host does not have.
+        $this->users->pruneSyncEvents(self::SYNC_LOG_RETENTION_DAYS);
 
         return [
             'window_days' => $windowDays,

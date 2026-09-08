@@ -16,7 +16,7 @@ class DatabaseSeeder
      * calls migrate() on every request; this version lets a warm database skip
      * the entire DDL + scan + legacy-encryption pass.
      */
-    private const int SCHEMA_VERSION = 10;
+    private const int SCHEMA_VERSION = 11;
 
     /**
      * @param array<string, string> $statsSchema
@@ -57,6 +57,7 @@ class DatabaseSeeder
         $this->createPersistentTokensTable();
         $this->createPendingRegistrationsTable();
         $this->createAuditLogTable();
+        $this->createUserSyncEventsTable();
 
         $this->createPilotsTable();
         $this->createMetadataTable();
@@ -75,6 +76,7 @@ class DatabaseSeeder
 
 
         $this->applyUserMigrations();
+        $this->backfillSyncEventsFromUsers();
         $this->purgeUnverifiedUsers();
         $this->hardenUserUniqueIndexes();
         $this->encryptLegacyApiTokens();
@@ -583,6 +585,60 @@ class DatabaseSeeder
         $this->db->exec("
             CREATE INDEX IF NOT EXISTS idx_pending_expires
             ON pending_registrations(expires_at)
+        ");
+    }
+
+    /**
+     * Append-only log of successful data syncs, one row per sync. `users`
+     * keeps only the LATEST sync time, which cannot answer "who was active in
+     * the period before this one" — a user active in both periods would be
+     * counted only in the current one, understating every prior-period figure
+     * on the admin dashboard. This table makes that a DISTINCT count.
+     *
+     * Rows are pruned to a rolling retention window (see
+     * UserRepository::pruneSyncEvents) so the table stays small. The backfill
+     * is a separate step because it reads users.last_synced_at, which
+     * applyUserMigrations() may still have to add to a legacy table.
+     */
+    private function createUserSyncEventsTable(): void
+    {
+        $this->db->exec("
+            CREATE TABLE IF NOT EXISTS user_sync_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                synced_at TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+        ");
+
+        $this->db->exec("
+            CREATE INDEX IF NOT EXISTS idx_sync_events_synced_at
+            ON user_sync_events(synced_at, user_id)
+        ");
+    }
+
+    /**
+     * Seed the log from the one sync time the old schema kept, so an existing
+     * production database is not blind for its whole first retention window.
+     * The backfill is partial by nature (only the latest sync per user
+     * survives), so prior-period counts stay conservative until the log fills.
+     * Guarded on an empty table: the log is append-only and this must never
+     * duplicate rows on a re-run.
+     */
+    private function backfillSyncEventsFromUsers(): void
+    {
+        $stmt = $this->db->query('SELECT COUNT(*) FROM user_sync_events');
+        $existing = $stmt === false ? 0 : (int) $stmt->fetchColumn();
+        if ($stmt !== false) {
+            $stmt->closeCursor();
+        }
+        if ($existing > 0) {
+            return;
+        }
+
+        $this->db->exec("
+            INSERT INTO user_sync_events (user_id, synced_at)
+            SELECT id, last_synced_at FROM users WHERE last_synced_at IS NOT NULL
         ");
     }
 

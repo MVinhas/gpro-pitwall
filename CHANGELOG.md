@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.15.10] - 2026-09-08
+
+### Fixed
+- **The admin dashboard's prior-period Active count was systematically too low.** It was derived from `users.last_synced_at`, which keeps only the *latest* sync — so anyone active in both the previous and the current window was counted in the current one only, and the activity trend always leaned towards growth. Syncs are now recorded in an append-only log and the prior period is a distinct-user count over it. The log is backfilled from the existing last-sync stamps on upgrade (partial by nature, so prior-period figures stay conservative until it fills) and pruned to a 180-day retention window.
+
 ## [1.15.9] - 2026-09-04
 
 ### Removed
