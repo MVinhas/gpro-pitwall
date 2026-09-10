@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.15.11] - 2026-09-10
+
+### Fixed
+- **Security:** **A new API token was silently discarded when the session came from "keep me signed in".** Changing the token requires a freshly authenticated session, but the step-up redirect dropped the submitted form body without saving or reporting anything — the user returned to a page still showing the old token's last 4 and reasonably concluded it had been stored. Because the PHP session lasts 7 days while the remember-me cookie lasts 30, any signed-in user could sit in this state for up to 23 days, unable to replace a broken token without logging out and back in. The control panel now asks for verification up front instead of offering a field whose contents would be lost, and a token submitted from an unverified session reports that it was not saved.
+
 ## [1.15.10] - 2026-09-08
 
 ### Fixed

@@ -61,6 +61,26 @@
         <div class="mb-8">
             <h2 class="t-heading mb-4">GPRO API Connection</h2>
 
+            {% if not is_fresh %}
+                {# Changing a token requires a fresh session. Offering the field
+                   here would lose whatever is typed to the step-up redirect. #}
+                <div class="notice notice-info">
+                    <p class="text-sm font-bold">Verify your identity to change your token.</p>
+                    <p class="text-sm mt-1">
+                        You're signed in from a remembered session. For your
+                        security, confirm it's you before updating your API token.
+                    </p>
+                    {% if has_token %}
+                        <p class="mt-2 inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
+                            <span aria-hidden="true">●</span>
+                            Current token ending <span class="font-mono">…{{ token_hint }}</span>
+                        </p>
+                    {% endif %}
+                    <div class="mt-3">
+                        <a href="/reauth" class="btn btn-md btn-primary">Verify to continue →</a>
+                    </div>
+                </div>
+            {% else %}
             <form method="POST" action="/update_token" class="space-y-4">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
@@ -96,6 +116,7 @@
                     </button>
                 </div>
             </form>
+            {% endif %}
         </div>
 
         {# Account Details (Read Only) #}

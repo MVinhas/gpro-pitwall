@@ -36,6 +36,10 @@ class ControlPanelController
             'is_logged_in' => true,
             'has_token' => $hasToken,
             'token_hint' => $hasToken ? substr($token, -4) : null,
+            // Changing a token needs a fresh session. Surfacing that here lets
+            // the template ask for verification up front instead of offering a
+            // field whose contents the step-up redirect would silently discard.
+            'is_fresh' => $this->authorize->isFresh(),
             'flash' => $_SESSION['flash'] ?? null,
             'flash_error' => $_SESSION['flash_error'] ?? null,
             'csrf_token' => $_SESSION['csrf_token'] ?? ''
@@ -45,6 +49,17 @@ class ControlPanelController
 
     public function updateToken(Request $request): void
     {
+        // A not-fresh session is redirected into the step-up flow, which loses
+        // this POST body — the token is NOT saved. Say so before redirecting,
+        // otherwise the user returns to a page showing the old token's hint and
+        // reasonably concludes it was stored. A remembered session goes
+        // not-fresh after the 7-day session window while the 30-day remember
+        // cookie keeps them signed in, so this window is wide.
+        if (!$this->authorize->isFresh()) {
+            $_SESSION['flash_error'] = 'Confirm your identity before changing your API token. '
+                . 'Your new token was not saved — enter it again after verifying.';
+        }
+
         $user = $this->authorize->requireFreshAuth('/control_panel');
 
         $token = trim((string)$request->post('api_token'));

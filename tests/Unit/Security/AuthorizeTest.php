@@ -88,6 +88,39 @@ final class AuthorizeTest extends TestCase
         return new Authorize($users);
     }
 
+    /**
+     * A session restored from a "keep me signed in" cookie is marked not-fresh
+     * (bootstrap.php). Callers rely on this to avoid offering a form whose body
+     * the step-up redirect would discard.
+     */
+    public function testSessionIsNotFreshByDefault(): void
+    {
+        $this->assertFalse($this->authorizeWith(1)->isFresh());
+    }
+
+    public function testSessionIsFreshOnlyForTheStrictTrueFlag(): void
+    {
+        $authorize = $this->authorizeWith(1);
+
+        $_SESSION['auth_fresh'] = true;
+        $this->assertTrue($authorize->isFresh());
+
+        $_SESSION['auth_fresh'] = false;
+        $this->assertFalse($authorize->isFresh());
+    }
+
+    /** Fails closed: a truthy-but-not-true value must not pass the step-up gate. */
+    public function testTruthyNonBooleanDoesNotCountAsFresh(): void
+    {
+        $authorize = $this->authorizeWith(1);
+
+        $_SESSION['auth_fresh'] = '1';
+        $this->assertFalse($authorize->isFresh());
+
+        $_SESSION['auth_fresh'] = 1;
+        $this->assertFalse($authorize->isFresh());
+    }
+
     public function testCurrentUserIdIsNullWithoutASession(): void
     {
         $this->assertNull($this->authorizeWith(null)->currentUserId());
