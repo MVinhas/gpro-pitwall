@@ -66,12 +66,23 @@ final readonly class Authorize
     {
         $user = $this->requireAuth();
 
-        if (($_SESSION['auth_fresh'] ?? false) !== true) {
+        if (!$this->isFresh()) {
             $_SESSION['reauth_return_to'] = $returnTo;
             $this->redirect('/reauth');
         }
 
         return $user;
+    }
+
+    /**
+     * Whether this session was authenticated by entering a code, as opposed to
+     * being silently restored from a "keep me signed in" cookie. Callers use it
+     * to render the right UI *before* a step-up redirect discards a submitted
+     * form body (see ControlPanelController::updateToken).
+     */
+    public function isFresh(): bool
+    {
+        return ($_SESSION['auth_fresh'] ?? false) === true;
     }
 
     /** @return array<string, mixed> */
