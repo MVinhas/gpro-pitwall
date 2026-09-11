@@ -1,0 +1,379 @@
+{% extends "layout.twig" %}
+{% import "debrief/_shell.twig" as t %}
+
+{% block title %}Track History — GPRO Pitwall{% endblock %}
+{% block robots %}<meta name="robots" content="noindex,nofollow">{% endblock %}
+{% block canonical_path %}/debrief/track{% endblock %}
+
+{% block content %}
+    {# The app-wide tab bar: the Debrief lives on its own routes, so it has to
+       include the nav itself rather than inheriting it from index.twig. #}
+    {% include 'partials/_nav.twig' %}
+
+<div class="space-y-5">
+
+    <div>
+        <h1 class="t-display">Debrief</h1>
+        <p class="t-caption mt-1">Everything the shared corpus knows about one circuit.</p>
+    </div>
+
+    {{ t.tabs(tabs, active_tab, track_id) }}
+
+    {# ---- Track picker. Only tracks with data are offered. ---- #}
+    <form method="get" action="/debrief/track" class="flex flex-wrap items-end gap-2">
+        <label class="block">
+            <span class="t-label">Track</span>
+            <select name="track" class="form-select mt-1 text-sm" onchange="this.form.submit()">
+                {% for option in tracks %}
+                    <option value="{{ option.track_id }}" {{ option.track_id == track_id ? 'selected' : '' }}>
+                        {{ option.track_name }} ({{ option.races }} race{{ option.races == 1 ? '' : 's' }})
+                    </option>
+                {% endfor %}
+            </select>
+        </label>
+        <noscript><button type="submit" class="btn btn-sm btn-secondary">Show</button></noscript>
+    </form>
+
+    {% if not has_data %}
+        <div class="notice notice-warn">
+            <p>
+                <strong>Nothing collected here yet.</strong>
+                A track appears once at least one manager has synced a race at it.
+            </p>
+        </div>
+    {% else %}
+
+        <div>
+            <h2 class="t-heading">{{ track_name }}</h2>
+            <p class="t-caption mt-0.5">{{ total_races }} race{{ total_races == 1 ? '' : 's' }} analysed</p>
+        </div>
+
+        {# ---- Coverage. The denominator behind every percentage below, so it
+           is open by default rather than buried. ---- #}
+        {% embed 'partials/_acc.twig' with {
+            id: 'th-coverage', title: 'Coverage', caption: 'How much is known, per division',
+            open_default: true
+        } %}
+            {% block verdict %}{% import "debrief/_shell.twig" as t %}
+                <span class="brief-n">{{ total_races }} races</span>
+            {% endblock %}
+            {% block body %}{% import "debrief/_shell.twig" as t %}
+                <div class="brief-scroll">
+                    <table class="brief-table">
+                        <thead class="bg-slate-50">
+                            <tr>
+                                <th class="brief-th">Division</th>
+                                <th class="brief-th text-right">Races</th>
+                                <th class="brief-th text-right hidden sm:table-cell">Seasons</th>
+                                <th class="brief-th text-right hidden md:table-cell">Drivers</th>
+                                <th class="brief-th text-right">Avg finish</th>
+                                <th class="brief-th text-right hidden lg:table-cell">Avg mistake</th>
+                                <th class="brief-th text-right hidden sm:table-cell">DNFs</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            {% for row in totals %}
+                                <tr>
+                                    <td class="brief-td font-medium">{{ row.level }}</td>
+                                    <td class="brief-td text-right">{{ row.races }}</td>
+                                    <td class="brief-td text-right hidden sm:table-cell">{{ row.seasons }}</td>
+                                    <td class="brief-td text-right hidden md:table-cell">{{ row.drivers }}</td>
+                                    <td class="brief-td text-right">{{ row.avg_pos ?? '—' }}</td>
+                                    <td class="brief-td text-right hidden lg:table-cell">
+                                        {{ row.avg_mistake is not null ? row.avg_mistake ~ 's' : '—' }}
+                                    </td>
+                                    <td class="brief-td text-right hidden sm:table-cell">{{ row.dnfs }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <p class="t-caption mt-2">
+                    Percentages on this page are shares of the races above, not of GPRO as a whole —
+                    this is what Pitwall's own managers did here.
+                </p>
+            {% endblock %}
+        {% endembed %}
+
+        {# ---- Qualifying risk. ---- #}
+        {% if q1_risk.choices|length %}
+            {% embed 'partials/_acc.twig' with {
+                id: 'th-q1', title: 'Qualifying risk', caption: 'How hard managers pushed in Q1 and Q2'
+            } %}
+                {% block verdict %}{% import "debrief/_shell.twig" as t %}
+                    {% set top = q1_risk.choices|last %}
+                    <span class="t-caption">Most common: {{ top.choice|lower }}</span>
+                {% endblock %}
+                {% block body %}{% import "debrief/_shell.twig" as t %}
+                    <h5 class="t-section mb-2">Q1</h5>
+                    {{ t.dist_table(q1_risk, 'Risk taken') }}
+                    {% if q2_risk.choices|length %}
+                        <h5 class="t-section mb-2 mt-5">Q2</h5>
+                        {{ t.dist_table(q2_risk, 'Risk taken') }}
+                    {% endif %}
+                {% endblock %}
+            {% endembed %}
+        {% endif %}
+
+        {# ---- Race start risk. ---- #}
+        {% if start_risk.choices|length %}
+            {% embed 'partials/_acc.twig' with {
+                id: 'th-start', title: 'Start orders', caption: 'What managers told the driver to do at the lights'
+            } %}
+                {% block verdict %}{% import "debrief/_shell.twig" as t %}
+                    <span class="t-caption">{{ start_risk.choices|length }} orders used</span>
+                {% endblock %}
+                {% block body %}{% import "debrief/_shell.twig" as t %}{{ t.dist_table(start_risk, 'Order given') }}{% endblock %}
+            {% endembed %}
+        {% endif %}
+
+        {# ---- Numeric race risks. ---- #}
+        {% if risk_avg|length %}
+            {% embed 'partials/_acc.twig' with {
+                id: 'th-risk', title: 'Race risk', caption: 'Mean risk settings per division'
+            } %}
+                {% block verdict %}{% import "debrief/_shell.twig" as t %}
+                    <span class="t-caption">{{ risk_avg|length }} division{{ risk_avg|length == 1 ? '' : 's' }}</span>
+                {% endblock %}
+                {% block body %}{% import "debrief/_shell.twig" as t %}
+                    <div class="brief-scroll">
+                        <table class="brief-table">
+                            <thead class="bg-slate-50">
+                                <tr>
+                                    <th class="brief-th">Division</th>
+                                    <th class="brief-th text-right">Overtake</th>
+                                    <th class="brief-th text-right">Defend</th>
+                                    <th class="brief-th text-right">Clear dry</th>
+                                    <th class="brief-th text-right hidden sm:table-cell">Clear wet</th>
+                                    <th class="brief-th text-right">Malfunction</th>
+                                    <th class="brief-th text-right hidden md:table-cell">Clear dry &gt; 50</th>
+                                    <th class="brief-th text-right">Sample</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                {% for row in risk_avg %}
+                                    <tr>
+                                        <td class="brief-td font-medium">{{ row.level }}</td>
+                                        <td class="brief-td text-right">{{ row.overtaking ?? '—' }}</td>
+                                        <td class="brief-td text-right">{{ row.defensive ?? '—' }}</td>
+                                        <td class="brief-td text-right">{{ row.clear_dry ?? '—' }}</td>
+                                        <td class="brief-td text-right hidden sm:table-cell">{{ row.clear_wet ?? '—' }}</td>
+                                        <td class="brief-td text-right">{{ row.malfunctioning ?? '—' }}</td>
+                                        <td class="brief-td text-right hidden md:table-cell">
+                                            {{ row.clear_dry_over_50 is not null ? row.clear_dry_over_50 ~ '%' : '—' }}
+                                        </td>
+                                        <td class="brief-td text-right">{{ t.n(row.n, min_sample) }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% endblock %}
+            {% endembed %}
+        {% endif %}
+
+        {# ---- Strategy. ---- #}
+        {% if strategy.rows|length %}
+            {% embed 'partials/_acc.twig' with {
+                id: 'th-strategy', title: 'Race strategy', caption: 'Stop counts used here, and how they finished'
+            } %}
+                {% block verdict %}{% import "debrief/_shell.twig" as t %}
+                    {% set best = null %}
+                    {% for row in strategy.rows %}
+                        {% for cell in row.cells %}
+                            {% if best is null or (cell.percent is not null and cell.percent > best.percent) %}
+                                {% set best = {'stops': row.stops, 'percent': cell.percent} %}
+                            {% endif %}
+                        {% endfor %}
+                    {% endfor %}
+                    <span class="t-caption">
+                        {% if best %}Most common: {{ best.stops }} stop{{ best.stops == 1 ? '' : 's' }}{% endif %}
+                    </span>
+                {% endblock %}
+                {% block body %}{% import "debrief/_shell.twig" as t %}
+                    <div class="brief-scroll">
+                        <table class="brief-table">
+                            <thead class="bg-slate-50">
+                                <tr>
+                                    <th class="brief-th">Stops</th>
+                                    {% for level in strategy.levels %}
+                                        <th class="brief-th text-right">{{ level }}</th>
+                                    {% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                {% for row in strategy.rows %}
+                                    <tr>
+                                        <td class="brief-td font-medium">
+                                            {{ row.stops }} stop{{ row.stops == 1 ? '' : 's' }}
+                                        </td>
+                                        {% for cell in row.cells %}
+                                            <td class="brief-td text-right">
+                                                {% if cell.n == 0 %}—
+                                                {% else %}
+                                                    {{ cell.percent }}%
+                                                    <span class="text-slate-400 text-xs">
+                                                        (avg P{{ cell.avg_pos ?? '?' }})
+                                                    </span>
+                                                {% endif %}
+                                            </td>
+                                        {% endfor %}
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="t-caption mt-2">
+                        The bracket is the mean finishing position of the races that used that many stops —
+                        popularity and success are not the same thing.
+                    </p>
+                {% endblock %}
+            {% endembed %}
+        {% endif %}
+
+        {# ---- Tyres. ---- #}
+        {% if tyres|length %}
+            {% embed 'partials/_acc.twig' with {
+                id: 'th-tyres', title: 'Tyres', caption: 'Compounds run here, and what they returned'
+            } %}
+                {% block verdict %}{% import "debrief/_shell.twig" as t %}
+                    <span class="t-caption">{{ tyres|length }} compound/condition splits</span>
+                {% endblock %}
+                {% block body %}{% import "debrief/_shell.twig" as t %}
+                    <div class="brief-scroll">
+                        <table class="brief-table">
+                            <thead class="bg-slate-50">
+                                <tr>
+                                    <th class="brief-th">Division</th>
+                                    <th class="brief-th">Compound</th>
+                                    <th class="brief-th">Conditions</th>
+                                    <th class="brief-th text-right">Avg finish</th>
+                                    <th class="brief-th text-right hidden sm:table-cell">Avg points</th>
+                                    <th class="brief-th text-right">Sample</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                {% for row in tyres %}
+                                    <tr>
+                                        <td class="brief-td font-medium">{{ row.level }}</td>
+                                        <td class="brief-td">{{ row.race_tyre }}</td>
+                                        <td class="brief-td">{{ row.was_wet ? 'Wet' : 'Dry' }}</td>
+                                        <td class="brief-td text-right">{{ row.avg_pos ?? '—' }}</td>
+                                        <td class="brief-td text-right hidden sm:table-cell">{{ row.avg_points ?? '—' }}</td>
+                                        <td class="brief-td text-right">{{ t.n(row.n, min_sample) }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% endblock %}
+            {% endembed %}
+        {% endif %}
+
+        {# ---- Weather by season. ---- #}
+        {% if weather|length %}
+            {% embed 'partials/_acc.twig' with {
+                id: 'th-weather', title: 'Weather by season', caption: 'What actually fell on the laps that were run'
+            } %}
+                {% block verdict %}{% import "debrief/_shell.twig" as t %}
+                    {% set wet = 0 %}
+                    {% for row in weather %}{% set wet = wet + row.wet_races %}{% endfor %}
+                    <span class="t-caption">{{ wet }} wet of {{ total_races }}</span>
+                {% endblock %}
+                {% block body %}{% import "debrief/_shell.twig" as t %}
+                    <div class="brief-scroll">
+                        <table class="brief-table">
+                            <thead class="bg-slate-50">
+                                <tr>
+                                    <th class="brief-th">Season</th>
+                                    <th class="brief-th text-right">Races</th>
+                                    <th class="brief-th text-right">Temperature</th>
+                                    <th class="brief-th text-right hidden sm:table-cell">Humidity</th>
+                                    <th class="brief-th text-right">Weather</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                {% for row in weather %}
+                                    <tr>
+                                        <td class="brief-td font-medium">{{ row.season }}</td>
+                                        <td class="brief-td text-right">{{ row.races }}</td>
+                                        <td class="brief-td text-right">{{ row.temperature ?? '—' }}°</td>
+                                        <td class="brief-td text-right hidden sm:table-cell">{{ row.humidity ?? '—' }}%</td>
+                                        <td class="brief-td text-right">
+                                            {% if row.wet_races == 0 %}
+                                                <span class="inline-flex items-center rounded px-1.5 py-px text-xs font-medium bg-amber-100 text-amber-900">Dry</span>
+                                            {% elseif row.wet_races == row.races %}
+                                                <span class="inline-flex items-center rounded px-1.5 py-px text-xs font-medium bg-blue-100 text-blue-800">Wet</span>
+                                            {% else %}
+                                                <span class="inline-flex items-center rounded px-1.5 py-px text-xs font-medium bg-slate-200 text-slate-700">Mixed</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% endblock %}
+            {% endembed %}
+        {% endif %}
+
+        {# ---- The manager's own races here. ---- #}
+        {% embed 'partials/_acc.twig' with {
+            id: 'th-mine', title: 'My races here', caption: 'Your own results at this circuit',
+            open_default: mine|length > 0
+        } %}
+            {% block verdict %}{% import "debrief/_shell.twig" as t %}
+                <span class="t-caption">
+                    {{ mine|length }} race{{ mine|length == 1 ? '' : 's' }}
+                </span>
+            {% endblock %}
+            {% block body %}{% import "debrief/_shell.twig" as t %}
+                {% if mine|length == 0 %}
+                    <p class="t-caption">You have no archived races at this track yet.</p>
+                {% else %}
+                    <div class="brief-scroll">
+                        <table class="brief-table">
+                            <thead class="bg-slate-50">
+                                <tr>
+                                    <th class="brief-th">Race</th>
+                                    <th class="brief-th text-right">Grid</th>
+                                    <th class="brief-th text-right">Finish</th>
+                                    <th class="brief-th text-right">+/-</th>
+                                    <th class="brief-th text-right hidden sm:table-cell">Q2</th>
+                                    <th class="brief-th text-right hidden md:table-cell">Best lap</th>
+                                    <th class="brief-th text-right hidden lg:table-cell">Stops</th>
+                                    <th class="brief-th hidden lg:table-cell">Tyre</th>
+                                    <th class="brief-th text-right hidden xl:table-cell">Fuel /km</th>
+                                    <th class="brief-th text-right">Score</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                {% for row in mine %}
+                                    <tr>
+                                        <td class="brief-td">
+                                            <a class="text-blue-600 hover:underline"
+                                               href="/debrief?scope=mine&amp;season_detail={{ row.season }}&amp;race_detail={{ row.race }}#race-detail">
+                                                S{{ row.season }} R{{ row.race }}
+                                            </a>
+                                        </td>
+                                        <td class="brief-td text-right">{{ row.grid_pos ?? '—' }}</td>
+                                        <td class="brief-td text-right">{{ t.pos(row.final_pos, row.dnf) }}</td>
+                                        <td class="brief-td text-right">{{ t.delta(row.positions_gained) }}</td>
+                                        <td class="brief-td text-right hidden sm:table-cell">P{{ row.q2_pos ?? '—' }}</td>
+                                        <td class="brief-td text-right hidden md:table-cell">{{ t.laptime(row.best_lap_ms) }}</td>
+                                        <td class="brief-td text-right hidden lg:table-cell">{{ row.pit_stops ?? '—' }}</td>
+                                        <td class="brief-td hidden lg:table-cell">{{ row.race_tyre ?? '—' }}</td>
+                                        <td class="brief-td text-right hidden xl:table-cell">{{ row.fuel_per_km ?? '—' }}</td>
+                                        <td class="brief-td text-right font-semibold">{{ row.score }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% endif %}
+            {% endblock %}
+        {% endembed %}
+
+    {% endif %}
+</div>
+{% endblock %}

@@ -35,6 +35,11 @@ return function (Router $router): void {
     $router->add('GET', '/debug', 'controller.debug', 'index');
     $router->add('POST', '/debug/flush', 'controller.debug', 'flushCache');
 
+    // ========== DEBRIEF ==========
+    $router->add('GET', '/debrief', 'controller.debrief', 'index');
+    $router->add('GET', '/debrief/track', 'controller.debrief', 'track');
+    $router->add('GET', '/debrief/insights', 'controller.debrief', 'insights');
+
     // ========== ADMIN ==========
     $router->add('GET',  '/admin/users', 'controller.admin_users', 'index');
     $router->add('POST', '/admin/users/toggle_admin', 'controller.admin_users', 'toggleAdmin');

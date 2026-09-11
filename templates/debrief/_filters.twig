@@ -1,0 +1,57 @@
+{# Filter panel for the Bird's Eye View. Lives in its own partial so the
+   accordion that wraps it stays a plain embed with no block gymnastics.
+
+   Every dropdown is built from values that actually occur in the data on
+   screen, so no combination offered here can return an empty table on its
+   own — only a combination of several can. #}
+{% import "debrief/_shell.twig" as t %}
+
+<form method="get" action="/debrief" class="space-y-4">
+    <input type="hidden" name="scope" value="{{ scope }}">
+    <input type="hidden" name="sort" value="{{ sort }}">
+
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        {{ t.select('track', 'Track', options.tracks, filters.track) }}
+        {{ t.select('season', 'Season', options.seasons, filters.season) }}
+        {{ t.select('race', 'Race', options.races, filters.race) }}
+        {{ t.select('supplier', 'Tyre supplier', options.suppliers, filters.supplier) }}
+        {{ t.select('compound', 'Compound', options.compounds, filters.compound) }}
+        {% if options.levels is defined %}
+            {{ t.select('level', 'Division', options.levels, filters.level) }}
+        {% endif %}
+
+        <label class="block">
+            <span class="t-label">Qualified within</span>
+            <select name="quali_max" class="form-select mt-1 text-sm">
+                <option value="">Any</option>
+                {% for n in [1, 3, 5, 10] %}
+                    <option value="{{ n }}" {{ filters.quali_max == n ? 'selected' : '' }}>Top {{ n }}</option>
+                {% endfor %}
+            </select>
+        </label>
+
+        <label class="block">
+            <span class="t-label">Finished within</span>
+            <select name="finish_max" class="form-select mt-1 text-sm">
+                <option value="">Any</option>
+                {% for n in [1, 3, 5, 10] %}
+                    <option value="{{ n }}" {{ filters.finish_max == n ? 'selected' : '' }}>Top {{ n }}</option>
+                {% endfor %}
+            </select>
+        </label>
+
+        <label class="block">
+            <span class="t-label">Conditions</span>
+            <select name="wet" class="form-select mt-1 text-sm">
+                <option value="">Any</option>
+                <option value="0" {{ filters.wet == '0' ? 'selected' : '' }}>Dry</option>
+                <option value="1" {{ filters.wet == '1' ? 'selected' : '' }}>Wet</option>
+            </select>
+        </label>
+    </div>
+
+    <div class="flex gap-2">
+        <button type="submit" class="btn btn-md btn-primary">Apply filters</button>
+        <a href="/debrief?scope={{ scope }}&amp;sort={{ sort }}" class="btn btn-md btn-secondary">Reset</a>
+    </div>
+</form>

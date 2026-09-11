@@ -22,7 +22,7 @@ class RaceTelemetryRepository
         'q1_time_ms', 'q2_time_ms', 'positions_gained', 'dnf', 'laps_completed',
         'driver_id', 'driver_oa', 'driver_con', 'driver_tal', 'driver_agg',
         'driver_exp', 'driver_tei', 'driver_sta', 'driver_cha', 'driver_mot',
-        'driver_rep', 'driver_wei',
+        'driver_rep', 'driver_wei', 'driver_age',
         'q1_risk', 'q2_risk', 'start_risk', 'overtake_risk', 'defend_risk',
         'clear_dry_risk', 'clear_wet_risk', 'problem_risk',
         'mistake_seconds', 'ot_attempts', 'overtakes', 'ot_attempts_on_you',
@@ -354,6 +354,434 @@ class RaceTelemetryRepository
         return $this->rows($sql, ['min' => $minSample]);
     }
 
+    /** Filters the Bird's Eye View may apply to the anonymous corpus. */
+    private const array EQUALITY_FILTERS = [
+        'track'    => 'track_id',
+        'season'   => 'season',
+        'race'     => 'race',
+        'supplier' => 'tyre_supplier',
+        'compound' => 'race_tyre',
+        'level'    => 'level',
+    ];
+
+    /**
+     * Same "how impressive was this race" blend the personal archive sorts by,
+     * so a manager comparing their own row against the field is reading one
+     * scale, not two.
+     */
+    public const string IMPRESSIVENESS_SQL = "
+        CASE WHEN dnf = 1 THEN -20 ELSE
+            (COALESCE(points, 0) * 2)
+            + (COALESCE(positions_gained, 0) * 4)
+            + (CASE
+                 WHEN final_pos = 1 THEN 20
+                 WHEN final_pos <= 3 THEN 10
+                 WHEN final_pos <= 6 THEN 5
+                 ELSE 0
+               END)
+        END
+    ";
+
+    /** Sort keys accepted by browse(), mapped to ORDER BY clauses. */
+    private const array SORTS = [
+        'impressive' => 'score DESC, season DESC, race DESC',
+        'recent'     => 'season DESC, race DESC',
+        'position'   => 'final_pos IS NULL, final_pos ASC, season DESC',
+        'gained'     => 'positions_gained IS NULL, positions_gained DESC, season DESC',
+        'quali'      => 'q2_pos IS NULL, q2_pos ASC, season DESC',
+    ];
+
+    /**
+     * Anonymous rows for the Bird's Eye View's "everyone" mode.
+     *
+     * These are individual races, but they carry no manager identity — the
+     * corpus has none to carry. A reader sees "a Rookie who started 14th and
+     * finished 3rd", never who that was.
+     *
+     * @param array<string, int|string|null> $filters
+     * @return list<array<string, mixed>>
+     */
+    public function browse(array $filters = [], string $sort = 'impressive', int $limit = 100): array
+    {
+        [$where, $params] = $this->whereFor($filters);
+        $order = self::SORTS[$sort] ?? self::SORTS['impressive'];
+        $score = self::IMPRESSIVENESS_SQL;
+
+        $sql = "
+            SELECT season, race, track_id, track_name, level, group_label,
+                   start_pos, final_pos, points, positions_gained, dnf,
+                   q1_pos, q2_pos, q1_time_ms, q2_time_ms,
+                   pit_stops, laps_completed, race_tyre, tyre_supplier,
+                   was_wet, avg_temp, avg_humidity, avg_pit_time,
+                   overtake_risk, defend_risk, clear_dry_risk, clear_wet_risk,
+                   overtakes, ot_attempts, driver_oa, avg_part_level,
+                   ({$score}) AS score
+            FROM race_telemetry
+            {$where}
+            ORDER BY {$order}
+            LIMIT :limit
+        ";
+
+        $params['limit'] = $limit;
+
+        return $this->rows($sql, $params);
+    }
+
+    /**
+     * Headline aggregate over the same filtered slice browse() lists.
+     *
+     * @param array<string, int|string|null> $filters
+     * @return array<string, mixed>
+     */
+    public function browseSummary(array $filters = []): array
+    {
+        [$where, $params] = $this->whereFor($filters);
+
+        $sql = "
+            SELECT COUNT(*)                 AS races,
+                   COUNT(DISTINCT driver_id) AS drivers,
+                   COUNT(DISTINCT track_id)  AS tracks,
+                   COUNT(DISTINCT season)    AS seasons,
+                   ROUND(AVG(final_pos), 2)  AS avg_pos,
+                   ROUND(AVG(start_pos), 2)  AS avg_grid,
+                   ROUND(AVG(points), 2)     AS avg_points,
+                   ROUND(AVG(pit_stops), 2)  AS avg_stops,
+                   SUM(dnf)                  AS dnfs,
+                   SUM(was_wet)              AS wet_races
+            FROM race_telemetry
+            {$where}
+        ";
+
+        $rows = $this->rows($sql, $params);
+
+        return $rows[0] ?? [];
+    }
+
+    /**
+     * Distinct values actually present in the corpus, for the filter controls.
+     *
+     * @return array<string, list<array<string, mixed>>>
+     */
+    public function filterOptions(): array
+    {
+        return [
+            'tracks' => $this->rows(
+                'SELECT DISTINCT track_id AS value, track_name AS label FROM race_telemetry
+                  WHERE track_id IS NOT NULL ORDER BY track_name'
+            ),
+            'seasons' => $this->rows(
+                'SELECT DISTINCT season AS value, season AS label FROM race_telemetry ORDER BY season DESC'
+            ),
+            'races' => $this->rows(
+                'SELECT DISTINCT race AS value, race AS label FROM race_telemetry ORDER BY race'
+            ),
+            'suppliers' => $this->rows(
+                'SELECT DISTINCT tyre_supplier AS value, tyre_supplier AS label FROM race_telemetry
+                  WHERE tyre_supplier IS NOT NULL ORDER BY tyre_supplier'
+            ),
+            'compounds' => $this->rows(
+                'SELECT DISTINCT race_tyre AS value, race_tyre AS label FROM race_telemetry
+                  WHERE race_tyre IS NOT NULL ORDER BY race_tyre'
+            ),
+            'levels' => $this->rows(
+                'SELECT DISTINCT level AS value, level AS label FROM race_telemetry ORDER BY level'
+            ),
+        ];
+    }
+
+    /**
+     * Every track the corpus knows, with how much it knows about each — the
+     * Track History picker, which must never offer a track with no data.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function trackCoverage(): array
+    {
+        return $this->rows("
+            SELECT track_id, track_name,
+                   COUNT(*)                AS races,
+                   COUNT(DISTINCT season)  AS seasons,
+                   COUNT(DISTINCT level)   AS levels,
+                   SUM(was_wet)            AS wet_races
+            FROM race_telemetry
+            WHERE track_id IS NOT NULL
+            GROUP BY track_id, track_name
+            ORDER BY races DESC
+        ");
+    }
+
+    /**
+     * Race count per level at one track — the "how much do we know" header of
+     * the Track History screen, and the denominator of every percentage on it.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function trackLevelTotals(int $trackId): array
+    {
+        return $this->rows("
+            SELECT level,
+                   COUNT(*)                       AS races,
+                   COUNT(DISTINCT season)         AS seasons,
+                   COUNT(DISTINCT driver_id)      AS drivers,
+                   ROUND(AVG(final_pos), 2)       AS avg_pos,
+                   ROUND(AVG(mistake_seconds), 3) AS avg_mistake,
+                   SUM(dnf)                       AS dnfs
+            FROM race_telemetry
+            WHERE track_id = :track
+            GROUP BY level
+        ", ['track' => $trackId]);
+    }
+
+    /**
+     * Distribution of a categorical risk choice per level at one track, as
+     * counts — the caller turns them into the percentages GPRO's own track
+     * analysis prints. `$column` is whitelisted, never interpolated raw.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function trackRiskDistribution(int $trackId, string $column): array
+    {
+        $allowed = ['q1_risk', 'q2_risk', 'start_risk'];
+        if (!in_array($column, $allowed, true)) {
+            return [];
+        }
+
+        return $this->rows("
+            SELECT level, {$column} AS choice, COUNT(*) AS n
+            FROM race_telemetry
+            WHERE track_id = :track AND {$column} IS NOT NULL
+            GROUP BY level, {$column}
+        ", ['track' => $trackId]);
+    }
+
+    /**
+     * Mean numeric race risks per level at one track, plus the share of races
+     * that ran a clear-track-dry setting above 50 — the aggressive-setup
+     * tell GPRO's own page highlights.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function trackRiskAverages(int $trackId): array
+    {
+        return $this->rows("
+            SELECT level,
+                   COUNT(*)                        AS n,
+                   ROUND(AVG(overtake_risk), 2)    AS overtaking,
+                   ROUND(AVG(defend_risk), 2)      AS defensive,
+                   ROUND(AVG(clear_dry_risk), 2)   AS clear_dry,
+                   ROUND(AVG(clear_wet_risk), 2)   AS clear_wet,
+                   ROUND(AVG(problem_risk), 2)     AS malfunctioning,
+                   ROUND(
+                     100.0 * SUM(CASE WHEN clear_dry_risk > 50 THEN 1 ELSE 0 END) / COUNT(*),
+                     2
+                   ) AS clear_dry_over_50
+            FROM race_telemetry
+            WHERE track_id = :track
+            GROUP BY level
+        ", ['track' => $trackId]);
+    }
+
+    /**
+     * Pit-stop count distribution per level at one track — the strategy half of
+     * the Track History screen.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function trackStopDistribution(int $trackId): array
+    {
+        return $this->rows("
+            SELECT level, pit_stops, COUNT(*) AS n,
+                   ROUND(AVG(final_pos), 2) AS avg_pos
+            FROM race_telemetry
+            WHERE track_id = :track AND pit_stops IS NOT NULL
+            GROUP BY level, pit_stops
+            ORDER BY level, pit_stops
+        ", ['track' => $trackId]);
+    }
+
+    /**
+     * Weather actually observed at one track, per season — the bottom table of
+     * GPRO's track page. Built from laps run, not from a forecast.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function trackWeatherBySeason(int $trackId): array
+    {
+        return $this->rows("
+            SELECT season,
+                   COUNT(*)                      AS races,
+                   ROUND(AVG(avg_temp), 2)       AS temperature,
+                   ROUND(AVG(avg_humidity), 2)   AS humidity,
+                   SUM(was_wet)                  AS wet_races,
+                   ROUND(AVG(wet_lap_share), 3)  AS wet_lap_share
+            FROM race_telemetry
+            WHERE track_id = :track
+            GROUP BY season
+            ORDER BY season DESC
+        ", ['track' => $trackId]);
+    }
+
+    /**
+     * Tyre compound usage and result per level at one track.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function trackTyreUsage(int $trackId, int $minSample = 3): array
+    {
+        return $this->rows("
+            SELECT level, race_tyre, was_wet,
+                   COUNT(*)                 AS n,
+                   ROUND(AVG(final_pos), 2) AS avg_pos,
+                   ROUND(AVG(points), 2)    AS avg_points
+            FROM race_telemetry
+            WHERE track_id = :track AND race_tyre IS NOT NULL
+            GROUP BY level, race_tyre, was_wet
+            HAVING COUNT(*) >= :min
+            ORDER BY level, avg_pos
+        ", ['track' => $trackId, 'min' => $minSample]);
+    }
+
+    /**
+     * What a winning race looked like at one track, per level: the mean choices
+     * of races that finished in the top three, beside the mean of the rest.
+     *
+     * This is the Insights answer to "what does the next track reward" — every
+     * column is a decision a manager makes before the lights go out.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function trackWinnerProfile(int $trackId, int $minSample = 3): array
+    {
+        return $this->rows("
+            SELECT level,
+                   CASE WHEN final_pos <= 3 THEN 'podium' ELSE 'rest' END AS band,
+                   COUNT(*)                        AS n,
+                   ROUND(AVG(start_pos), 2)        AS avg_grid,
+                   ROUND(AVG(pit_stops), 2)        AS avg_stops,
+                   ROUND(AVG(start_fuel), 1)       AS avg_start_fuel,
+                   ROUND(AVG(overtake_risk), 2)    AS overtaking,
+                   ROUND(AVG(defend_risk), 2)      AS defensive,
+                   ROUND(AVG(clear_dry_risk), 2)   AS clear_dry,
+                   ROUND(AVG(problem_risk), 2)     AS malfunctioning,
+                   ROUND(AVG(driver_oa), 1)        AS driver_oa,
+                   ROUND(AVG(avg_part_level), 2)   AS part_level,
+                   ROUND(AVG(boost_laps), 2)       AS boost_laps,
+                   ROUND(AVG(setup_fwing), 0)      AS fwing,
+                   ROUND(AVG(setup_rwing), 0)      AS rwing,
+                   ROUND(AVG(setup_engine), 0)     AS engine,
+                   ROUND(AVG(setup_brakes), 0)     AS brakes,
+                   ROUND(AVG(setup_gear), 0)       AS gear,
+                   ROUND(AVG(setup_susp), 0)       AS susp
+            FROM race_telemetry
+            WHERE track_id = :track AND final_pos IS NOT NULL AND dnf = 0
+            GROUP BY level, band
+            HAVING COUNT(*) >= :min
+            ORDER BY level, band
+        ", ['track' => $trackId, 'min' => $minSample]);
+    }
+
+    /**
+     * The most-used tyre compound among podium finishers at one track, per
+     * level — a mode, which an average over compound names cannot express.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function trackPodiumTyres(int $trackId): array
+    {
+        return $this->rows("
+            SELECT level, race_tyre, was_wet, COUNT(*) AS n
+            FROM race_telemetry
+            WHERE track_id = :track AND final_pos <= 3 AND race_tyre IS NOT NULL
+            GROUP BY level, race_tyre, was_wet
+            ORDER BY level, n DESC
+        ", ['track' => $trackId]);
+    }
+
+    /**
+     * Races that took a top-three grid slot AND a top-three finish, and have
+     * not yet been promoted into the Division Baseline.
+     *
+     * Doing both is the filter that makes a driver representative of its
+     * division: a good qualifier with a bad race had the car, a good race from
+     * the back had the luck, but doing both is pace.
+     *
+     * This is the one query here that reads outside race_telemetry. The
+     * anti-join against pilots is what makes the auto-fill idempotent — it runs
+     * on every sync and must never promote the same race twice. It joins on the
+     * provenance column only, never on anything user-identifying.
+     *
+     * Rows collected before driver_age existed are skipped: pilots.age is NOT
+     * NULL, and inventing an age would corrupt every recruitment calculation
+     * that reads the baseline.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function podiumDoublesAwaitingBaseline(int $limit = 200): array
+    {
+        return $this->rows("
+            SELECT t.id, t.level,
+                   t.driver_con, t.driver_tal, t.driver_agg, t.driver_exp,
+                   t.driver_tei, t.driver_sta, t.driver_cha, t.driver_mot,
+                   t.driver_wei, t.driver_age
+            FROM race_telemetry t
+            LEFT JOIN pilots p ON p.source_telemetry_id = t.id
+            WHERE p.id IS NULL
+              AND t.dnf = 0
+              AND t.q2_pos IS NOT NULL AND t.q2_pos <= 3
+              AND t.final_pos IS NOT NULL AND t.final_pos <= 3
+              AND t.driver_age IS NOT NULL
+              AND t.driver_con IS NOT NULL
+              AND t.driver_tal IS NOT NULL
+            ORDER BY t.id
+            LIMIT :limit
+        ", ['limit' => $limit]);
+    }
+
+    /**
+     * Shared WHERE builder for browse()/browseSummary(). Filter keys are
+     * whitelisted against EQUALITY_FILTERS, so no caller input reaches the SQL.
+     *
+     * @param array<string, int|string|null> $filters
+     * @return array{0: string, 1: array<string, int|string>}
+     */
+    private function whereFor(array $filters): array
+    {
+        $clauses = [];
+        $params = [];
+
+        foreach (self::EQUALITY_FILTERS as $key => $column) {
+            $value = $filters[$key] ?? null;
+            if ($value === null || $value === '') {
+                continue;
+            }
+            $clauses[] = "{$column} = :{$key}";
+            $params[$key] = $value;
+        }
+
+        $quali = $filters['quali_max'] ?? null;
+        if ($quali !== null && $quali !== '') {
+            $clauses[] = 'q2_pos IS NOT NULL AND q2_pos <= :quali_max';
+            $params['quali_max'] = (int) $quali;
+        }
+
+        $finish = $filters['finish_max'] ?? null;
+        if ($finish !== null && $finish !== '') {
+            $clauses[] = 'final_pos IS NOT NULL AND final_pos <= :finish_max';
+            $params['finish_max'] = (int) $finish;
+        }
+
+        $wet = $filters['wet'] ?? null;
+        if ($wet === '1' || $wet === 1) {
+            $clauses[] = 'was_wet = 1';
+        } elseif ($wet === '0' || $wet === 0) {
+            $clauses[] = 'was_wet = 0';
+        }
+
+        return [
+            $clauses === [] ? '' : 'WHERE ' . implode(' AND ', $clauses),
+            $params,
+        ];
+    }
     /**
      * Only outcome columns may be interpolated into the correlation SQL.
      * Anything else falls back to final_pos rather than reaching the query.

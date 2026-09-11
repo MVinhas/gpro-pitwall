@@ -25,6 +25,8 @@ final class GproSyncService
         private readonly UserRepository $users,
         private readonly CacheInterface $cache,
         private readonly RaceTelemetryService $telemetry,
+        private readonly RaceHistoryService $history,
+        private readonly BaselineAutoFillService $baselineAutoFill,
         private readonly int $safetyMargin = 20,
     ) {
     }
@@ -87,13 +89,29 @@ final class GproSyncService
             $this->apiClient->getSponsorNegotiations($force);
             $this->apiClient->getCalendar($force);
 
-            // Anonymous telemetry: both payloads are already warm at this
-            // point, so this contributes race data to the shared corpus
+            // Both payloads are already warm at this point, so neither of the
+            // two writes below costs an extra API call.
+            $analysis = $this->apiClient->getRaceAnalysis($force);
+            $td = $this->apiClient->getTechnicalDirector();
+
+            // Anonymous telemetry: contributes race data to the shared corpus
             // without a per-user identifier ever being involved.
-            $this->telemetry->ingest(
-                $this->apiClient->getRaceAnalysis($force),
-                $this->apiClient->getTechnicalDirector(),
+            $this->telemetry->ingest($analysis, $td);
+
+            // The manager's own detailed archive — same payload, opposite
+            // privacy contract, kept in a separate table that is only ever
+            // read back by the user it belongs to.
+            $this->history->archive(
+                $userId,
+                $analysis,
+                $td,
+                $this->apiClient->getStaffAndFacilities(),
             );
+
+            // Grow the Division Baseline from whatever the corpus has learned.
+            // Pure SQL over data already stored — no API call, and idempotent,
+            // so running it every sync converges rather than duplicating.
+            $this->baselineAutoFill->run();
 
             $this->users->markSynced($userId);
             return 'synced';

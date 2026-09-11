@@ -9,7 +9,18 @@
 {% set tab_labels = {'Race Strategy': 'Strategy', 'Training Planner': 'Training', 'Recruitment Analyzer': 'Recruitment'} %}
 
 {% macro tab_href(section, active_division, active_track, division_tabs) %}
-    {%- set href = '?main_tab=' ~ section|url_encode -%}
+    {#- Sections that live on their own route instead of a ?main_tab= panel.
+        The Debrief is three real pages (bookmarkable per track), not a tab of
+        the calculator screen, so the nav links straight at it. -#}
+    {%- set routes = {'Debrief': '/debrief'} -%}
+    {%- if routes[section] is defined -%}
+        {{- routes[section] -}}
+    {%- else -%}
+    {#- Root-relative on purpose. A bare query string resolves against the
+        CURRENT path, so from /debrief every tab would link back to /debrief
+        and trap the user there. Every main_tab link in templates/ is absolute
+        for the same reason. -#}
+    {%- set href = '/?main_tab=' ~ section|url_encode -%}
     {%- if section in division_tabs -%}
         {%- set href = href ~ '&division_tab=' ~ active_division|url_encode -%}
     {%- endif -%}
@@ -17,13 +28,14 @@
         {%- set href = href ~ '&track=' ~ active_track|url_encode -%}
     {%- endif -%}
     {{- href -}}
+    {%- endif -%}
 {% endmacro %}
 
 {# Intent grouping: race-weekend flow, then team-building, then admin. Used to
    drop a divider (and an "Admin" chip) whenever the group changes in the loop —
    no reordering of the sections themselves. #}
 {% macro group_of(section, division_tabs) %}
-{%- if section in division_tabs -%}admin
+{%- if section in division_tabs or section == 'Debrief' -%}admin
 {%- elseif section in ['Training Planner', 'Recruitment Analyzer'] -%}team
 {%- else -%}race
 {%- endif -%}

@@ -16,7 +16,7 @@ class DatabaseSeeder
      * calls migrate() on every request; this version lets a warm database skip
      * the entire DDL + scan + legacy-encryption pass.
      */
-    private const int SCHEMA_VERSION = 11;
+    private const int SCHEMA_VERSION = 12;
 
     /**
      * @param array<string, string> $statsSchema
@@ -66,6 +66,7 @@ class DatabaseSeeder
         $this->createCarPartCoefficientsTable();
         $this->createGameConstantsTable();
         $this->createRaceTelemetryTable();
+        $this->createUserRaceHistoryTable();
         $this->dropDeprecatedTables();
 
 
@@ -385,6 +386,7 @@ class DatabaseSeeder
                 driver_mot INTEGER,
                 driver_rep INTEGER,
                 driver_wei INTEGER,
+                driver_age INTEGER,
 
                 -- Risks.
                 q1_risk TEXT,
@@ -473,6 +475,18 @@ class DatabaseSeeder
              )"
         );
 
+        // Added after the table shipped: the Division Baseline auto-fill needs a
+        // driver age, and pilots.age is NOT NULL. Rows collected before this
+        // column existed keep a NULL age and are skipped by the auto-fill.
+        $stmt = $this->db->query('PRAGMA table_info(race_telemetry)');
+        $cols = $stmt === false ? [] : $stmt->fetchAll(\PDO::FETCH_ASSOC);
+        if ($stmt !== false) {
+            $stmt->closeCursor();
+        }
+        if (!in_array('driver_age', array_column($cols, 'name'), true)) {
+            $this->db->exec('ALTER TABLE race_telemetry ADD COLUMN driver_age INTEGER');
+        }
+
         // The analytics screen always segments by level first.
         $this->db->exec(
             "CREATE INDEX IF NOT EXISTS idx_race_telemetry_level
@@ -484,6 +498,146 @@ class DatabaseSeeder
         );
     }
 
+    /**
+     * The manager's OWN detailed race archive — the deliberate counterpart to
+     * race_telemetry.
+     *
+     * race_telemetry is anonymous so it can be aggregated across everyone;
+     * this table is explicitly keyed to a user so a manager can read their own
+     * weekend back in full. The two are never joined, and a row here is never
+     * shown to anybody but its owner. Keeping them apart is what lets the
+     * shared corpus stay honestly anonymous while still offering a personal
+     * history.
+     *
+     * Variable-width blocks (stints, pits, per-part wear, qualifying runs) are
+     * JSON: they are read back whole for a single race and never filtered on.
+     * Everything the Bird's Eye View filters or sorts by is a real column.
+     */
+    private function createUserRaceHistoryTable(): void
+    {
+        $sql = "
+            CREATE TABLE IF NOT EXISTS user_race_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+
+                -- Race identity.
+                season INTEGER NOT NULL,
+                race INTEGER NOT NULL,
+                track_id INTEGER,
+                track_name TEXT,
+                group_label TEXT,
+                level TEXT,
+
+                -- Result.
+                laps_total INTEGER,
+                laps_completed INTEGER,
+                grid_pos INTEGER,
+                final_pos INTEGER,
+                points INTEGER,
+                positions_gained INTEGER,
+                dnf INTEGER NOT NULL DEFAULT 0,
+                best_lap_ms INTEGER,
+                best_pit_ms INTEGER,
+
+                -- Qualifying.
+                q1_pos INTEGER,
+                q2_pos INTEGER,
+                q1_time_ms INTEGER,
+                q2_time_ms INTEGER,
+
+                -- Strategy.
+                pit_stops INTEGER,
+                start_fuel INTEGER,
+                finish_fuel INTEGER,
+                finish_tyres INTEGER,
+                problems_count INTEGER,
+
+                -- Conditions.
+                avg_temp REAL,
+                avg_humidity REAL,
+                dry_laps INTEGER,
+                rain_laps INTEGER,
+                mist_laps INTEGER,
+                problem_laps INTEGER,
+                was_wet INTEGER NOT NULL DEFAULT 0,
+                fuel_per_km REAL,
+                tyre_per_km REAL,
+
+                -- Tyres.
+                race_tyre TEXT,
+                tyre_supplier TEXT,
+
+                -- Setup actually raced.
+                setup_fwing INTEGER,
+                setup_rwing INTEGER,
+                setup_engine INTEGER,
+                setup_brakes INTEGER,
+                setup_gear INTEGER,
+                setup_susp INTEGER,
+
+                -- Risks.
+                q1_risk TEXT,
+                q2_risk TEXT,
+                start_risk TEXT,
+                overtake_risk INTEGER,
+                defend_risk INTEGER,
+                clear_dry_risk INTEGER,
+                clear_wet_risk INTEGER,
+                problem_risk INTEGER,
+
+                -- Boost.
+                boost_lap_1 INTEGER,
+                boost_lap_2 INTEGER,
+                boost_lap_3 INTEGER,
+
+                -- Racecraft.
+                ot_attempts INTEGER,
+                overtakes INTEGER,
+                ot_attempts_on_you INTEGER,
+                overtakes_on_you INTEGER,
+
+                -- Car.
+                car_power INTEGER,
+                car_handling INTEGER,
+                car_accel INTEGER,
+                energy_from INTEGER,
+                energy_to INTEGER,
+
+                -- Variable-width report blocks.
+                qualifying_json TEXT,
+                stints_json TEXT,
+                pits_json TEXT,
+                parts_json TEXT,
+                driver_json TEXT,
+                td_json TEXT,
+                staff_json TEXT,
+                problems_json TEXT,
+
+                collected_at TEXT NOT NULL DEFAULT (datetime('now')),
+
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+        ";
+        $this->db->exec($sql);
+
+        // One row per manager per race; a re-sync of the same race is a no-op.
+        $this->db->exec(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_user_race_history_natural
+             ON user_race_history (user_id, season, race)"
+        );
+
+        // The Bird's Eye View always scopes to one manager, newest race first.
+        $this->db->exec(
+            "CREATE INDEX IF NOT EXISTS idx_user_race_history_user
+             ON user_race_history (user_id, season DESC, race DESC)"
+        );
+
+        // Track History scopes by track across a manager's own races.
+        $this->db->exec(
+            "CREATE INDEX IF NOT EXISTS idx_user_race_history_track
+             ON user_race_history (user_id, track_id)"
+        );
+    }
     private function createVerificationTokensTable(): void
     {
         $sql = "
@@ -686,6 +840,27 @@ class DatabaseSeeder
         $sql = "CREATE TABLE IF NOT EXISTS pilots ({$columns})";
 
         $this->db->exec($sql);
+
+        // Provenance for auto-filled rows: the race_telemetry row a pilot was
+        // promoted from. NULL for the hand-entered rows, which is why the
+        // uniqueness below is a partial index — many manual pilots may share a
+        // NULL source, but one telemetry row can only ever become one pilot.
+        // That is what makes the auto-fill safe to re-run on every sync.
+        $stmt = $this->db->query('PRAGMA table_info(pilots)');
+        $cols = $stmt === false ? [] : $stmt->fetchAll(PDO::FETCH_ASSOC);
+        if ($stmt !== false) {
+            $stmt->closeCursor();
+        }
+
+        if (!in_array('source_telemetry_id', array_column($cols, 'name'), true)) {
+            $this->db->exec('ALTER TABLE pilots ADD COLUMN source_telemetry_id INTEGER');
+        }
+
+        $this->db->exec(
+            'CREATE UNIQUE INDEX IF NOT EXISTS idx_pilots_source_telemetry
+             ON pilots (source_telemetry_id)
+             WHERE source_telemetry_id IS NOT NULL'
+        );
     }
 
     private function createMetadataTable(): void

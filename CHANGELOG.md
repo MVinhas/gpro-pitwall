@@ -6,6 +6,43 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.16.0] - 2026-09-11
+
+### Added
+- **Debrief — a new admin area for reading races back, in three screens.** Until now the
+  collected race data only existed as admin-only aggregates; this turns it into something
+  you can interrogate. **Bird's Eye View** ranks races by a stated impressiveness score
+  (points, places gained from the grid, podium bonuses, and a flat DNF penalty so a
+  retirement never outranks a finish), filterable by track, season, race, tyre supplier,
+  compound, qualifying and finishing position, and conditions — over your own archive or,
+  switched with one control, over the whole anonymous corpus. **Track History** rebuilds
+  the per-circuit picture: qualifying-risk and start-order distributions per division,
+  mean race risks, stop-count splits, compound returns, and the weather actually observed
+  season by season. **Insights** carries the driver-attribute correlations forward with a
+  plain-language reading per division, and adds a podium-versus-field profile for any
+  chosen track.
+- **Your own races are now archived in full.** A new `user_race_history` table keeps the
+  complete report for each of your weekends — stints, pit stops, per-part wear, both
+  qualifying runs with the setup delta between them, driver attributes before and after,
+  and fuel and tyre burn expressed per kilometre so two tracks are comparable. Written
+  from payloads the sync already fetches, so it costs no extra API call.
+- **The Division Baseline fills itself.** Any race in the corpus that took a top-three
+  grid slot *and* a top-three finish is promoted into the baseline for its division,
+  through the same OA-cap adjustment a hand-entered pilot receives. Promotion is keyed to
+  the source row, so it is safe to re-run on every sync and can never duplicate a pilot.
+  Hand-entered pilots are untouched.
+
+### Changed
+- Every `?main_tab=` link in the templates is now root-relative. A bare query string
+  resolves against the current path, so from any page outside `/` the whole tab bar
+  linked back to that page and trapped the user there.
+- The admin header link to the race corpus is now labelled **Corpus** rather than Intel.
+
+### Fixed
+- **Race Analysis track names never matched the track table.** GPRO returns
+  `"Brno (Czech Republic)"` where the table holds `"Brno"`, so a lookup by name missed
+  every time. Nothing depended on it before; the new per-kilometre burn rates do.
+
 ## [1.15.11] - 2026-09-10
 
 ### Fixed

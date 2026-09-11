@@ -231,11 +231,34 @@ $container['service.race_telemetry'] = new \App\Service\RaceTelemetryService(
 $container['service.race_intelligence'] = new \App\Service\RaceIntelligenceService(
     $container['repo.race_telemetry'],
 );
+$container['repo.race_history'] = new \App\Repository\RaceHistoryRepository($container['db']);
+$container['service.race_history'] = new \App\Service\RaceHistoryService(
+    $container['repo.race_history'],
+    new \App\Telemetry\RaceHistoryMapper(),
+    $container['repo.track'],
+);
+$container['service.debrief'] = new \App\Service\DebriefService(
+    $container['repo.race_history'],
+    $container['repo.race_telemetry'],
+    $container['service.race_intelligence'],
+);
+$container['service.calculator'] = new PilotCalculatorService(
+    $container['config']['secrets']['pilot_factors'],
+    $container['config']['secrets']['division_caps']
+);
+
+$container['service.baseline_autofill'] = new \App\Service\BaselineAutoFillService(
+    $container['repo.race_telemetry'],
+    $container['repo.pilot'],
+    $container['service.calculator'],
+);
 $container['service.gpro_sync'] = new GproSyncService(
     $container['service.api_client'],
     $container['service.user_repo'],
     $container['service.cache'],
     $container['service.race_telemetry'],
+    $container['service.race_history'],
+    $container['service.baseline_autofill'],
     Env::int('SYNC_SAFETY_MARGIN', 20),
 );
 $container['service.auth_service']  = new \App\Service\AuthService(
@@ -256,11 +279,6 @@ $container['service.auth_service']  = new \App\Service\AuthService(
     Env::int('MAX_CODES_PER_USER_PER_HOUR', 3),
 );
 $container['service.data_mapper'] = new GproDataMapper();
-
-$container['service.calculator'] = new PilotCalculatorService(
-    $container['config']['secrets']['pilot_factors'],
-    $container['config']['secrets']['division_caps']
-);
 
 $container['service.ideal_pilot'] = new IdealPilotService(
     $container['repo.pilot'],
@@ -455,6 +473,13 @@ $container['controller.admin_users'] = new \App\Controller\AdminUserController(
     $container['service.admin_users'],
     $container['service.authorize'],
     $container['twig'],
+);
+
+$container['controller.debrief'] = new \App\Controller\DebriefController(
+    $container['service.debrief'],
+    $container['service.authorize'],
+    $container['twig'],
+    $container['config'],
 );
 
 $container['controller.admin_telemetry'] = new \App\Controller\AdminTelemetryController(
