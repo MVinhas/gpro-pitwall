@@ -6,6 +6,32 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.17.0] - 2026-09-11
+
+### Changed
+- **Every screen now has its own URL.** `/?main_tab=Race%20Strategy` becomes `/strategy`,
+  and the rest follow: `/cockpit`, `/testing`, `/training`, `/recruitment`,
+  `/divisions/baseline`, `/divisions/differences`. The path had been carrying no meaning
+  at all — every screen was the same URL, so a bookmark recorded a display spelling
+  rather than a page, and any relative link resolved against whatever page you happened
+  to be on. A new `App\Http\Sections` owns the one map between a screen's canonical name
+  and its path; nothing else in the codebase knows both.
+- Selections *within* a screen — division, track, page, sort order, market filters — stay
+  query parameters, because they filter a screen rather than name one.
+- Post-redirect-get targets moved with the links: calculating a strategy, running the
+  training planner, and every division-baseline mutation now return you to the screen's
+  real path.
+- Requesting an admin-only screen's path without admin rights redirects to the cockpit
+  instead of rendering it under a URL that claims otherwise.
+
+### Fixed
+- Old `/?main_tab=…` links keep working. They are answered with a 301 to the new path,
+  carrying `division_tab`, `track`, `page`, `sort` and `order` across, so a bookmark
+  keeps its selections and not just its screen. The short labels (`Strategy`, `Training`,
+  `Recruitment`) and the tab retired in 1.15.9 (`Car Wear` → the cockpit) still resolve.
+  A fragment request is never redirected — the refresh JS expects a body, and a 301 would
+  break it rather than move it.
+
 ## [1.16.0] - 2026-09-11
 
 ### Added

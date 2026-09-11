@@ -8,27 +8,22 @@
    so old URLs keep working. #}
 {% set tab_labels = {'Race Strategy': 'Strategy', 'Training Planner': 'Training', 'Recruitment Analyzer': 'Recruitment'} %}
 
-{% macro tab_href(section, active_division, active_track, division_tabs) %}
-    {#- Sections that live on their own route instead of a ?main_tab= panel.
-        The Debrief is three real pages (bookmarkable per track), not a tab of
-        the calculator screen, so the nav links straight at it. -#}
-    {%- set routes = {'Debrief': '/debrief'} -%}
-    {%- if routes[section] is defined -%}
-        {{- routes[section] -}}
-    {%- else -%}
-    {#- Root-relative on purpose. A bare query string resolves against the
-        CURRENT path, so from /debrief every tab would link back to /debrief
-        and trap the user there. Every main_tab link in templates/ is absolute
-        for the same reason. -#}
-    {%- set href = '/?main_tab=' ~ section|url_encode -%}
-    {%- if section in division_tabs -%}
-        {%- set href = href ~ '&division_tab=' ~ active_division|url_encode -%}
+{#- Every screen has a real path now; App\Http\Sections owns the map and hands
+    it in as `section_paths`. The division and the track stay query parameters:
+    they select *within* a screen rather than naming one. -#}
+{% macro tab_href(section, active_division, active_track, division_tabs, section_paths) %}
+    {%- set href = section_paths[section]|default('/') -%}
+    {%- set query = [] -%}
+    {%- if section in division_tabs and active_division -%}
+        {%- set query = query|merge(['division_tab=' ~ active_division|url_encode]) -%}
     {%- endif -%}
-    {%- if active_track -%}
-        {%- set href = href ~ '&track=' ~ active_track|url_encode -%}
+    {#- The Debrief's `track` is a numeric track id chosen on its own screens,
+        not the track NAME the calculators carry, so passing this one across
+        would be a meaningless parameter it silently discards. -#}
+    {%- if active_track and section != 'Debrief' -%}
+        {%- set query = query|merge(['track=' ~ active_track|url_encode]) -%}
     {%- endif -%}
-    {{- href -}}
-    {%- endif -%}
+    {{- query is empty ? href : href ~ '?' ~ query|join('&') -}}
 {% endmacro %}
 
 {# Intent grouping: race-weekend flow, then team-building, then admin. Used to
@@ -56,7 +51,7 @@
             {% endif %}
             {% set label = tab_labels[section]|default(section) %}
             {% set is_active = (section == active_main_tab) %}
-            <a href="{{ _self.tab_href(section, active_division, active_track, division_tabs) }}"
+            <a href="{{ _self.tab_href(section, active_division, active_track, division_tabs, section_paths) }}"
                class="shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium transition-colors
                       {{ is_active
                          ? 'bg-blue-600 text-on-accent'
@@ -81,7 +76,7 @@
                 {% endif %}
                 {% set label = tab_labels[section]|default(section) %}
                 {% set is_active = (section == active_main_tab) %}
-                <a href="{{ _self.tab_href(section, active_division, active_track, division_tabs) }}"
+                <a href="{{ _self.tab_href(section, active_division, active_track, division_tabs, section_paths) }}"
                    class="whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors duration-200
                           {{ is_active
                              ? 'border-blue-600 text-blue-600'
@@ -99,12 +94,12 @@
 {% if active_main_tab in ['Cockpit', 'Race Strategy'] %}
     {% set on_cockpit = (active_main_tab == 'Cockpit') %}
     <div class="-mt-2 mb-6 flex items-center gap-2 text-xs">
-        <a href="{{ _self.tab_href('Cockpit', active_division, active_track, division_tabs) }}"
+        <a href="{{ _self.tab_href("Cockpit", active_division, active_track, division_tabs, section_paths) }}"
            class="rounded-full px-2 py-0.5 transition-colors
                   {{ on_cockpit ? 'bg-blue-50 text-blue-700 font-semibold ring-1 ring-inset ring-blue-200' : 'text-slate-500 hover:text-slate-700' }}"
            {% if on_cockpit %}aria-current="step"{% endif %}>① Cockpit</a>
         <span class="text-slate-400" aria-hidden="true">→</span>
-        <a href="{{ _self.tab_href('Race Strategy', active_division, active_track, division_tabs) }}"
+        <a href="{{ _self.tab_href("Race Strategy", active_division, active_track, division_tabs, section_paths) }}"
            class="rounded-full px-2 py-0.5 transition-colors
                   {{ not on_cockpit ? 'bg-blue-50 text-blue-700 font-semibold ring-1 ring-inset ring-blue-200' : 'text-slate-500 hover:text-slate-700' }}"
            {% if not on_cockpit %}aria-current="step"{% endif %}>② Strategy</a>

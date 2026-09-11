@@ -92,7 +92,7 @@
                 </a>
             {% endif %}
 
-            <a href="/?main_tab=Race Strategy&track={{ active_track|url_encode }}" class="tile">
+            <a href="/strategy?track={{ active_track|url_encode }}" class="tile">
                 <p class="t-label">Next step</p>
                 <p class="text-xs font-semibold text-blue-700 mt-0.5">Set your race strategy →</p>
             </a>
@@ -250,7 +250,7 @@
                                 {% else %}
                                     <p class="text-sm text-slate-600">Not enough division baseline data yet.</p>
                                     <p class="t-caption">
-                                        Add pilots in <a href="/?main_tab=Division Baseline" class="underline">Division Baseline</a>
+                                        Add pilots in <a href="/divisions/baseline" class="underline">Division Baseline</a>
                                         to unlock training picks tuned to your division's ideal driver.
                                     </p>
                                 {% endif %}
@@ -461,7 +461,7 @@
 
         {# JUMP TO STRATEGY #}
         <div class="text-center space-y-2">
-            <a href="/?main_tab=Race Strategy&track={{ active_track|url_encode }}"
+            <a href="/strategy?track={{ active_track|url_encode }}"
                class="btn btn-md btn-primary">
                 Set your race strategy →
             </a>

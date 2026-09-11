@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Http\Request;
+use App\Http\Sections;
 use App\Security\Authorize;
 use App\Service\PilotCalculatorService;
 use App\Service\TrainingService;
@@ -23,7 +24,7 @@ class TrainingController
         $this->authorize->requireAuth();
         $this->calculateTraining($request);
 
-        header("Location: /?main_tab=Training Planner");
+        header('Location: ' . Sections::url('Training Planner'));
         exit;
     }
 

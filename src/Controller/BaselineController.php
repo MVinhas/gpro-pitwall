@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Http\Request;
+use App\Http\Sections;
 use App\Repository\PilotRepository;
 use App\Repository\DivisionMetadataRepository;
 use App\Security\Authorize;
@@ -97,11 +98,9 @@ class BaselineController
 
     private function redirectBack(string $division): void
     {
-        $params = http_build_query([
-            'main_tab' => 'Division Baseline',
-            'division_tab' => $division ?: 'Rookie'
-        ]);
-        header("Location: /?{$params}");
+        header('Location: ' . Sections::url('Division Baseline', [
+            'division_tab' => $division ?: 'Rookie',
+        ]));
         exit;
     }
 }
