@@ -126,6 +126,7 @@ final readonly class DebriefController
             // controller would normally supply have to be passed here too.
             'main_sections'   => $this->mainSections(),
             'active_main_tab' => 'Debrief',
+            'section_paths'   => \App\Http\Sections::all(),
             'active_division' => null,
             'active_track'    => null,
         ]));

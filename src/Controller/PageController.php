@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Http\Request;
+use App\Http\Sections;
 use App\Repository\DivisionMetadataRepository;
 use App\Repository\UserRepository;
 use App\Support\Env;
@@ -32,17 +33,11 @@ use Twig\Environment;
 class PageController
 {
     /**
-     * Short tab labels shown in the nav map back to their canonical routing
-     * keys here, so a `?main_tab=Strategy` link resolves to `Race Strategy`
-     * while every internal link and redirect keeps using canonical names.
+     * Query keys the legacy `?main_tab=` redirect carries across to the new
+     * path, so an old bookmark keeps its selections and not just its screen.
      */
-    private const array MAIN_TAB_ALIASES = [
-        'Strategy'    => 'Race Strategy',
-        'Training'    => 'Training Planner',
-        'Recruitment' => 'Recruitment Analyzer',
-        // Retired 1.15.9 — the wear calculator lives on the cockpit card now,
-        // so old links and bookmarks land there instead of the default tab.
-        'Car Wear'    => 'Cockpit',
+    private const array CARRIED_QUERY_KEYS = [
+        'division_tab', 'track', 'page', 'sort', 'order',
     ];
 
     /** @param array<string, mixed> $config */
@@ -114,6 +109,19 @@ class PageController
             exit;
         }
 
+        // Old links still arrive as '/?main_tab=Race%20Strategy'. Send them to
+        // the screen's real path, keeping whatever selections they carried, so
+        // a bookmark survives the move instead of silently landing on the
+        // cockpit. Only '/' redirects: on a real section path a stray
+        // main_tab is ignored rather than bounced.
+        if ($request->getPath() === '/') {
+            $redirect = $this->legacyTabRedirect($request);
+            if ($redirect !== null) {
+                header('Location: ' . $redirect, true, 301);
+                exit;
+            }
+        }
+
         $this->apiClient->setToken($user['api_token']);
 
         $divisions    = $this->config['app']['divisions'];
@@ -140,7 +148,19 @@ class PageController
             $defaultTab = $mainSections[0] ?? '';
         }
 
-        $activeMainTab = self::canonicalMainTab((string) $request->get('main_tab', $defaultTab));
+        // The path selects the screen. A bare '/' means the default one — the
+        // redirect above has already sent an explicit ?main_tab= elsewhere.
+        $pathSection = Sections::sectionFor($request->getPath());
+
+        // A real path that names a screen this user cannot see (an admin one)
+        // is sent to the default rather than silently rendering the cockpit
+        // under a URL that claims to be the division baseline.
+        if ($pathSection !== null && !in_array($pathSection, $mainSections, true)) {
+            header('Location: ' . Sections::url($defaultTab), true, 302);
+            exit;
+        }
+
+        $activeMainTab = $pathSection ?? $defaultTab;
         if (!in_array($activeMainTab, $mainSections, true)) {
             $activeMainTab = $defaultTab;
         }
@@ -178,6 +198,7 @@ class PageController
             'divisions'       => $divisions,
             'tracks'          => $tracks,
             'main_sections'   => $mainSections,
+            'section_paths'   => Sections::all(),
             'config'          => $this->config,
             'settings'        => $this->config['settings'],
             'api_limit'       => $_SESSION['api_limit'] ?? '?',
@@ -650,7 +671,42 @@ class PageController
      */
     public static function canonicalMainTab(string $tab): string
     {
-        return self::MAIN_TAB_ALIASES[$tab] ?? $tab;
+        return Sections::canonical($tab);
+    }
+
+    /**
+     * The path a legacy '?main_tab=' request should be sent to, or null when
+     * there is nothing to redirect (no main_tab, or a name that is not a
+     * screen — those just render the default rather than 301 into a 404).
+     *
+     * A fragment request is never redirected: the JS that issues it expects a
+     * response body, and a 301 would break the refresh rather than move it.
+     */
+    private function legacyTabRedirect(Request $request): ?string
+    {
+        if ((string) $request->get('fragment', '') !== '') {
+            return null;
+        }
+
+        $tab = $request->get('main_tab');
+        if (!is_string($tab) || $tab === '') {
+            return null;
+        }
+
+        $section = Sections::canonical($tab);
+        if (Sections::pathFor($section) === null) {
+            return null;
+        }
+
+        $params = [];
+        foreach (self::CARRIED_QUERY_KEYS as $key) {
+            $value = $request->get($key);
+            if (is_string($value) && $value !== '') {
+                $params[$key] = $value;
+            }
+        }
+
+        return Sections::url($section, $params);
     }
 
     /**

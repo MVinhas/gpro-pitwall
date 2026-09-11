@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Http\Request;
+use App\Http\Sections;
 use App\Security\Authorize;
 use App\Service\StrategyService;
 use App\Service\SetupCalculatorService;
@@ -57,7 +58,7 @@ class StrategyController
             $_SESSION['strategy_results'] = $result;
         }
         session_write_close();
-        header("Location: /?main_tab=Race Strategy");
+        header('Location: ' . Sections::url('Race Strategy'));
         exit;
     }
 

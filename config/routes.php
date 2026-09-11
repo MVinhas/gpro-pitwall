@@ -20,7 +20,18 @@ return function (Router $router): void {
     $router->add('POST', '/logout', 'controller.auth', 'logout');
 
     // ========== PUBLIC PAGES ==========
+    // '/' is the landing page for visitors and, for a signed-in manager, a
+    // redirect to the default screen. Every screen below has a real path;
+    // App\Http\Sections owns the name <-> path map, and a legacy
+    // '/?main_tab=…' link is redirected to the matching path.
     $router->add('GET', '/', 'controller.page', 'index');
+
+    foreach (App\Http\Sections::all() as $sectionPath) {
+        // The Debrief has its own controller and is registered below.
+        if ($sectionPath !== '/debrief') {
+            $router->add('GET', $sectionPath, 'controller.page', 'index');
+        }
+    }
 
     // ========== CONTACT (logged-in only) ==========
     $router->add('GET', '/contact', 'controller.contact', 'show');
