@@ -261,6 +261,79 @@ summary:focus-visible { @apply outline-none ring-2 ring-blue-600; }
 .plan-tag-free { @apply bg-blue-100 text-blue-800; }
 .plan-tag-match { @apply bg-amber-100 text-amber-900; }
 
+/* =========================
+   TELEMETRY AREA
+   Bird's Eye View / Track History / Insights. These screens are dense by
+   nature — every one of them is a stack of tables — so the shared pieces
+   below exist to keep that density uniform instead of re-tuning padding
+   per table.
+========================= */
+
+/* Sub-tab bar under the page title. Icon + label, so three sibling pills are
+   distinguishable at a glance rather than three identical text chips. */
+.brief-tab {
+    @apply inline-flex items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2
+           text-sm font-medium transition-colors
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600;
+}
+.brief-tab-on  { @apply bg-blue-600 text-on-accent shadow-sm; }
+.brief-tab-off { @apply bg-surface text-slate-600 ring-1 ring-inset ring-slate-200 hover:bg-slate-50 hover:text-slate-900; }
+
+/* Two-state scope switch (you / everyone). Segmented, not a dropdown: it is
+   the single most-used control on the screen. */
+.brief-seg {
+    @apply inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5;
+}
+.brief-seg-opt {
+    @apply rounded-md px-3 py-1.5 text-sm font-medium transition-colors;
+}
+.brief-seg-on  { @apply bg-blue-600 text-on-accent shadow-sm; }
+.brief-seg-off { @apply text-slate-600 hover:text-slate-900; }
+
+/* Headline figure tile. Reads as a single number with its label under it. */
+.brief-stat {
+    @apply rounded-lg border border-slate-200 bg-surface px-3 py-2;
+}
+.brief-stat-v { @apply text-lg font-semibold tabular-nums text-slate-900; }
+.brief-stat-l { @apply text-[10px] font-medium uppercase tracking-wide text-slate-500; }
+
+/* Active-filter chip, shown on the collapsed filter panel so a filtered
+   table never looks like an empty one. */
+.brief-chip {
+    @apply inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5
+           text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-600/20;
+}
+
+/* Dense data table. Every debrief table uses these three.
+   Dense is not cramped: the horizontal padding has to keep adjacent headers
+   visibly apart (several of them are long phrases), and the row rhythm has to
+   stay readable down a column of 11 driver attributes. */
+.brief-table { @apply w-full text-sm; }
+.brief-th {
+    @apply px-2 sm:px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wide
+           text-slate-500 whitespace-nowrap;
+}
+/* Long phrase headers ("Relationship to finishing position") need room from
+   whatever sits next to them, which nowrap alone does not give. */
+.brief-th + .brief-th { @apply pl-2 sm:pl-5; }
+.brief-td { @apply px-2 sm:px-3 py-2.5 tabular-nums whitespace-nowrap align-middle; }
+.brief-td + .brief-td { @apply pl-2 sm:pl-5; }
+/* The first column is the row's label and carries the most text — let it wrap
+   and give the rest of the row something to align against. */
+.brief-table tbody tr > .brief-td:first-child { @apply font-normal text-slate-700; }
+
+/* Sample-size marker. Colour alone never carries the "thin data" warning —
+   the number is always printed next to it. */
+.brief-n {
+    @apply inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5
+           text-[10px] font-medium text-slate-600;
+}
+.brief-n-thin { @apply bg-amber-100 text-amber-900; }
+
+/* Horizontal scroll container for the wide tables. Paired with column
+   dieting (hidden sm:table-cell) rather than replacing it. */
+.brief-scroll { @apply overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0; }
+
 /* Compact anchor tile for the cockpit decision-summary board. */
 .tile {
     @apply block rounded-lg border border-slate-200 bg-surface p-3 shadow-sm transition-colors

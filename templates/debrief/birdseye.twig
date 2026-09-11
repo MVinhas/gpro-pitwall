@@ -1,0 +1,209 @@
+{% extends "layout.twig" %}
+{% import "debrief/_shell.twig" as t %}
+
+{% block title %}Bird's Eye View — GPRO Pitwall{% endblock %}
+{% block robots %}<meta name="robots" content="noindex,nofollow">{% endblock %}
+{% block canonical_path %}/debrief{% endblock %}
+
+{% block content %}
+    {# The app-wide tab bar: the Debrief lives on its own routes, so it has to
+       include the nav itself rather than inheriting it from index.twig. #}
+    {% include 'partials/_nav.twig' %}
+
+<div class="space-y-5">
+
+    <div>
+        <h1 class="t-display">Debrief</h1>
+        <p class="t-caption mt-1">
+            Every race Pitwall has seen — yours in full detail, everyone else's as anonymous aggregate.
+        </p>
+    </div>
+
+    {{ t.tabs(tabs, active_tab, filters.track) }}
+
+    {# ---- Scope switch. The single most consequential control here, so it is
+       a segmented toggle rather than one more dropdown in the filter panel. ---- #}
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="brief-seg" role="group" aria-label="Whose races to show">
+            {% for key, label in {'mine': 'My races', 'all': 'Everyone'} %}
+                {% set qs = {'scope': key, 'sort': sort}|merge(filters|filter(v => v is not null)) %}
+                <a href="/debrief?{{ qs|url_encode }}"
+                   class="brief-seg-opt {{ scope == key ? 'brief-seg-on' : 'brief-seg-off' }}"
+                   {% if scope == key %}aria-current="true"{% endif %}>{{ label }}</a>
+            {% endfor %}
+        </div>
+
+        <form method="get" action="/debrief" class="flex items-end gap-2">
+            <input type="hidden" name="scope" value="{{ scope }}">
+            {% for key, value in filters %}
+                {% if value is not null %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endif %}
+            {% endfor %}
+            <label class="block">
+                <span class="t-label">Sort by</span>
+                <select name="sort" class="form-select mt-1 text-sm" onchange="this.form.submit()">
+                    {% for key, label in sorts %}
+                        <option value="{{ key }}" {{ sort == key ? 'selected' : '' }}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <noscript><button type="submit" class="btn btn-sm btn-secondary">Apply</button></noscript>
+        </form>
+    </div>
+
+    {% if scope == 'all' %}
+        <div class="notice notice-info notice-slim">
+            <p>
+                <strong>Anonymous.</strong>
+                Everyone-mode rows carry no manager identity — the shared corpus stores none.
+                You are reading what was done, never who did it.
+            </p>
+        </div>
+    {% elseif own_races == 0 %}
+        <div class="notice notice-warn">
+            <p>
+                <strong>No races archived yet.</strong>
+                Your own history fills one race at a time as you sync after each race weekend.
+                Switch to <em>Everyone</em> meanwhile to read the shared corpus.
+            </p>
+        </div>
+    {% endif %}
+
+    {# ---- Filters. Collapsed by default; the active ones stay visible as chips
+       so a filtered-to-empty table is never mistaken for no data. ---- #}
+    {% embed 'partials/_acc.twig' with {
+        id: 'brief-filters',
+        title: 'Filters',
+        caption: active_filters == 0 ? 'Showing everything' : active_filters ~ ' active',
+        open_default: active_filters > 0
+    } %}
+        {% block verdict %}{% import "debrief/_shell.twig" as t %}
+            {% if active_filters > 0 %}
+                <span class="brief-chip">{{ active_filters }} active</span>
+            {% else %}
+                <span class="t-caption">None</span>
+            {% endif %}
+        {% endblock %}
+        {% block body %}{% import "debrief/_shell.twig" as t %}{% include "debrief/_filters.twig" %}{% endblock %}
+    {% endembed %}
+
+    {# ---- Headline over the filtered slice. ---- #}
+    {% if summary.races is defined and summary.races > 0 %}
+        <div class="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+            {% set tiles = scope == 'mine'
+                ? [
+                    {'l': 'Races', 'v': summary.races},
+                    {'l': 'Wins', 'v': summary.wins ?? 0},
+                    {'l': 'Podiums', 'v': summary.podiums ?? 0},
+                    {'l': 'Poles', 'v': summary.poles ?? 0},
+                    {'l': 'Points', 'v': summary.points ?? 0},
+                    {'l': 'Avg finish', 'v': summary.avg_pos ?? '—'},
+                    {'l': 'DNFs', 'v': summary.dnfs ?? 0}
+                  ]
+                : [
+                    {'l': 'Races', 'v': summary.races},
+                    {'l': 'Drivers', 'v': summary.drivers ?? 0},
+                    {'l': 'Tracks', 'v': summary.tracks ?? 0},
+                    {'l': 'Seasons', 'v': summary.seasons ?? 0},
+                    {'l': 'Avg finish', 'v': summary.avg_pos ?? '—'},
+                    {'l': 'Avg stops', 'v': summary.avg_stops ?? '—'},
+                    {'l': 'Wet races', 'v': summary.wet_races ?? 0}
+                  ] %}
+            {% for tile in tiles %}
+                <div class="brief-stat">
+                    <div class="brief-stat-v">{{ tile.v }}</div>
+                    <div class="brief-stat-l">{{ tile.l }}</div>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    {# ---- The ranked list. ---- #}
+    <div class="card">
+        <div class="card-hd flex items-center justify-between gap-3">
+            <h2 class="t-heading">{{ sorts[sort] }}</h2>
+            <span class="t-caption">{{ rows|length }} shown</span>
+        </div>
+
+        {% if not has_rows %}
+            <div class="card-bd">
+                <p class="t-caption">No races match these filters.</p>
+            </div>
+        {% else %}
+            <div class="brief-scroll">
+                <table class="brief-table">
+                    <thead class="bg-slate-50 border-b border-slate-200">
+                        <tr>
+                            {# Column diet: at 375px only Race, Finish, places
+                               gained and Score survive — the answer columns.
+                               The track is not dropped, it moves under the race
+                               id in the first cell. #}
+                            <th class="brief-th">Race</th>
+                            <th class="brief-th hidden md:table-cell">Track</th>
+                            <th class="brief-th hidden lg:table-cell">Div</th>
+                            <th class="brief-th text-right hidden sm:table-cell">Grid</th>
+                            <th class="brief-th text-right">Finish</th>
+                            <th class="brief-th text-right">+/-</th>
+                            <th class="brief-th text-right hidden lg:table-cell">Pts</th>
+                            <th class="brief-th text-right hidden lg:table-cell">Stops</th>
+                            <th class="brief-th hidden lg:table-cell">Tyre</th>
+                            <th class="brief-th hidden xl:table-cell">Weather</th>
+                            <th class="brief-th text-right">Score</th>
+                            {% if scope == 'mine' %}<th class="brief-th"><span class="sr-only">Open</span></th>{% endif %}
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        {% for row in rows %}
+                            {# The two datasets name the grid slot differently:
+                               the personal archive calls it grid_pos, the
+                               anonymous corpus start_pos. #}
+                            {% set grid = scope == 'mine' ? row.grid_pos : row.start_pos %}
+                            <tr class="hover:bg-slate-50">
+                                <td class="brief-td">
+                                    S{{ row.season }} R{{ row.race }}
+                                    <span class="block md:hidden text-xs text-slate-500 truncate max-w-24">
+                                        {{ row.track_name ?? '—' }}
+                                    </span>
+                                </td>
+                                <td class="brief-td whitespace-normal hidden md:table-cell">{{ row.track_name ?? '—' }}</td>
+                                <td class="brief-td hidden lg:table-cell">{{ row.level ?? '—' }}</td>
+                                <td class="brief-td text-right hidden sm:table-cell">{{ grid ?? '—' }}</td>
+                                <td class="brief-td text-right">{{ t.pos(row.final_pos, row.dnf) }}</td>
+                                <td class="brief-td text-right">{{ t.delta(row.positions_gained) }}</td>
+                                <td class="brief-td text-right hidden sm:table-cell">{{ row.points ?? 0 }}</td>
+                                <td class="brief-td text-right hidden lg:table-cell">{{ row.pit_stops ?? '—' }}</td>
+                                <td class="brief-td hidden lg:table-cell">{{ row.race_tyre ?? '—' }}</td>
+                                <td class="brief-td hidden xl:table-cell">
+                                    {{ row.was_wet ? 'Wet' : 'Dry' }}{% if row.avg_temp %} · {{ row.avg_temp }}°{% endif %}
+                                </td>
+                                <td class="brief-td text-right font-semibold">{{ row.score }}</td>
+                                {% if scope == 'mine' %}
+                                    <td class="brief-td">
+                                        <a class="text-blue-600 hover:underline text-xs font-medium"
+                                           href="/debrief?scope=mine&sort={{ sort }}&season_detail={{ row.season }}&race_detail={{ row.race }}#race-detail">
+                                            Open
+                                        </a>
+                                    </td>
+                                {% endif %}
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% endif %}
+    </div>
+
+    {% if sort == 'impressive' %}
+        <p class="t-caption">
+            <strong>Score</strong> blends the result with what you did to earn it:
+            2 × points, 4 × places gained from the grid, plus 20 / 10 / 5 for a win, podium or top six.
+            A DNF scores −20, so a retirement never outranks a finish.
+        </p>
+    {% endif %}
+
+    {# ---- One race, in full. Own races only — the corpus has no detail. ---- #}
+    {% if scope == 'mine' and detail %}
+        {% include 'debrief/_race_detail.twig' %}
+    {% endif %}
+
+</div>
+{% endblock %}

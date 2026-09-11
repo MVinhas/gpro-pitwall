@@ -1,0 +1,535 @@
+{# One of the manager's own races, in full.
+
+   GPRO prints this as a single wall of tables. Here it is split into
+   accordions so the screen opens on the answer (result + conditions) and
+   everything else is one click away — each closed accordion still states its
+   own headline in the verdict slot, rendered from the same variables as its
+   body. #}
+{% import "debrief/_shell.twig" as t %}
+
+<div id="race-detail" class="space-y-4 scroll-mt-16">
+
+    <div class="flex flex-wrap items-end justify-between gap-3 pt-2 border-t border-slate-200">
+        <div>
+            <h2 class="t-heading">
+                Season {{ detail.season }}, race {{ detail.race }} — {{ detail.track_name ?? 'Unknown track' }}
+            </h2>
+            <p class="t-caption mt-0.5">
+                {{ detail.group_label ?? detail.level ?? '—' }}
+                · {{ detail.laps_total ?? '—' }} laps
+                · {{ detail.was_wet ? 'Wet race' : 'Dry race' }}
+            </p>
+        </div>
+
+        {# Race picker. One race at a time, newest first. #}
+        <form method="get" action="/debrief" class="flex items-end gap-2">
+            <input type="hidden" name="scope" value="mine">
+            <input type="hidden" name="sort" value="{{ sort }}">
+            <label class="block">
+                <span class="t-label">Show race</span>
+                <select name="race_pick" class="form-select mt-1 text-sm" data-race-pick>
+                    {% for option in race_options %}
+                        {% set value = option.season ~ ':' ~ option.race %}
+                        <option value="{{ value }}"
+                            {{ option.season == detail.season and option.race == detail.race ? 'selected' : '' }}>
+                            S{{ option.season }} R{{ option.race }} — {{ option.track_name }}
+                            ({{ option.dnf ? 'DNF' : 'P' ~ option.final_pos }})
+                        </option>
+                    {% endfor %}
+                </select>
+            </label>
+            <input type="hidden" name="season_detail" value="{{ detail.season }}" data-race-season>
+            <input type="hidden" name="race_detail" value="{{ detail.race }}" data-race-race>
+            <button type="submit" class="btn btn-sm btn-secondary">Show</button>
+        </form>
+    </div>
+
+    {# ---- Result. Open by default: it is the answer the page exists for. ---- #}
+    {% embed 'partials/_acc.twig' with {
+        id: 'rd-result', title: 'Result', caption: 'Grid, finish, and the race in numbers',
+        open_default: true
+    } %}
+        {% block verdict %}{% import "debrief/_shell.twig" as t %}
+            <span class="flex items-center gap-3">
+                {{ t.pos(detail.final_pos, detail.dnf) }}
+                <span class="t-caption">from P{{ detail.grid_pos ?? '?' }}</span>
+            </span>
+        {% endblock %}
+        {% block body %}{% import "debrief/_shell.twig" as t %}
+            <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2">
+                {% set cells = [
+                    {'l': 'Grid', 'v': detail.grid_pos ?? '—'},
+                    {'l': 'Finish', 'v': detail.dnf ? 'DNF' : ('P' ~ (detail.final_pos ?? '—'))},
+                    {'l': 'Places', 'v': detail.positions_gained ?? '—'},
+                    {'l': 'Points', 'v': detail.points ?? 0},
+                    {'l': 'Q1', 'v': 'P' ~ (detail.q1_pos ?? '—')},
+                    {'l': 'Q2', 'v': 'P' ~ (detail.q2_pos ?? '—')},
+                    {'l': 'Best lap', 'v': t.laptime(detail.best_lap_ms)},
+                    {'l': 'Best pit', 'v': t.laptime(detail.best_pit_ms)},
+                    {'l': 'Pit stops', 'v': detail.pit_stops ?? '—'},
+                    {'l': 'Laps', 'v': (detail.laps_completed ?? '—') ~ '/' ~ (detail.laps_total ?? '—')},
+                    {'l': 'Overtakes', 'v': (detail.overtakes ?? 0) ~ '/' ~ (detail.ot_attempts ?? 0)},
+                    {'l': 'Passed by', 'v': (detail.overtakes_on_you ?? 0) ~ '/' ~ (detail.ot_attempts_on_you ?? 0)}
+                ] %}
+                {% for cell in cells %}
+                    <div class="brief-stat">
+                        <div class="brief-stat-v">{{ cell.v }}</div>
+                        <div class="brief-stat-l">{{ cell.l }}</div>
+                    </div>
+                {% endfor %}
+            </div>
+
+            <div class="mt-4 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+                {% set cond = [
+                    {'l': 'Avg temp', 'v': detail.avg_temp ? detail.avg_temp ~ '°' : '—'},
+                    {'l': 'Avg humidity', 'v': detail.avg_humidity ? detail.avg_humidity ~ '%' : '—'},
+                    {'l': 'Dry laps', 'v': detail.dry_laps ?? '—'},
+                    {'l': 'Rain laps', 'v': detail.rain_laps ?? '—'},
+                    {'l': 'Mist laps', 'v': detail.mist_laps ?? '—'},
+                    {'l': 'Fuel /km', 'v': detail.fuel_per_km ?? '—'},
+                    {'l': 'Tyre /km', 'v': detail.tyre_per_km ?? '—'}
+                ] %}
+                {% for cell in cond %}
+                    <div class="brief-stat">
+                        <div class="brief-stat-v">{{ cell.v }}</div>
+                        <div class="brief-stat-l">{{ cell.l }}</div>
+                    </div>
+                {% endfor %}
+            </div>
+
+            {% if detail.fuel_per_km is null %}
+                <p class="t-caption mt-2">
+                    Per-kilometre burn needs this track's lap length, which isn't in the local track table.
+                </p>
+            {% endif %}
+        {% endblock %}
+    {% endembed %}
+
+    {# ---- Qualifying. ---- #}
+    {% if detail.qualifying %}
+        {% set q = detail.qualifying %}
+        {% embed 'partials/_acc.twig' with {
+            id: 'rd-quali', title: 'Qualifying', caption: 'Both runs, and what changed between them'
+        } %}
+            {% block verdict %}{% import "debrief/_shell.twig" as t %}
+                <span class="t-caption">
+                    Q1 P{{ q.sessions[0].position ?? '—' }} · Q2 P{{ q.sessions[1].position ?? '—' }}
+                </span>
+            {% endblock %}
+            {% block body %}{% import "debrief/_shell.twig" as t %}
+                <div class="brief-scroll">
+                    <table class="brief-table">
+                        <thead class="bg-slate-50">
+                            <tr>
+                                <th class="brief-th"></th>
+                                <th class="brief-th text-right">Temp</th>
+                                <th class="brief-th text-right hidden sm:table-cell">Hum</th>
+                                <th class="brief-th hidden md:table-cell">Sky</th>
+                                <th class="brief-th hidden lg:table-cell">Compound</th>
+                                <th class="brief-th text-right">FW</th>
+                                <th class="brief-th text-right">RW</th>
+                                <th class="brief-th text-right">E</th>
+                                <th class="brief-th text-right">B</th>
+                                <th class="brief-th text-right">G</th>
+                                <th class="brief-th text-right">S</th>
+                                <th class="brief-th text-right">Lap</th>
+                                <th class="brief-th text-right">Pos</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            {% for s in q.sessions %}
+                                <tr>
+                                    <td class="brief-td font-semibold">{{ s.session }}</td>
+                                    <td class="brief-td text-right">{{ s.temp ?? '—' }}</td>
+                                    <td class="brief-td text-right hidden sm:table-cell">{{ s.humidity ?? '—' }}</td>
+                                    <td class="brief-td hidden md:table-cell">{{ s.weather ?? '—' }}</td>
+                                    <td class="brief-td hidden lg:table-cell">{{ s.compound ?? '—' }}</td>
+                                    <td class="brief-td text-right">{{ s.setup.fwing ?? '—' }}</td>
+                                    <td class="brief-td text-right">{{ s.setup.rwing ?? '—' }}</td>
+                                    <td class="brief-td text-right">{{ s.setup.engine ?? '—' }}</td>
+                                    <td class="brief-td text-right">{{ s.setup.brakes ?? '—' }}</td>
+                                    <td class="brief-td text-right">{{ s.setup.gear ?? '—' }}</td>
+                                    <td class="brief-td text-right">{{ s.setup.susp ?? '—' }}</td>
+                                    <td class="brief-td text-right">{{ s.lap_time ?? '—' }}</td>
+                                    <td class="brief-td text-right">P{{ s.position ?? '—' }}</td>
+                                </tr>
+                            {% endfor %}
+                            <tr class="bg-slate-50 font-medium">
+                                <td class="brief-td">Q2 − Q1</td>
+                                <td class="brief-td" colspan="4"></td>
+                                <td class="brief-td text-right">{{ t.delta(q.delta.fwing) }}</td>
+                                <td class="brief-td text-right">{{ t.delta(q.delta.rwing) }}</td>
+                                <td class="brief-td text-right">{{ t.delta(q.delta.engine) }}</td>
+                                <td class="brief-td text-right">{{ t.delta(q.delta.brakes) }}</td>
+                                <td class="brief-td text-right">{{ t.delta(q.delta.gear) }}</td>
+                                <td class="brief-td text-right">{{ t.delta(q.delta.susp) }}</td>
+                                <td class="brief-td text-right">
+                                    {% if q.delta.lap_ms is not null %}
+                                        {{ q.delta.lap_ms > 0 ? '+' : '' }}{{ (q.delta.lap_ms / 1000)|number_format(3) }}s
+                                    {% else %}—{% endif %}
+                                </td>
+                                <td class="brief-td"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p class="t-caption mt-2">
+                    Tyre supplier: {{ q.sessions[0].supplier ?? '—' }}
+                    · Q1 risk: {{ detail.q1_risk ?? '—' }}
+                    · Q2 risk: {{ detail.q2_risk ?? '—' }}
+                </p>
+            {% endblock %}
+        {% endembed %}
+    {% endif %}
+
+    {# ---- Stints. ---- #}
+    {% if detail.stints %}
+        {% embed 'partials/_acc.twig' with {
+            id: 'rd-stints', title: 'Stints', caption: 'Each run between stops, and what it cost'
+        } %}
+            {% block verdict %}{% import "debrief/_shell.twig" as t %}
+                <span class="t-caption">{{ detail.stints|length }} stint{{ detail.stints|length == 1 ? '' : 's' }}</span>
+            {% endblock %}
+            {% block body %}{% import "debrief/_shell.twig" as t %}
+                <div class="brief-scroll">
+                    <table class="brief-table">
+                        <thead class="bg-slate-50">
+                            <tr>
+                                <th class="brief-th">#</th>
+                                <th class="brief-th">Laps</th>
+                                <th class="brief-th text-right">Count</th>
+                                <th class="brief-th text-right">Temp</th>
+                                <th class="brief-th text-right hidden sm:table-cell">Hum</th>
+                                <th class="brief-th text-right hidden md:table-cell">Dry</th>
+                                <th class="brief-th text-right hidden md:table-cell">Rain</th>
+                                <th class="brief-th hidden lg:table-cell">Compound</th>
+                                <th class="brief-th text-right">Fuel</th>
+                                <th class="brief-th text-right">Tyre</th>
+                                <th class="brief-th text-right hidden sm:table-cell">Fuel /km</th>
+                                <th class="brief-th text-right hidden sm:table-cell">Tyre /km</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            {% for s in detail.stints %}
+                                <tr>
+                                    <td class="brief-td">{{ s.number }}</td>
+                                    <td class="brief-td">{{ '%02d'|format(s.lap_from) }}–{{ '%02d'|format(s.lap_to) }}</td>
+                                    <td class="brief-td text-right">{{ s.laps }}</td>
+                                    <td class="brief-td text-right">{{ s.avg_temp ?? '—' }}</td>
+                                    <td class="brief-td text-right hidden sm:table-cell">{{ s.avg_humidity ?? '—' }}</td>
+                                    <td class="brief-td text-right hidden md:table-cell">{{ s.dry }}</td>
+                                    <td class="brief-td text-right hidden md:table-cell">{{ s.rain }}</td>
+                                    <td class="brief-td hidden lg:table-cell">{{ s.compound ?? '—' }}</td>
+                                    <td class="brief-td text-right">{{ s.fuel_used ?? '—' }}</td>
+                                    <td class="brief-td text-right">{{ s.tyre_used is not null ? s.tyre_used ~ '%' : '—' }}</td>
+                                    <td class="brief-td text-right hidden sm:table-cell">{{ s.fuel_per_km ?? '—' }}</td>
+                                    <td class="brief-td text-right hidden sm:table-cell">{{ s.tyre_per_km ?? '—' }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endblock %}
+        {% endembed %}
+    {% endif %}
+
+    {# ---- Pit stops. ---- #}
+    {% if detail.pits %}
+        {% embed 'partials/_acc.twig' with {
+            id: 'rd-pits', title: 'Pit stops', caption: 'Fuel taken, tyres handed back, time lost'
+        } %}
+            {% block verdict %}{% import "debrief/_shell.twig" as t %}
+                <span class="t-caption">
+                    {{ detail.pits|length }} stop{{ detail.pits|length == 1 ? '' : 's' }}
+                    · best {{ t.laptime(detail.best_pit_ms) }}
+                </span>
+            {% endblock %}
+            {% block body %}{% import "debrief/_shell.twig" as t %}
+                <div class="brief-scroll">
+                    <table class="brief-table">
+                        <thead class="bg-slate-50">
+                            <tr>
+                                <th class="brief-th">#</th>
+                                <th class="brief-th text-right">Lap</th>
+                                <th class="brief-th hidden md:table-cell">Reason</th>
+                                <th class="brief-th text-right">Fuel left</th>
+                                <th class="brief-th text-right">Refilled to</th>
+                                <th class="brief-th text-right hidden sm:table-cell">Added</th>
+                                <th class="brief-th text-right">Tyre</th>
+                                <th class="brief-th text-right">Time</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            {% for p in detail.pits %}
+                                <tr>
+                                    <td class="brief-td">{{ p.number }}</td>
+                                    <td class="brief-td text-right">{{ p.lap ?? '—' }}</td>
+                                    <td class="brief-td hidden md:table-cell">{{ p.reason ?? '—' }}</td>
+                                    <td class="brief-td text-right">{{ p.fuel_left ?? '—' }}</td>
+                                    <td class="brief-td text-right">{{ p.refilled_to ?? '—' }}</td>
+                                    <td class="brief-td text-right hidden sm:table-cell">{{ p.fuel_added ?? '—' }}</td>
+                                    <td class="brief-td text-right">{{ p.tyre_cond is not null ? p.tyre_cond ~ '%' : '—' }}</td>
+                                    <td class="brief-td text-right">{{ p.pit_time ?? '—' }}</td>
+                                </tr>
+                            {% endfor %}
+                            <tr class="bg-slate-50 font-medium">
+                                <td class="brief-td">End</td>
+                                <td class="brief-td text-right">{{ detail.laps_completed ?? '—' }}</td>
+                                <td class="brief-td hidden md:table-cell"></td>
+                                <td class="brief-td text-right">{{ detail.finish_fuel ?? '—' }}</td>
+                                <td class="brief-td"></td>
+                                <td class="brief-td hidden sm:table-cell"></td>
+                                <td class="brief-td text-right">
+                                    {{ detail.finish_tyres is not null ? detail.finish_tyres ~ '%' : '—' }}
+                                </td>
+                                <td class="brief-td"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            {% endblock %}
+        {% endembed %}
+    {% endif %}
+
+    {# ---- Setup, risk and boost: the three things you set before the race. ---- #}
+    {% embed 'partials/_acc.twig' with {
+        id: 'rd-setup', title: 'Setup, risk and boost', caption: 'What you chose before the lights went out'
+    } %}
+        {% block verdict %}{% import "debrief/_shell.twig" as t %}
+            <span class="t-caption">
+                {{ detail.race_tyre ?? '—' }}
+                {%- if detail.tyre_supplier %} · {{ detail.tyre_supplier }}{% endif %}
+            </span>
+        {% endblock %}
+        {% block body %}{% import "debrief/_shell.twig" as t %}
+            <div class="grid gap-4 lg:grid-cols-3">
+                <div>
+                    <h5 class="t-section mb-2">Race setup</h5>
+                    <div class="grid grid-cols-3 gap-2">
+                        {% set setup = [
+                            {'l': 'FW', 'v': detail.setup_fwing}, {'l': 'RW', 'v': detail.setup_rwing},
+                            {'l': 'Engine', 'v': detail.setup_engine}, {'l': 'Brakes', 'v': detail.setup_brakes},
+                            {'l': 'Gear', 'v': detail.setup_gear}, {'l': 'Susp', 'v': detail.setup_susp}
+                        ] %}
+                        {% for s in setup %}
+                            <div class="brief-stat">
+                                <div class="brief-stat-v">{{ s.v ?? '—' }}</div>
+                                <div class="brief-stat-l">{{ s.l }}</div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div>
+                    <h5 class="t-section mb-2">Race risk</h5>
+                    <div class="grid grid-cols-3 gap-2">
+                        {% set risks = [
+                            {'l': 'Overtake', 'v': detail.overtake_risk}, {'l': 'Defend', 'v': detail.defend_risk},
+                            {'l': 'Clear dry', 'v': detail.clear_dry_risk}, {'l': 'Clear wet', 'v': detail.clear_wet_risk},
+                            {'l': 'Malfunction', 'v': detail.problem_risk}
+                        ] %}
+                        {% for r in risks %}
+                            <div class="brief-stat">
+                                <div class="brief-stat-v">{{ r.v ?? '—' }}</div>
+                                <div class="brief-stat-l">{{ r.l }}</div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                    <p class="t-caption mt-2">Start: {{ detail.start_risk ?? '—' }}</p>
+                </div>
+
+                <div>
+                    <h5 class="t-section mb-2">Boost &amp; fuel</h5>
+                    <div class="grid grid-cols-3 gap-2">
+                        {% set boost = [
+                            {'l': 'Boost 1', 'v': detail.boost_lap_1}, {'l': 'Boost 2', 'v': detail.boost_lap_2},
+                            {'l': 'Boost 3', 'v': detail.boost_lap_3}, {'l': 'Start fuel', 'v': detail.start_fuel},
+                            {'l': 'End fuel', 'v': detail.finish_fuel}, {'l': 'End tyres', 'v': detail.finish_tyres}
+                        ] %}
+                        {% for b in boost %}
+                            <div class="brief-stat">
+                                <div class="brief-stat-v">{{ b.v ?? '—' }}</div>
+                                <div class="brief-stat-l">{{ b.l }}</div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        {% endblock %}
+    {% endembed %}
+
+    {# ---- Car. ---- #}
+    {% if detail.parts %}
+        {% embed 'partials/_acc.twig' with {
+            id: 'rd-car', title: 'Car', caption: 'Per-part level and the wear this race added'
+        } %}
+            {% block verdict %}{% import "debrief/_shell.twig" as t %}
+                <span class="t-caption">
+                    P{{ detail.car_power ?? '—' }} · H{{ detail.car_handling ?? '—' }} · A{{ detail.car_accel ?? '—' }}
+                </span>
+            {% endblock %}
+            {% block body %}{% import "debrief/_shell.twig" as t %}
+                <div class="brief-scroll">
+                    <table class="brief-table">
+                        <thead class="bg-slate-50">
+                            <tr>
+                                <th class="brief-th">Part</th>
+                                <th class="brief-th text-right">Level</th>
+                                <th class="brief-th text-right">Wear before</th>
+                                <th class="brief-th text-right">Wear after</th>
+                                <th class="brief-th text-right">Added</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            {% for part in detail.parts %}
+                                <tr>
+                                    <td class="brief-td whitespace-normal">{{ part.label }}</td>
+                                    <td class="brief-td text-right">{{ part.level ?? '—' }}</td>
+                                    <td class="brief-td text-right">{{ part.wear_start is not null ? part.wear_start ~ '%' : '—' }}</td>
+                                    <td class="brief-td text-right">{{ part.wear_end is not null ? part.wear_end ~ '%' : '—' }}</td>
+                                    <td class="brief-td text-right">{{ t.delta(part.wear_gain, false) }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endblock %}
+        {% endembed %}
+    {% endif %}
+
+    {# ---- Driver. ---- #}
+    {% if detail.driver %}
+        {% embed 'partials/_acc.twig' with {
+            id: 'rd-driver', title: 'Driver', caption: 'Attributes before and after, and the energy spent'
+        } %}
+            {% block verdict %}{% import "debrief/_shell.twig" as t %}
+                <span class="t-caption">
+                    Energy {{ detail.energy_from ?? '—' }} → {{ detail.energy_to ?? '—' }}
+                </span>
+            {% endblock %}
+            {% block body %}{% import "debrief/_shell.twig" as t %}
+                <div class="brief-scroll">
+                    <table class="brief-table">
+                        <thead class="bg-slate-50">
+                            <tr>
+                                <th class="brief-th">Attribute</th>
+                                <th class="brief-th text-right">Before</th>
+                                <th class="brief-th text-right">After</th>
+                                <th class="brief-th text-right">Change</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            {% for attr in detail.driver.attributes %}
+                                <tr>
+                                    <td class="brief-td whitespace-normal">{{ attr.label }}</td>
+                                    <td class="brief-td text-right">{{ attr.pre ?? '—' }}</td>
+                                    <td class="brief-td text-right">{{ attr.post ?? '—' }}</td>
+                                    <td class="brief-td text-right">{{ t.delta(attr.delta) }}</td>
+                                </tr>
+                            {% endfor %}
+                            <tr class="bg-slate-50">
+                                <td class="brief-td font-medium">Energy</td>
+                                <td class="brief-td text-right">{{ detail.driver.energy.pre ?? '—' }}</td>
+                                <td class="brief-td text-right">{{ detail.driver.energy.post ?? '—' }}</td>
+                                <td class="brief-td text-right">
+                                    {% if detail.driver.energy.pre is not null and detail.driver.energy.post is not null %}
+                                        {{ t.delta(detail.driver.energy.post - detail.driver.energy.pre) }}
+                                    {% else %}—{% endif %}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            {% endblock %}
+        {% endembed %}
+    {% endif %}
+
+    {# ---- Team. Current-state snapshots, labelled as such. ---- #}
+    {% if detail.td or detail.staff %}
+        {% embed 'partials/_acc.twig' with {
+            id: 'rd-team', title: 'Team', caption: 'Technical director, facilities and staff'
+        } %}
+            {% block verdict %}{% import "debrief/_shell.twig" as t %}
+                <span class="t-caption">{{ detail.td.name ?? 'No TD' }}</span>
+            {% endblock %}
+            {% block body %}{% import "debrief/_shell.twig" as t %}
+                <div class="notice notice-warn notice-slim mb-3">
+                    <p>
+                        <strong>Snapshot, not history.</strong>
+                        GPRO exposes no past technical director, facility or staff values, so these are
+                        the figures as they stood when the race was archived.
+                    </p>
+                </div>
+
+                <div class="grid gap-4 sm:grid-cols-3">
+                    {% set groups = [
+                        {'title': 'Technical director', 'rows': detail.td.attributes|default([])},
+                        {'title': 'Facilities', 'rows': detail.staff.facilities|default([])},
+                        {'title': 'Staff', 'rows': detail.staff.staff|default([])}
+                    ] %}
+                    {% for group in groups %}
+                        {% if group.rows|length %}
+                            <div>
+                                <h5 class="t-section mb-2">{{ group.title }}</h5>
+                                <table class="brief-table">
+                                    <tbody class="divide-y divide-slate-100">
+                                        {% for row in group.rows %}
+                                            <tr>
+                                                <td class="brief-td whitespace-normal">{{ row.label }}</td>
+                                                <td class="brief-td text-right font-medium">{{ row.value ?? '—' }}</td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            {% endblock %}
+        {% endembed %}
+    {% endif %}
+
+    {# ---- Problems, only when the race actually had some. ---- #}
+    {% if detail.problems|default([])|length %}
+        {% embed 'partials/_acc.twig' with {
+            id: 'rd-problems', title: 'Problems', caption: 'What went wrong, and on which lap'
+        } %}
+            {% block verdict %}{% import "debrief/_shell.twig" as t %}
+                <span class="brief-chip">{{ detail.problems|length }}</span>
+            {% endblock %}
+            {% block body %}{% import "debrief/_shell.twig" as t %}
+                <table class="brief-table">
+                    <tbody class="divide-y divide-slate-100">
+                        {% for problem in detail.problems %}
+                            <tr>
+                                <td class="brief-td">Lap {{ problem.lap ?? '—' }}</td>
+                                <td class="brief-td whitespace-normal">{{ problem.reason ?? '—' }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% endblock %}
+        {% endembed %}
+    {% endif %}
+
+</div>
+
+<script>
+// The race picker submits one "season:race" value; split it back into the two
+// query parameters the controller reads. Without JS the two hidden inputs
+// still carry the current race, so the form degrades to a no-op rather than
+// a broken request.
+(() => {
+    const pick = document.querySelector('[data-race-pick]');
+    if (!pick) return;
+    const season = document.querySelector('[data-race-season]');
+    const race = document.querySelector('[data-race-race]');
+    const sync = () => {
+        const [s, r] = pick.value.split(':');
+        if (season) season.value = s;
+        if (race) race.value = r;
+    };
+    pick.addEventListener('change', sync);
+    sync();
+})();
+</script>

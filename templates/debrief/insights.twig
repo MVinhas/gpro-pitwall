@@ -1,0 +1,454 @@
+{% extends "layout.twig" %}
+{% import "debrief/_shell.twig" as t %}
+
+{% block title %}Insights — GPRO Pitwall{% endblock %}
+{% block robots %}<meta name="robots" content="noindex,nofollow">{% endblock %}
+{% block canonical_path %}/debrief/insights{% endblock %}
+
+{% block content %}
+    {# The app-wide tab bar: the Debrief lives on its own routes, so it has to
+       include the nav itself rather than inheriting it from index.twig. #}
+    {% include 'partials/_nav.twig' %}
+
+<div class="space-y-5">
+
+    <div>
+        <h1 class="t-display">Debrief</h1>
+        <p class="t-caption mt-1">
+            What the shared corpus says actually wins — and what it is still too thin to say.
+        </p>
+    </div>
+
+    {{ t.tabs(tabs, active_tab, track_id) }}
+
+    <div class="notice notice-info notice-slim">
+        <p>
+            <strong>Read these as tendencies, not laws.</strong>
+            Every figure below is an average over {{ total }} anonymous race{{ total == 1 ? '' : 's' }};
+            a slice under {{ min_sample }} races is not shown at all, and correlations need
+            {{ min_corr }}.
+        </p>
+    </div>
+
+    {% if not has_data %}
+        <div class="notice notice-warn">
+            <p>
+                <strong>No races collected yet.</strong>
+                The corpus fills as managers sync — each sync contributes its most recent race.
+            </p>
+        </div>
+    {% else %}
+
+        {# ---- Per-track question: what wins HERE. ---- #}
+        <form method="get" action="/debrief/insights" class="flex flex-wrap items-end gap-2">
+            <label class="block">
+                <span class="t-label">What wins at</span>
+                <select name="track" class="form-select mt-1 text-sm" onchange="this.form.submit()">
+                    <option value="">— pick a track —</option>
+                    {% for option in tracks %}
+                        <option value="{{ option.track_id }}" {{ option.track_id == track_id ? 'selected' : '' }}>
+                            {{ option.track_name }} ({{ option.races }})
+                        </option>
+                    {% endfor %}
+                </select>
+            </label>
+            <noscript><button type="submit" class="btn btn-sm btn-secondary">Show</button></noscript>
+        </form>
+
+        {% if track_id and winner_profile is defined and winner_profile|length %}
+            {% embed 'partials/_acc.twig' with {
+                id: 'in-winner',
+                title: 'What wins at ' ~ track_name,
+                caption: 'Podium finishers versus everyone else, per division',
+                open_default: true
+            } %}
+                {% block verdict %}{% import "debrief/_shell.twig" as t %}
+                    <span class="t-caption">{{ winner_profile|length }} division{{ winner_profile|length == 1 ? '' : 's' }}</span>
+                {% endblock %}
+                {% block body %}{% import "debrief/_shell.twig" as t %}
+                    <div class="space-y-5">
+                        {% for block in winner_profile %}
+                            <div>
+                                <h5 class="t-section mb-2">
+                                    {{ block.level }}
+                                    <span class="brief-n ml-1">{{ block.n_podium }} podium / {{ block.n_rest }} rest</span>
+                                </h5>
+                                <div class="brief-scroll">
+                                    <table class="brief-table">
+                                        <thead class="bg-slate-50">
+                                            <tr>
+                                                <th class="brief-th">Choice</th>
+                                                <th class="brief-th text-right">Podium</th>
+                                                <th class="brief-th text-right">Everyone else</th>
+                                                <th class="brief-th text-right">Difference</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-slate-100">
+                                            {% for metric in block.metrics %}
+                                                <tr>
+                                                    <td class="brief-td whitespace-normal">{{ metric.label }}</td>
+                                                    <td class="brief-td text-right font-medium">{{ metric.podium }}</td>
+                                                    <td class="brief-td text-right text-slate-500">{{ metric.rest }}</td>
+                                                    <td class="brief-td text-right">
+                                                        {{ metric.delta > 0 ? '+' : '' }}{{ metric.delta }}
+                                                    </td>
+                                                </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <p class="t-caption mt-2">
+                                    Mean podium setup — FW {{ block.setup.fwing ?? '—' }},
+                                    RW {{ block.setup.rwing ?? '—' }},
+                                    E {{ block.setup.engine ?? '—' }},
+                                    B {{ block.setup.brakes ?? '—' }},
+                                    G {{ block.setup.gear ?? '—' }},
+                                    S {{ block.setup.susp ?? '—' }}.
+                                    An average of setups is a direction, not a setup to copy.
+                                </p>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            {% if podium_tyres is defined and podium_tyres|length %}
+                {% embed 'partials/_acc.twig' with {
+                    id: 'in-podium-tyres',
+                    title: 'What the podium ran on',
+                    caption: 'Compound choices among top-three finishers here'
+                } %}
+                    {% block verdict %}{% import "debrief/_shell.twig" as t %}
+                        <span class="t-caption">{{ podium_tyres|length }} combinations</span>
+                    {% endblock %}
+                    {% block body %}{% import "debrief/_shell.twig" as t %}
+                        <div class="brief-scroll">
+                            <table class="brief-table">
+                                <thead class="bg-slate-50">
+                                    <tr>
+                                        <th class="brief-th">Division</th>
+                                        <th class="brief-th">Compound</th>
+                                        <th class="brief-th">Conditions</th>
+                                        <th class="brief-th text-right">Podiums</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    {% for row in podium_tyres %}
+                                        <tr>
+                                            <td class="brief-td font-medium">{{ row.level }}</td>
+                                            <td class="brief-td">{{ row.race_tyre }}</td>
+                                            <td class="brief-td">{{ row.was_wet ? 'Wet' : 'Dry' }}</td>
+                                            <td class="brief-td text-right">{{ row.n }}</td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% endblock %}
+                {% endembed %}
+            {% endif %}
+        {% endif %}
+
+        {# ---- Driver attribute → finishing position. ---- #}
+        {% if attributes|length %}
+            {% embed 'partials/_acc.twig' with {
+                id: 'in-attrs',
+                title: 'Driver attributes that track a good finish',
+                caption: 'Correlation between each attribute and where the car finished',
+                open_default: true
+            } %}
+                {% block verdict %}{% import "debrief/_shell.twig" as t %}
+                    {% set headline = null %}
+                    {% for level, rows in attributes %}
+                        {% if headline is null and rows|length %}
+                            {% set headline = rows|first|merge({'level': level}) %}
+                        {% endif %}
+                    {% endfor %}
+                    <span class="t-caption">
+                        {% if headline %}Strongest: {{ headline.label|lower }}{% endif %}
+                    </span>
+                {% endblock %}
+                {% block body %}{% import "debrief/_shell.twig" as t %}
+                    <p class="t-caption mb-3">
+                        A <strong>positive</strong> number means more of that attribute goes with a
+                        <strong>better</strong> finish. Retirements are excluded, so this measures pace
+                        and racecraft rather than reliability. Shown once a division has
+                        {{ min_corr }}+ races.
+                    </p>
+
+                    <div class="space-y-5">
+                        {% for level, rows in attributes %}
+                            <div>
+                                <h5 class="t-section mb-2">{{ level }}</h5>
+
+                                {% if rows|length %}
+                                    {% set top = rows|first %}
+                                    <p class="text-sm text-slate-700 mb-2">
+                                        In {{ level }}, <strong>{{ top.label|lower }}</strong> tracks the
+                                        finishing position most closely
+                                        ({{ top.advantage > 0 ? '+' : '' }}{{ top.advantage }},
+                                        {{ top.strength }}, over {{ top.n }} races).
+                                    </p>
+                                {% endif %}
+
+                                <div class="brief-scroll">
+                                    <table class="brief-table">
+                                        <thead class="bg-slate-50">
+                                            <tr>
+                                                <th class="brief-th">Attribute</th>
+                                                <th class="brief-th">Relationship to finishing position</th>
+                                                <th class="brief-th text-right hidden md:table-cell">Mean value</th>
+                                                <th class="brief-th text-right hidden sm:table-cell">Races</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-slate-100">
+                                            {% for row in rows %}
+                                                <tr>
+                                                    <td class="brief-td whitespace-normal">{{ row.label }}</td>
+                                                    <td class="brief-td">{{ t.corr_bar(row) }}</td>
+                                                    <td class="brief-td text-right hidden md:table-cell">{{ row.avg_attr }}</td>
+                                                    <td class="brief-td text-right hidden sm:table-cell">{{ t.n(row.n, min_corr) }}</td>
+                                                </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+        {% endif %}
+
+        {# ---- Podium driver prototype. ---- #}
+        {% if prototype|length %}
+            {% embed 'partials/_acc.twig' with {
+                id: 'in-prototype',
+                title: 'The podium driver',
+                caption: 'Mean attributes of top-three finishers, against everyone else'
+            } %}
+                {% block verdict %}{% import "debrief/_shell.twig" as t %}
+                    <span class="t-caption">{{ prototype|length }} division{{ prototype|length == 1 ? '' : 's' }}</span>
+                {% endblock %}
+                {% block body %}{% import "debrief/_shell.twig" as t %}
+                    <div class="space-y-5">
+                        {% for block in prototype %}
+                            <div>
+                                <h5 class="t-section mb-2">
+                                    {{ block.level }}
+                                    <span class="brief-n ml-1">{{ block.podium_n }} podium / {{ block.rest_n }} rest</span>
+                                </h5>
+                                <div class="brief-scroll">
+                                    <table class="brief-table">
+                                        <thead class="bg-slate-50">
+                                            <tr>
+                                                <th class="brief-th">Attribute</th>
+                                                <th class="brief-th text-right">Podium</th>
+                                                <th class="brief-th text-right hidden sm:table-cell">Rest</th>
+                                                <th class="brief-th text-right">Gap</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-slate-100">
+                                            {% for attr in block.attributes %}
+                                                <tr>
+                                                    <td class="brief-td whitespace-normal">{{ attr.label }}</td>
+                                                    <td class="brief-td text-right font-medium">{{ attr.podium }}</td>
+                                                    <td class="brief-td text-right hidden sm:table-cell text-slate-500">{{ attr.rest ?? '—' }}</td>
+                                                    <td class="brief-td text-right">{{ t.delta(attr.gap) }}</td>
+                                                </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+        {% endif %}
+
+        {# ---- Tyres across the whole corpus. ---- #}
+        {% if tyres|length %}
+            {% embed 'partials/_acc.twig' with {
+                id: 'in-tyres', title: 'Tyres', caption: 'Compound performance by division and conditions'
+            } %}
+                {% block verdict %}{% import "debrief/_shell.twig" as t %}
+                    <span class="t-caption">{{ tyres|keys|length }} division{{ tyres|keys|length == 1 ? '' : 's' }}</span>
+                {% endblock %}
+                {% block body %}{% import "debrief/_shell.twig" as t %}
+                    {% for level, rows in tyres %}
+                        <div class="mb-5">
+                            <h5 class="t-section mb-2">{{ level }}</h5>
+                            <div class="brief-scroll">
+                                <table class="brief-table">
+                                    <thead class="bg-slate-50">
+                                        <tr>
+                                            <th class="brief-th">Compound</th>
+                                            <th class="brief-th">Conditions</th>
+                                            <th class="brief-th text-right">Avg finish</th>
+                                            <th class="brief-th text-right hidden sm:table-cell">Avg points</th>
+                                            <th class="brief-th text-right hidden md:table-cell">Avg gained</th>
+                                            <th class="brief-th text-right hidden lg:table-cell">Tyres left</th>
+                                            <th class="brief-th text-right">Sample</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100">
+                                        {% for row in rows %}
+                                            <tr>
+                                                <td class="brief-td">{{ row.race_tyre }}</td>
+                                                <td class="brief-td">{{ row.was_wet ? 'Wet' : 'Dry' }}</td>
+                                                <td class="brief-td text-right">{{ row.avg_pos ?? '—' }}</td>
+                                                <td class="brief-td text-right hidden sm:table-cell">{{ row.avg_points ?? '—' }}</td>
+                                                <td class="brief-td text-right hidden md:table-cell">{{ row.avg_gained ?? '—' }}</td>
+                                                <td class="brief-td text-right hidden lg:table-cell">{{ row.avg_finish_tyres ?? '—' }}</td>
+                                                <td class="brief-td text-right">{{ t.n(row.n, min_sample) }}</td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    {% endfor %}
+                {% endblock %}
+            {% endembed %}
+        {% endif %}
+
+        {# ---- Strategy. ---- #}
+        {% if strategy|length %}
+            {% embed 'partials/_acc.twig' with {
+                id: 'in-strategy', title: 'Stop counts', caption: 'How many stops returned what, by division'
+            } %}
+                {% block verdict %}{% import "debrief/_shell.twig" as t %}
+                    <span class="t-caption">{{ strategy|keys|length }} division{{ strategy|keys|length == 1 ? '' : 's' }}</span>
+                {% endblock %}
+                {% block body %}{% import "debrief/_shell.twig" as t %}
+                    {% for level, rows in strategy %}
+                        <div class="mb-5">
+                            <h5 class="t-section mb-2">{{ level }}</h5>
+                            <div class="brief-scroll">
+                                <table class="brief-table">
+                                    <thead class="bg-slate-50">
+                                        <tr>
+                                            <th class="brief-th">Stops</th>
+                                            <th class="brief-th">Conditions</th>
+                                            <th class="brief-th text-right">Avg finish</th>
+                                            <th class="brief-th text-right hidden sm:table-cell">Avg points</th>
+                                            <th class="brief-th text-right hidden md:table-cell">Start fuel</th>
+                                            <th class="brief-th text-right">Sample</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100">
+                                        {% for row in rows %}
+                                            <tr>
+                                                <td class="brief-td">{{ row.pit_stops }}</td>
+                                                <td class="brief-td">{{ row.was_wet ? 'Wet' : 'Dry' }}</td>
+                                                <td class="brief-td text-right">{{ row.avg_pos ?? '—' }}</td>
+                                                <td class="brief-td text-right hidden sm:table-cell">{{ row.avg_points ?? '—' }}</td>
+                                                <td class="brief-td text-right hidden md:table-cell">{{ row.avg_start_fuel ?? '—' }}</td>
+                                                <td class="brief-td text-right">{{ t.n(row.n, min_sample) }}</td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    {% endfor %}
+                {% endblock %}
+            {% endembed %}
+        {% endif %}
+
+        {# ---- Technical director. ---- #}
+        {% if td|length %}
+            {% embed 'partials/_acc.twig' with {
+                id: 'in-td', title: 'Technical director', caption: 'With one, versus without'
+            } %}
+                {% block verdict %}{% import "debrief/_shell.twig" as t %}
+                    <span class="t-caption">{{ td|length }} division{{ td|length == 1 ? '' : 's' }}</span>
+                {% endblock %}
+                {% block body %}{% import "debrief/_shell.twig" as t %}
+                    <div class="brief-scroll">
+                        <table class="brief-table">
+                            <thead class="bg-slate-50">
+                                <tr>
+                                    <th class="brief-th">Division</th>
+                                    <th class="brief-th text-right">With TD</th>
+                                    <th class="brief-th text-right">Without</th>
+                                    <th class="brief-th text-right">Positions</th>
+                                    <th class="brief-th text-right hidden sm:table-cell">Points</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                {% for row in td %}
+                                    <tr>
+                                        <td class="brief-td font-medium">{{ row.level }}</td>
+                                        <td class="brief-td text-right">
+                                            {{ row.with ? 'P' ~ row.with.avg_pos : '—' }}
+                                            {% if row.with %}{{ t.n(row.with.n, min_sample) }}{% endif %}
+                                        </td>
+                                        <td class="brief-td text-right">
+                                            {{ row.without ? 'P' ~ row.without.avg_pos : '—' }}
+                                            {% if row.without %}{{ t.n(row.without.n, min_sample) }}{% endif %}
+                                        </td>
+                                        <td class="brief-td text-right">
+                                            {% if row.comparable %}{{ t.delta(row.pos_delta) }}{% else %}—{% endif %}
+                                        </td>
+                                        <td class="brief-td text-right hidden sm:table-cell">
+                                            {% if row.comparable %}{{ t.delta(row.points_delta) }}{% else %}—{% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="t-caption mt-2">
+                        A division with only one arm shows no verdict — there is nothing to compare it against.
+                    </p>
+                {% endblock %}
+            {% endembed %}
+        {% endif %}
+
+        {# ---- Mistakes. ---- #}
+        {% if mistakes|length %}
+            {% embed 'partials/_acc.twig' with {
+                id: 'in-mistakes', title: 'Driver mistakes', caption: 'What practice-lap errors cost on Sunday'
+            } %}
+                {% block verdict %}{% import "debrief/_shell.twig" as t %}
+                    <span class="t-caption">{{ mistakes|keys|length }} division{{ mistakes|keys|length == 1 ? '' : 's' }}</span>
+                {% endblock %}
+                {% block body %}{% import "debrief/_shell.twig" as t %}
+                    {% for level, rows in mistakes %}
+                        <div class="mb-5">
+                            <h5 class="t-section mb-2">{{ level }}</h5>
+                            <div class="brief-scroll">
+                                <table class="brief-table">
+                                    <thead class="bg-slate-50">
+                                        <tr>
+                                            <th class="brief-th">Mistake time</th>
+                                            <th class="brief-th text-right">Avg finish</th>
+                                            <th class="brief-th text-right hidden sm:table-cell">Avg Q2</th>
+                                            <th class="brief-th text-right hidden md:table-cell">Avg points</th>
+                                            <th class="brief-th text-right">Sample</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100">
+                                        {% for row in rows %}
+                                            <tr>
+                                                <td class="brief-td">{{ row.bucket }}</td>
+                                                <td class="brief-td text-right">{{ row.avg_pos ?? '—' }}</td>
+                                                <td class="brief-td text-right hidden sm:table-cell">{{ row.avg_q2_pos ?? '—' }}</td>
+                                                <td class="brief-td text-right hidden md:table-cell">{{ row.avg_points ?? '—' }}</td>
+                                                <td class="brief-td text-right">{{ t.n(row.n, min_sample) }}</td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    {% endfor %}
+                {% endblock %}
+            {% endembed %}
+        {% endif %}
+
+    {% endif %}
+</div>
+{% endblock %}

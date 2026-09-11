@@ -12,6 +12,7 @@ return [
         'Testing',
         'Training Planner',
         'Recruitment Analyzer',
+        'Debrief',
         'Division Baseline',
         'Division Differences',
     ],

@@ -42,11 +42,11 @@ final class GproSyncServiceTest extends TestCase
     }
 
     /**
-     * Telemetry ingest is observational and must not influence sync outcomes.
-     * The service is final (it is not a seam), so wire a real one over a
-     * throwaway in-memory schema rather than doubling it.
+     * Both write paths are observational and must not influence sync
+     * outcomes. Each service is final (neither is a seam), so wire real ones
+     * over a throwaway in-memory schema rather than doubling them.
      */
-    private function telemetry(): RaceTelemetryService
+    private function sink(): \PDO
     {
         $db = new \PDO('sqlite::memory:');
         $db->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
@@ -58,9 +58,36 @@ final class GproSyncServiceTest extends TestCase
             new \App\Security\ApiTokenCrypto('sync-test-secret'),
         ))->migrate();
 
+        return $db;
+    }
+
+    private function telemetry(?\PDO $db = null): RaceTelemetryService
+    {
         return new RaceTelemetryService(
-            new \App\Repository\RaceTelemetryRepository($db),
+            new \App\Repository\RaceTelemetryRepository($db ?? $this->sink()),
             new \App\Telemetry\RaceTelemetryMapper(),
+        );
+    }
+
+    private function autofill(?\PDO $db = null): \App\Service\BaselineAutoFillService
+    {
+        $db ??= $this->sink();
+
+        return new \App\Service\BaselineAutoFillService(
+            new \App\Repository\RaceTelemetryRepository($db),
+            new \App\Repository\PilotRepository($db),
+            new \App\Service\PilotCalculatorService([], []),
+        );
+    }
+
+    private function history(?\PDO $db = null): \App\Service\RaceHistoryService
+    {
+        $db ??= $this->sink();
+
+        return new \App\Service\RaceHistoryService(
+            new \App\Repository\RaceHistoryRepository($db),
+            new \App\Telemetry\RaceHistoryMapper(),
+            new \App\Repository\TrackRepository($db),
         );
     }
 
@@ -71,7 +98,7 @@ final class GproSyncServiceTest extends TestCase
             ->method('updateSyncStatus')
             ->with(7, 'needs_token');
 
-        $svc = new GproSyncService($this->apiClient(), $users, $this->cache, $this->telemetry());
+        $svc = new GproSyncService($this->apiClient(), $users, $this->cache, $this->telemetry(), $this->history(), $this->autofill());
         $this->assertSame('needs_token', $svc->trySyncForUser(['id' => 7, 'api_token' => '']));
     }
 
@@ -85,7 +112,7 @@ final class GproSyncServiceTest extends TestCase
         $users->expects($this->never())->method('updateSyncStatus');
         $users->expects($this->never())->method('markSynced');
 
-        $svc = new GproSyncService($this->apiClient(), $users, $this->cache, $this->telemetry());
+        $svc = new GproSyncService($this->apiClient(), $users, $this->cache, $this->telemetry(), $this->history(), $this->autofill());
         $this->assertSame('in_progress', $svc->trySyncForUser(['id' => 7, 'api_token' => 'tok']));
     }
 
@@ -100,7 +127,7 @@ final class GproSyncServiceTest extends TestCase
             ->with(7, 'deferred_low_budget');
         $users->expects($this->never())->method('markSynced');
 
-        $svc = new GproSyncService($this->apiClient(), $users, $this->cache, $this->telemetry(), 20);
+        $svc = new GproSyncService($this->apiClient(), $users, $this->cache, $this->telemetry(), $this->history(), $this->autofill(), 20);
         $this->assertSame('deferred_low_budget', $svc->trySyncForUser(['id' => 7, 'api_token' => 'tok']));
 
         // Deferring must not leave a lock behind.
@@ -120,7 +147,7 @@ final class GproSyncServiceTest extends TestCase
                 $statuses[] = $status;
             });
 
-        $svc = new GproSyncService($this->apiClient(), $users, $this->cache, $this->telemetry(), 20);
+        $svc = new GproSyncService($this->apiClient(), $users, $this->cache, $this->telemetry(), $this->history(), $this->autofill(), 20);
         $result = $svc->trySyncForUser(['id' => 7, 'api_token' => 'tok']);
 
         $this->assertContains('running', $statuses, 'sufficient budget must start the sync');
@@ -139,7 +166,7 @@ final class GproSyncServiceTest extends TestCase
                 $statuses[] = $status;
             });
 
-        $svc = new GproSyncService($this->apiClient(), $users, $this->cache, $this->telemetry(), 20);
+        $svc = new GproSyncService($this->apiClient(), $users, $this->cache, $this->telemetry(), $this->history(), $this->autofill(), 20);
         $svc->trySyncForUser(['id' => 7, 'api_token' => 'tok']);
 
         $this->assertContains('running', $statuses);
@@ -149,7 +176,7 @@ final class GproSyncServiceTest extends TestCase
     {
         $users = $this->createStub(UserRepository::class);
 
-        $svc = new GproSyncService($this->apiClient(), $users, $this->cache, $this->telemetry());
+        $svc = new GproSyncService($this->apiClient(), $users, $this->cache, $this->telemetry(), $this->history(), $this->autofill());
         $svc->trySyncForUser(['id' => 7, 'api_token' => 'tok']);
 
         // Whether the sync succeeded or failed, the lock must be gone so the
@@ -169,7 +196,7 @@ final class GproSyncServiceTest extends TestCase
                 $statuses[] = $status;
             });
 
-        $svc = new GproSyncService($this->apiClient(), $users, $this->cache, $this->telemetry());
+        $svc = new GproSyncService($this->apiClient(), $users, $this->cache, $this->telemetry(), $this->history(), $this->autofill());
         $svc->trySyncForUser(['id' => 7, 'api_token' => 'tok']);
 
         $this->assertSame('running', $statuses[0] ?? null, 'first status must be running');

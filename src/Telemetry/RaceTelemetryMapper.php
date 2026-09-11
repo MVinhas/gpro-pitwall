@@ -17,6 +17,8 @@ namespace App\Telemetry;
  */
 final class RaceTelemetryMapper
 {
+    use PayloadReader;
+
     /** GPRO points per finishing position (1st..10th); 0 outside the top 10. */
     private const array POINTS_TABLE = [
         1 => 25, 2 => 18, 3 => 15, 4 => 12, 5 => 10,
@@ -96,6 +98,7 @@ final class RaceTelemetryMapper
             'driver_mot' => $this->int($driver['mot'] ?? null),
             'driver_rep' => $this->int($driver['rep'] ?? null),
             'driver_wei' => $this->int($driver['wei'] ?? null),
+            'driver_age' => $this->int($driver['age'] ?? null),
 
             'q1_risk'        => $this->str($analysis['q1Risk'] ?? null),
             'q2_risk'        => $this->str($analysis['q2Risk'] ?? null),
@@ -441,90 +444,5 @@ final class RaceTelemetryMapper
             'avg_level' => $levels === [] ? null : round(array_sum($levels) / count($levels), 2),
             'wear_gain' => $sawWear ? $wear : null,
         ];
-    }
-
-    /**
-     * "1:59.502s" / "1:59.502" -> milliseconds. Used as part of the natural
-     * de-duplication key, so a stable parse matters more than precision.
-     */
-    private function lapTimeMs(?string $time): ?int
-    {
-        if ($time === null) {
-            return null;
-        }
-
-        $clean = trim(rtrim(trim($time), 's'));
-        if ($clean === '' || $clean === '-') {
-            return null;
-        }
-
-        if (preg_match('/^(\d+):(\d+)\.(\d+)$/', $clean, $m) === 1) {
-            return ((int) $m[1]) * 60000
-                + ((int) $m[2]) * 1000
-                + (int) str_pad(substr($m[3], 0, 3), 3, '0');
-        }
-
-        if (preg_match('/^(\d+)\.(\d+)$/', $clean, $m) === 1) {
-            return ((int) $m[1]) * 1000 + (int) str_pad(substr($m[2], 0, 3), 3, '0');
-        }
-
-        return null;
-    }
-
-    /** @return array<string, mixed> */
-    private function arrayOf(mixed $value): array
-    {
-        if (!is_array($value)) {
-            return [];
-        }
-
-        /** @var array<string, mixed> $value */
-        return $value;
-    }
-
-    /** @return list<array<string, mixed>> */
-    private function listOf(mixed $value): array
-    {
-        if (!is_array($value)) {
-            return [];
-        }
-
-        $out = [];
-        foreach ($value as $item) {
-            if (is_array($item)) {
-                /** @var array<string, mixed> $item */
-                $out[] = $item;
-            }
-        }
-
-        return $out;
-    }
-
-    private function int(mixed $value): ?int
-    {
-        if (is_int($value)) {
-            return $value;
-        }
-        if (is_string($value) && is_numeric(trim($value))) {
-            return (int) trim($value);
-        }
-        if (is_float($value)) {
-            return (int) $value;
-        }
-
-        return null;
-    }
-
-    private function str(mixed $value): ?string
-    {
-        if (is_string($value)) {
-            $trimmed = trim($value);
-            return $trimmed === '' ? null : $trimmed;
-        }
-        if (is_int($value) || is_float($value)) {
-            return (string) $value;
-        }
-
-        return null;
     }
 }

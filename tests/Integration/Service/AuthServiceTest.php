@@ -126,6 +126,16 @@ final class AuthServiceTest extends TestCase
                 new \App\Repository\RaceTelemetryRepository($this->db),
                 new \App\Telemetry\RaceTelemetryMapper(),
             ),
+            new \App\Service\RaceHistoryService(
+                new \App\Repository\RaceHistoryRepository($this->db),
+                new \App\Telemetry\RaceHistoryMapper(),
+                new \App\Repository\TrackRepository($this->db),
+            ),
+            new \App\Service\BaselineAutoFillService(
+                new \App\Repository\RaceTelemetryRepository($this->db),
+                new \App\Repository\PilotRepository($this->db),
+                new \App\Service\PilotCalculatorService([], []),
+            ),
         );
 
         $persistentRepo = new \App\Repository\PersistentTokenRepository($this->db);
@@ -471,6 +481,16 @@ final class AuthServiceTest extends TestCase
             new \App\Service\RaceTelemetryService(
                 new \App\Repository\RaceTelemetryRepository($this->db),
                 new \App\Telemetry\RaceTelemetryMapper(),
+            ),
+            new \App\Service\RaceHistoryService(
+                new \App\Repository\RaceHistoryRepository($this->db),
+                new \App\Telemetry\RaceHistoryMapper(),
+                new \App\Repository\TrackRepository($this->db),
+            ),
+            new \App\Service\BaselineAutoFillService(
+                new \App\Repository\RaceTelemetryRepository($this->db),
+                new \App\Repository\PilotRepository($this->db),
+                new \App\Service\PilotCalculatorService([], []),
             ),
         );
         $persistentLogin = new \App\Service\PersistentLoginService(

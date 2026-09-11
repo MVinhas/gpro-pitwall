@@ -1,0 +1,162 @@
+{# Shared chrome for the three debrief screens: title, sub-tab bar, and the
+   scope/track control strip each page fills in.
+
+   The sub-tabs are real links to real routes, not JS panels — a manager can
+   bookmark "Track History at Monza" and land on it. #}
+{% macro tabs(tabs, active, track_id) %}
+    {# Each section gets a glyph as well as its name: three text-only pills
+       read as one undifferentiated row, and the icon gives the eye something
+       to land on. The label is always present, so the icon is decorative and
+       is hidden from assistive tech. #}
+    {% set icons = {
+        'birdseye': '<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"/><circle cx="12" cy="12" r="2.5"/>',
+        'track':    '<path d="M5 19c-2 0-3-1.3-3-3s1-3 3-3h9c1.4 0 2.5-1.1 2.5-2.5S15.4 8 14 8H7"/><circle cx="5" cy="19" r="1"/>',
+        'insights': '<path d="M4 19V10M10 19V5M16 19v-6M22 19H2"/>'
+    } %}
+    <nav class="flex overflow-x-auto gap-2 no-scrollbar py-1" aria-label="Debrief sections">
+        {% for key, label in tabs %}
+            {% set href = key == 'birdseye'
+                ? '/debrief'
+                : (key == 'track' ? '/debrief/track' : '/debrief/insights') %}
+            {% if track_id and key != 'birdseye' %}{% set href = href ~ '?track=' ~ track_id %}{% endif %}
+            <a href="{{ href }}"
+               class="brief-tab {{ key == active ? 'brief-tab-on' : 'brief-tab-off' }}"
+               {% if key == active %}aria-current="page"{% endif %}>
+                <svg class="size-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    {{ icons[key]|raw }}
+                </svg>
+                <span>{{ label }}</span>
+            </a>
+        {% endfor %}
+    </nav>
+{% endmacro %}
+
+{# Filter dropdown. "All" is always first and always means "no constraint", so
+   clearing a filter never requires knowing what the neutral value was. #}
+{% macro select(name, label, options, current) %}
+    <label class="block">
+        <span class="t-label">{{ label }}</span>
+        <select name="{{ name }}" class="form-select mt-1 text-sm">
+            <option value="">All</option>
+            {% for option in options %}
+                <option value="{{ option.value }}" {{ current is not null and current ~ '' == option.value ~ '' ? 'selected' : '' }}>
+                    {{ option.label }}
+                </option>
+            {% endfor %}
+        </select>
+    </label>
+{% endmacro %}
+
+{# Sample-size chip. Thin slices are flagged in the chip itself, so a reader
+   never has to remember which tables were trustworthy. #}
+{% macro n(count, min) %}
+    <span class="brief-n {{ count < (min|default(3)) ? 'brief-n-thin' : '' }}">n={{ count }}</span>
+{% endmacro %}
+
+{# Lap time in ms -> "1:13.264". Milliseconds are what the DB stores; nobody
+   reads a lap in milliseconds. #}
+{% macro laptime(ms) %}
+    {%- if ms is null -%}—
+    {%- else -%}
+        {%- set total = ms // 1000 -%}
+        {%- set mins = total // 60 -%}
+        {%- set secs = total % 60 -%}
+        {%- set millis = ms % 1000 -%}
+        {%- if mins > 0 -%}
+            {{ mins }}:{{ '%02d'|format(secs) }}.{{ '%03d'|format(millis) }}
+        {%- else -%}
+            {{ secs }}.{{ '%03d'|format(millis) }}
+        {%- endif -%}
+    {%- endif -%}
+{% endmacro %}
+
+{# Signed delta, coloured AND signed — the sign carries the meaning on its own
+   so the colour is reinforcement, never the only cue. #}
+{% macro delta(value, good_is_positive) %}
+    {%- if value is null or value == 0 -%}
+        <span class="text-slate-400">0</span>
+    {%- else -%}
+        {%- set good = good_is_positive|default(true) ? value > 0 : value < 0 -%}
+        <span class="font-medium {{ good ? 'text-emerald-700' : 'text-red-700' }}">
+            {{- value > 0 ? '+' : '' }}{{ value -}}
+        </span>
+    {%- endif -%}
+{% endmacro %}
+
+{# Finishing position with its podium/points standing made explicit. #}
+{% macro pos(value, dnf) %}
+    {%- if dnf -%}
+        <span class="inline-flex items-center rounded px-1.5 py-px text-xs font-semibold bg-red-100 text-red-800">DNF</span>
+    {%- elseif value is null -%}—
+    {%- elseif value == 1 -%}
+        <span class="inline-flex items-center rounded px-1.5 py-px text-xs font-semibold bg-amber-100 text-amber-900">P1</span>
+    {%- elseif value <= 3 -%}
+        <span class="inline-flex items-center rounded px-1.5 py-px text-xs font-semibold bg-emerald-100 text-emerald-800">P{{ value }}</span>
+    {%- else -%}
+        P{{ value }}
+    {%- endif -%}
+{% endmacro %}
+
+{# Both macros below live here rather than in the page that uses them:
+   a macro imported via {% import _self %} is invisible inside an
+   {% embed %} block, and every table on these screens sits inside one. #}
+{# A per-division percentage table. GPRO's own track analysis prints several of
+   these; they only differ in which choices they list, so they share one macro
+   rather than three near-identical tables. #}
+{% macro dist_table(dist, label) %}
+    <div class="brief-scroll">
+        <table class="brief-table">
+            <thead class="bg-slate-50">
+                <tr>
+                    <th class="brief-th">{{ label }}</th>
+                    {% for level in dist.levels %}
+                        <th class="brief-th text-right">{{ level }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                {% for row in dist.choices %}
+                    <tr>
+                        <td class="brief-td whitespace-normal">{{ row.choice }}</td>
+                        {% for cell in row.cells %}
+                            <td class="brief-td text-right">
+                                {% if cell.percent is null %}—
+                                {% else %}
+                                    {{ cell.percent }}%
+                                    <span class="text-slate-400 text-xs">({{ cell.n }})</span>
+                                {% endif %}
+                            </td>
+                        {% endfor %}
+                    </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot class="bg-slate-50">
+                <tr>
+                    <td class="brief-td t-label">Races</td>
+                    {% for level in dist.levels %}
+                        <td class="brief-td text-right t-label">{{ dist.totals[level] }}</td>
+                    {% endfor %}
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+{% endmacro %}
+
+{# Correlation strength as a bar. The number and the word carry the meaning on
+   their own — the bar is a third, redundant encoding for scanning speed, never
+   the only cue. #}
+{% macro corr_bar(row) %}
+    {% set width = (row.advantage|abs * 100)|round %}
+    {% set positive = row.advantage > 0 %}
+    <span class="flex items-center gap-2">
+        <span class="relative block h-1.5 w-20 rounded-full bg-slate-200" aria-hidden="true">
+            <span class="absolute inset-y-0 left-0 rounded-full {{ positive ? 'bg-emerald-600' : 'bg-red-600' }}"
+                  style="width: {{ width > 100 ? 100 : width }}%"></span>
+        </span>
+        <span class="tabular-nums font-medium {{ positive ? 'text-emerald-700' : 'text-red-700' }}">
+            {{ positive ? '+' : '' }}{{ row.advantage }}
+        </span>
+        <span class="t-caption hidden sm:inline">{{ row.strength }}</span>
+    </span>
+{% endmacro %}
