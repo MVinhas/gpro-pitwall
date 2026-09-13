@@ -66,14 +66,14 @@
                 </div>
             </div>
 
-            {# Hidden Setup Inputs #}
-            <div class="hidden">
-               <input type="hidden" name="q1_temp" value="{{ strategy_results.weather_inputs.Q1.temp }}">
-               <input type="hidden" name="q1_weather" value="{{ strategy_results.weather_inputs.Q1.weather }}">
-               <input type="hidden" name="q2_temp" value="{{ strategy_results.weather_inputs.Q2.temp }}">
-               <input type="hidden" name="q2_weather" value="{{ strategy_results.weather_inputs.Q2.weather }}">
-               <input type="hidden" name="race_weather" value="{{ strategy_results.weather_inputs.Race.weather }}">
-            </div>
+            {# Session weather the calculation ran with. The Race sheet re-emits these
+               (and the race-weather select) with form="stratForm"; these copies keep
+               the POST whole when the results panel is showing an error instead. #}
+            <input type="hidden" name="q1_temp" value="{{ strategy_results.weather_inputs.Q1.temp }}">
+            <input type="hidden" name="q1_weather" value="{{ strategy_results.weather_inputs.Q1.weather }}">
+            <input type="hidden" name="q2_temp" value="{{ strategy_results.weather_inputs.Q2.temp }}">
+            <input type="hidden" name="q2_weather" value="{{ strategy_results.weather_inputs.Q2.weather }}">
+            <input type="hidden" name="race_weather" value="{{ strategy_results.weather_inputs.Race.weather }}">
 
             <button type="submit" id="stratBtn"
                 class="btn btn-lg btn-primary w-full">
@@ -156,7 +156,7 @@
     </div>
 
     {# RIGHT: Results Display #}
-    <div class="lg:col-span-9" id="strategy-results-card" data-failure-message="{{ generic_error_message }}">
+    <div class="order-first lg:order-none lg:col-span-9" id="strategy-results-card" data-failure-message="{{ generic_error_message }}">
         {% include 'partials/_strategy_results.twig' %}
     </div>
 </div>

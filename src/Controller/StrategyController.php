@@ -360,6 +360,7 @@ class StrategyController
                 $strategyResults['overtaking'] ?? null,
                 $raceIsWet,
                 $rain['race_rain_avg'],
+                (int)$inputs['boost_stints'],
             );
 
             return $strategyResults;
