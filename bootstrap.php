@@ -85,6 +85,7 @@ $container['twig']->addGlobal(
     rtrim(Env::get('APP_PUBLIC_URL', 'https://gpro-pitwall.com'), '/'),
 );
 $container['twig']->addGlobal('no_pilot_message', \App\Controller\StrategyController::NO_PILOT_MESSAGE);
+$container['twig']->addGlobal('generic_error_message', \App\Controller\StrategyController::GENERIC_ERROR_MESSAGE);
 
 use App\Repository\PilotRepository;
 use App\Repository\DivisionMetadataRepository;
@@ -184,6 +185,12 @@ if (is_array($currentUserSafe)) {
 }
 $container['twig']->addGlobal('is_logged_in', $currentUser !== null);
 $container['twig']->addGlobal('user', $currentUserSafe);
+// A separate global rather than a key on `user`: controllers that pass their own
+// `user` into render would otherwise shadow it (the Account page does).
+$container['twig']->addGlobal(
+    'sync_state',
+    $currentUser !== null ? \App\Support\SyncState::forUser($currentUser) : null,
+);
 
 $mailCfg = [
     'host'       => Env::get('MAIL_HOST', 'localhost'),

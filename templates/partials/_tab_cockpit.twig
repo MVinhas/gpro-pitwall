@@ -30,6 +30,16 @@
             {% endfor %}
         {% endif %}
 
+        {# Training scores only rank the picks and often tie at the displayed 2 dp; colour
+           would turn a coin-flip into a recommendation, so the verdict is ink and
+           names every pick that shares the top score. #}
+        {% set training_verdict = '' %}
+        {% if training_picks is defined and training_picks is not empty %}
+            {% set top_score = training_picks[0].score %}
+            {% set top_names = training_picks|filter(p => p.score == top_score)|map(p => p.name) %}
+            {% set training_verdict = top_names|join(' / ') ~ (top_names|length > 1 ? ' (tie)' : '') ~ ' ' ~ (top_score > 0 ? '+' : '') ~ top_score %}
+        {% endif %}
+
         {% set spon_contested = false %}
         {% set spon_attention = false %}
         {% if sponsor_negotiations is defined %}
@@ -70,8 +80,8 @@
             {% if training_baseline_count is defined %}
                 <a href="#training" class="tile">
                     <p class="t-label">Training</p>
-                    {% if training_picks is defined and training_picks is not empty %}
-                        <p class="text-xs font-semibold mt-0.5 {{ training_picks[0].score > 0 ? 'text-emerald-700' : 'text-slate-700' }}">{{ training_picks[0].name }} {{ training_picks[0].score > 0 ? '+' : '' }}{{ training_picks[0].score }}</p>
+                    {% if training_verdict %}
+                        <p class="text-xs font-semibold text-slate-700 mt-0.5 tabular-nums">{{ training_verdict }}</p>
                     {% else %}
                         <p class="text-xs font-semibold text-slate-500 mt-0.5">No baseline yet</p>
                     {% endif %}
@@ -215,10 +225,11 @@
                         lg_open: true,
                         extra_class: 'order-4',
                         training_picks: training_picks|default(null),
+                        training_verdict: training_verdict,
                     } only %}
                         {% block verdict %}
-                            {% if training_picks is not empty %}
-                                <span class="text-xs font-semibold {{ training_picks[0].score > 0 ? 'text-emerald-700' : 'text-slate-700' }}">{{ training_picks[0].name }} {{ training_picks[0].score > 0 ? '+' : '' }}{{ training_picks[0].score }}</span>
+                            {% if training_verdict %}
+                                <span class="text-xs font-semibold text-slate-700 tabular-nums">{{ training_verdict }}</span>
                             {% else %}
                                 <span class="text-xs font-semibold text-slate-500">No baseline yet</span>
                             {% endif %}
@@ -239,7 +250,7 @@
                                                         {% if t.name == 'Spa' %}<span> · +energy</span>{% endif %}
                                                     </div>
                                                 </div>
-                                                <span class="text-sm font-bold {{ t.score > 0 ? 'text-emerald-700' : 'text-slate-400' }}">{{ t.score > 0 ? '+' : '' }}{{ t.score }}</span>
+                                                <span class="text-sm font-bold tabular-nums {{ t.score > 0 ? 'text-slate-900' : 'text-slate-400' }}">{{ t.score > 0 ? '+' : '' }}{{ t.score }}</span>
                                             </li>
                                         {% endfor %}
                                     </ul>

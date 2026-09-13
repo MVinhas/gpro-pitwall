@@ -1,25 +1,24 @@
+{# One state at a time, in precedence order. An error always wins over a
+   stored result: a failed recalculation must never sit on top of the previous
+   success. Expected outcomes (season over, no tyre supplier) are not failures,
+   so they take the caution tone; only the generic load failure is an error. #}
 {% if strategy_error == no_pilot_message %}
-    <div class="mb-6">{% include 'partials/_no_pilot_notice.twig' %}</div>
-{% elseif strategy_error %}
-    <div class="mb-6 rounded-md bg-red-50 border-l-4 border-red-400 p-4 shadow-sm">
-        <div class="flex">
-            <svg class="h-5 w-5 text-red-400 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/>
-            </svg>
-            <div class="ml-3">
-                <p class="text-sm font-bold text-red-800">Strategy calculation failed</p>
-                <p class="text-sm text-red-700 mt-1">{{ strategy_error }}</p>
-            </div>
-        </div>
+    <div data-result-state="no-driver">{% include 'partials/_no_pilot_notice.twig' %}</div>
+{% elseif strategy_error == generic_error_message %}
+    <div class="notice notice-error" data-result-state="failed">
+        <p class="font-bold">Strategy calculation failed.</p>
+        <p class="mt-1">{{ strategy_error }}</p>
     </div>
-{% endif %}
-
-{% if strategy_results and strategy_results.error is defined %}
-    <div class="rounded-md bg-amber-50 border-l-4 border-amber-400 p-4 shadow-sm">
-        <p class="text-sm font-bold text-amber-800">{{ strategy_results.error }}</p>
+{% elseif strategy_error %}
+    <div class="notice notice-warn" data-result-state="unavailable">
+        <span class="font-bold">Strategy unavailable.</span> {{ strategy_error }}
+    </div>
+{% elseif strategy_results and strategy_results.error is defined %}
+    <div class="notice notice-warn" data-result-state="unavailable">
+        <span class="font-bold">Strategy unavailable.</span> {{ strategy_results.error }}
     </div>
 {% elseif strategy_results and strategy_results.track is defined %}
-    <div class="space-y-6">
+    <div class="space-y-6" data-result-state="results">
         {# VERDICT STRIP #}
         {% set best = strategy_results.tyres[strategy_results.best_compound] %}
         {# Runner-up must be the same tyre type as the winner: dry compares
@@ -450,7 +449,7 @@
         </div>
     </div>
 {% else %}
-    <div class="h-full flex flex-col items-center justify-center bg-slate-50 rounded-xl border border-dashed border-slate-200 p-12">
+    <div class="h-full flex flex-col items-center justify-center bg-slate-50 rounded-xl border border-dashed border-slate-200 p-12" data-result-state="empty">
         <p class="t-heading">Strategy &amp; Setup</p>
         <p class="t-caption mt-1">Click "Calculate Strategy" to simulate race outcomes.</p>
     </div>

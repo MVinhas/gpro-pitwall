@@ -32,12 +32,13 @@
             </div>
         {% endif %}
 
-        {# Orientation: tells the user where to go. Changes with token state. #}
-        {% if has_token %}
+        {# Orientation. Reads the same sync_state as the header strip, so this
+           notice and the strip always describe the same situation. #}
+        {% if sync_state == 'synced' %}
             <div class="rounded-md bg-emerald-50 border-l-4 border-emerald-400 p-4 shadow-sm mb-8">
                 <p class="text-sm font-bold text-emerald-800">You're connected.</p>
                 <p class="text-sm text-emerald-800 mt-1">
-                    Your data is syncing from GPRO. Head to the cockpit to plan
+                    Last synced {{ t.localtime(user.last_synced_at, 'datetime') }}. Head to the cockpit to plan
                     your race weekend — strategy, car wear, training and recruitment
                     are all in the top navigation.
                 </p>
@@ -46,6 +47,33 @@
                         Go to Race Weekend Cockpit →
                     </a>
                 </div>
+            </div>
+        {% elseif sync_state == 'failed' %}
+            <div class="rounded-md bg-red-50 border-l-4 border-red-400 p-4 shadow-sm mb-8">
+                <p class="text-sm font-bold text-red-800">Your last sync failed.</p>
+                <p class="text-sm text-red-800 mt-1">
+                    {% if user.last_synced_at %}
+                        Pitwall is showing data from your last successful sync ({{ t.localtime(user.last_synced_at, 'datetime') }}).
+                    {% else %}
+                        No GPRO data has been loaded yet.
+                    {% endif %}
+                    Try ↻ Re-sync above; if it keeps failing, replace your API token below.
+                </p>
+            </div>
+        {% elseif sync_state == 'running' %}
+            <div class="rounded-md bg-blue-50 border-l-4 border-blue-400 p-4 shadow-sm mb-8">
+                <p class="text-sm font-bold text-blue-800">Syncing your GPRO data…</p>
+                <p class="text-sm text-blue-800 mt-1">This takes a few seconds. Reload the page to see the result.</p>
+            </div>
+        {% elseif sync_state == 'deferred' %}
+            <div class="rounded-md bg-amber-50 border-l-4 border-amber-400 p-4 shadow-sm mb-8">
+                <p class="text-sm font-bold text-amber-800">Sync paused — GPRO API budget low.</p>
+                <p class="text-sm text-amber-800 mt-1">It'll resume once your hourly allowance recovers.</p>
+            </div>
+        {% elseif sync_state == 'never' %}
+            <div class="rounded-md bg-blue-50 border-l-4 border-blue-400 p-4 shadow-sm mb-8">
+                <p class="text-sm font-bold text-blue-800">Token saved — not synced yet.</p>
+                <p class="text-sm text-blue-800 mt-1">Use ↻ Re-sync above to load your GPRO data.</p>
             </div>
         {% else %}
             <div class="rounded-md bg-amber-50 border-l-4 border-amber-400 p-4 shadow-sm mb-8">

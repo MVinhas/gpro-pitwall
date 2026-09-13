@@ -132,17 +132,27 @@
                         </div>
 
                         {% if training_results.start_oa is defined %}
-                            {% set oa_delta = training_results.end_oa - training_results.start_oa %}
+                            {# Both OAs are 1-dp rounded; their raw difference carries
+                               float noise (0.20000000000000002), so the delta is rounded
+                               to the same precision before it is signed or coloured. #}
+                            {% set oa_delta = (training_results.end_oa - training_results.start_oa)|round(1) %}
                             <div class="bg-slate-50 rounded-lg p-4 border border-slate-100 text-center">
                                 <p class="text-xs text-slate-500 uppercase tracking-wide">Overall Ability</p>
                                 <p class="text-xl font-bold text-slate-800 tabular-nums">
-                                    {{ training_results.start_oa }} → {{ training_results.end_oa }}
+                                    {{ training_results.start_oa|number_format(1) }} → {{ training_results.end_oa|number_format(1) }}
                                 </p>
-                                <p class="text-xs {{ oa_delta > 0 ? 'text-emerald-600' : (oa_delta < 0 ? 'text-red-600' : 'text-slate-500') }}">
-                                    {{ oa_delta > 0 ? '+' : '' }}{{ oa_delta }} OA
+                                <p class="text-xs tabular-nums {{ oa_delta > 0 ? 'text-emerald-600' : (oa_delta < 0 ? 'text-red-600' : 'text-slate-500') }}">
+                                    {{ oa_delta > 0 ? '+' : '' }}{{ oa_delta|number_format(1) }} OA
                                 </p>
                             </div>
                         {% endif %}
+
+                        {# Attribute names come from the same schema that labels the
+                           Driver stats form, so one attribute has one name on the page. #}
+                        {% set attr_labels = {} %}
+                        {% for label, column in config.app.stats_schema %}
+                            {% set attr_labels = attr_labels|merge({(column): label}) %}
+                        {% endfor %}
 
                         {# Key Stat Changes #}
                         <div class="md:col-span-1 bg-surface border border-slate-100 rounded-lg p-4">
@@ -153,7 +163,7 @@
                                     {% set diff = endVal - startVal %}
                                     {% if diff != 0 %}
                                         <span class="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset {{ diff > 0 ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/20' : 'bg-red-50 text-red-700 ring-red-600/20' }}">
-                                            {{ key|capitalize }}: {{ diff > 0 ? '+' : '' }}{{ diff }}
+                                            {{ attr_labels[key]|default(key) }}: {{ diff > 0 ? '+' : '' }}{{ diff }}
                                         </span>
                                     {% endif %}
                                 {% endfor %}
@@ -177,7 +187,7 @@
                                     {% set endVal = training_results.end[key] %}
                                     {% set diff = endVal - startVal %}
                                     <tr class="hover:bg-slate-50">
-                                        <td class="whitespace-nowrap py-3 pl-4 pr-3 text-sm font-medium text-slate-700 capitalize">{{ key }}</td>
+                                        <td class="whitespace-nowrap py-3 pl-4 pr-3 text-sm font-medium text-slate-700">{{ attr_labels[key]|default(key) }}</td>
                                         <td class="whitespace-nowrap px-3 py-3 text-center text-sm text-slate-500">{{ startVal }}</td>
                                         <td class="whitespace-nowrap px-3 py-3 text-center text-sm font-bold text-slate-900">{{ endVal }}</td>
                                         <td class="whitespace-nowrap px-3 py-3 text-center text-sm font-medium {{ diff > 0 ? 'text-emerald-600' : (diff < 0 ? 'text-red-600' : 'text-slate-300') }}">
