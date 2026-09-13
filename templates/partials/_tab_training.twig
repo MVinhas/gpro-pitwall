@@ -137,27 +137,25 @@
                     </div>
 
                     {# Comparison Table #}
-                    <div class="overflow-hidden shadow ring-1 ring-slate-200 sm:rounded-lg">
-                        <table class="min-w-full divide-y divide-slate-300">
-                            <thead class="bg-slate-50">
+                    <div class="dt-scroll">
+                        <table class="dt">
+                            <thead class="border-b border-slate-200">
                                 <tr>
-                                    <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-slate-900">Attribute</th>
-                                    <th scope="col" class="px-3 py-3.5 text-center text-sm font-semibold text-slate-900">Current</th>
-                                    <th scope="col" class="px-3 py-3.5 text-center text-sm font-semibold text-slate-900">Projected</th>
-                                    <th scope="col" class="px-3 py-3.5 text-center text-sm font-semibold text-slate-900">Change</th>
+                                    <th scope="col" class="dt-th">Attribute</th>
+                                    <th scope="col" class="dt-th text-right">Current</th>
+                                    <th scope="col" class="dt-th text-right">Projected</th>
+                                    <th scope="col" class="dt-th text-right">Change</th>
                                 </tr>
                             </thead>
-                            <tbody class="divide-y divide-slate-200 bg-surface">
+                            <tbody class="divide-y divide-slate-100">
                                 {% for key, startVal in training_results.start %}
                                     {% set endVal = training_results.end[key] %}
                                     {% set diff = endVal - startVal %}
-                                    <tr class="hover:bg-slate-50">
-                                        <td class="whitespace-nowrap py-3 pl-4 pr-3 text-sm font-medium text-slate-700">{{ attr_labels[key]|default(key) }}</td>
-                                        <td class="whitespace-nowrap px-3 py-3 text-center text-sm text-slate-500">{{ startVal }}</td>
-                                        <td class="whitespace-nowrap px-3 py-3 text-center text-sm font-bold text-slate-900">{{ endVal }}</td>
-                                        <td class="whitespace-nowrap px-3 py-3 text-center text-sm font-medium tabular-nums {{ diff != 0 ? 'text-slate-900' : 'text-slate-300' }}">
-                                            {{ diff > 0 ? '+' : '' }}{{ diff != 0 ? diff : '-' }}
-                                        </td>
+                                    <tr>
+                                        <td class="dt-td">{{ attr_labels[key]|default(key) }}</td>
+                                        <td class="dt-td text-right text-slate-500">{{ startVal }}</td>
+                                        <td class="dt-td text-right font-semibold text-slate-900">{{ endVal }}</td>
+                                        <td class="dt-td text-right {{ diff != 0 ? 'text-slate-900' : 'text-slate-300' }}">{{ diff != 0 ? (diff > 0 ? '+' : '') ~ diff : '—' }}</td>
                                     </tr>
                                 {% endfor %}
                             </tbody>

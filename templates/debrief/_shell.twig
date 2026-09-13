@@ -103,22 +103,22 @@
    these; they only differ in which choices they list, so they share one macro
    rather than three near-identical tables. #}
 {% macro dist_table(dist, label) %}
-    <div class="brief-scroll">
-        <table class="brief-table">
+    <div class="dt-scroll">
+        <table class="dt">
             <thead class="bg-slate-50">
                 <tr>
-                    <th class="brief-th">{{ label }}</th>
+                    <th class="dt-th">{{ label }}</th>
                     {% for level in dist.levels %}
-                        <th class="brief-th text-right">{{ level }}</th>
+                        <th class="dt-th text-right">{{ level }}</th>
                     {% endfor %}
                 </tr>
             </thead>
             <tbody class="divide-y divide-slate-100">
                 {% for row in dist.choices %}
                     <tr>
-                        <td class="brief-td whitespace-normal">{{ row.choice }}</td>
+                        <td class="dt-td whitespace-normal">{{ row.choice }}</td>
                         {% for cell in row.cells %}
-                            <td class="brief-td text-right">
+                            <td class="dt-td text-right">
                                 {% if cell.percent is null %}—
                                 {% else %}
                                     {{ cell.percent }}%
@@ -131,9 +131,9 @@
             </tbody>
             <tfoot class="bg-slate-50">
                 <tr>
-                    <td class="brief-td t-label">Races</td>
+                    <td class="dt-td t-label">Races</td>
                     {% for level in dist.levels %}
-                        <td class="brief-td text-right t-label">{{ dist.totals[level] }}</td>
+                        <td class="dt-td text-right t-label">{{ dist.totals[level] }}</td>
                     {% endfor %}
                 </tr>
             </tfoot>

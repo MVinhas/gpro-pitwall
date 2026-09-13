@@ -117,58 +117,58 @@
                 </span>
             {% endblock %}
             {% block body %}{% import "debrief/_shell.twig" as t %}
-                <div class="brief-scroll">
-                    <table class="brief-table">
+                <div class="dt-scroll">
+                    <table class="dt">
                         <thead class="bg-slate-50">
                             <tr>
-                                <th class="brief-th"></th>
-                                <th class="brief-th text-right">Temp</th>
-                                <th class="brief-th text-right hidden sm:table-cell">Hum</th>
-                                <th class="brief-th hidden md:table-cell">Sky</th>
-                                <th class="brief-th hidden lg:table-cell">Compound</th>
-                                <th class="brief-th text-right">FW</th>
-                                <th class="brief-th text-right">RW</th>
-                                <th class="brief-th text-right">E</th>
-                                <th class="brief-th text-right">B</th>
-                                <th class="brief-th text-right">G</th>
-                                <th class="brief-th text-right">S</th>
-                                <th class="brief-th text-right">Lap</th>
-                                <th class="brief-th text-right">Pos</th>
+                                <th class="dt-th"></th>
+                                <th class="dt-th text-right">Temp</th>
+                                <th class="dt-th text-right hidden sm:table-cell">Hum</th>
+                                <th class="dt-th hidden md:table-cell">Sky</th>
+                                <th class="dt-th hidden lg:table-cell">Compound</th>
+                                <th class="dt-th text-right">FW</th>
+                                <th class="dt-th text-right">RW</th>
+                                <th class="dt-th text-right">E</th>
+                                <th class="dt-th text-right">B</th>
+                                <th class="dt-th text-right">G</th>
+                                <th class="dt-th text-right">S</th>
+                                <th class="dt-th text-right">Lap</th>
+                                <th class="dt-th text-right">Pos</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
                             {% for s in q.sessions %}
                                 <tr>
-                                    <td class="brief-td font-semibold">{{ s.session }}</td>
-                                    <td class="brief-td text-right">{{ s.temp ?? '—' }}</td>
-                                    <td class="brief-td text-right hidden sm:table-cell">{{ s.humidity ?? '—' }}</td>
-                                    <td class="brief-td hidden md:table-cell">{{ s.weather ?? '—' }}</td>
-                                    <td class="brief-td hidden lg:table-cell">{{ s.compound ?? '—' }}</td>
-                                    <td class="brief-td text-right">{{ s.setup.fwing ?? '—' }}</td>
-                                    <td class="brief-td text-right">{{ s.setup.rwing ?? '—' }}</td>
-                                    <td class="brief-td text-right">{{ s.setup.engine ?? '—' }}</td>
-                                    <td class="brief-td text-right">{{ s.setup.brakes ?? '—' }}</td>
-                                    <td class="brief-td text-right">{{ s.setup.gear ?? '—' }}</td>
-                                    <td class="brief-td text-right">{{ s.setup.susp ?? '—' }}</td>
-                                    <td class="brief-td text-right">{{ s.lap_time ?? '—' }}</td>
-                                    <td class="brief-td text-right">P{{ s.position ?? '—' }}</td>
+                                    <td class="dt-td font-semibold">{{ s.session }}</td>
+                                    <td class="dt-td text-right">{{ s.temp ?? '—' }}</td>
+                                    <td class="dt-td text-right hidden sm:table-cell">{{ s.humidity ?? '—' }}</td>
+                                    <td class="dt-td hidden md:table-cell">{{ s.weather ?? '—' }}</td>
+                                    <td class="dt-td hidden lg:table-cell">{{ s.compound ?? '—' }}</td>
+                                    <td class="dt-td text-right">{{ s.setup.fwing ?? '—' }}</td>
+                                    <td class="dt-td text-right">{{ s.setup.rwing ?? '—' }}</td>
+                                    <td class="dt-td text-right">{{ s.setup.engine ?? '—' }}</td>
+                                    <td class="dt-td text-right">{{ s.setup.brakes ?? '—' }}</td>
+                                    <td class="dt-td text-right">{{ s.setup.gear ?? '—' }}</td>
+                                    <td class="dt-td text-right">{{ s.setup.susp ?? '—' }}</td>
+                                    <td class="dt-td text-right">{{ s.lap_time ?? '—' }}</td>
+                                    <td class="dt-td text-right">P{{ s.position ?? '—' }}</td>
                                 </tr>
                             {% endfor %}
                             <tr class="bg-slate-50 font-medium">
-                                <td class="brief-td">Q2 − Q1</td>
-                                <td class="brief-td" colspan="4"></td>
-                                <td class="brief-td text-right">{{ t.delta(q.delta.fwing) }}</td>
-                                <td class="brief-td text-right">{{ t.delta(q.delta.rwing) }}</td>
-                                <td class="brief-td text-right">{{ t.delta(q.delta.engine) }}</td>
-                                <td class="brief-td text-right">{{ t.delta(q.delta.brakes) }}</td>
-                                <td class="brief-td text-right">{{ t.delta(q.delta.gear) }}</td>
-                                <td class="brief-td text-right">{{ t.delta(q.delta.susp) }}</td>
-                                <td class="brief-td text-right">
+                                <td class="dt-td">Q2 − Q1</td>
+                                <td class="dt-td" colspan="4"></td>
+                                <td class="dt-td text-right">{{ t.delta(q.delta.fwing) }}</td>
+                                <td class="dt-td text-right">{{ t.delta(q.delta.rwing) }}</td>
+                                <td class="dt-td text-right">{{ t.delta(q.delta.engine) }}</td>
+                                <td class="dt-td text-right">{{ t.delta(q.delta.brakes) }}</td>
+                                <td class="dt-td text-right">{{ t.delta(q.delta.gear) }}</td>
+                                <td class="dt-td text-right">{{ t.delta(q.delta.susp) }}</td>
+                                <td class="dt-td text-right">
                                     {% if q.delta.lap_ms is not null %}
                                         {{ q.delta.lap_ms > 0 ? '+' : '' }}{{ (q.delta.lap_ms / 1000)|number_format(3) }}s
                                     {% else %}—{% endif %}
                                 </td>
-                                <td class="brief-td"></td>
+                                <td class="dt-td"></td>
                             </tr>
                         </tbody>
                     </table>
@@ -191,39 +191,39 @@
                 <span class="t-caption">{{ detail.stints|length }} stint{{ detail.stints|length == 1 ? '' : 's' }}</span>
             {% endblock %}
             {% block body %}{% import "debrief/_shell.twig" as t %}
-                <div class="brief-scroll">
-                    <table class="brief-table">
+                <div class="dt-scroll">
+                    <table class="dt">
                         <thead class="bg-slate-50">
                             <tr>
-                                <th class="brief-th">#</th>
-                                <th class="brief-th">Laps</th>
-                                <th class="brief-th text-right">Count</th>
-                                <th class="brief-th text-right">Temp</th>
-                                <th class="brief-th text-right hidden sm:table-cell">Hum</th>
-                                <th class="brief-th text-right hidden md:table-cell">Dry</th>
-                                <th class="brief-th text-right hidden md:table-cell">Rain</th>
-                                <th class="brief-th hidden lg:table-cell">Compound</th>
-                                <th class="brief-th text-right">Fuel</th>
-                                <th class="brief-th text-right">Tyre</th>
-                                <th class="brief-th text-right hidden sm:table-cell">Fuel /km</th>
-                                <th class="brief-th text-right hidden sm:table-cell">Tyre /km</th>
+                                <th class="dt-th">#</th>
+                                <th class="dt-th">Laps</th>
+                                <th class="dt-th text-right">Count</th>
+                                <th class="dt-th text-right">Temp</th>
+                                <th class="dt-th text-right hidden sm:table-cell">Hum</th>
+                                <th class="dt-th text-right hidden md:table-cell">Dry</th>
+                                <th class="dt-th text-right hidden md:table-cell">Rain</th>
+                                <th class="dt-th hidden lg:table-cell">Compound</th>
+                                <th class="dt-th text-right">Fuel</th>
+                                <th class="dt-th text-right">Tyre</th>
+                                <th class="dt-th text-right hidden sm:table-cell">Fuel /km</th>
+                                <th class="dt-th text-right hidden sm:table-cell">Tyre /km</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
                             {% for s in detail.stints %}
                                 <tr>
-                                    <td class="brief-td">{{ s.number }}</td>
-                                    <td class="brief-td">{{ '%02d'|format(s.lap_from) }}–{{ '%02d'|format(s.lap_to) }}</td>
-                                    <td class="brief-td text-right">{{ s.laps }}</td>
-                                    <td class="brief-td text-right">{{ s.avg_temp ?? '—' }}</td>
-                                    <td class="brief-td text-right hidden sm:table-cell">{{ s.avg_humidity ?? '—' }}</td>
-                                    <td class="brief-td text-right hidden md:table-cell">{{ s.dry }}</td>
-                                    <td class="brief-td text-right hidden md:table-cell">{{ s.rain }}</td>
-                                    <td class="brief-td hidden lg:table-cell">{{ s.compound ?? '—' }}</td>
-                                    <td class="brief-td text-right">{{ s.fuel_used ?? '—' }}</td>
-                                    <td class="brief-td text-right">{{ s.tyre_used is not null ? s.tyre_used ~ '%' : '—' }}</td>
-                                    <td class="brief-td text-right hidden sm:table-cell">{{ s.fuel_per_km ?? '—' }}</td>
-                                    <td class="brief-td text-right hidden sm:table-cell">{{ s.tyre_per_km ?? '—' }}</td>
+                                    <td class="dt-td">{{ s.number }}</td>
+                                    <td class="dt-td">{{ '%02d'|format(s.lap_from) }}–{{ '%02d'|format(s.lap_to) }}</td>
+                                    <td class="dt-td text-right">{{ s.laps }}</td>
+                                    <td class="dt-td text-right">{{ s.avg_temp ?? '—' }}</td>
+                                    <td class="dt-td text-right hidden sm:table-cell">{{ s.avg_humidity ?? '—' }}</td>
+                                    <td class="dt-td text-right hidden md:table-cell">{{ s.dry }}</td>
+                                    <td class="dt-td text-right hidden md:table-cell">{{ s.rain }}</td>
+                                    <td class="dt-td hidden lg:table-cell">{{ s.compound ?? '—' }}</td>
+                                    <td class="dt-td text-right">{{ s.fuel_used ?? '—' }}</td>
+                                    <td class="dt-td text-right">{{ s.tyre_used is not null ? s.tyre_used ~ '%' : '—' }}</td>
+                                    <td class="dt-td text-right hidden sm:table-cell">{{ s.fuel_per_km ?? '—' }}</td>
+                                    <td class="dt-td text-right hidden sm:table-cell">{{ s.tyre_per_km ?? '—' }}</td>
                                 </tr>
                             {% endfor %}
                         </tbody>
@@ -245,44 +245,44 @@
                 </span>
             {% endblock %}
             {% block body %}{% import "debrief/_shell.twig" as t %}
-                <div class="brief-scroll">
-                    <table class="brief-table">
+                <div class="dt-scroll">
+                    <table class="dt">
                         <thead class="bg-slate-50">
                             <tr>
-                                <th class="brief-th">#</th>
-                                <th class="brief-th text-right">Lap</th>
-                                <th class="brief-th hidden md:table-cell">Reason</th>
-                                <th class="brief-th text-right">Fuel left</th>
-                                <th class="brief-th text-right">Refilled to</th>
-                                <th class="brief-th text-right hidden sm:table-cell">Added</th>
-                                <th class="brief-th text-right">Tyre</th>
-                                <th class="brief-th text-right">Time</th>
+                                <th class="dt-th">#</th>
+                                <th class="dt-th text-right">Lap</th>
+                                <th class="dt-th hidden md:table-cell">Reason</th>
+                                <th class="dt-th text-right">Fuel left</th>
+                                <th class="dt-th text-right">Refilled to</th>
+                                <th class="dt-th text-right hidden sm:table-cell">Added</th>
+                                <th class="dt-th text-right">Tyre</th>
+                                <th class="dt-th text-right">Time</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
                             {% for p in detail.pits %}
                                 <tr>
-                                    <td class="brief-td">{{ p.number }}</td>
-                                    <td class="brief-td text-right">{{ p.lap ?? '—' }}</td>
-                                    <td class="brief-td hidden md:table-cell">{{ p.reason ?? '—' }}</td>
-                                    <td class="brief-td text-right">{{ p.fuel_left ?? '—' }}</td>
-                                    <td class="brief-td text-right">{{ p.refilled_to ?? '—' }}</td>
-                                    <td class="brief-td text-right hidden sm:table-cell">{{ p.fuel_added ?? '—' }}</td>
-                                    <td class="brief-td text-right">{{ p.tyre_cond is not null ? p.tyre_cond ~ '%' : '—' }}</td>
-                                    <td class="brief-td text-right">{{ p.pit_time ?? '—' }}</td>
+                                    <td class="dt-td">{{ p.number }}</td>
+                                    <td class="dt-td text-right">{{ p.lap ?? '—' }}</td>
+                                    <td class="dt-td hidden md:table-cell">{{ p.reason ?? '—' }}</td>
+                                    <td class="dt-td text-right">{{ p.fuel_left ?? '—' }}</td>
+                                    <td class="dt-td text-right">{{ p.refilled_to ?? '—' }}</td>
+                                    <td class="dt-td text-right hidden sm:table-cell">{{ p.fuel_added ?? '—' }}</td>
+                                    <td class="dt-td text-right">{{ p.tyre_cond is not null ? p.tyre_cond ~ '%' : '—' }}</td>
+                                    <td class="dt-td text-right">{{ p.pit_time ?? '—' }}</td>
                                 </tr>
                             {% endfor %}
                             <tr class="bg-slate-50 font-medium">
-                                <td class="brief-td">End</td>
-                                <td class="brief-td text-right">{{ detail.laps_completed ?? '—' }}</td>
-                                <td class="brief-td hidden md:table-cell"></td>
-                                <td class="brief-td text-right">{{ detail.finish_fuel ?? '—' }}</td>
-                                <td class="brief-td"></td>
-                                <td class="brief-td hidden sm:table-cell"></td>
-                                <td class="brief-td text-right">
+                                <td class="dt-td">End</td>
+                                <td class="dt-td text-right">{{ detail.laps_completed ?? '—' }}</td>
+                                <td class="dt-td hidden md:table-cell"></td>
+                                <td class="dt-td text-right">{{ detail.finish_fuel ?? '—' }}</td>
+                                <td class="dt-td"></td>
+                                <td class="dt-td hidden sm:table-cell"></td>
+                                <td class="dt-td text-right">
                                     {{ detail.finish_tyres is not null ? detail.finish_tyres ~ '%' : '—' }}
                                 </td>
-                                <td class="brief-td"></td>
+                                <td class="dt-td"></td>
                             </tr>
                         </tbody>
                     </table>
@@ -369,25 +369,25 @@
                 </span>
             {% endblock %}
             {% block body %}{% import "debrief/_shell.twig" as t %}
-                <div class="brief-scroll">
-                    <table class="brief-table">
+                <div class="dt-scroll">
+                    <table class="dt">
                         <thead class="bg-slate-50">
                             <tr>
-                                <th class="brief-th">Part</th>
-                                <th class="brief-th text-right">Level</th>
-                                <th class="brief-th text-right">Wear before</th>
-                                <th class="brief-th text-right">Wear after</th>
-                                <th class="brief-th text-right">Added</th>
+                                <th class="dt-th">Part</th>
+                                <th class="dt-th text-right">Level</th>
+                                <th class="dt-th text-right">Wear before</th>
+                                <th class="dt-th text-right">Wear after</th>
+                                <th class="dt-th text-right">Added</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
                             {% for part in detail.parts %}
                                 <tr>
-                                    <td class="brief-td whitespace-normal">{{ part.label }}</td>
-                                    <td class="brief-td text-right">{{ part.level ?? '—' }}</td>
-                                    <td class="brief-td text-right">{{ part.wear_start is not null ? part.wear_start ~ '%' : '—' }}</td>
-                                    <td class="brief-td text-right">{{ part.wear_end is not null ? part.wear_end ~ '%' : '—' }}</td>
-                                    <td class="brief-td text-right">{{ t.delta(part.wear_gain, false) }}</td>
+                                    <td class="dt-td whitespace-normal">{{ part.label }}</td>
+                                    <td class="dt-td text-right">{{ part.level ?? '—' }}</td>
+                                    <td class="dt-td text-right">{{ part.wear_start is not null ? part.wear_start ~ '%' : '—' }}</td>
+                                    <td class="dt-td text-right">{{ part.wear_end is not null ? part.wear_end ~ '%' : '—' }}</td>
+                                    <td class="dt-td text-right">{{ t.delta(part.wear_gain, false) }}</td>
                                 </tr>
                             {% endfor %}
                         </tbody>
@@ -408,30 +408,30 @@
                 </span>
             {% endblock %}
             {% block body %}{% import "debrief/_shell.twig" as t %}
-                <div class="brief-scroll">
-                    <table class="brief-table">
+                <div class="dt-scroll">
+                    <table class="dt">
                         <thead class="bg-slate-50">
                             <tr>
-                                <th class="brief-th">Attribute</th>
-                                <th class="brief-th text-right">Before</th>
-                                <th class="brief-th text-right">After</th>
-                                <th class="brief-th text-right">Change</th>
+                                <th class="dt-th">Attribute</th>
+                                <th class="dt-th text-right">Before</th>
+                                <th class="dt-th text-right">After</th>
+                                <th class="dt-th text-right">Change</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
                             {% for attr in detail.driver.attributes %}
                                 <tr>
-                                    <td class="brief-td whitespace-normal">{{ attr.label }}</td>
-                                    <td class="brief-td text-right">{{ attr.pre ?? '—' }}</td>
-                                    <td class="brief-td text-right">{{ attr.post ?? '—' }}</td>
-                                    <td class="brief-td text-right">{{ t.delta(attr.delta) }}</td>
+                                    <td class="dt-td whitespace-normal">{{ attr.label }}</td>
+                                    <td class="dt-td text-right">{{ attr.pre ?? '—' }}</td>
+                                    <td class="dt-td text-right">{{ attr.post ?? '—' }}</td>
+                                    <td class="dt-td text-right">{{ t.delta(attr.delta) }}</td>
                                 </tr>
                             {% endfor %}
                             <tr class="bg-slate-50">
-                                <td class="brief-td font-medium">Energy</td>
-                                <td class="brief-td text-right">{{ detail.driver.energy.pre ?? '—' }}</td>
-                                <td class="brief-td text-right">{{ detail.driver.energy.post ?? '—' }}</td>
-                                <td class="brief-td text-right">
+                                <td class="dt-td font-medium">Energy</td>
+                                <td class="dt-td text-right">{{ detail.driver.energy.pre ?? '—' }}</td>
+                                <td class="dt-td text-right">{{ detail.driver.energy.post ?? '—' }}</td>
+                                <td class="dt-td text-right">
                                     {% if detail.driver.energy.pre is not null and detail.driver.energy.post is not null %}
                                         {{ t.delta(detail.driver.energy.post - detail.driver.energy.pre) }}
                                     {% else %}—{% endif %}
@@ -471,12 +471,12 @@
                         {% if group.rows|length %}
                             <div>
                                 <h5 class="t-section mb-2">{{ group.title }}</h5>
-                                <table class="brief-table">
+                                <table class="dt">
                                     <tbody class="divide-y divide-slate-100">
                                         {% for row in group.rows %}
                                             <tr>
-                                                <td class="brief-td whitespace-normal">{{ row.label }}</td>
-                                                <td class="brief-td text-right font-medium">{{ row.value ?? '—' }}</td>
+                                                <td class="dt-td whitespace-normal">{{ row.label }}</td>
+                                                <td class="dt-td text-right font-medium">{{ row.value ?? '—' }}</td>
                                             </tr>
                                         {% endfor %}
                                     </tbody>
@@ -498,12 +498,12 @@
                 <span class="brief-chip">{{ detail.problems|length }}</span>
             {% endblock %}
             {% block body %}{% import "debrief/_shell.twig" as t %}
-                <table class="brief-table">
+                <table class="dt">
                     <tbody class="divide-y divide-slate-100">
                         {% for problem in detail.problems %}
                             <tr>
-                                <td class="brief-td">Lap {{ problem.lap ?? '—' }}</td>
-                                <td class="brief-td whitespace-normal">{{ problem.reason ?? '—' }}</td>
+                                <td class="dt-td">Lap {{ problem.lap ?? '—' }}</td>
+                                <td class="dt-td whitespace-normal">{{ problem.reason ?? '—' }}</td>
                             </tr>
                         {% endfor %}
                     </tbody>

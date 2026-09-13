@@ -312,23 +312,40 @@ summary:focus-visible { @apply outline-none ring-2 ring-blue-600; }
            text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-600/20;
 }
 
-/* Dense data table. Every debrief table uses these three.
-   Dense is not cramped: the horizontal padding has to keep adjacent headers
-   visibly apart (several of them are long phrases), and the row rhythm has to
-   stay readable down a column of 11 driver attributes. */
-.brief-table { @apply w-full text-sm; }
-.brief-th {
-    @apply px-2 sm:px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wide
-           text-slate-500 whitespace-nowrap;
+/* =========================
+   DATA TABLE — the one table component (P10 D6). Born in the Debrief; every
+   table in the app uses it. Labels left, figures right (add text-right on
+   numeric cells), t-label headers, one row rhythm.
+========================= */
+/* In the components layer on purpose: utilities (text-right on a numeric column,
+   font-semibold on a label cell) must be able to override these defaults. */
+@layer components {
+    /* Dense data table.
+       Dense is not cramped: the horizontal padding has to keep adjacent headers
+       visibly apart (several of them are long phrases), and the row rhythm has to
+       stay readable down a column of 11 driver attributes. */
+    .dt { @apply w-full text-sm; }
+    .dt-th {
+        @apply px-2 sm:px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wide
+               text-slate-500 whitespace-nowrap;
+    }
+    /* Long phrase headers ("Relationship to finishing position") need room from
+       whatever sits next to them, which nowrap alone does not give. */
+    .dt-th + .dt-th { @apply pl-2 sm:pl-5; }
+    .dt-td { @apply px-2 sm:px-3 py-2.5 tabular-nums whitespace-nowrap align-middle; }
+    .dt-td + .dt-td { @apply pl-2 sm:pl-5; }
+    /* The first column is the row's label and carries the most text — let it wrap
+       and give the rest of the row something to align against. */
+    .dt tbody tr > .dt-td:first-child { @apply font-normal text-slate-700; }
+
+    /* Horizontal scroll container for the wide tables. Paired with column
+       dieting (hidden sm:table-cell) rather than replacing it. */
+    .dt-scroll { @apply overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0; }
+    /* A table flush inside a card (no card body padding): the inset lines the first
+       and last cells up with the card header's text. */
+    .dt-inset { @apply overflow-x-auto px-2 sm:px-3; }
+
 }
-/* Long phrase headers ("Relationship to finishing position") need room from
-   whatever sits next to them, which nowrap alone does not give. */
-.brief-th + .brief-th { @apply pl-2 sm:pl-5; }
-.brief-td { @apply px-2 sm:px-3 py-2.5 tabular-nums whitespace-nowrap align-middle; }
-.brief-td + .brief-td { @apply pl-2 sm:pl-5; }
-/* The first column is the row's label and carries the most text — let it wrap
-   and give the rest of the row something to align against. */
-.brief-table tbody tr > .brief-td:first-child { @apply font-normal text-slate-700; }
 
 /* Sample-size marker. Colour alone never carries the "thin data" warning —
    the number is always printed next to it. */
@@ -337,10 +354,6 @@ summary:focus-visible { @apply outline-none ring-2 ring-blue-600; }
            text-[10px] font-medium text-slate-600;
 }
 .brief-n-thin { @apply bg-amber-100 text-amber-900; }
-
-/* Horizontal scroll container for the wide tables. Paired with column
-   dieting (hidden sm:table-cell) rather than replacing it. */
-.brief-scroll { @apply overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0; }
 
 /*
  * Type tokens — keep usage consistent across all tabs.

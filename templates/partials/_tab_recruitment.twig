@@ -156,112 +156,72 @@
                         {% if rangeFilterQuery %}
                             {% set href = href ~ '&' ~ rangeFilterQuery %}
                         {% endif %}
-                        <a href="{{ href }}"
-                           class="group inline-flex items-center hover:text-blue-600 transition-colors">
-                             {{ label }}{{ icon }}
-                        </a>
+                        <a href="{{ href }}" class="hover:text-slate-900{{ currentSort.col == col ? ' text-slate-900' : '' }}">{{ label }}{{ icon }}</a>
                     {% endmacro %}
 
-                    <div class="overflow-hidden shadow ring-1 ring-slate-200 sm:rounded-lg">
-                        <div class="overflow-x-auto">
-                            <table class="min-w-full divide-y divide-slate-300">
-                                <thead class="bg-slate-50">
+                    {# First columns are the answer (rating, name, OA); the attribute and money
+                       columns scroll on a phone. #}
+                    <div class="border-t border-slate-200">
+                        <div class="dt-scroll">
+                            <table class="dt">
+                                <thead class="border-b border-slate-200">
                                     <tr>
-                                        <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-slate-900 sm:pl-6 cursor-pointer">
-                                             {{ _self.sortLink('Rtg', 'rating', sort, active_division, range_filter_query) }}
-                                        </th>
-                                        <th scope="col" class="px-2 py-3.5 text-left text-sm font-semibold text-slate-900 cursor-pointer">
-                                            {{ _self.sortLink('Name', 'NAME', sort, active_division, range_filter_query) }}
-                                        </th>
-                                        <th scope="col" class="px-2 py-3.5 text-center text-sm font-semibold text-slate-900 cursor-pointer">
-                                            {{ _self.sortLink('OA', 'OA', sort, active_division, range_filter_query) }}
-                                        </th>
-                                        
-                                        {# Stats #}
-                                        {% set stats = ['CON', 'TAL', 'AGG', 'EXP', 'TEI', 'STA', 'CHA', 'MOT', 'WEI', 'AGE'] %}
-                                        {% for stat in stats %}
-                                            <th scope="col" class="px-1 py-3.5 text-center cursor-pointer">
-                                                <span class="t-label">{{ _self.sortLink(stat|capitalize, stat, sort, active_division, range_filter_query) }}</span>
-                                            </th>
+                                        <th scope="col" class="dt-th text-right">{{ _self.sortLink('Rtg', 'rating', sort, active_division, range_filter_query) }}</th>
+                                        <th scope="col" class="dt-th">{{ _self.sortLink('Name', 'NAME', sort, active_division, range_filter_query) }}</th>
+                                        <th scope="col" class="dt-th text-right">{{ _self.sortLink('OA', 'OA', sort, active_division, range_filter_query) }}</th>
+                                        {% for stat in ['CON', 'TAL', 'AGG', 'EXP', 'TEI', 'STA', 'CHA', 'MOT', 'WEI', 'AGE'] %}
+                                            <th scope="col" class="dt-th text-right">{{ _self.sortLink(stat, stat, sort, active_division, range_filter_query) }}</th>
                                         {% endfor %}
-                                        
                                         {% if favourite_tracks_available %}
-                                            <th scope="col" class="px-2 py-3.5 text-center text-sm font-semibold text-slate-900"
-                                                title="Favourite tracks racing this season (C) and next season (N)">
-                                                <span class="t-label">Fav</span>
-                                            </th>
+                                            <th scope="col" class="dt-th" title="Favourite tracks racing this season (C) and next season (N)">Fav</th>
                                         {% endif %}
-
-                                        <th scope="col" class="px-3 py-3.5 text-right text-sm font-semibold text-slate-900 cursor-pointer">
-                                            {{ _self.sortLink('Salary', 'SAL', sort, active_division, range_filter_query) }}
-                                        </th>
-                                        <th scope="col" class="px-3 py-3.5 text-right text-sm font-semibold text-slate-900 cursor-pointer">
-                                            {{ _self.sortLink('Fee', 'FEE', sort, active_division, range_filter_query) }}
-                                        </th>
-                                        <th scope="col" class="px-3 py-3.5 text-center text-sm font-semibold text-slate-900">Link</th>
+                                        <th scope="col" class="dt-th text-right">{{ _self.sortLink('Salary', 'SAL', sort, active_division, range_filter_query) }}</th>
+                                        <th scope="col" class="dt-th text-right">{{ _self.sortLink('Fee', 'FEE', sort, active_division, range_filter_query) }}</th>
                                     </tr>
                                 </thead>
-                                
-                                <tbody class="divide-y divide-slate-200 bg-surface">
+                                <tbody class="divide-y divide-slate-100">
                                     {% for d in recruitment_results %}
-                                        <tr class="hover:bg-slate-50 transition-colors">
-                                            <td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-bold tabular-nums sm:pl-6 text-slate-900">
-                                                {{ d.rating }}
-                                            </td>
-                                            <td class="whitespace-nowrap px-2 py-4 text-sm font-medium text-slate-900">
-                                                {{ d.NAME }}
+                                        <tr>
+                                            <td class="dt-td text-right font-semibold text-slate-900">{{ d.rating }}</td>
+                                            <td class="dt-td">
+                                                {% if d.ID > 0 %}
+                                                    <a href="https://gpro.net/gb/DriverProfile.asp?ID={{ d.ID }}" target="_blank" rel="noopener noreferrer"
+                                                       class="font-medium text-blue-600 hover:underline" title="Open the GPRO profile">{{ d.NAME }}</a>
+                                                {% else %}
+                                                    <span class="font-medium text-slate-900">{{ d.NAME }}</span>
+                                                {% endif %}
                                                 {% if d.OFF > 0 %}
-                                                    <span class="ml-2 inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">{{ d.OFF }} Off</span>
+                                                    <span class="ml-1.5 inline-flex items-center rounded bg-amber-100 px-1.5 py-px text-[10px] font-medium text-amber-800">{{ d.OFF }} offer{{ d.OFF == 1 ? '' : 's' }}</span>
                                                 {% endif %}
                                             </td>
-                                            <td class="whitespace-nowrap px-2 py-4 text-center text-sm font-bold tabular-nums text-slate-700">{{ d.OA }}</td>
-
-                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm tabular-nums text-slate-500">{{ d.CON }}</td>
-                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm tabular-nums font-medium text-slate-700">{{ d.TAL }}</td>
-                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm tabular-nums text-slate-500">{{ d.AGG }}</td>
-                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm tabular-nums text-slate-500">{{ d.EXP }}</td>
-                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm tabular-nums text-slate-500">{{ d.TEI }}</td>
-                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm tabular-nums text-slate-500">{{ d.STA }}</td>
-                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm tabular-nums text-slate-500">{{ d.CHA }}</td>
-                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm tabular-nums text-slate-500">{{ d.MOT }}</td>
-                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm tabular-nums text-slate-500">{{ d.WEI }}</td>
-                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm tabular-nums font-bold text-slate-500">{{ d.AGE }}</td>
-
+                                            <td class="dt-td text-right font-semibold text-slate-900">{{ d.OA }}</td>
+                                            {% for stat in ['CON', 'TAL', 'AGG', 'EXP', 'TEI', 'STA', 'CHA', 'MOT', 'WEI', 'AGE'] %}
+                                                <td class="dt-td text-right text-slate-600">{{ attribute(d, stat) }}</td>
+                                            {% endfor %}
                                             {% if favourite_tracks_available %}
-                                                <td class="whitespace-nowrap px-2 py-4 text-center text-sm">
-                                                    <div class="inline-flex items-center gap-1">
-                                                        {% set curOn = d.FAV_current > 0 %}
-                                                        {% set nxtOn = d.FAV_next > 0 %}
-                                                        <span class="inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ring-1 ring-inset {{ curOn ? 'bg-slate-100 text-slate-900 ring-slate-300' : 'bg-slate-50 text-slate-400 ring-slate-200' }}"
+                                                {% set curOn = d.FAV_current > 0 %}
+                                                {% set nxtOn = d.FAV_next > 0 %}
+                                                <td class="dt-td">
+                                                    <span class="inline-flex items-center gap-1">
+                                                        <span class="rounded px-1.5 py-px text-[11px] font-semibold {{ curOn ? 'bg-slate-100 text-slate-900' : 'text-slate-400' }}"
                                                               title="{{ curOn ? 'This season: ' ~ d.FAV_current_names|join(', ') : 'No favourite tracks this season' }}">C·{{ d.FAV_current }}</span>
-                                                        <span class="inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ring-1 ring-inset {{ nxtOn ? 'bg-slate-100 text-slate-900 ring-slate-300' : 'bg-slate-50 text-slate-400 ring-slate-200' }}"
+                                                        <span class="rounded px-1.5 py-px text-[11px] font-semibold {{ nxtOn ? 'bg-slate-100 text-slate-900' : 'text-slate-400' }}"
                                                               title="{{ nxtOn ? 'Next season: ' ~ d.FAV_next_names|join(', ') : 'No favourite tracks next season' }}">N·{{ d.FAV_next }}</span>
-                                                    </div>
+                                                    </span>
                                                 </td>
                                             {% endif %}
-
-                                            <td class="whitespace-nowrap px-3 py-4 text-right text-sm tabular-nums text-slate-600">${{ d.SAL|number_format }}</td>
-                                            <td class="whitespace-nowrap px-3 py-4 text-right text-sm tabular-nums text-slate-600">${{ d.FEE|number_format }}</td>
-                                            
-                                            <td class="whitespace-nowrap px-3 py-4 text-center text-sm">
-                                                {% if d.ID > 0 %}
-                                                    <a href="https://gpro.net/gb/DriverProfile.asp?ID={{ d.ID }}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 transition-colors text-lg" title="Open GPRO Profile">🔗</a>
-                                                {% else %}
-                                                    <span class="text-slate-300">-</span>
-                                                {% endif %}
-                                            </td>
+                                            <td class="dt-td text-right text-slate-600">${{ d.SAL|number_format }}</td>
+                                            <td class="dt-td text-right text-slate-600">${{ d.FEE|number_format }}</td>
                                         </tr>
                                     {% else %}
                                         <tr>
-                                            <td colspan="{{ favourite_tracks_available ? 17 : 16 }}" class="px-6 py-10 text-center text-sm text-slate-500 bg-slate-50">
-                                                No candidates found.
-                                            </td>
+                                            <td colspan="{{ favourite_tracks_available ? 16 : 15 }}" class="dt-td py-8 text-center text-slate-500">No candidates found.</td>
                                         </tr>
                                     {% endfor %}
                                 </tbody>
                             </table>
                         </div>
-                        
+
                         {# Pagination Controls #}
                         {% if pagination.total_pages > 1 %}
                             <div class="bg-surface px-4 py-3 flex items-center justify-between border-t border-slate-200 sm:px-6">

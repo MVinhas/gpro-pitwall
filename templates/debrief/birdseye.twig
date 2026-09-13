@@ -129,26 +129,26 @@
                 <p class="t-caption">No races match these filters.</p>
             </div>
         {% else %}
-            <div class="brief-scroll">
-                <table class="brief-table">
+            <div class="dt-scroll">
+                <table class="dt">
                     <thead class="bg-slate-50 border-b border-slate-200">
                         <tr>
                             {# Column diet: at 375px only Race, Finish, places
                                gained and Score survive — the answer columns.
                                The track is not dropped, it moves under the race
                                id in the first cell. #}
-                            <th class="brief-th">Race</th>
-                            <th class="brief-th hidden md:table-cell">Track</th>
-                            <th class="brief-th hidden lg:table-cell">Div</th>
-                            <th class="brief-th text-right hidden sm:table-cell">Grid</th>
-                            <th class="brief-th text-right">Finish</th>
-                            <th class="brief-th text-right">+/-</th>
-                            <th class="brief-th text-right hidden lg:table-cell">Pts</th>
-                            <th class="brief-th text-right hidden lg:table-cell">Stops</th>
-                            <th class="brief-th hidden lg:table-cell">Tyre</th>
-                            <th class="brief-th hidden xl:table-cell">Weather</th>
-                            <th class="brief-th text-right">Score</th>
-                            {% if scope == 'mine' %}<th class="brief-th"><span class="sr-only">Open</span></th>{% endif %}
+                            <th class="dt-th">Race</th>
+                            <th class="dt-th hidden md:table-cell">Track</th>
+                            <th class="dt-th hidden lg:table-cell">Div</th>
+                            <th class="dt-th text-right hidden sm:table-cell">Grid</th>
+                            <th class="dt-th text-right">Finish</th>
+                            <th class="dt-th text-right">+/-</th>
+                            <th class="dt-th text-right hidden lg:table-cell">Pts</th>
+                            <th class="dt-th text-right hidden lg:table-cell">Stops</th>
+                            <th class="dt-th hidden lg:table-cell">Tyre</th>
+                            <th class="dt-th hidden xl:table-cell">Weather</th>
+                            <th class="dt-th text-right">Score</th>
+                            {% if scope == 'mine' %}<th class="dt-th"><span class="sr-only">Open</span></th>{% endif %}
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100">
@@ -158,26 +158,26 @@
                                anonymous corpus start_pos. #}
                             {% set grid = scope == 'mine' ? row.grid_pos : row.start_pos %}
                             <tr class="hover:bg-slate-50">
-                                <td class="brief-td">
+                                <td class="dt-td">
                                     S{{ row.season }} R{{ row.race }}
                                     <span class="block md:hidden text-xs text-slate-500 truncate max-w-24">
                                         {{ row.track_name ?? '—' }}
                                     </span>
                                 </td>
-                                <td class="brief-td whitespace-normal hidden md:table-cell">{{ row.track_name ?? '—' }}</td>
-                                <td class="brief-td hidden lg:table-cell">{{ row.level ?? '—' }}</td>
-                                <td class="brief-td text-right hidden sm:table-cell">{{ grid ?? '—' }}</td>
-                                <td class="brief-td text-right">{{ t.pos(row.final_pos, row.dnf) }}</td>
-                                <td class="brief-td text-right">{{ t.delta(row.positions_gained) }}</td>
-                                <td class="brief-td text-right hidden sm:table-cell">{{ row.points ?? 0 }}</td>
-                                <td class="brief-td text-right hidden lg:table-cell">{{ row.pit_stops ?? '—' }}</td>
-                                <td class="brief-td hidden lg:table-cell">{{ row.race_tyre ?? '—' }}</td>
-                                <td class="brief-td hidden xl:table-cell">
+                                <td class="dt-td whitespace-normal hidden md:table-cell">{{ row.track_name ?? '—' }}</td>
+                                <td class="dt-td hidden lg:table-cell">{{ row.level ?? '—' }}</td>
+                                <td class="dt-td text-right hidden sm:table-cell">{{ grid ?? '—' }}</td>
+                                <td class="dt-td text-right">{{ t.pos(row.final_pos, row.dnf) }}</td>
+                                <td class="dt-td text-right">{{ t.delta(row.positions_gained) }}</td>
+                                <td class="dt-td text-right hidden sm:table-cell">{{ row.points ?? 0 }}</td>
+                                <td class="dt-td text-right hidden lg:table-cell">{{ row.pit_stops ?? '—' }}</td>
+                                <td class="dt-td hidden lg:table-cell">{{ row.race_tyre ?? '—' }}</td>
+                                <td class="dt-td hidden xl:table-cell">
                                     {{ row.was_wet ? 'Wet' : 'Dry' }}{% if row.avg_temp %} · {{ row.avg_temp }}°{% endif %}
                                 </td>
-                                <td class="brief-td text-right font-semibold">{{ row.score }}</td>
+                                <td class="dt-td text-right font-semibold">{{ row.score }}</td>
                                 {% if scope == 'mine' %}
-                                    <td class="brief-td">
+                                    <td class="dt-td">
                                         <a class="text-blue-600 hover:underline text-xs font-medium"
                                            href="/debrief?scope=mine&sort={{ sort }}&season_detail={{ row.season }}&race_detail={{ row.race }}#race-detail">
                                             Open
