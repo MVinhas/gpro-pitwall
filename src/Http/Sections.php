@@ -22,7 +22,7 @@ final class Sections
     /**
      * Canonical section name => URL path.
      *
-     * Paths are lowercase and shorter than the display names on purpose: a URL
+     * Paths are all lower case and shorter than the display names on purpose: a URL
      * is typed and read aloud, a tab label is not.
      */
     private const array PATHS = [
