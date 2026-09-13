@@ -150,17 +150,12 @@
             <p class="notice notice-warn notice-slim {{ swap_plan.cost <= (cockpit_cash|default(0)) ? 'hidden' : '' }}" data-plan-over-cash>
                 <span class="font-bold">Over budget.</span> This plan costs more than the ${{ cockpit_cash|default(0)|number_format }} you have.
             </p>
-            <p class="t-caption">
-                Track demand and car attributes use different scales — only the balance between P, H and A is
-                comparable. Fit scores how closely that balance mirrors the track (100 = identical); options are
-                ranked by fit first, price second.
-            </p>
+            {% embed 'partials/_how.twig' %}{% block how %}
+                <p>Track demand and car attributes use different scales, so only the balance between P, H and A is compared. Fit scores how closely your car's balance mirrors the track (100 = identical); options rank by fit, then price.</p>
+            {% endblock %}{% endembed %}
         </div>
     {% endif %}
 
-    <p class="t-caption">
-        Move the sliders to model different risk levels and training sessions.
-    </p>
 
     {# Every part, not just the flagged ones — the full projection that used to
        live on the retired Car Wear tab. Collapsed by default: the flagged table
@@ -230,7 +225,7 @@
             </svg>
         </summary>
         <div class="border-t border-slate-200 px-4 pb-4 pt-3 space-y-3">
-            <p class="t-caption pt-1">Use this to manually calculate PHA shifts when swapping parts. Each number is the contribution per level — multiply by the level change to get the delta.</p>
+            <p class="t-caption pt-1">P/H/A points each part adds per level.</p>
             <table class="w-full text-xs">
                 <thead>
                     <tr class="border-b border-slate-200">

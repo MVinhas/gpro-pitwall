@@ -1,8 +1,3 @@
-{% import "partials/_localtime.twig" as t %}
-<div class="notice notice-warn notice-slim mb-4">
-    <span class="font-bold">Changed the car?</span>
-    Re-sync first — strategy uses your last sync{% if user.last_synced_at %} ({{ t.localtime(user.last_synced_at, 'datetime') }}){% endif %}.
-</div>
 
 <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
 

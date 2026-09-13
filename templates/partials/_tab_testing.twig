@@ -1,5 +1,3 @@
-{% import "partials/_localtime.twig" as t %}
-
 {% if testing_error == no_pilot_message %}
     {% include 'partials/_no_pilot_notice.twig' %}
 {% elseif testing_error == generic_error_message %}
@@ -8,11 +6,6 @@
     <div class="notice notice-warn"><span class="font-bold">Testing unavailable.</span> {{ testing_error }}</div>
 {% elseif testing_results %}
     {% set r = testing_results %}
-
-    <div class="notice notice-warn notice-slim mb-4">
-        <span class="font-bold">Changed the car?</span>
-        Re-sync first — testing uses your last sync{% if user.last_synced_at %} ({{ t.localtime(user.last_synced_at, 'datetime') }}){% endif %}.
-    </div>
 
     {# Two flowing columns (single grid, no shared row heights, so cards stack
        flush): left = track facts + per-priority gains, right = points
@@ -124,7 +117,9 @@
             </table>
         </div>
         <div class="px-6 py-3 border-t border-slate-100">
-            <p class="text-xs text-slate-500">Car Character is what actually lands in your car — points decay through Test → R&amp;D → Engineering before arriving.</p>
+            {% embed 'partials/_how.twig' %}{% block how %}
+                <p>Car Character is what actually lands in your car: test points decay through Test → R&amp;D → Engineering before they arrive.</p>
+            {% endblock %}{% endembed %}
         </div>
     </div>
 
@@ -140,14 +135,14 @@
                         {% for part in ['Front Wing', 'Rear Wing', 'Engine', 'Brakes', 'Gearbox', 'Suspension'] %}
                             <tr class="hover:bg-slate-50">
                                 <td class="px-6 py-2.5 font-bold text-slate-700">{{ part }}</td>
-                                <td class="px-6 py-2.5 text-right text-base font-semibold tabular-nums text-slate-900">{{ r.setup[part] }}</td>
+                                {% set v = r.setup[part] %}
+                                <td class="px-6 py-2.5 text-right text-base font-semibold tabular-nums text-slate-900">
+                                    {% if v > 999 %}999<span class="block text-[10px] font-normal text-slate-400" title="Computed {{ v }} — GPRO accepts at most 999">{{ v }}</span>{% else %}{{ v }}{% endif %}
+                                </td>
                             </tr>
                         {% endfor %}
                     </tbody>
                 </table>
-            </div>
-            <div class="px-6 py-3 border-t border-slate-100">
-                <p class="text-xs text-slate-500">Optimised for the testing track at {{ r.weather.temp }}°C ({{ r.weather.label }}). Values above 999 should be entered as 999 in GPRO.</p>
             </div>
         </div>
     {% endif %}
@@ -163,11 +158,9 @@
                 <div class="flex items-center justify-between gap-4 mb-1">
                     <div class="flex items-center gap-2">
                         <h3 class="t-section">Expected Car Wear</h3>
-                        <span class="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">Experimental</span>
                     </div>
                     <span class="text-sm text-slate-600">Testing laps: <span data-laps-value class="font-semibold text-slate-900 tabular-nums">{{ r.default_laps }}</span></span>
                 </div>
-                <p class="text-xs text-slate-500 mb-3">The expected car wear is still being refined, the current values are the best estimates as of now. Expect improvements in the future.</p>
                 <input type="range" min="5" max="{{ r.max_laps }}" step="5" value="{{ r.default_laps }}"
                        data-testing-laps
                        class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer">
@@ -200,7 +193,7 @@
                 </table>
             </div>
             <div class="px-6 py-3 border-t border-slate-100">
-                <p class="text-xs text-slate-500">Estimate — per-lap wear is this track's race wear, scaled by your driver and the lower testing wear rate (~half a race lap). Drag the slider to project a longer session.</p>
+                <p class="text-xs text-slate-500">Estimate — per-lap wear is this track's race wear, scaled by your driver and the lower testing wear rate (about half a race lap).</p>
             </div>
         </div>
 

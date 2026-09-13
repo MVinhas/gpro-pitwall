@@ -4,9 +4,9 @@
     {% if cockpit_error == no_pilot_message %}
         {% include 'partials/_no_pilot_notice.twig' %}
     {% elseif cockpit_error %}
-        <div class="rounded-md bg-red-50 border-l-4 border-red-400 p-4">
-            <p class="text-sm font-bold text-red-800">Couldn't load cockpit data</p>
-            <p class="text-sm text-red-700 mt-1">{{ cockpit_error }}</p>
+        <div class="notice notice-error">
+            <p class="font-bold">Couldn't load cockpit data.</p>
+            <p class="mt-1">{{ cockpit_error }}</p>
         </div>
     {% elseif pha is not defined %}
         <div class="rounded-md bg-slate-50 border border-dashed border-slate-200 p-8 text-center">
@@ -109,10 +109,9 @@
                                     {% endfor %}
                                 </div>
 
-                                <p class="t-caption">
-                                    Rank #1 = the most-demanded (track) or strongest (car) attribute. A match means your
-                                    car's #1 lines up with the track's #1 (top); a perfect match lines up all three.
-                                </p>
+                                {% embed 'partials/_how.twig' %}{% block how %}
+                                    <p>Rank #1 is the attribute the track demands most, or your car's strongest. Top match: the two #1s line up. Perfect match: all three ranks line up.</p>
+                                {% endblock %}{% endembed %}
                             </div>
                         {% endblock %}
                     {% endembed %}
@@ -141,7 +140,6 @@
                             {% endblock %}
                             {% block body %}
                                 <div class="space-y-4">
-                                    <p class="t-caption">PHA points that would land in your car after race +3 (Test → R&amp;D → Engineering → Car Character decay).</p>
                                     <div class="overflow-x-auto">
                                         <table class="min-w-full text-sm">
                                             <thead>
@@ -198,16 +196,12 @@
                                                         </div>
                                                     {% endfor %}
                                                 </div>
-                                                <p class="t-caption">
-                                                    Decay applied at 0.5 per race over 3 races (~12.5% survives). Test laps also wear parts — adjust the risk slider on the wear card.
-                                                </p>
                                             </div>
                                         </details>
-                                    {% else %}
-                                        <p class="t-caption">
-                                            Decay applied at 0.5 per race over 3 races (~12.5% survives). Test laps also wear parts — adjust the risk slider on the wear card.
-                                        </p>
                                     {% endif %}
+                                    {% embed 'partials/_how.twig' %}{% block how %}
+                                        <p>Test points decay through Test → R&amp;D → Engineering → Car Character at 0.5 per race; about 12.5% of the raw points lands in the car by race +3. Test laps also wear parts.</p>
+                                    {% endblock %}{% endembed %}
                                 </div>
                             {% endblock %}
                         {% endembed %}
@@ -251,10 +245,9 @@
                                             <p class="t-caption">{{ weather.race_rain_avg }}% rain</p>
                                         </div>
                                     </div>
-                                    <p class="t-caption">
-                                        Race-start call uses the average rain probability across the four race quarters
-                                        (≥ 50% = wet). Forecasts drift — recheck closer to qualifying.
-                                    </p>
+                                    {% embed 'partials/_how.twig' %}{% block how %}
+                                        <p>Race start is called wet when the average rain probability across the four race quarters is 50% or more. Forecasts drift; recheck closer to qualifying.</p>
+                                    {% endblock %}{% endembed %}
                                 </div>
                             {% endblock %}
                         {% endembed %}
@@ -342,16 +335,18 @@
                                                 </li>
                                             {% endfor %}
                                         </ul>
-                                        <p class="t-caption">
-                                            Score = how much closer this training brings your driver to the
-                                            division's ideal profile. Positive is better.
-                                        </p>
+                                        {% embed 'partials/_how.twig' %}{% block how %}
+                                            <p>Score is how much closer the training brings your driver to the division's ideal profile, weighted by what matters most in recruitment. Higher is better; equal scores are a tie.</p>
+                                        {% endblock %}{% endembed %}
                                     {% else %}
                                         <p class="text-sm text-slate-600">Not enough division baseline data yet.</p>
-                                        <p class="t-caption">
-                                            Add pilots in <a href="/divisions/baseline" class="underline">Division Baseline</a>
-                                            to unlock training picks tuned to your division's ideal driver.
-                                        </p>
+                                        {# The baseline is maintained by admins; a manager can't add to it. #}
+                                        {% if user.is_admin %}
+                                            <p class="t-caption">
+                                                Add drivers in <a href="/divisions/baseline" class="underline">Division Baseline</a>
+                                                to unlock training picks tuned to this division's ideal driver.
+                                            </p>
+                                        {% endif %}
                                     {% endif %}
                                 </div>
                             {% endblock %}
@@ -393,7 +388,7 @@
                                     <tr class="{{ round.is_current ? 'bg-slate-100 font-semibold' : '' }}">
                                         <td class="py-1.5 pr-2 tabular-nums text-slate-500">
                                             {{ round.race }}
-                                            {%- if round.is_current %}<span class="sr-only"> (next race)</span>{% endif -%}
+                                            {%- if round.is_current %} <span class="text-xs font-semibold text-slate-900">next</span>{% endif -%}
                                         </td>
                                         <td class="py-1.5 px-2 text-slate-900 truncate max-w-[10rem] sm:max-w-none">
                                             {{ round.track_name|default('—') }}
@@ -406,20 +401,17 @@
                             </tbody>
                         </table>
                     </div>
-                    <p class="t-caption mt-3">Higher means the track demands more of that attribute. The highlighted row is your next race.</p>
+                    <p class="t-caption mt-3">Higher means the track demands more of that attribute.</p>
                 {% endblock %}
             {% endembed %}
         {% endif %}
 
         {# JUMP TO STRATEGY #}
-        <div class="text-center space-y-2">
+        <div class="text-center">
             <a href="/strategy?track={{ active_track|url_encode }}"
                class="btn btn-md btn-primary">
                 Set your race strategy →
             </a>
-            <p class="t-caption">
-                Changed parts since your last sync? Re-sync first so the strategy uses the current car.
-            </p>
         </div>
 
     {% endif %}

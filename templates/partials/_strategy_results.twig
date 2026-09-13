@@ -40,8 +40,9 @@
 
     <div class="space-y-6" data-result-state="results">
 
-        {# RACE SHEET — every value the manager types into GPRO, in GPRO's own form
-           order: setup, fuel, tyres, risks, start, boost laps, pit on a problem.
+        {# RACE SHEET — the values the manager types into GPRO, in GPRO's own form
+           order: setup, fuel, tyres, risks, boost laps. Start risk and pit-on-problem
+           are deliberately left out: they don't work well in the game (Micael).
            Sessions are rows and parts are columns, so all three setups fit a phone
            without scrolling sideways. #}
         <section class="card" aria-labelledby="race-sheet-title">
@@ -100,7 +101,7 @@
             <input form="stratForm" type="hidden" name="q2_temp" value="{{ sr.weather_inputs.Q2.temp }}">
             <input form="stratForm" type="hidden" name="q2_weather" value="{{ sr.weather_inputs.Q2.weather }}">
 
-            <dl class="grid grid-cols-2 gap-x-6 gap-y-3 border-t border-slate-200 px-4 py-4 sm:grid-cols-4 sm:px-6">
+            <dl class="grid grid-cols-2 gap-x-6 gap-y-3 border-t border-slate-200 px-4 py-4 sm:grid-cols-3 sm:px-6 lg:grid-cols-6">
                 <div>
                     <dt class="t-label">Fuel per stint</dt>
                     <dd class="text-base font-semibold text-slate-900 tabular-nums">{{ best.fuel_recommended }} L</dd>
@@ -123,12 +124,6 @@
                     <dt class="t-label">Clear track risk</dt>
                     <dd class="text-base font-semibold text-slate-900 tabular-nums">{{ sr.inputs.risk ?? 0 }}</dd>
                 </div>
-                {% if ra and ra.settings is defined %}
-                    <div>
-                        <dt class="t-label">Start</dt>
-                        <dd class="text-base font-semibold text-slate-900">{{ ra.settings.start_approach }}</dd>
-                    </div>
-                {% endif %}
                 {% if ra and ra.boost is defined %}
                     {# Only the sets the fuel plan carries (Boost stints); suggestions
                        beyond that would under-fuel the car, so they stay a hint. #}
@@ -145,13 +140,55 @@
                         {% endif %}
                     </div>
                 {% endif %}
-                {% if ra and ra.settings is defined %}
-                    <div>
-                        <dt class="t-label">Pit on a problem</dt>
-                        <dd class="text-base font-semibold text-slate-900">if &gt; {{ ra.settings.problem_pit_laps }} laps left</dd>
-                    </div>
-                {% endif %}
             </dl>
+            {# PUSH SIGNALS — the evidence for the Clear Track Risk above: one short fact
+               per signal, tinted when it holds. The long explanation is the chip's title. #}
+            {% if sr.push_signals is defined %}
+                {% set ps = sr.push_signals %}
+                {% set signals = [
+                    {ok: ps.pha_match,
+                     short: ps.pha_level == 'perfect' ? 'Perfect P/H/A match' : (ps.pha_level == 'top' ? 'Top P/H/A match' : 'No P/H/A match'),
+                     detail: ps.pha_level == 'perfect' ? 'All three attributes line up with the track.' : (ps.pha_level == 'top' ? 'Your strongest attribute is what the track demands most.' : 'Your car is built for different attributes than this track rewards.')},
+                    {ok: ps.favourite,
+                     short: ps.favourite ? 'Favourite track' : 'Not a favourite track',
+                     detail: ps.favourite ? "One of your driver's three favourite tracks." : "Not one of your driver's favourite tracks."},
+                ] %}
+                {% if ps.show_tyres %}
+                    {% set signals = signals|merge([
+                        {ok: ps.tyres_weather,
+                         short: ps.tyre_perf is null ? 'No tyre rating' : ((ps.race_wet ? 'Wet' : 'Dry') ~ ' tyres ' ~ ps.tyre_perf ~ '/8'),
+                         detail: ps.tyre_perf is null ? 'No tyre supplier rating available.' : ('Supplier ' ~ (ps.race_wet ? 'wet' : 'dry') ~ ' rating ' ~ ps.tyre_perf ~ '/8; 4/8 or better counts.')},
+                        {ok: ps.temp_match,
+                         short: ps.ideal_temp is null ? 'No ideal temp' : ('Track ' ~ ps.race_temp ~ '° vs ideal ' ~ ps.ideal_temp ~ '°'),
+                         detail: 'Race temperature within ±3°C of the tyre ideal counts.'},
+                    ]) %}
+                {% endif %}
+                {% if ps.car_rank is not null %}
+                    {% set signals = signals|merge([{ok: ps.car_above, short: 'Car #' ~ ps.car_rank ~ ' of ' ~ ps.car_total, detail: 'Car level against the group; above the group average counts.'}]) %}
+                {% endif %}
+                {% if ps.driver_rank is not null %}
+                    {% set signals = signals|merge([{ok: ps.driver_above, short: 'Driver #' ~ ps.driver_rank ~ ' of ' ~ ps.driver_total, detail: 'Driver OA against the group; above the group average counts.'}]) %}
+                {% endif %}
+                {% if ps.wear_ok is not null %}
+                    {% set signals = signals|merge([{ok: ps.wear_ok, short: 'Worst part ' ~ ps.wear_max|number_format(0) ~ '% at CTR ' ~ ps.wear_risk, detail: 'The car can take the push while its worst part stays under 90% wear.'}]) %}
+                {% endif %}
+                {% set met = signals|filter(x => x.ok)|length %}
+                <div class="border-t border-slate-200 bg-slate-50 px-4 py-3 sm:px-6">
+                    <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                        <p class="t-label">Push signals <span class="ml-1 text-slate-900 tabular-nums">{{ met }} of {{ signals|length }}</span></p>
+                        {% embed 'partials/_how.twig' %}{% block how %}
+                            <p>Each signal that holds argues for a higher Clear Track Risk; a full sweep points to a very likely win. Heuristic guidance from your car, driver, track and forecast — not a game formula.</p>
+                        {% endblock %}{% endembed %}
+                    </div>
+                    <ul class="mt-2 flex flex-wrap gap-1.5">
+                        {% for x in signals %}
+                            <li class="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs {{ x.ok ? 'bg-emerald-100 font-medium text-emerald-800' : 'bg-slate-100 text-slate-500' }}" title="{{ x.detail }}">
+                                <span aria-hidden="true">{{ x.ok ? '✓' : '–' }}</span>{{ x.short }}<span class="sr-only">{{ x.ok ? ' — holds' : " — doesn't hold" }}</span>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
         </section>
 
         {# TYRE COMPARISON — why the sheet picked this compound. #}
@@ -229,117 +266,6 @@
             {% endif %}
         </section>
 
-        {# RACE ENGINEER — the reasoning behind the sheet's risks, plus the signals
-           that argue for a higher Clear Track Risk. Heuristic, not a game formula. #}
-        {% set signals = [] %}
-        {% if sr.push_signals is defined %}
-            {% set ps = sr.push_signals %}
-            {% set signals = [
-                {
-                    'ok': ps.pha_match,
-                    'label': 'Car P/H/A matches the track',
-                    'detail': ps.pha_level == 'perfect'
-                        ? 'Perfect — all three attributes line up.'
-                        : (ps.pha_level == 'top'
-                            ? 'Top — your strongest attribute is what the track demands most.'
-                            : 'Your car is built for different attributes than this track rewards.')
-                },
-                {
-                    'ok': ps.favourite,
-                    'label': "Driver's favourite track",
-                    'detail': ps.favourite
-                        ? 'This is one of your driver\'s three favourite tracks.'
-                        : 'Not one of your driver\'s favourite tracks.'
-                }
-            ] %}
-            {% if ps.show_tyres %}
-                {% set signals = signals|merge([
-                    {
-                        'ok': ps.tyres_weather,
-                        'label': 'Tyres suit the ' ~ (ps.race_wet ? 'wet' : 'dry') ~ ' race',
-                        'detail': ps.tyre_perf is null
-                            ? 'No tyre supplier rating available.'
-                            : ('Supplier ' ~ (ps.race_wet ? 'wet' : 'dry') ~ ' rating ' ~ ps.tyre_perf ~ '/8' ~ (ps.tyre_perf >= 4 ? ' — strong enough.' : ' — below 4/8.'))
-                    },
-                    {
-                        'ok': ps.temp_match,
-                        'label': 'Track temp near tyre ideal',
-                        'detail': ps.ideal_temp is null
-                            ? 'No tyre ideal temperature available.'
-                            : ('Race ' ~ ps.race_temp ~ '°C vs ideal ' ~ ps.ideal_temp ~ '°C (±3°C).')
-                    }
-                ]) %}
-            {% endif %}
-            {% if ps.car_rank is not null %}
-                {% set signals = signals|merge([{
-                    'ok': ps.car_above,
-                    'label': 'Car level vs the group',
-                    'detail': '#' ~ ps.car_rank ~ ' of ' ~ ps.car_total ~ ' by car level — ' ~ (ps.car_above ? 'above' : 'below or at') ~ ' the group average.'
-                }]) %}
-            {% endif %}
-            {% if ps.driver_rank is not null %}
-                {% set signals = signals|merge([{
-                    'ok': ps.driver_above,
-                    'label': 'Driver OA vs the group',
-                    'detail': '#' ~ ps.driver_rank ~ ' of ' ~ ps.driver_total ~ ' by driver OA — ' ~ (ps.driver_above ? 'above' : 'below or at') ~ ' the group average.'
-                }]) %}
-            {% endif %}
-            {% if ps.wear_ok is not null %}
-                {% set signals = signals|merge([{
-                    'ok': ps.wear_ok,
-                    'label': 'Car can take the push',
-                    'detail': 'At ' ~ ps.wear_risk ~ ' Clear Track Risk the worst part ends at ' ~ ps.wear_max|number_format(0) ~ '% wear' ~ (ps.wear_ok ? ' — under 90%, headroom to push.' : ' — over 90%, risk of failure.')
-                }]) %}
-            {% endif %}
-        {% endif %}
-        {% set met = signals|filter(s => s.ok)|length %}
-
-        {% if ra or signals is not empty %}
-            {% embed 'partials/_acc.twig' with {
-                id: 'race-engineer',
-                title: 'Race engineer',
-                caption: 'Why these risks, and whether to push',
-                ra: ra,
-                signals: signals,
-                met: met,
-            } only %}
-                {% block verdict %}
-                    {% if signals is not empty %}
-                        <span class="text-xs font-semibold text-slate-700 tabular-nums">{{ met }} of {{ signals|length }} push signals</span>
-                    {% endif %}
-                {% endblock %}
-                {% block body %}
-                    <div class="space-y-4">
-                        {% if ra %}
-                            <div class="space-y-2 text-sm text-slate-700">
-                                <p>{{ ra.phrase }}</p>
-                                {% if ra.tip %}<p>{{ ra.tip }}</p>{% endif %}
-                                {% if ra.distance_tip %}<p>{{ ra.distance_tip }}</p>{% endif %}
-                                {% if ra.boost is defined and ra.boost.note %}<p>{{ ra.boost.note }}</p>{% endif %}
-                                {% if ra.settings is defined %}
-                                    <p class="text-slate-500">Start risk stacks with the race risks. A repair stop beats limping 3–6 s a lap.</p>
-                                {% endif %}
-                            </div>
-                        {% endif %}
-                        {% if signals is not empty %}
-                            <ul class="divide-y divide-slate-100 border-t border-slate-100">
-                                {% for s in signals %}
-                                    <li class="flex items-start gap-3 py-2.5">
-                                        <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full {{ s.ok ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400' }}" aria-hidden="true">{{ s.ok ? '✓' : '–' }}</span>
-                                        <span>
-                                            <span class="block text-sm font-semibold {{ s.ok ? 'text-slate-900' : 'text-slate-500' }}">{{ s.label }}<span class="sr-only">{{ s.ok ? ' — met' : ' — not met' }}</span></span>
-                                            <span class="block text-xs text-slate-500 mt-0.5">{{ s.detail }}</span>
-                                        </span>
-                                    </li>
-                                {% endfor %}
-                            </ul>
-                            <p class="text-xs text-slate-500">More signals met means the weekend favours a higher Clear Track Risk. Heuristic guidance from your driver, track and forecast — not a game formula.</p>
-                        {% endif %}
-                    </div>
-                {% endblock %}
-            {% endembed %}
-        {% endif %}
-
         {# Peak-end support ask: it renders only once a strategy has actually been
            calculated — the one screen where Pitwall has just answered the question
            the user came for. Yellow on purpose (Micael, 2026-09-13). #}
@@ -358,6 +284,6 @@
 {% else %}
     <div class="h-full flex flex-col items-center justify-center bg-slate-50 rounded-xl border border-dashed border-slate-200 p-12" data-result-state="empty">
         <p class="t-heading">Strategy &amp; Setup</p>
-        <p class="t-caption mt-1">Click "Calculate Strategy" to simulate race outcomes.</p>
+        <p class="t-caption mt-1">No strategy calculated yet.</p>
     </div>
 {% endif %}

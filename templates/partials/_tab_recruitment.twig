@@ -1,15 +1,11 @@
 <div class="space-y-6">
-    {# Notification Banner #}
-    <div class="notice notice-info notice-slim">
-        <span class="font-bold">Driver decisions:</span> Mondays &amp; Thursdays 18:00 Europe/Lisbon — offers rise incrementally from 10:00 the same days.
-    </div>
-
     <div class="card">
         {# Header Section #}
         <div class="card-hd flex flex-col sm:flex-row justify-between items-start sm:items-center">
             <div>
                 <h2 class="t-heading">Recruitment Analyzer</h2>
-                <p class="t-caption">Score the live GPRO driver market against your division's ideal pilot.</p>
+                <p class="t-caption">Score the live GPRO driver market against your division's ideal driver.</p>
+                <p class="t-caption">Drivers decide Mondays and Thursdays at 18:00 (Lisbon); offers rise from 10:00 the same days.</p>
             </div>
         </div>
 
@@ -17,14 +13,9 @@
             <form method="POST" action="/analyze_recruitment" class="space-y-6">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
-                <p class="t-caption">
-                    The full GPRO driver market is pulled directly from
-                    <code class="text-xs">GetMarketFile.asp</code> (refreshes hourly upstream;
-                    cached locally for ~55 minutes).
-                    {% if recruitment_updated_at %}
-                        Last upstream update: <span class="font-semibold">{{ recruitment_updated_at }}</span>.
-                    {% endif %}
-                </p>
+                {% if recruitment_updated_at %}
+                    <p class="t-caption">Market updated {{ recruitment_updated_at }}.</p>
+                {% endif %}
 
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
                     {# Target Division #}
@@ -55,24 +46,9 @@
                 </div>
 
                 <div class="flex justify-end border-t border-slate-100 pt-6">
-                    {% if can_submit %}
-                        <button type="submit" class="btn btn-md btn-primary">
-                            Analyze Candidates
-                        </button>
-                    {% else %}
-                        <div class="w-full md:w-1/2 p-4 bg-amber-50 border border-amber-200 rounded-md text-center">
-                            <p class="text-sm font-medium text-amber-800 mb-2">Account Required</p>
-                            <p class="text-xs text-amber-600 mb-3">
-                                <a href="/login" class="underline hover:text-amber-800">Log in</a>
-                                or
-                                <a href="/register" class="underline hover:text-amber-800">register</a>
-                                to analyze recruitment data.
-                            </p>
-                            <button type="button" disabled class="btn btn-md btn-disabled w-full">
-                                Analyze Candidates (Locked)
-                            </button>
-                        </div>
-                    {% endif %}
+                    <button type="submit" class="btn btn-md btn-primary">
+                        Analyze candidates
+                    </button>
                 </div>
             </form>
 
@@ -120,9 +96,6 @@
                             <input type="hidden" name="sort" value="{{ sort.col }}">
                             <input type="hidden" name="order" value="{{ sort.order }}">
 
-                            <p class="t-caption mb-3">
-                                Leave either bound blank for a one-sided range. Minimum and maximum values are inclusive.
-                            </p>
 
                             <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
                                 {% for field, label in range_filter_fields %}

@@ -21,22 +21,22 @@
         </div>
 
         {% if flash %}
-            <div class="rounded-md bg-blue-50 border-l-4 border-blue-400 p-4 shadow-sm mb-6">
-                <p class="text-sm text-blue-800">{{ flash }}</p>
+            <div class="notice notice-info mb-6">
+                <p>{{ flash }}</p>
             </div>
         {% endif %}
         {% if flash_error %}
-            <div class="rounded-md bg-red-50 border-l-4 border-red-400 p-4 shadow-sm mb-6">
-                <p class="text-sm text-red-800">{{ flash_error }}</p>
+            <div class="notice notice-error mb-6">
+                <p>{{ flash_error }}</p>
             </div>
         {% endif %}
 
         {# Orientation. Reads the same sync_state as the header strip, so this
            notice and the strip always describe the same situation. #}
         {% if sync_state == 'synced' %}
-            <div class="rounded-md bg-emerald-50 border-l-4 border-emerald-400 p-4 shadow-sm mb-8">
-                <p class="text-sm font-bold text-emerald-800">You're connected.</p>
-                <p class="text-sm text-emerald-800 mt-1">
+            <div class="notice notice-success mb-8">
+                <p class="font-bold">You're connected.</p>
+                <p class="mt-1">
                     Last synced {{ t.localtime(user.last_synced_at, 'datetime') }}. Head to the cockpit to plan
                     your race weekend — strategy, car wear, training and recruitment
                     are all in the top navigation.
@@ -48,9 +48,9 @@
                 </div>
             </div>
         {% elseif sync_state == 'failed' %}
-            <div class="rounded-md bg-red-50 border-l-4 border-red-400 p-4 shadow-sm mb-8">
-                <p class="text-sm font-bold text-red-800">Your last sync failed.</p>
-                <p class="text-sm text-red-800 mt-1">
+            <div class="notice notice-error mb-8">
+                <p class="font-bold">Your last sync failed.</p>
+                <p class="mt-1">
                     {% if user.last_synced_at %}
                         Pitwall is showing data from your last successful sync ({{ t.localtime(user.last_synced_at, 'datetime') }}).
                     {% else %}
@@ -60,24 +60,24 @@
                 </p>
             </div>
         {% elseif sync_state == 'running' %}
-            <div class="rounded-md bg-blue-50 border-l-4 border-blue-400 p-4 shadow-sm mb-8">
-                <p class="text-sm font-bold text-blue-800">Syncing your GPRO data…</p>
-                <p class="text-sm text-blue-800 mt-1">This takes a few seconds. Reload the page to see the result.</p>
+            <div class="notice notice-info mb-8">
+                <p class="font-bold">Syncing your GPRO data…</p>
+                <p class="mt-1">This takes a few seconds. Reload the page to see the result.</p>
             </div>
         {% elseif sync_state == 'deferred' %}
-            <div class="rounded-md bg-amber-50 border-l-4 border-amber-400 p-4 shadow-sm mb-8">
-                <p class="text-sm font-bold text-amber-800">Sync paused — GPRO API budget low.</p>
-                <p class="text-sm text-amber-800 mt-1">It'll resume once your hourly allowance recovers.</p>
+            <div class="notice notice-warn mb-8">
+                <p class="font-bold">Sync paused — GPRO API budget low.</p>
+                <p class="mt-1">It'll resume once your hourly allowance recovers.</p>
             </div>
         {% elseif sync_state == 'never' %}
-            <div class="rounded-md bg-blue-50 border-l-4 border-blue-400 p-4 shadow-sm mb-8">
-                <p class="text-sm font-bold text-blue-800">Token saved — not synced yet.</p>
-                <p class="text-sm text-blue-800 mt-1">Use ↻ Re-sync above to load your GPRO data.</p>
+            <div class="notice notice-info mb-8">
+                <p class="font-bold">Token saved — not synced yet.</p>
+                <p class="mt-1">Use ↻ Re-sync above to load your GPRO data.</p>
             </div>
         {% else %}
-            <div class="rounded-md bg-amber-50 border-l-4 border-amber-400 p-4 shadow-sm mb-8">
-                <p class="text-sm font-bold text-amber-800">One step left: add your API token.</p>
-                <p class="text-sm text-amber-800 mt-1">
+            <div class="notice notice-warn mb-8">
+                <p class="font-bold">One step left: add your API token.</p>
+                <p class="mt-1">
                     Paste your GPRO API token below to unlock the cockpit and every
                     analysis tool. It takes a few seconds.
                 </p>
@@ -178,7 +178,7 @@
                 </span>
             </summary>
             <div class="mt-4 rounded-md border border-red-200 bg-red-50 p-4">
-                <p class="text-sm text-red-800">
+                <p>
                     This deactivates your account and logs you out. You won't be able
                     to log back in. This cannot be undone by you — contact an admin to
                     restore it.
