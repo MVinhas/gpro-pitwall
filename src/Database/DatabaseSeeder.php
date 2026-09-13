@@ -16,7 +16,7 @@ class DatabaseSeeder
      * calls migrate() on every request; this version lets a warm database skip
      * the entire DDL + scan + legacy-encryption pass.
      */
-    private const int SCHEMA_VERSION = 12;
+    private const int SCHEMA_VERSION = 13;
 
     /**
      * @param array<string, string> $statsSchema

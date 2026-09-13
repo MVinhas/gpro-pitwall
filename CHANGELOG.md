@@ -6,6 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.17.3] - 2026-09-13
+
+### Fixed
+- **Race telemetry ingest and the Division Baseline auto-fill stopped failing with
+  "no such column: driver_age".** Schema version 12 shipped in the same change that added
+  `race_telemetry.driver_age`, so a database that had run an earlier build of that change was
+  stamped version 12 without the column, and the version gate never ran the migration again.
+  The schema version is now 13, so every such database re-runs the guarded, idempotent
+  migrations once on its next request and gains the column; existing rows are untouched.
+
 ## [1.17.2] - 2026-09-13
 
 ### Fixed
