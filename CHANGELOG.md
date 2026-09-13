@@ -6,6 +6,30 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.17.2] - 2026-09-13
+
+### Fixed
+- **Strategy shows one state at a time.** A failed calculation used to render its error *and*
+  the "Click Calculate Strategy" empty prompt, whose full-height box then ran under the page
+  footer; a failed recalculation could also sit on top of the previous result. The panel is now
+  a single precedence chain — no driver, failed, unavailable, result, empty — guarded by a
+  render test over every state. A failed slider refresh replaces the stale result instead of
+  leaving it under the new settings, and the panel dims while a recalculation is in flight.
+- **Expected outcomes no longer read as failures.** "Season finished" and "no tyre supplier"
+  showed as a red "Strategy calculation failed"; they now use the caution tone, and only a real
+  load failure is red — on Testing too, which had shown that failure in amber.
+- **The header and the Account page agree on sync status.** A failed sync showed "⚠ Sync failed"
+  in the header and "You're connected. Your data is syncing" on the Account page. Both now read
+  one derived state (synced, running, failed, paused, never synced, no token); the Account page
+  reports the real last-sync time, and the header offers "Add your GPRO API token" instead of a
+  Re-sync button that could not work.
+- **Training projection formatting.** The Overall Ability change printed float noise
+  (`+0.20000000000000002 OA`) and attributes showed raw column keys (`Technical_insight`); the
+  change is rounded to the OA's own precision and attributes use the same names as the form.
+- **Colour no longer implies a recommendation that isn't there.** Cockpit training scores were
+  painted green, so a tie read as a pick — the verdict now names tied picks (`Psycho / Spa (tie)`)
+  in plain ink. Debrief correlations labelled "none" are neutral instead of green or red.
+
 ## [1.17.1] - 2026-09-13
 
 ### Fixed

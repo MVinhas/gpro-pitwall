@@ -2,6 +2,8 @@
 
 {% if testing_error == no_pilot_message %}
     {% include 'partials/_no_pilot_notice.twig' %}
+{% elseif testing_error == generic_error_message %}
+    <div class="notice notice-error"><span class="font-bold">Couldn't load Testing.</span> {{ testing_error }}</div>
 {% elseif testing_error %}
     <div class="notice notice-warn"><span class="font-bold">Testing unavailable.</span> {{ testing_error }}</div>
 {% elseif testing_results %}

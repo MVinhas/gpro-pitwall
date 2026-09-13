@@ -149,12 +149,16 @@
 {% macro corr_bar(row) %}
     {% set width = (row.advantage|abs * 100)|round %}
     {% set positive = row.advantage > 0 %}
+    {# Below the "weak" threshold the service labels a correlation "none": its sign
+       is noise, so it gets no good/bad colour — only real relationships do. #}
+    {% set bar = row.strength == 'none' ? 'bg-slate-400' : (positive ? 'bg-emerald-600' : 'bg-red-600') %}
+    {% set ink = row.strength == 'none' ? 'text-slate-500' : (positive ? 'text-emerald-700' : 'text-red-700') %}
     <span class="flex items-center gap-2">
         <span class="relative block h-1.5 w-20 rounded-full bg-slate-200" aria-hidden="true">
-            <span class="absolute inset-y-0 left-0 rounded-full {{ positive ? 'bg-emerald-600' : 'bg-red-600' }}"
+            <span class="absolute inset-y-0 left-0 rounded-full {{ bar }}"
                   style="width: {{ width > 100 ? 100 : width }}%"></span>
         </span>
-        <span class="tabular-nums font-medium {{ positive ? 'text-emerald-700' : 'text-red-700' }}">
+        <span class="tabular-nums font-medium {{ ink }}">
             {{ positive ? '+' : '' }}{{ row.advantage }}
         </span>
         <span class="t-caption hidden sm:inline">{{ row.strength }}</span>

@@ -156,7 +156,7 @@
     </div>
 
     {# RIGHT: Results Display #}
-    <div class="lg:col-span-9" id="strategy-results-card">
+    <div class="lg:col-span-9" id="strategy-results-card" data-failure-message="{{ generic_error_message }}">
         {% include 'partials/_strategy_results.twig' %}
     </div>
 </div>
@@ -186,17 +186,41 @@
         if (label) label.textContent = e.target.value;
     });
 
+    // While a recalculation is in flight the panel still shows the previous
+    // inputs' result, so it is marked busy; if the request fails, that stale
+    // result is replaced by the failure state rather than left under the new
+    // inputs as if it answered them.
+    const setBusy = (on) => {
+        card.setAttribute('aria-busy', on ? 'true' : 'false');
+        card.classList.toggle('opacity-60', on);
+    };
+    const showFailure = () => {
+        const box = document.createElement('div');
+        box.className = 'notice notice-error';
+        box.dataset.resultState = 'failed';
+        const title = document.createElement('p');
+        title.className = 'font-bold';
+        title.textContent = 'Strategy calculation failed.';
+        const body = document.createElement('p');
+        body.className = 'mt-1';
+        body.textContent = card.dataset.failureMessage || '';
+        box.append(title, body);
+        card.replaceChildren(box);
+    };
+
     // Sliders + selects flagged as fragment triggers re-run the calc and swap the panel.
     document.addEventListener('change', async (e) => {
         if (!e.target.matches('[data-strategy-fragment-trigger]')) return;
         if (pending) pending.abort();
-        pending = new AbortController();
+        const request = new AbortController();
+        pending = request;
+        setBusy(true);
         const data = new FormData(form);
         try {
             const res = await fetch('/strategy_fragment', {
                 method: 'POST',
                 body: data,
-                signal: pending.signal,
+                signal: request.signal,
                 headers: { 'X-Requested-With': 'fetch' },
             });
             if (res.redirected || res.status === 401 || res.status === 403) {
@@ -204,7 +228,10 @@
                 window.location.reload();
                 return;
             }
-            if (!res.ok) return;
+            if (!res.ok) {
+                showFailure();
+                return;
+            }
             const html = await res.text();
             // A whole document here means something other than the fragment
             // endpoint answered — never nest it inside the card.
@@ -215,7 +242,12 @@
             card.innerHTML = html;
             window.applyAccState(card);
         } catch (err) {
-            if (err.name !== 'AbortError') console.error(err);
+            if (err.name === 'AbortError') return;
+            console.error(err);
+            showFailure();
+        } finally {
+            // A newer request owns the busy state once this one was superseded.
+            if (pending === request) setBusy(false);
         }
     });
 })();

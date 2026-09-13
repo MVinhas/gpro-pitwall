@@ -130,23 +130,28 @@
     <div class="bg-slate-50 border-b border-slate-200">
         <div class="mx-auto max-w-7xl px-4 py-2 text-sm text-slate-600 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
             <div class="flex items-center gap-3">
-                {% set has_status = user.sync_status in ['running', 'failed', 'deferred_low_budget'] or user.last_synced_at %}
+                {# sync_state (App\Support\SyncState) is the single source the
+                   Account page reads too, so the two can never disagree. #}
                 {% if user.username %}
                     <span class="font-medium text-slate-700">Hello, {{ user.username }}</span>
-                    {% if has_status %}<span class="text-slate-300" aria-hidden="true">|</span>{% endif %}
+                    <span class="text-slate-300" aria-hidden="true">|</span>
                 {% endif %}
-                {% if user.sync_status == 'running' %}
+                {% if sync_state == 'running' %}
                     <span class="animate-spin">⏳</span>
                     <span>Syncing GPRO data…</span>
-                {% elseif user.sync_status == 'failed' %}
+                {% elseif sync_state == 'failed' %}
                     <span class="text-red-600">⚠ Sync failed</span>
-                {% elseif user.sync_status == 'deferred_low_budget' %}
+                {% elseif sync_state == 'deferred' %}
                     <span class="text-amber-600">⏸ Sync paused — GPRO API budget low. It'll resume once your hourly allowance recovers.</span>
-                {% elseif user.last_synced_at %}
+                {% elseif sync_state == 'synced' %}
                     <span>Last sync: {{ t.localtime(user.last_synced_at, 'datetime') }}</span>
+                {% elseif sync_state == 'never' %}
+                    <span>Not synced yet</span>
+                {% elseif sync_state == 'no_token' %}
+                    <a href="/control_panel" class="font-medium text-blue-600 hover:underline">Add your GPRO API token</a>
                 {% endif %}
-                {% if can_submit %}
-                    {% if user.username or has_status %}<span class="text-slate-300" aria-hidden="true">|</span>{% endif %}
+                {% if can_submit and sync_state != 'no_token' %}
+                    <span class="text-slate-300" aria-hidden="true">|</span>
                     <button id="apiWarmupBtn" class="btn btn-sm btn-primary whitespace-nowrap">
                         <svg id="apiWarmupSpinner" class="hidden h-4 w-4 animate-spin" viewBox="0 0 24 24">
                             <circle class="opacity-25" cx="12" cy="12" r="10"
