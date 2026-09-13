@@ -6,7 +6,7 @@
             <div class="card-hd flex justify-between items-center">
                 <h3 class="t-heading">
                     {{ active_division }} Baseline
-                    <span class="ml-2 inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
+                    <span class="ml-2 inline-flex items-center rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
                         {{ all_ideal_pilots[active_division].count }} Pilots
                     </span>
                 </h3>
@@ -21,9 +21,9 @@
                     <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
                         {% for key, val in all_ideal_pilots[active_division].stats %}
                             {% set isOA = (key == 'Overall Ability') %}
-                            <div class="relative flex flex-col rounded-lg border {{ isOA ? 'border-blue-200 bg-blue-50 col-span-2 sm:col-span-3 p-4 items-center' : 'border-slate-100 p-3 bg-slate-50' }}">
+                            <div class="relative flex flex-col rounded-lg border {{ isOA ? 'border-slate-200 bg-slate-50 col-span-2 sm:col-span-3 p-4 items-center' : 'border-slate-100 p-3 bg-slate-50' }}">
                                 <dt class="t-label">{{ key }}</dt>
-                                <dd class="mt-1 font-bold tabular-nums {{ isOA ? 'text-blue-700 text-3xl' : 'text-slate-900 text-xl' }}">
+                                <dd class="mt-1 font-bold tabular-nums {{ isOA ? 'text-slate-900 text-3xl' : 'text-slate-900 text-xl' }}">
                                     {{ val }}
                                 </dd>
                             </div>

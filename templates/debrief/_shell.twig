@@ -89,8 +89,6 @@
     {%- if dnf -%}
         <span class="inline-flex items-center rounded px-1.5 py-px text-xs font-semibold bg-red-100 text-red-800">DNF</span>
     {%- elseif value is null -%}—
-    {%- elseif value == 1 -%}
-        <span class="inline-flex items-center rounded px-1.5 py-px text-xs font-semibold bg-amber-100 text-amber-900">P1</span>
     {%- elseif value <= 3 -%}
         <span class="inline-flex items-center rounded px-1.5 py-px text-xs font-semibold bg-emerald-100 text-emerald-800">P{{ value }}</span>
     {%- else -%}

@@ -118,30 +118,30 @@
             <div class="card">
                 <div class="card-hd flex justify-between items-center">
                     <h3 class="t-heading">Projected Results</h3>
-                    <span class="inline-flex items-center rounded-md bg-blue-100 px-2 py-1 text-xs font-medium text-blue-700">
+                    <span class="inline-flex items-center rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
                         {{ training_results.program }}
                     </span>
                 </div>
 
                 <div class="card-bd">
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
                         {# Summary Cards #}
                         <div class="bg-slate-50 rounded-lg p-4 border border-slate-100 text-center">
                             <p class="text-xs text-slate-500 uppercase tracking-wide">Total Cost</p>
-                            <p class="text-xl font-bold text-emerald-600">${{ training_results.total_cost|number_format }}</p>
+                            <p class="text-xl font-bold text-slate-900 tabular-nums">${{ training_results.total_cost|number_format }}</p>
                         </div>
 
                         {% if training_results.start_oa is defined %}
                             {# Both OAs are 1-dp rounded; their raw difference carries
                                float noise (0.20000000000000002), so the delta is rounded
-                               to the same precision before it is signed or coloured. #}
+                               to the same precision before it is signed. #}
                             {% set oa_delta = (training_results.end_oa - training_results.start_oa)|round(1) %}
                             <div class="bg-slate-50 rounded-lg p-4 border border-slate-100 text-center">
                                 <p class="text-xs text-slate-500 uppercase tracking-wide">Overall Ability</p>
                                 <p class="text-xl font-bold text-slate-800 tabular-nums">
                                     {{ training_results.start_oa|number_format(1) }} → {{ training_results.end_oa|number_format(1) }}
                                 </p>
-                                <p class="text-xs tabular-nums {{ oa_delta > 0 ? 'text-emerald-600' : (oa_delta < 0 ? 'text-red-600' : 'text-slate-500') }}">
+                                <p class="text-xs tabular-nums text-slate-600">
                                     {{ oa_delta > 0 ? '+' : '' }}{{ oa_delta|number_format(1) }} OA
                                 </p>
                             </div>
@@ -153,22 +153,6 @@
                         {% for label, column in config.app.stats_schema %}
                             {% set attr_labels = attr_labels|merge({(column): label}) %}
                         {% endfor %}
-
-                        {# Key Stat Changes #}
-                        <div class="md:col-span-1 bg-surface border border-slate-100 rounded-lg p-4">
-                            <p class="text-xs text-slate-500 uppercase tracking-wide mb-2">Attribute Changes</p>
-                            <div class="flex flex-wrap gap-2">
-                                {% for key, startVal in training_results.start %}
-                                    {% set endVal = training_results.end[key] %}
-                                    {% set diff = endVal - startVal %}
-                                    {% if diff != 0 %}
-                                        <span class="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset {{ diff > 0 ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/20' : 'bg-red-50 text-red-700 ring-red-600/20' }}">
-                                            {{ attr_labels[key]|default(key) }}: {{ diff > 0 ? '+' : '' }}{{ diff }}
-                                        </span>
-                                    {% endif %}
-                                {% endfor %}
-                            </div>
-                        </div>
                     </div>
 
                     {# Comparison Table #}
@@ -190,7 +174,7 @@
                                         <td class="whitespace-nowrap py-3 pl-4 pr-3 text-sm font-medium text-slate-700">{{ attr_labels[key]|default(key) }}</td>
                                         <td class="whitespace-nowrap px-3 py-3 text-center text-sm text-slate-500">{{ startVal }}</td>
                                         <td class="whitespace-nowrap px-3 py-3 text-center text-sm font-bold text-slate-900">{{ endVal }}</td>
-                                        <td class="whitespace-nowrap px-3 py-3 text-center text-sm font-medium {{ diff > 0 ? 'text-emerald-600' : (diff < 0 ? 'text-red-600' : 'text-slate-300') }}">
+                                        <td class="whitespace-nowrap px-3 py-3 text-center text-sm font-medium tabular-nums {{ diff != 0 ? 'text-slate-900' : 'text-slate-300' }}">
                                             {{ diff > 0 ? '+' : '' }}{{ diff != 0 ? diff : '-' }}
                                         </td>
                                     </tr>

@@ -100,9 +100,6 @@
        stepper chips): white in light; near-black in dark because the
        brightened accents would fail AA under white text. */
     --color-on-accent: light-dark(#fff, #0e1622);
-    /* Ink over warm amber fills (the coffee CTA): slate-900 in light,
-       dark brown in dark — the flipped slate-900 would fail AA there. */
-    --color-on-amber: light-dark(oklch(.208 .042 265.755), #221a0d);
     /* Destructive fills keep white text in BOTH themes, so the dark
        side stays deep instead of riding the flipped red ramp. */
     --color-danger:        light-dark(oklch(.637 .237 25.331), #a84e52);
@@ -122,6 +119,12 @@
 :root { color-scheme: light dark; }
 :root[data-theme="light"] { color-scheme: light; }
 :root[data-theme="dark"]  { color-scheme: dark; }
+
+/* Figures in a table are always tabular, so a column of numbers aligns without
+   every cell having to ask for it. */
+@layer base {
+    table { font-variant-numeric: tabular-nums; }
+}
 
 /* Landing screenshots ship one image per theme. light-dark() can't switch an
    <img> src, so mirror the same three states the tokens use: System follows the
@@ -187,14 +190,6 @@
            focus:ring-red-400;
 }
 
-/* Voluntary-support CTA. Warm amber is this project's coffee colour only —
-   it is never an action colour anywhere else in the app. */
-.btn-coffee {
-    @apply bg-amber-400 text-on-amber
-           hover:bg-amber-500
-           focus:ring-amber-500;
-}
-
 /* =========================
    NOTICE BANNERS
    The left-accent-bar idiom: info = blue, caution/stale-data = amber,
@@ -211,19 +206,6 @@
 .notice-error   { @apply bg-red-50 border-red-400 text-red-800; }
 .notice-success { @apply bg-emerald-50 border-emerald-400 text-emerald-800; }
 .notice-slim    { @apply py-2 text-xs; }
-
-/* =========================
-   SUPPORT STRIP
-   The end-of-flow "buy me a coffee" band. Deliberately NOT a .notice:
-   the amber notice tone means caution, and a thank-you must never read
-   as a warning. Soft amber card, no left accent bar.
-========================= */
-
-.support-strip {
-    @apply flex flex-wrap items-center justify-between gap-3
-           rounded-xl border border-amber-200 bg-amber-50 px-4 py-3;
-}
-.support-strip-copy { @apply flex items-start gap-2 text-xs text-amber-900; }
 
 /* =========================
    CARD STANDARD
@@ -258,8 +240,9 @@ summary:focus-visible { @apply outline-none ring-2 ring-blue-600; }
     @apply inline-flex items-center rounded px-1 py-px text-[10px] font-semibold uppercase tracking-wide;
 }
 .plan-tag-best { @apply bg-emerald-100 text-emerald-800; }
-.plan-tag-free { @apply bg-blue-100 text-blue-800; }
-.plan-tag-match { @apply bg-amber-100 text-amber-900; }
+/* Only "best" carries a colour; the other tags are facts, not states. */
+.plan-tag-free,
+.plan-tag-match { @apply bg-slate-100 text-slate-700; }
 
 /* =========================
    TELEMETRY AREA

@@ -30,7 +30,7 @@
             </div>
             <div class="flex items-center gap-2 text-xs text-slate-600">
                 <span class="font-semibold">{{ r.weather.temp }}°C</span>
-                <span class="px-1.5 py-0.5 rounded {{ r.weather.label == 'Wet' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700' }}">{{ r.weather.label }}</span>
+                <span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">{{ r.weather.label }}</span>
                 <span class="text-slate-400">·</span>
                 <span>{{ r.weather.hum }}% hum</span>
             </div>
@@ -42,7 +42,7 @@
                     {% for label, key in {'Power': 'power', 'Handling': 'handling', 'Accel': 'acceleration'} %}
                         <div>
                             <dt class="t-caption">{{ label }}</dt>
-                            <dd class="font-mono text-lg font-bold tabular-nums text-slate-800">{{ r.track[key]|round(1) }}</dd>
+                            <dd class="text-lg font-semibold tabular-nums text-slate-900">{{ r.track[key]|round(1) }}</dd>
                         </div>
                     {% endfor %}
                 </dl>
@@ -53,7 +53,7 @@
                     {% for label, key in {'Power': 'power', 'Handling': 'handling', 'Accel': 'acceleration'} %}
                         <div>
                             <dt class="t-caption">{{ label }}</dt>
-                            <dd class="font-mono text-lg font-bold tabular-nums text-slate-800">{{ r.car[key]|round(1) }}</dd>
+                            <dd class="text-lg font-semibold tabular-nums text-slate-900">{{ r.car[key]|round(1) }}</dd>
                         </div>
                     {% endfor %}
                 </dl>
@@ -80,9 +80,9 @@
                     {% for name, pts in r.priority_gains %}
                         <tr class="hover:bg-slate-50">
                             <td class="px-6 py-2.5 font-medium text-slate-700">{{ name }}</td>
-                            <td class="px-4 py-2.5 text-center font-mono tabular-nums text-slate-600 border-l border-slate-100">{{ pts.power }}</td>
-                            <td class="px-4 py-2.5 text-center font-mono tabular-nums text-slate-600 border-l border-slate-100">{{ pts.handling }}</td>
-                            <td class="px-4 py-2.5 text-center font-mono tabular-nums text-slate-600 border-l border-slate-100">{{ pts.acceleration }}</td>
+                            <td class="px-4 py-2.5 text-center tabular-nums text-slate-600 border-l border-slate-100">{{ pts.power }}</td>
+                            <td class="px-4 py-2.5 text-center tabular-nums text-slate-600 border-l border-slate-100">{{ pts.handling }}</td>
+                            <td class="px-4 py-2.5 text-center tabular-nums text-slate-600 border-l border-slate-100">{{ pts.acceleration }}</td>
                         </tr>
                     {% endfor %}
                 </tbody>
@@ -107,17 +107,17 @@
                         <th class="hidden sm:table-cell px-4 py-3 text-center border-l border-slate-100"><span class="t-label">Test</span></th>
                         <th class="hidden sm:table-cell px-4 py-3 text-center border-l border-slate-100"><span class="t-label">R&amp;D</span></th>
                         <th class="hidden sm:table-cell px-4 py-3 text-center border-l border-slate-100"><span class="t-label">Engineering</span></th>
-                        <th class="px-4 py-3 text-center border-l border-blue-200 bg-blue-50"><span class="text-xs font-bold uppercase tracking-wide text-blue-800">Car Character</span></th>
+                        <th class="px-4 py-3 text-center border-l border-slate-200 bg-slate-50"><span class="text-xs font-bold uppercase tracking-wide text-slate-900">Car Character</span></th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-200">
                     {% for label, key in {'Power': 'power', 'Handling': 'handling', 'Acceleration': 'acceleration'} %}
                         <tr>
                             <td class="px-6 py-3 font-bold text-slate-700">{{ label }}</td>
-                            <td class="hidden sm:table-cell px-4 py-3 text-center font-mono tabular-nums text-slate-600 border-l border-slate-100">{{ r.points.test[key]|round(1) }}</td>
-                            <td class="hidden sm:table-cell px-4 py-3 text-center font-mono tabular-nums text-slate-600 border-l border-slate-100">{{ r.points.rd[key]|round(1) }}</td>
-                            <td class="hidden sm:table-cell px-4 py-3 text-center font-mono tabular-nums text-slate-600 border-l border-slate-100">{{ r.points.eng[key]|round(1) }}</td>
-                            <td class="px-4 py-3 text-center font-mono text-base font-bold tabular-nums text-blue-700 bg-blue-50 border-l border-blue-100">{{ r.points.car_character[key]|round(1) }}</td>
+                            <td class="hidden sm:table-cell px-4 py-3 text-center tabular-nums text-slate-600 border-l border-slate-100">{{ r.points.test[key]|round(1) }}</td>
+                            <td class="hidden sm:table-cell px-4 py-3 text-center tabular-nums text-slate-600 border-l border-slate-100">{{ r.points.rd[key]|round(1) }}</td>
+                            <td class="hidden sm:table-cell px-4 py-3 text-center tabular-nums text-slate-600 border-l border-slate-100">{{ r.points.eng[key]|round(1) }}</td>
+                            <td class="px-4 py-3 text-center text-base font-semibold tabular-nums text-slate-900 bg-slate-50 border-l border-slate-200">{{ r.points.car_character[key]|round(1) }}</td>
                         </tr>
                     {% endfor %}
                 </tbody>
@@ -140,7 +140,7 @@
                         {% for part in ['Front Wing', 'Rear Wing', 'Engine', 'Brakes', 'Gearbox', 'Suspension'] %}
                             <tr class="hover:bg-slate-50">
                                 <td class="px-6 py-2.5 font-bold text-slate-700">{{ part }}</td>
-                                <td class="px-6 py-2.5 text-right font-mono text-base font-bold tabular-nums text-blue-700">{{ r.setup[part] }}</td>
+                                <td class="px-6 py-2.5 text-right text-base font-semibold tabular-nums text-slate-900">{{ r.setup[part] }}</td>
                             </tr>
                         {% endfor %}
                     </tbody>
@@ -163,9 +163,9 @@
                 <div class="flex items-center justify-between gap-4 mb-1">
                     <div class="flex items-center gap-2">
                         <h3 class="t-section">Expected Car Wear</h3>
-                        <span class="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-600/20">Experimental</span>
+                        <span class="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">Experimental</span>
                     </div>
-                    <span class="text-sm text-slate-600">Testing laps: <span data-laps-value class="font-bold text-blue-600 tabular-nums">{{ r.default_laps }}</span></span>
+                    <span class="text-sm text-slate-600">Testing laps: <span data-laps-value class="font-semibold text-slate-900 tabular-nums">{{ r.default_laps }}</span></span>
                 </div>
                 <p class="text-xs text-slate-500 mb-3">The expected car wear is still being refined, the current values are the best estimates as of now. Expect improvements in the future.</p>
                 <input type="range" min="5" max="{{ r.max_laps }}" step="5" value="{{ r.default_laps }}"
@@ -190,9 +190,9 @@
                                 data-per-lap="{{ data.per_lap }}">
                                 <td class="px-6 py-3 whitespace-nowrap text-sm font-medium text-slate-900">{{ part }}</td>
                                 <td class="hidden sm:table-cell px-6 py-3 text-center text-sm tabular-nums text-slate-600">{{ data.start }}%</td>
-                                <td class="px-6 py-3 text-center text-sm font-medium tabular-nums text-blue-600" data-wear-added>—</td>
+                                <td class="px-6 py-3 text-center text-sm tabular-nums text-slate-600" data-wear-added>—</td>
                                 <td class="px-6 py-3 text-center">
-                                    <span data-wear-end class="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium tabular-nums ring-1 ring-inset">—</span>
+                                    <span data-wear-end class="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium tabular-nums">—</span>
                                 </td>
                             </tr>
                         {% endfor %}
@@ -212,10 +212,11 @@
             const lapsLabel = root.querySelector('[data-laps-value]');
             const rows = root.querySelectorAll('[data-wear-row]');
 
+            // Only a part that needs attention gets a tone; a healthy one stays ink.
             const badge = (end) => {
-                if (end >= 90) return 'bg-red-50 text-red-700 ring-red-600/10';
-                if (end >= 50) return 'bg-amber-50 text-amber-800 ring-amber-600/20';
-                return 'bg-emerald-50 text-emerald-700 ring-emerald-600/20';
+                if (end >= 90) return 'bg-red-100 text-red-800';
+                if (end >= 50) return 'bg-amber-100 text-amber-800';
+                return 'text-slate-700';
             };
 
             const render = (laps) => {
@@ -228,7 +229,7 @@
                     row.querySelector('[data-wear-added]').textContent = '+' + added + '%';
                     const endEl = row.querySelector('[data-wear-end]');
                     endEl.textContent = end + '%';
-                    endEl.className = 'inline-flex items-center rounded-md px-2 py-1 text-xs font-medium tabular-nums ring-1 ring-inset ' + badge(end);
+                    endEl.className = 'inline-flex items-center rounded-md px-2 py-1 text-xs font-medium tabular-nums ' + badge(end);
                 });
             };
 

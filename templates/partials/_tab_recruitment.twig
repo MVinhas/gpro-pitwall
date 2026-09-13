@@ -108,7 +108,7 @@
                                 <span class="text-sm font-medium text-slate-700">Value range filters</span>
                             </span>
                             {% if hasRangeFilters %}
-                                <span class="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
+                                <span class="inline-flex items-center rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
                                     {{ range_filters|length }} active {{ range_filters|length == 1 ? 'range' : 'ranges' }}
                                 </span>
                             {% endif %}
@@ -167,8 +167,8 @@
                     {% if favourite_tracks_available %}
                         <p class="t-caption mb-3">
                             <span class="font-semibold">Fav</span> = favourite tracks on the calendar.
-                            <span class="font-semibold text-emerald-700">C·n</span> this season,
-                            <span class="font-semibold text-emerald-700">N·n</span> next season. Hover for track names.
+                            <span class="font-semibold">C·n</span> this season,
+                            <span class="font-semibold">N·n</span> next season. Hover for track names.
                         </p>
                     {% endif %}
 
@@ -231,15 +231,14 @@
                                 
                                 <tbody class="divide-y divide-slate-200 bg-surface">
                                     {% for d in recruitment_results %}
-                                        {% set ratingColor = d.rating >= 90 ? 'text-emerald-600' : (d.rating >= 75 ? 'text-blue-600' : 'text-slate-600') %}
                                         <tr class="hover:bg-slate-50 transition-colors">
-                                            <td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-bold tabular-nums sm:pl-6 {{ ratingColor }}">
+                                            <td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-bold tabular-nums sm:pl-6 text-slate-900">
                                                 {{ d.rating }}
                                             </td>
                                             <td class="whitespace-nowrap px-2 py-4 text-sm font-medium text-slate-900">
                                                 {{ d.NAME }}
                                                 {% if d.OFF > 0 %}
-                                                    <span class="ml-2 inline-flex items-center rounded-full bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-700 ring-1 ring-inset ring-red-600/10">{{ d.OFF }} Off</span>
+                                                    <span class="ml-2 inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">{{ d.OFF }} Off</span>
                                                 {% endif %}
                                             </td>
                                             <td class="whitespace-nowrap px-2 py-4 text-center text-sm font-bold tabular-nums text-slate-700">{{ d.OA }}</td>
@@ -260,9 +259,9 @@
                                                     <div class="inline-flex items-center gap-1">
                                                         {% set curOn = d.FAV_current > 0 %}
                                                         {% set nxtOn = d.FAV_next > 0 %}
-                                                        <span class="inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ring-1 ring-inset {{ curOn ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/20' : 'bg-slate-50 text-slate-400 ring-slate-200' }}"
+                                                        <span class="inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ring-1 ring-inset {{ curOn ? 'bg-slate-100 text-slate-900 ring-slate-300' : 'bg-slate-50 text-slate-400 ring-slate-200' }}"
                                                               title="{{ curOn ? 'This season: ' ~ d.FAV_current_names|join(', ') : 'No favourite tracks this season' }}">C·{{ d.FAV_current }}</span>
-                                                        <span class="inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ring-1 ring-inset {{ nxtOn ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/20' : 'bg-slate-50 text-slate-400 ring-slate-200' }}"
+                                                        <span class="inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ring-1 ring-inset {{ nxtOn ? 'bg-slate-100 text-slate-900 ring-slate-300' : 'bg-slate-50 text-slate-400 ring-slate-200' }}"
                                                               title="{{ nxtOn ? 'Next season: ' ~ d.FAV_next_names|join(', ') : 'No favourite tracks next season' }}">N·{{ d.FAV_next }}</span>
                                                     </div>
                                                 </td>

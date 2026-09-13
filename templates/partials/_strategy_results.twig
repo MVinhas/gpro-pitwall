@@ -49,7 +49,7 @@
                     {{ strategy_results.track }}
                     <span class="t-caption font-normal">Season {{ strategy_results.season }} Race {{ strategy_results.race }} · {{ strategy_results.inputs.laps }} laps</span>
                 </p>
-                <p class="text-sm font-bold text-blue-600 tabular-nums">
+                <p class="text-sm font-semibold text-slate-900 tabular-nums">
                     {{ strategy_results.supplier }}
                     {% if strategy_results.supplier_info %}
                         {% set si = strategy_results.supplier_info %}
@@ -79,17 +79,10 @@
                     {% endif %}
                 </span>
                 {% if strategy_results.overtaking %}
-                    {% set ot_class = {
-                        'Very Easy': 'text-emerald-700',
-                        'Easy':      'text-emerald-700',
-                        'Normal':    'text-slate-700',
-                        'Hard':      'text-amber-700',
-                        'Very Hard': 'text-red-700',
-                    }[strategy_results.overtaking] ?? 'text-slate-700' %}
                     <span class="px-3 last:pr-0"
                           title="How easily cars pass here. Hard overtaking makes track position more valuable — favour fewer pit stops.">
                         <span class="text-slate-400">Overtaking</span>
-                        <span class="ml-1 font-bold {{ ot_class }}">{{ strategy_results.overtaking }}</span>
+                        <span class="ml-1 text-slate-700">{{ strategy_results.overtaking }}</span>
                     </span>
                 {% endif %}
             </div>
@@ -136,11 +129,11 @@
                                     {% endif %}
                                     {{ comp }}
                                 </td>
-                                <td class="px-2 sm:px-4 py-3 text-center text-sm font-bold tabular-nums {{ data.stops > 3 ? 'text-red-500' : (is_best ? 'text-emerald-700' : 'text-blue-600') }}">
+                                <td class="px-2 sm:px-4 py-3 text-center text-sm font-bold tabular-nums text-slate-900">
                                     {{ data.stops }}
                                 </td>
                                 <td class="hidden sm:table-cell px-2 py-3 text-center text-sm text-slate-500 tabular-nums">{{ data.fuel_load }}</td>
-                                <td class="px-2 py-3 text-center text-sm font-semibold tabular-nums {{ is_best ? 'text-emerald-700' : 'text-blue-600' }}">{{ data.fuel_recommended }}</td>
+                                <td class="px-2 py-3 text-center text-sm font-semibold tabular-nums text-slate-900">{{ data.fuel_recommended }}</td>
                                 <td class="hidden md:table-cell px-2 py-3 text-center text-sm text-slate-500 tabular-nums">{{ data.pit_time_est }}</td>
 
                                 <td class="hidden md:table-cell px-2 py-3 text-center text-xs text-slate-500 tabular-nums border-l border-slate-100">
@@ -156,12 +149,12 @@
                                     {{ data.total_lost }}
                                 </td>
                                 {% if strategy_results.ctr_gain_per_lap > 0 %}
-                                    <td class="hidden sm:table-cell px-2 py-3 text-center text-xs font-semibold tabular-nums {{ data.ctr_gain > 0 ? 'text-emerald-600' : 'text-slate-400' }}">
+                                    <td class="hidden sm:table-cell px-2 py-3 text-center text-xs font-semibold tabular-nums {{ data.ctr_gain > 0 ? 'text-slate-700' : 'text-slate-400' }}">
                                         {{ data.ctr_gain > 0 ? '−' ~ data.ctr_gain ~ 's' : '—' }}
                                     </td>
                                 {% endif %}
 
-                                <td class="px-2 sm:px-4 py-3 text-center text-sm font-bold tabular-nums border-l border-slate-200 {{ is_best ? 'text-emerald-700 bg-emerald-100' : 'text-slate-900 bg-slate-50' }}">
+                                <td class="px-2 sm:px-4 py-3 text-center text-sm font-bold tabular-nums border-l border-slate-200 {{ is_best ? 'text-slate-900 bg-emerald-100' : 'text-slate-900 bg-slate-50' }}">
                                     {{ data.net_lost }}s
                                 </td>
                             </tr>
@@ -432,21 +425,11 @@
            been calculated, so it lands on the one screen where Pitwall has
            just answered the question the user came for — never on the empty
            or error states. #}
-        <div class="support-strip">
-            <p class="support-strip-copy">
-                <span aria-hidden="true" class="text-base leading-none">☕</span>
-                <span>
-                    <strong class="font-semibold">Strategy sorted.</strong>
-                    Pitwall is free and always will be — a coffee keeps it running.
-                </span>
-            </p>
-            <a
-                href="https://buymeacoffee.com/mvinhas"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="btn btn-sm btn-coffee shrink-0"
-            >Buy me a coffee</a>
-        </div>
+        <p class="t-caption text-center">
+            Strategy sorted. Pitwall is free and always will be —
+            <a href="https://buymeacoffee.com/mvinhas" target="_blank" rel="noopener noreferrer"
+               class="font-medium text-blue-600 hover:underline">a coffee keeps it running</a>.
+        </p>
     </div>
 {% else %}
     <div class="h-full flex flex-col items-center justify-center bg-slate-50 rounded-xl border border-dashed border-slate-200 p-12" data-result-state="empty">

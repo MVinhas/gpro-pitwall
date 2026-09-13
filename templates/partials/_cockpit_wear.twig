@@ -7,14 +7,14 @@
    accordion per part buried the answer under its own chrome. Each part offers
    at most one level down / same / one level up, so the whole plan fits on one
    screen and is picked in place. #}
-{% set wear_cls = 'text-emerald-700' %}
+{% set wear_cls = 'text-slate-700' %}
 {% set wear_txt = 'All OK' %}
 {% if wear_advice.swap is not empty %}
     {% set wear_cls = 'text-red-700' %}
     {% set wear_txt = wear_advice.swap|length ~ " won't finish" %}
 {% elseif wear_advice.risky is not empty %}
     {% set wear_cls = 'text-amber-700' %}
-    {% set wear_txt = wear_advice.risky|length ~ ' in the red' %}
+    {% set wear_txt = wear_advice.risky|length ~ ' at risk' %}
 {% elseif wear_advice.watch is not empty %}
     {% set wear_cls = 'text-slate-700' %}
     {% set wear_txt = wear_advice.watch|length ~ ' to watch' %}
@@ -40,7 +40,7 @@
                 <input type="range" id="cockpitRisk" name="cockpit_risk" min="0" max="100" value="{{ cockpit_risk }}"
                        data-cockpit-wear-slider
                        class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer">
-                <span data-slider-value class="text-sm font-bold text-blue-600 w-10 text-right tabular-nums">{{ cockpit_risk }}</span>
+                <span data-slider-value class="text-sm font-semibold text-slate-900 w-10 text-right tabular-nums">{{ cockpit_risk }}</span>
             </div>
         </div>
         <div>
@@ -50,7 +50,7 @@
                        value="{{ cockpit_training_laps }}"
                        data-cockpit-wear-slider
                        class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer">
-                <span data-slider-value class="text-sm font-bold text-blue-600 w-10 text-right tabular-nums">{{ cockpit_training_laps }}</span>
+                <span data-slider-value class="text-sm font-semibold text-slate-900 w-10 text-right tabular-nums">{{ cockpit_training_laps }}</span>
             </div>
             <p class="t-caption mt-1">Wear from training laps run before this race.</p>
         </div>
@@ -61,7 +61,7 @@
        comfortably, so a row for each of them was pure noise — the summary
        verdict chip still counts them. #}
     {% if wear_advice.swap is empty and wear_advice.risky is empty %}
-        <p class="text-sm font-medium text-emerald-700">{{ wear_advice.headline }}</p>
+        <p class="text-sm font-medium text-slate-700">{{ wear_advice.headline }}</p>
     {% else %}
         <div class="overflow-x-auto">
             <table class="min-w-full text-sm">
@@ -78,7 +78,6 @@
                         {% include 'partials/_cockpit_wear_row.twig' with {
                             p: p,
                             plan: swap_advice[p.part]|default(null),
-                            row_bg: 'bg-red-50',
                             badge_class: 'bg-red-100 text-red-800',
                             badge_text: 'Replace',
                         } only %}
@@ -87,9 +86,8 @@
                         {% include 'partials/_cockpit_wear_row.twig' with {
                             p: p,
                             plan: swap_advice[p.part]|default(null),
-                            row_bg: 'bg-amber-50',
                             badge_class: 'bg-amber-100 text-amber-800',
-                            badge_text: 'Red',
+                            badge_text: 'At risk',
                         } only %}
                     {% endfor %}
                 </tbody>
@@ -114,9 +112,9 @@
                 <thead>
                     <tr>
                         <th class="t-label text-left font-medium pb-1"><span class="sr-only">Profile</span></th>
-                        <th class="t-label text-center font-medium pb-1 text-blue-600">P</th>
-                        <th class="t-label text-center font-medium pb-1 text-amber-600">H</th>
-                        <th class="t-label text-center font-medium pb-1 text-emerald-600">A</th>
+                        <th class="t-label text-center font-medium pb-1">P</th>
+                        <th class="t-label text-center font-medium pb-1">H</th>
+                        <th class="t-label text-center font-medium pb-1">A</th>
                         <th class="t-label text-right font-medium pb-1">Match</th>
                     </tr>
                 </thead>
@@ -203,10 +201,10 @@
                                     {% if cockpit_training_laps > 0 %}
                                         <td class="hidden md:table-cell py-1.5 px-2 text-right tabular-nums text-slate-600">+{{ row.training|default(0) }}%</td>
                                     {% endif %}
-                                    <td class="py-1.5 px-2 text-right tabular-nums font-medium text-blue-600">+{{ row.est }}%</td>
+                                    <td class="py-1.5 px-2 text-right tabular-nums text-slate-600">+{{ row.est }}%</td>
                                     <td class="py-1.5 pl-2 text-right">
                                         <span class="inline-flex items-center rounded px-1.5 py-0.5 font-semibold tabular-nums
-                                            {{ row.end >= 90 ? 'bg-red-100 text-red-800' : (row.end >= 75 ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800') }}">{{ row.end|round }}%</span>
+                                            {{ row.end >= 100 ? 'bg-red-100 text-red-800' : (row.end >= 90 ? 'bg-amber-100 text-amber-800' : 'text-slate-700') }}">{{ row.end|round }}%</span>
                                     </td>
                                 </tr>
                             {% endfor %}
@@ -237,9 +235,9 @@
                 <thead>
                     <tr class="border-b border-slate-200">
                         <th class="pb-1.5 text-left font-semibold text-slate-600">Part</th>
-                        <th class="pb-1.5 text-center font-semibold text-blue-600">P</th>
-                        <th class="pb-1.5 text-center font-semibold text-amber-600">H</th>
-                        <th class="pb-1.5 text-center font-semibold text-emerald-600">A</th>
+                        <th class="pb-1.5 text-center font-semibold text-slate-600">P</th>
+                        <th class="pb-1.5 text-center font-semibold text-slate-600">H</th>
+                        <th class="pb-1.5 text-center font-semibold text-slate-600">A</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
@@ -259,9 +257,9 @@
                     {% for row in pha_table %}
                         <tr>
                             <td class="py-1.5 text-slate-700">{{ row.part }}</td>
-                            <td class="py-1.5 text-center {{ row.p > 0 ? 'font-semibold text-blue-600' : 'text-slate-300' }}">{{ row.p > 0 ? row.p : '—' }}</td>
-                            <td class="py-1.5 text-center {{ row.h > 0 ? 'font-semibold text-amber-600' : 'text-slate-300' }}">{{ row.h > 0 ? row.h : '—' }}</td>
-                            <td class="py-1.5 text-center {{ row.a > 0 ? 'font-semibold text-emerald-600' : 'text-slate-300' }}">{{ row.a > 0 ? row.a : '—' }}</td>
+                            <td class="py-1.5 text-center {{ row.p > 0 ? 'font-semibold text-slate-900' : 'text-slate-300' }}">{{ row.p > 0 ? row.p : '—' }}</td>
+                            <td class="py-1.5 text-center {{ row.h > 0 ? 'font-semibold text-slate-900' : 'text-slate-300' }}">{{ row.h > 0 ? row.h : '—' }}</td>
+                            <td class="py-1.5 text-center {{ row.a > 0 ? 'font-semibold text-slate-900' : 'text-slate-300' }}">{{ row.a > 0 ? row.a : '—' }}</td>
                         </tr>
                     {% endfor %}
                 </tbody>
