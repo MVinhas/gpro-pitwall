@@ -31,7 +31,8 @@
             {% endif %}
         {% endfor %}
     {% endif %}
-    {% set parts = {'Front Wing': 'FW', 'Rear Wing': 'RW', 'Engine': 'EN', 'Brakes': 'BR', 'Gearbox': 'GB', 'Suspension': 'SU'} %}
+    {# GPRO's own setup field names, in GPRO's order. #}
+    {% set parts = {'Front Wing': 'Front wing', 'Rear Wing': 'Rear wing', 'Engine': 'Engine', 'Brakes': 'Brakes', 'Gearbox': 'Gear', 'Suspension': 'Suspension'} %}
     {% set sessions = [
         {key: 'Q1', temp: sr.weather_inputs.Q1.temp, weather: sr.weather_inputs.Q1.weather},
         {key: 'Q2', temp: sr.weather_inputs.Q2.temp, weather: sr.weather_inputs.Q2.weather},
@@ -63,29 +64,33 @@
                 </label>
             </div>
 
-            <div class="px-4 pt-3 pb-1 sm:px-6">
+            {# Parts are rows and sessions are columns — the same top-to-bottom order as
+               GPRO's setup form, so each value is typed straight across. The rest of the
+               race settings sit beside it on wide screens. #}
+            <div class="grid lg:grid-cols-2">
+            <div class="px-2 py-3 sm:px-4">
                 <table class="w-full text-sm">
                     <caption class="sr-only">Car setup for each session</caption>
                     <thead>
                         <tr>
-                            <th scope="col" class="pb-1 pr-2 text-left t-label font-medium">Setup</th>
-                            {% for label, code in parts %}
-                                <th scope="col" class="pb-1 px-1 sm:px-2 text-right t-label font-medium">
-                                    <abbr title="{{ label }}" class="no-underline sm:hidden">{{ code }}</abbr><span class="hidden sm:inline">{{ label }}</span>
+                            <th scope="col" class="pb-1.5 pl-2 pr-2 text-left align-bottom t-label font-medium">Setup</th>
+                            {% for s in sessions %}
+                                <th scope="col" class="pb-1.5 pl-4 pr-2 text-right align-bottom sm:pl-6">
+                                    <span class="block text-sm font-semibold text-slate-900">{{ s.key }}</span>
+                                    <span class="block text-xs font-normal text-slate-500 whitespace-nowrap">{{ s.temp }}° {{ s.weather }}</span>
                                 </th>
                             {% endfor %}
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-100">
-                        {% for s in sessions %}
-                            <tr>
-                                <th scope="row" class="py-2 pr-2 text-left font-semibold text-slate-900 whitespace-nowrap">
-                                    {{ s.key }}
-                                    <span class="block text-xs font-normal text-slate-500 sm:inline sm:ml-1">{{ s.temp }}° {{ s.weather }}</span>
-                                </th>
-                                {% for label, code in parts %}
-                                    {% set v = sr.setups[s.key][label] %}
-                                    <td class="py-2 px-1 sm:px-2 text-right font-medium text-slate-900">
+                    {# Alternate shading keeps each part's row distinct while the eye
+                       travels down one session's column. #}
+                    <tbody>
+                        {% for key, label in parts %}
+                            <tr class="odd:bg-slate-100/70">
+                                <th scope="row" class="rounded-l-md py-2 pl-2 pr-2 text-left font-normal text-slate-700 whitespace-nowrap">{{ label }}</th>
+                                {% for s in sessions %}
+                                    {% set v = sr.setups[s.key][key] %}
+                                    <td class="py-2 pl-4 pr-2 text-right font-semibold text-slate-900 tabular-nums last:rounded-r-md sm:pl-6">
                                         {# GPRO caps every setup field at 999: show what to enter,
                                            and keep the computed value visible beside it. #}
                                         {% if v > 999 %}999<span class="block text-[10px] font-normal text-slate-400" title="Computed {{ v }} — GPRO accepts at most 999">{{ v }}</span>{% else %}{{ v }}{% endif %}
@@ -96,12 +101,7 @@
                     </tbody>
                 </table>
             </div>
-            <input form="stratForm" type="hidden" name="q1_temp" value="{{ sr.weather_inputs.Q1.temp }}">
-            <input form="stratForm" type="hidden" name="q1_weather" value="{{ sr.weather_inputs.Q1.weather }}">
-            <input form="stratForm" type="hidden" name="q2_temp" value="{{ sr.weather_inputs.Q2.temp }}">
-            <input form="stratForm" type="hidden" name="q2_weather" value="{{ sr.weather_inputs.Q2.weather }}">
-
-            <dl class="grid grid-cols-2 gap-x-6 gap-y-3 border-t border-slate-200 px-4 py-4 sm:grid-cols-3 sm:px-6 lg:grid-cols-6">
+            <dl class="grid grid-cols-2 content-start gap-x-6 gap-y-3 border-t border-slate-200 px-4 py-4 sm:grid-cols-3 sm:px-6 lg:grid-cols-2 lg:border-t-0 lg:border-l">
                 <div>
                     <dt class="t-label">Fuel per stint</dt>
                     <dd class="text-base font-semibold text-slate-900 tabular-nums">{{ best.fuel_recommended }} L</dd>
@@ -141,6 +141,7 @@
                     </div>
                 {% endif %}
             </dl>
+            </div>
             {# PUSH SIGNALS — the evidence for the Clear Track Risk above: one short fact
                per signal, tinted when it holds. The long explanation is the chip's title. #}
             {% if sr.push_signals is defined %}
