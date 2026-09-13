@@ -40,6 +40,23 @@ final class GproApiClient
         $this->scope = self::scopeFor($token);
     }
 
+    /**
+     * A copy of this client scoped to $token's cache, for reads only.
+     *
+     * setToken() mutates the shared client AND its fetcher, and the controller
+     * that runs after the layout decides which token those should hold. A
+     * layout-level read (the header strip, which renders on every page) must
+     * not re-scope that shared instance behind the controller's back, so it
+     * works on a clone that only ever changes the cache namespace.
+     */
+    public function withScopeFor(string $token): self
+    {
+        $copy = clone $this;
+        $copy->scope = self::scopeFor($token);
+
+        return $copy;
+    }
+
     /** Stable per-user cache namespace for a token (no raw token exposed). */
     public static function scopeFor(string $token): string
     {

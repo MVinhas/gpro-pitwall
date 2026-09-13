@@ -223,6 +223,47 @@ $container['service.api_client'] = new GproApiClient(
     $container['service.api_fetcher'],
     $container['service.cache']
 );
+
+// The header strip under the page title (Re-sync button; cash, division, next
+// race) belongs to the layout, so every signed-in page gets it — not only the
+// screens whose controller happened to assemble it.
+//
+// A Twig function rather than a global so it is computed only when a page
+// actually renders the strip: JSON endpoints and redirects run this bootstrap
+// too and must not pay for three cache reads they never show. Memoised, so the
+// layout can call it more than once in a render for free.
+$container['service.billboard'] = new \App\Service\BillboardService(
+    $container['service.api_client'],
+    $container['config']['app']['divisions'],
+);
+$billboardMemo = ['done' => false, 'value' => null];
+$container['twig']->addFunction(new \Twig\TwigFunction(
+    'billboard',
+    static function () use ($container, $currentUser, &$billboardMemo): ?array {
+        if (!$billboardMemo['done']) {
+            $token = is_array($currentUser) ? (string) ($currentUser['api_token'] ?? '') : '';
+            $billboardMemo['value'] = $token === ''
+                ? null
+                : $container['service.billboard']->forToken($token);
+            $billboardMemo['done'] = true;
+        }
+
+        return $billboardMemo['value'];
+    },
+));
+
+// can_submit is "signed in" by definition (see Access tiers). Only one
+// controller ever passed it, which is why the Re-sync button vanished from
+// every other page. As a global it holds everywhere; a controller that passes
+// it explicitly still wins for its own render.
+$container['twig']->addGlobal('can_submit', $currentUser !== null);
+
+// Same story for the API-budget pill in the header: it is session data, but it
+// only appeared on pages whose controller copied it into the render. Contact
+// and the control panel never did. A controller that passes a value set later
+// in the request still overrides these for its own render.
+$container['twig']->addGlobal('api_limit', $_SESSION['api_limit'] ?? '?');
+$container['twig']->addGlobal('api_limit_updated_at', $_SESSION['api_limit_updated_at'] ?? null);
 $container['repo.race_telemetry'] = new \App\Repository\RaceTelemetryRepository($container['db']);
 $container['service.race_telemetry'] = new \App\Service\RaceTelemetryService(
     $container['repo.race_telemetry'],

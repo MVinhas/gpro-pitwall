@@ -17,6 +17,7 @@ use App\Service\GproApiClient;
 use App\Service\GproDataMapper;
 use App\Service\PhaMatchService;
 use App\Service\RaceWeatherService;
+use App\Service\BillboardService;
 use App\Service\CarWearService;
 use App\Service\WearAdvisorService;
 use App\Service\PartSwapAdvisorService;
@@ -207,7 +208,6 @@ class PageController
             'is_logged_in'    => $isLoggedIn,
             'user'            => $user,
             'can_submit'      => $isLoggedIn,
-            'billboard'       => $this->buildBillboard(),
         ];
 
         unset($_SESSION['flash']);
@@ -710,92 +710,6 @@ class PageController
     }
 
     /**
-     * Compact glance strip shown beside "Last sync" on every page.
-     *
-     * Cache-read-only: it pulls Menu + Office strictly from the already-warmed
-     * per-user cache and never triggers an API call. Returns null when nothing
-     * is cached yet (pre-first-sync) so the bar just shows "Last sync".
-     *
-     * @return array{cash:int,division:?string,next_track:?string,season:?int,race:?int,cash_rank:?int,cash_total:?int}|null
-     */
-    private function buildBillboard(): ?array
-    {
-        $menu   = $this->apiClient->getCachedMenu();
-        $office = $this->apiClient->getCachedOfficeData();
-
-        if ($menu === [] && $office === []) {
-            return null;
-        }
-
-        $nextTrack = (string) ($office['trackName'] ?? '');
-        $season    = (int) ($office['seasonNb'] ?? 0);
-        $race      = (int) ($office['raceNb'] ?? 0);
-        $cash      = (int) ($menu['cash'] ?? 0);
-
-        $rank = $this->cashRankInGroup((int) ($menu['IDM'] ?? 0), $cash);
-
-        return [
-            'cash'       => $cash,
-            'division'   => $this->fullDivisionFromMenu($menu),
-            'next_track' => $nextTrack !== '' ? $nextTrack : null,
-            'season'     => $season > 0 ? $season : null,
-            'race'       => $race > 0 ? $race : null,
-            'cash_rank'  => $rank['rank'],
-            'cash_total' => $rank['total'],
-        ];
-    }
-
-    /**
-     * Ranks the manager's cash against the rest of the group, read straight from
-     * the already-warmed MoneyLevels cache (no extra API call). Rank is computed
-     * from cash values rather than the API's `pos` field so it's robust to the
-     * response ordering. Returns nulls when MoneyLevels isn't cached or the
-     * manager isn't found in it.
-     *
-     * @return array{rank:?int,total:?int}
-     */
-    private function cashRankInGroup(int $idm, int $cash): array
-    {
-        $money    = $this->apiClient->getCachedMoneyLevels();
-        $managers = $money['managers'] ?? [];
-        return self::rankCashAgainstGroup($idm, $cash, is_array($managers) ? $managers : []);
-    }
-
-    /**
-     * Pure cash-ranking against a group's MoneyLevels `managers` array. Rank is
-     * derived from cash values (count of managers with more cash + 1) rather
-     * than the API's `pos` field, so it stays correct regardless of ordering.
-     * Returns nulls when the list is empty or the manager isn't in it.
-     *
-     * @param array<mixed> $managers
-     * @return array{rank:?int,total:?int}
-     */
-    public static function rankCashAgainstGroup(int $idm, int $cash, array $managers): array
-    {
-        $found = false;
-        $ahead = 0;
-        $total = 0;
-        foreach ($managers as $manager) {
-            if (!is_array($manager)) {
-                continue;
-            }
-            $total++;
-            if ($idm > 0 && (int) ($manager['IDM'] ?? 0) === $idm) {
-                $found = true;
-            }
-            if ((int) ($manager['cash'] ?? 0) > $cash) {
-                $ahead++;
-            }
-        }
-
-        if (!$found) {
-            return ['rank' => null, 'total' => null];
-        }
-
-        return ['rank' => $ahead + 1, 'total' => $total];
-    }
-
-    /**
      * The division tier only (e.g. "Pro"). Used to key division-wide data
      * (ideal pilot, baselines) that is shared across every league of a tier.
      *
@@ -803,27 +717,10 @@ class PageController
      */
     private function divisionFromMenu(array $menu): ?string
     {
-        $group = (string) ($menu['group'] ?? '');
-        if ($group === '') {
-            return null;
-        }
-        $first = trim(explode('-', $group, 2)[0]);
-        return in_array($first, $this->config['app']['divisions'], true) ? $first : null;
-    }
-
-    /**
-     * The full league label for display (e.g. "Pro - 8"). Each tier has many
-     * leagues, so the billboard shows the whole group — but only once we've
-     * confirmed the tier prefix is a real division (guards against junk).
-     *
-     * @param array<string, mixed> $menu
-     */
-    private function fullDivisionFromMenu(array $menu): ?string
-    {
-        if ($this->divisionFromMenu($menu) === null) {
-            return null;
-        }
-        return trim((string) $menu['group']);
+        return BillboardService::tierFromGroup(
+            (string) ($menu['group'] ?? ''),
+            $this->config['app']['divisions'],
+        );
     }
 
     /** @param array<string, mixed> $pilot */

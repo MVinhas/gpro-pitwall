@@ -6,6 +6,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.17.1] - 2026-09-13
+
+### Fixed
+- **The header strip is back on every signed-in page.** Cash, division and the next race,
+  the ↻ Re-sync button, and the API-budget pill were each assembled by whichever controller
+  rendered the page — so they appeared on the calculator screens and went missing on the
+  Debrief, the control panel, contact and the admin pages. They are now owned by the layout:
+  the strip comes from a new `BillboardService`, exposed once as a `billboard()` Twig function,
+  and the button and pill read layout-wide values. The strip stays cache-only (it can never
+  spend API budget) and is computed only when a page actually renders it.
+- The strip reads the current manager's cache through a scoped copy of the API client rather
+  than re-scoping the shared one, so a layout-level read can never change which account the
+  page's own controller is working with.
+
 ## [1.17.0] - 2026-09-11
 
 ### Changed
