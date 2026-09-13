@@ -405,6 +405,27 @@ final class DatabaseSeederTest extends TestCase
         }
     }
 
+    public function testADatabaseStampedBeforeDriverAgeExistedGainsTheColumn(): void
+    {
+        // A database can carry user_version 12 without race_telemetry.driver_age:
+        // version 12 shipped in the same change that added the column, so a
+        // database that ran an earlier build of that change was stamped 12
+        // without it — and a gated migrate() never looked again. Telemetry
+        // ingest and the Division Baseline auto-fill then fail on the missing
+        // column.
+        $db = new PDO('sqlite::memory:');
+        $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $this->makeSeeder($db)->migrate();
+
+        $db->exec('ALTER TABLE race_telemetry DROP COLUMN driver_age');
+        $db->exec('PRAGMA user_version = 12');
+        $this->assertNotContains('driver_age', $this->columnsOf($db, 'race_telemetry'));
+
+        $this->makeSeeder($db)->migrate();
+
+        $this->assertContains('driver_age', $this->columnsOf($db, 'race_telemetry'));
+    }
+
     public function testDeprecatedTablesAreDroppedOnMigrate(): void
     {
         $db = new PDO('sqlite::memory:');
