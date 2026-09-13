@@ -89,23 +89,6 @@
     </div>
 </nav>
 
-{# Weekend-flow stepper — sits UNDER the sticky nav (outside it, so it scrolls
-   away). Only on the two connected steps. #}
-{% if active_main_tab in ['Cockpit', 'Race Strategy'] %}
-    {% set on_cockpit = (active_main_tab == 'Cockpit') %}
-    <div class="-mt-2 mb-6 flex items-center gap-2 text-xs">
-        <a href="{{ _self.tab_href("Cockpit", active_division, active_track, division_tabs, section_paths) }}"
-           class="rounded-full px-2 py-0.5 transition-colors
-                  {{ on_cockpit ? 'bg-blue-50 text-blue-700 font-semibold ring-1 ring-inset ring-blue-200' : 'text-slate-500 hover:text-slate-700' }}"
-           {% if on_cockpit %}aria-current="step"{% endif %}>① Cockpit</a>
-        <span class="text-slate-400" aria-hidden="true">→</span>
-        <a href="{{ _self.tab_href("Race Strategy", active_division, active_track, division_tabs, section_paths) }}"
-           class="rounded-full px-2 py-0.5 transition-colors
-                  {{ not on_cockpit ? 'bg-blue-50 text-blue-700 font-semibold ring-1 ring-inset ring-blue-200' : 'text-slate-500 hover:text-slate-700' }}"
-           {% if not on_cockpit %}aria-current="step"{% endif %}>② Strategy</a>
-    </div>
-{% endif %}
-
 <script>
 // Centre the active mobile pill on load so the current tab is always visible in
 // the scroll bar. No-op on desktop (the pill bar is display:none) and for

@@ -443,6 +443,9 @@ document.addEventListener('submit', (e) => {
 // innerHTML-swap handler calls applyAccState(root) to restore the choice.
 // First visit (no stored state): ≥1024px viewports open accordions flagged
 // data-acc-lg-open; everything else keeps its server-rendered state.
+// Only a click on the summary is stored — never a programmatic or
+// parser-set open — so a card the server opened because it needs attention
+// is not remembered as open once the problem is gone.
 (() => {
     const key = (id) => 'acc:' + id;
     window.applyAccState = (root) => {
@@ -455,12 +458,15 @@ document.addEventListener('submit', (e) => {
             }
         });
     };
-    // <details> toggle events don't bubble — listen in the capture phase.
-    document.addEventListener('toggle', (e) => {
-        if (e.target instanceof HTMLDetailsElement && e.target.hasAttribute('data-acc') && e.target.id) {
-            sessionStorage.setItem(key(e.target.id), e.target.open ? '1' : '0');
-        }
-    }, true);
+    // Keyboard activation of a <summary> dispatches click too. The click runs
+    // before the toggle, so the stored value is the state it is about to take.
+    document.addEventListener('click', (e) => {
+        const summary = e.target instanceof Element ? e.target.closest('summary') : null;
+        const details = summary ? summary.parentElement : null;
+        if (!(details instanceof HTMLDetailsElement) || !details.hasAttribute('data-acc') || !details.id) return;
+        if (summary !== details.querySelector(':scope > summary')) return;
+        sessionStorage.setItem(key(details.id), details.open ? '0' : '1');
+    });
     window.applyAccState(document);
 })();
 </script>

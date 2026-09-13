@@ -334,12 +334,6 @@ summary:focus-visible { @apply outline-none ring-2 ring-blue-600; }
    dieting (hidden sm:table-cell) rather than replacing it. */
 .brief-scroll { @apply overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0; }
 
-/* Compact anchor tile for the cockpit decision-summary board. */
-.tile {
-    @apply block rounded-lg border border-slate-200 bg-surface p-3 shadow-sm transition-colors
-           hover:border-blue-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600;
-}
-
 /*
  * Type tokens — keep usage consistent across all tabs.
  * Section headers are colour-neutral on purpose: colour is reserved for

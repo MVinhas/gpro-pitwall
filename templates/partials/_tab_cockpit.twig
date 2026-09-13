@@ -1,9 +1,6 @@
 <div class="space-y-6">
 
-    <div>
-        <h2 class="t-display">Race Weekend Cockpit</h2>
-        <p class="t-caption">Your pre-qualifying decision board.</p>
-    </div>
+    <h2 class="sr-only">Race weekend cockpit</h2>
 
     {% if cockpit_error == no_pilot_message %}
         {% include 'partials/_no_pilot_notice.twig' %}
@@ -19,8 +16,9 @@
         </div>
     {% else %}
 
-        {# Verdicts computed once, reused by the board tiles and each card's
-           accordion summary so both render from the same variables. #}
+        {# Verdicts computed once, reused by each card's summary and body. A card
+           renders open only when its verdict needs the manager; healthy cards stay
+           closed and still inform through the verdict in their summary. #}
         {% set best_test = null %}
         {% if testing_projection is defined and testing_projection is not empty %}
             {% for p in testing_projection %}
@@ -49,6 +47,11 @@
             {% endfor %}
         {% endif %}
 
+        {% set pha_attention = pha.match == 'none' %}
+        {% set wear_attention = wear_advice is defined and (wear_advice.swap is not empty or wear_advice.risky is not empty) %}
+        {% set weather_attention = weather is defined and (weather.q1_wet or weather.q2_wet or weather.race_start_wet) %}
+        {% set sponsor_attention = spon_contested or spon_attention %}
+
         {% if cockpit_setup_stale %}
             <div class="notice notice-warn">
                 <p class="font-bold">Weather forecast not available yet.</p>
@@ -56,369 +59,308 @@
             </div>
         {% endif %}
 
-        {# ============ DECISION SUMMARY BOARD ============ #}
-        <div class="grid grid-cols-2 lg:grid-cols-3 gap-2" data-tile-board>
-            <a href="#pha" class="tile">
-                <p class="t-label">PHA match</p>
-                <p class="text-xs font-semibold mt-0.5">{% if pha.favourite %}<span class="text-amber-500">★</span> {% endif %}{% if pha.match == 'perfect' %}<span class="text-emerald-700">Perfect match</span>{% elseif pha.match == 'top' %}<span class="text-blue-700">Top match</span>{% else %}<span class="text-slate-500">No match</span>{% endif %}</p>
-            </a>
+        {# Two subject groups, one order on every viewport: the car first, then the
+           rest of the weekend. Each group is one list of rows — a card per row
+           would be chrome around a single line. The car column is wider: it
+           carries the parts plan, the largest decision on the page. #}
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            <section aria-labelledby="cockpit-car" class="lg:col-span-7">
+                <h3 id="cockpit-car" class="t-label mb-2">Car</h3>
+                <div class="card divide-y divide-slate-200">
 
-            {% if testing_projection is defined and testing_projection is not empty %}
-                <a href="#testing" class="tile">
-                    <p class="t-label">Testing</p>
-                    <p class="text-xs font-semibold text-slate-700 mt-0.5 tabular-nums">{{ best_test.priority }} +{{ best_test.landed.power|number_format(1) }}/+{{ best_test.landed.handling|number_format(1) }}/+{{ best_test.landed.acceleration|number_format(1) }}</p>
-                </a>
-            {% endif %}
-
-            {% if weather is defined %}
-                <a href="#weather" class="tile">
-                    <p class="t-label">Weather</p>
-                    <p class="text-xs font-semibold text-slate-700 mt-0.5">Q1 <span class="{{ weather.q1_wet ? 'text-blue-700' : '' }}">{{ weather.q1_wet ? 'Wet' : 'Dry' }}</span> · Q2 <span class="{{ weather.q2_wet ? 'text-blue-700' : '' }}">{{ weather.q2_wet ? 'Wet' : 'Dry' }}</span> · Race <span class="{{ weather.race_start_wet ? 'text-blue-700' : '' }}">{{ weather.race_start_wet ? 'wet' : 'dry' }}</span> ({{ weather.race_rain_avg }}%)</p>
-                </a>
-            {% endif %}
-
-            {% if training_baseline_count is defined %}
-                <a href="#training" class="tile">
-                    <p class="t-label">Training</p>
-                    {% if training_verdict %}
-                        <p class="text-xs font-semibold text-slate-700 mt-0.5 tabular-nums">{{ training_verdict }}</p>
-                    {% else %}
-                        <p class="text-xs font-semibold text-slate-500 mt-0.5">No baseline yet</p>
-                    {% endif %}
-                </a>
-            {% endif %}
-
-            {% if sponsor_negotiations is defined %}
-                <a href="#sponsors" class="tile">
-                    <p class="t-label">Sponsors</p>
-                    <p class="text-xs font-semibold text-slate-700 mt-0.5">{{ sponsor_negotiations.ongoing|length }} ongoing{% if spon_contested %} · <span class="text-red-700">contested</span>{% endif %}{% if spon_attention %} · <span class="text-amber-700">needs attention</span>{% endif %}</p>
-                </a>
-            {% endif %}
-
-            {% if wear_advice is defined %}
-                <a href="#wear" class="tile">
-                    <p class="t-label">Car wear</p>
-                    <p class="mt-0.5">{% include 'partials/_wear_verdict.twig' with { wear_advice: wear_advice, site: 'tile' } only %}</p>
-                </a>
-            {% endif %}
-
-            <a href="/strategy?track={{ active_track|url_encode }}" class="tile">
-                <p class="t-label">Next step</p>
-                <p class="text-xs font-semibold text-blue-700 mt-0.5">Set your race strategy →</p>
-            </a>
-        </div>
-
-        {# ============ TWO-COLUMN CARD GRID ============ #}
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-
-            {# LEFT: PHA · Weather · Training (contents below lg so cards join the
-               single-column grid and follow the order-* decision sequence). #}
-            <div class="contents lg:block lg:space-y-6">
-
-                {% embed 'partials/_acc.twig' with {
-                    id: 'pha',
-                    title: 'Power / Handling / Acceleration match',
-                    caption: pha_track_name,
-                    lg_open: true,
-                    extra_class: 'order-1',
-                    pha: pha,
-                } only %}
-                    {% block verdict %}
-                        <span class="text-xs font-semibold">{% if pha.favourite %}<span class="text-amber-500">★</span> {% endif %}{% if pha.match == 'perfect' %}<span class="text-emerald-700">Perfect match</span>{% elseif pha.match == 'top' %}<span class="text-blue-700">Top match</span>{% else %}<span class="text-slate-500">No match</span>{% endif %}</span>
-                    {% endblock %}
-                    {% block body %}
-                        <div class="space-y-6">
-                            {% if pha.match == 'perfect' %}
-                                <div class="notice notice-success">
-                                    <p class="font-bold">Perfect match.</p>
-                                    <p>Your car's P/H/A ranking mirrors this track's demand across all three attributes.</p>
-                                </div>
-                            {% elseif pha.match == 'top' %}
-                                <div class="notice notice-info">
-                                    <p class="font-bold">Top match.</p>
-                                    <p>Your car's strongest attribute is the one this track demands most.</p>
-                                </div>
-                            {% endif %}
-
-                            <div>
-                                <div class="grid grid-cols-12 gap-2 pb-2 mb-1 border-b border-slate-100">
-                                    <span class="col-span-4 t-label">Attribute</span>
-                                    <span class="col-span-3 t-label text-center">Track</span>
-                                    <span class="col-span-3 t-label text-center">Car</span>
-                                    <span class="col-span-2 t-label text-center">Match</span>
-                                </div>
-                                {% for attr, d in pha.attributes %}
-                                    <div class="grid grid-cols-12 gap-2 py-2 items-center {{ d.aligned ? 'bg-emerald-50/60 rounded-md' : '' }}">
-                                        <span class="col-span-4 text-sm font-medium text-slate-800 capitalize pl-1">{{ attr }}</span>
-                                        <span class="col-span-3 text-center">
-                                            <span class="t-value">{{ d.track }}</span>
-                                            <span class="t-caption">#{{ d.track_rank }}</span>
-                                        </span>
-                                        <span class="col-span-3 text-center">
-                                            <span class="t-value">{{ d.car }}</span>
-                                            <span class="t-caption">#{{ d.car_rank }}</span>
-                                        </span>
-                                        <span class="col-span-2 text-center">
-                                            {% if d.aligned %}
-                                                <span class="text-emerald-600 font-bold">✓</span>
-                                            {% else %}
-                                                <span class="text-slate-300">—</span>
-                                            {% endif %}
-                                        </span>
-                                    </div>
-                                {% endfor %}
-                            </div>
-
-                            <p class="t-caption">
-                                Rank #1 = the most-demanded (track) or strongest (car) attribute. A match means your
-                                car's #1 lines up with the track's #1 (top); a perfect match lines up all three.
-                            </p>
-                        </div>
-                    {% endblock %}
-                {% endembed %}
-
-                {% if weather is defined %}
                     {% embed 'partials/_acc.twig' with {
-                        id: 'weather',
-                        title: 'Weather',
-                        lg_open: true,
-                        extra_class: 'order-3',
-                        weather: weather,
-                        weather_temps: weather_temps,
+                        id: 'pha',
+                        variant: 'row',
+                        title: 'Power / Handling / Acceleration match',
+                        caption: pha_track_name,
+                        open_default: pha_attention,
+                        pha: pha,
                     } only %}
                         {% block verdict %}
-                            <span class="text-xs font-semibold text-slate-700">Q1 <span class="{{ weather.q1_wet ? 'text-blue-700' : '' }}">{{ weather.q1_wet ? 'Wet' : 'Dry' }}</span> · Q2 <span class="{{ weather.q2_wet ? 'text-blue-700' : '' }}">{{ weather.q2_wet ? 'Wet' : 'Dry' }}</span> · Race <span class="{{ weather.race_start_wet ? 'text-blue-700' : '' }}">{{ weather.race_start_wet ? 'wet' : 'dry' }}</span> ({{ weather.race_rain_avg }}%)</span>
+                            <span class="text-xs font-semibold">{% if pha.favourite %}<span class="text-amber-500">★</span> {% endif %}{% if pha.match == 'perfect' %}<span class="text-emerald-700">Perfect match</span>{% elseif pha.match == 'top' %}<span class="text-blue-700">Top match</span>{% else %}<span class="text-slate-500">No match</span>{% endif %}</span>
                         {% endblock %}
                         {% block body %}
-                            <div class="space-y-4">
-                                <div class="grid grid-cols-3 gap-3">
-                                    <div class="rounded-lg border border-slate-200 p-3 text-center">
-                                        <p class="t-label">Qualifying 1</p>
-                                        <p class="t-value mt-1 {{ weather.q1_wet ? 'text-blue-600' : 'text-slate-900' }}">{{ weather.q1_wet ? 'Wet' : 'Dry' }}</p>
-                                        {% if weather_temps.q1 is not null %}<p class="t-caption">{{ weather_temps.q1 }}°C</p>{% endif %}
+                            <div class="space-y-6">
+                                <div>
+                                    <div class="grid grid-cols-12 gap-2 pb-2 mb-1 border-b border-slate-100">
+                                        <span class="col-span-4 t-label">Attribute</span>
+                                        <span class="col-span-3 t-label text-center">Track</span>
+                                        <span class="col-span-3 t-label text-center">Car</span>
+                                        <span class="col-span-2 t-label text-center">Match</span>
                                     </div>
-                                    <div class="rounded-lg border border-slate-200 p-3 text-center">
-                                        <p class="t-label">Qualifying 2</p>
-                                        <p class="t-value mt-1 {{ weather.q2_wet ? 'text-blue-600' : 'text-slate-900' }}">{{ weather.q2_wet ? 'Wet' : 'Dry' }}</p>
-                                        {% if weather_temps.q2 is not null %}<p class="t-caption">{{ weather_temps.q2 }}°C</p>{% endif %}
-                                    </div>
-                                    <div class="rounded-lg border p-3 text-center {{ weather.race_start_wet ? 'border-blue-200 bg-blue-50' : 'border-slate-200' }}">
-                                        <p class="t-label">Race start</p>
-                                        <p class="t-value mt-1 {{ weather.race_start_wet ? 'text-blue-700' : 'text-slate-900' }}">{{ weather.race_start_wet ? 'Likely wet' : 'Likely dry' }}</p>
-                                        <p class="t-caption">{{ weather.race_rain_avg }}% rain</p>
-                                    </div>
+                                    {% for attr, d in pha.attributes %}
+                                        <div class="grid grid-cols-12 gap-2 py-2 items-center {{ d.aligned ? 'bg-emerald-50/60 rounded-md' : '' }}">
+                                            <span class="col-span-4 text-sm font-medium text-slate-800 capitalize pl-1">{{ attr }}</span>
+                                            <span class="col-span-3 text-center">
+                                                <span class="t-value">{{ d.track }}</span>
+                                                <span class="t-caption">#{{ d.track_rank }}</span>
+                                            </span>
+                                            <span class="col-span-3 text-center">
+                                                <span class="t-value">{{ d.car }}</span>
+                                                <span class="t-caption">#{{ d.car_rank }}</span>
+                                            </span>
+                                            <span class="col-span-2 text-center">
+                                                {% if d.aligned %}
+                                                    <span class="text-emerald-600 font-bold">✓</span>
+                                                {% else %}
+                                                    <span class="text-slate-300">—</span>
+                                                {% endif %}
+                                            </span>
+                                        </div>
+                                    {% endfor %}
                                 </div>
+
                                 <p class="t-caption">
-                                    Race-start call uses the average rain probability across the four race quarters
-                                    (≥ 50% = wet). Forecasts drift — recheck closer to qualifying.
+                                    Rank #1 = the most-demanded (track) or strongest (car) attribute. A match means your
+                                    car's #1 lines up with the track's #1 (top); a perfect match lines up all three.
                                 </p>
                             </div>
                         {% endblock %}
                     {% endembed %}
-                {% endif %}
 
-                {% if training_baseline_count is defined %}
-                    {% embed 'partials/_acc.twig' with {
-                        id: 'training',
-                        title: 'Training picks',
-                        caption: training_division ? 'vs ' ~ training_division ~ ' ideal' : '',
-                        lg_open: true,
-                        extra_class: 'order-4',
-                        training_picks: training_picks|default(null),
-                        training_verdict: training_verdict,
-                    } only %}
-                        {% block verdict %}
-                            {% if training_verdict %}
-                                <span class="text-xs font-semibold text-slate-700 tabular-nums">{{ training_verdict }}</span>
-                            {% else %}
-                                <span class="text-xs font-semibold text-slate-500">No baseline yet</span>
-                            {% endif %}
-                        {% endblock %}
-                        {% block body %}
-                            <div class="space-y-3">
-                                {% if training_picks is not empty %}
-                                    <ul class="space-y-2">
-                                        {% for t in training_picks %}
-                                            <li class="flex items-baseline justify-between gap-3 rounded-md border border-slate-200 px-3 py-2">
-                                                <div class="min-w-0">
-                                                    <span class="text-sm font-semibold text-slate-900">{{ t.name }}</span>
-                                                    <span class="t-caption ml-1">${{ t.cost|number_format }}</span>
-                                                    <div class="t-caption mt-0.5 truncate">
-                                                        {% for attr, g in t.gains %}
-                                                            <span>{{ g > 0 ? '+' : '' }}{{ g }} {{ attr|replace({'_': ' '}) }}</span>{% if not loop.last %} · {% endif %}
-                                                        {% endfor %}
-                                                        {% if t.name == 'Spa' %}<span> · +energy</span>{% endif %}
-                                                    </div>
-                                                </div>
-                                                <span class="text-sm font-bold tabular-nums {{ t.score > 0 ? 'text-slate-900' : 'text-slate-400' }}">{{ t.score > 0 ? '+' : '' }}{{ t.score }}</span>
-                                            </li>
-                                        {% endfor %}
-                                    </ul>
-                                    <p class="t-caption">
-                                        Score = how much closer this training brings your driver to the
-                                        division's ideal profile. Positive is better.
-                                    </p>
-                                {% else %}
-                                    <p class="text-sm text-slate-600">Not enough division baseline data yet.</p>
-                                    <p class="t-caption">
-                                        Add pilots in <a href="/divisions/baseline" class="underline">Division Baseline</a>
-                                        to unlock training picks tuned to your division's ideal driver.
-                                    </p>
-                                {% endif %}
-                            </div>
-                        {% endblock %}
-                    {% endembed %}
-                {% endif %}
+                    {# Hand-rolled details: the fragment endpoint re-renders
+                       _cockpit_wear.twig into this element's innerHTML, so an embed
+                       would duplicate the wrapper. Named group (group/wear) keeps the
+                       chevron independent of the nested swap/PHA accordions inside. #}
+                    {% if wear_advice is defined %}
+                        <details id="wear" data-acc {{ wear_attention ? 'open' : '' }} class="group/wear scroll-mt-16">
+                            {% include 'partials/_cockpit_wear.twig' %}
+                        </details>
+                    {% endif %}
 
-            </div>
-
-            {# RIGHT: Wear (tallest) · Sponsors · Testing #}
-            <div class="contents lg:block lg:space-y-6">
-
-                {# Hand-rolled details: the fragment endpoint re-renders
-                   _cockpit_wear.twig into this element's innerHTML, so an embed
-                   would duplicate the wrapper. Named group (group/wear) keeps the
-                   ▸ chevron independent of the nested swap/PHA accordions inside. #}
-                {% if wear_advice is defined %}
-                    <details id="wear" data-acc data-acc-lg-open class="card group/wear scroll-mt-16 order-6">
-                        {% include 'partials/_cockpit_wear.twig' %}
-                    </details>
-                {% endif %}
-
-                {% if sponsor_negotiations is defined %}
-                    {% embed 'partials/_acc.twig' with {
-                        id: 'sponsors',
-                        title: 'Sponsors',
-                        caption: sponsor_negotiations.car_spots_taken ~ ' / ' ~ sponsor_negotiations.car_spots_total ~ ' car spots filled',
-                        lg_open: true,
-                        extra_class: 'order-5',
-                        sponsor_negotiations: sponsor_negotiations,
-                        spon_contested: spon_contested,
-                        spon_attention: spon_attention,
-                    } only %}
-                        {% block verdict %}
-                            <span class="text-xs font-semibold text-slate-700">{{ sponsor_negotiations.ongoing|length }} ongoing{% if spon_contested %} · <span class="text-red-700">contested</span>{% endif %}{% if spon_attention %} · <span class="text-amber-700">needs attention</span>{% endif %}</span>
-                        {% endblock %}
-                        {% block body %}
-                            <div class="space-y-4">
-                                {% if sponsor_negotiations.ongoing is empty %}
-                                    <p class="t-caption">No ongoing negotiations.</p>
-                                {% else %}
-                                    {% for neg in sponsor_negotiations.ongoing %}
-                                        <div class="rounded-md border border-slate-200 p-3">
-                                            <div class="flex items-baseline justify-between mb-2 gap-3 flex-wrap">
-                                                <span class="text-sm font-semibold text-slate-900">{{ neg.name }}</span>
-                                                <span class="t-caption">progress {{ neg.progress }}% · priority {{ neg.priority }}{% if neg.contested == 'Yes' %} · <span class="text-red-700 font-medium">contested</span>{% endif %}{% if neg.attention %} · <span class="text-amber-700 font-medium">needs attention</span>{% endif %}</span>
-                                            </div>
-                                            <div class="flex flex-wrap gap-1 mb-3">
-                                                {% for k, v in neg.characteristics %}
-                                                    <span class="rounded bg-slate-50 px-1.5 py-0.5 text-xs text-slate-600">{{ k|capitalize }} <span class="font-semibold text-slate-800">{{ v }}/7</span></span>
-                                                {% endfor %}
-                                            </div>
-                                            <p class="t-label mb-1">Recommended answers</p>
-                                            <ol class="space-y-1 list-decimal list-inside text-sm text-slate-800">
-                                                <li><span class="text-slate-500">Ad placement:</span> <span class="font-semibold">{{ neg.answers.car_spot }}</span></li>
-                                                <li><span class="text-slate-500">Next-season expectation:</span> <span class="font-semibold">{{ neg.answers.expectation }}</span></li>
-                                                <li><span class="text-slate-500">Driver popularity:</span> <span class="font-semibold">{{ neg.answers.driver_popularity }}</span></li>
-                                                <li><span class="text-slate-500">Amount per race:</span> <span class="font-semibold">{{ neg.answers.amount }}</span></li>
-                                                <li><span class="text-slate-500">Contract duration:</span> <span class="font-semibold">{{ neg.answers.duration }}</span></li>
-                                            </ol>
-                                        </div>
-                                    {% endfor %}
-                                {% endif %}
-                            </div>
-                        {% endblock %}
-                    {% endembed %}
-                {% endif %}
-
-                {% if testing_projection is defined and testing_projection is not empty %}
-                    {% embed 'partials/_acc.twig' with {
-                        id: 'testing',
-                        title: 'If you test 100 laps today',
-                        lg_open: true,
-                        extra_class: 'order-2',
-                        testing_projection: testing_projection,
-                        testing_targets: testing_targets|default(null),
-                        best_test: best_test,
-                    } only %}
-                        {% block verdict %}
-                            <span class="text-xs font-semibold text-slate-700 tabular-nums">{{ best_test.priority }} +{{ best_test.landed.power|number_format(1) }}/+{{ best_test.landed.handling|number_format(1) }}/+{{ best_test.landed.acceleration|number_format(1) }}</span>
-                        {% endblock %}
-                        {% block body %}
-                            <div class="space-y-4">
-                                <p class="t-caption">PHA points that would land in your car after race +3 (Test → R&amp;D → Engineering → Car Character decay).</p>
-                                <div class="overflow-x-auto">
-                                    <table class="min-w-full text-sm">
-                                        <thead>
-                                            <tr class="text-left text-slate-500">
-                                                <th class="py-1.5 pr-3 font-medium">Priority</th>
-                                                <th class="py-1.5 px-2 font-medium text-right sm:hidden">Raw / Landed</th>
-                                                <th class="py-1.5 px-2 font-medium text-right hidden sm:table-cell">Raw P / H / A</th>
-                                                <th class="py-1.5 px-2 font-medium text-right hidden sm:table-cell">~ Landed P / H / A</th>
-                                                <th class="py-1.5 pl-2 font-medium text-right">~ Car after race +3</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody class="divide-y divide-slate-100">
-                                            {% for p in testing_projection %}
-                                                <tr>
-                                                    <td class="py-1.5 pr-3 font-medium text-slate-800">{{ p.priority }}</td>
-                                                    <td class="py-1.5 px-2 text-right tabular-nums sm:hidden">
-                                                        <span class="text-slate-600">+{{ p.raw.power|number_format(1) }} / +{{ p.raw.handling|number_format(1) }} / +{{ p.raw.acceleration|number_format(1) }}</span>
-                                                        <span class="block text-emerald-700">+{{ p.landed.power|number_format(1) }} / +{{ p.landed.handling|number_format(1) }} / +{{ p.landed.acceleration|number_format(1) }}</span>
-                                                    </td>
-                                                    <td class="py-1.5 px-2 text-right tabular-nums text-slate-600 hidden sm:table-cell">
-                                                        +{{ p.raw.power|number_format(1) }} / +{{ p.raw.handling|number_format(1) }} / +{{ p.raw.acceleration|number_format(1) }}
-                                                    </td>
-                                                    <td class="py-1.5 px-2 text-right tabular-nums text-emerald-700 hidden sm:table-cell">
-                                                        +{{ p.landed.power|number_format(1) }} / +{{ p.landed.handling|number_format(1) }} / +{{ p.landed.acceleration|number_format(1) }}
-                                                    </td>
-                                                    <td class="py-1.5 pl-2 text-right tabular-nums text-slate-900">
-                                                        P {{ p.new_car.power|number_format(0) }} · H {{ p.new_car.handling|number_format(0) }} · A {{ p.new_car.acceleration|number_format(0) }}
-                                                    </td>
+                    {% if testing_projection is defined and testing_projection is not empty %}
+                        {% embed 'partials/_acc.twig' with {
+                            id: 'testing',
+                            variant: 'row',
+                            title: 'If you test 100 laps today',
+                            testing_projection: testing_projection,
+                            testing_targets: testing_targets|default(null),
+                            best_test: best_test,
+                        } only %}
+                            {% block verdict %}
+                                <span class="text-xs font-semibold text-slate-700 tabular-nums">{{ best_test.priority }} +{{ best_test.landed.power|number_format(1) }}/+{{ best_test.landed.handling|number_format(1) }}/+{{ best_test.landed.acceleration|number_format(1) }}</span>
+                            {% endblock %}
+                            {% block body %}
+                                <div class="space-y-4">
+                                    <p class="t-caption">PHA points that would land in your car after race +3 (Test → R&amp;D → Engineering → Car Character decay).</p>
+                                    <div class="overflow-x-auto">
+                                        <table class="min-w-full text-sm">
+                                            <thead>
+                                                <tr class="text-left text-slate-500">
+                                                    <th class="py-1.5 pr-3 font-medium">Priority</th>
+                                                    <th class="py-1.5 px-2 font-medium text-right sm:hidden">Raw / Landed</th>
+                                                    <th class="py-1.5 px-2 font-medium text-right hidden sm:table-cell">Raw P / H / A</th>
+                                                    <th class="py-1.5 px-2 font-medium text-right hidden sm:table-cell">~ Landed P / H / A</th>
+                                                    <th class="py-1.5 pl-2 font-medium text-right">~ Car after race +3</th>
                                                 </tr>
-                                            {% endfor %}
-                                        </tbody>
-                                    </table>
-                                </div>
-                                {% if testing_targets is not empty %}
-                                    <details data-acc id="testing-tracks" class="group/lt rounded-lg border border-slate-200">
-                                        <summary class="flex cursor-pointer select-none list-none items-center justify-between px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 hover:bg-slate-50">
-                                            Landing tracks — race +3/+4/+5
-                                            <svg class="h-4 w-4 shrink-0 transition-transform group-open/lt:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                                <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
-                                            </svg>
-                                        </summary>
-                                        <div class="border-t border-slate-200 px-4 pb-4 pt-3 space-y-3">
-                                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                                {% for t in testing_targets %}
-                                                    <div class="rounded-md border p-3 {{ t.favourite ? 'border-amber-300 bg-amber-50' : 'border-slate-200' }}">
-                                                        <p class="t-caption">+{{ t.offset }} → {{ t.season == 'next' ? 'next' : 'this' }} season race {{ t.race }}</p>
-                                                        {% if t.track_name %}
-                                                            <p class="text-sm font-semibold text-slate-900 mt-0.5">{% if t.favourite %}<span class="text-amber-700">★</span> {% endif %}{{ t.track_name }}</p>
-                                                            <p class="t-caption tabular-nums">P {{ t.power }} · H {{ t.handling }} · A {{ t.acceleration }}</p>
-                                                            {% if t.favourite %}<p class="t-caption text-amber-700 mt-0.5">Driver's favourite</p>{% endif %}
-                                                        {% else %}
-                                                            <p class="t-caption mt-0.5 italic">Next-season calendar not published yet.</p>
-                                                        {% endif %}
-                                                    </div>
+                                            </thead>
+                                            <tbody class="divide-y divide-slate-100">
+                                                {% for p in testing_projection %}
+                                                    <tr>
+                                                        <td class="py-1.5 pr-3 font-medium text-slate-800">{{ p.priority }}</td>
+                                                        <td class="py-1.5 px-2 text-right tabular-nums sm:hidden">
+                                                            <span class="text-slate-600">+{{ p.raw.power|number_format(1) }} / +{{ p.raw.handling|number_format(1) }} / +{{ p.raw.acceleration|number_format(1) }}</span>
+                                                            <span class="block text-emerald-700">+{{ p.landed.power|number_format(1) }} / +{{ p.landed.handling|number_format(1) }} / +{{ p.landed.acceleration|number_format(1) }}</span>
+                                                        </td>
+                                                        <td class="py-1.5 px-2 text-right tabular-nums text-slate-600 hidden sm:table-cell">
+                                                            +{{ p.raw.power|number_format(1) }} / +{{ p.raw.handling|number_format(1) }} / +{{ p.raw.acceleration|number_format(1) }}
+                                                        </td>
+                                                        <td class="py-1.5 px-2 text-right tabular-nums text-emerald-700 hidden sm:table-cell">
+                                                            +{{ p.landed.power|number_format(1) }} / +{{ p.landed.handling|number_format(1) }} / +{{ p.landed.acceleration|number_format(1) }}
+                                                        </td>
+                                                        <td class="py-1.5 pl-2 text-right tabular-nums text-slate-900">
+                                                            P {{ p.new_car.power|number_format(0) }} · H {{ p.new_car.handling|number_format(0) }} · A {{ p.new_car.acceleration|number_format(0) }}
+                                                        </td>
+                                                    </tr>
                                                 {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    {% if testing_targets is not empty %}
+                                        <details data-acc id="testing-tracks" class="group/lt rounded-lg border border-slate-200">
+                                            <summary class="flex cursor-pointer select-none list-none items-center justify-between px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 hover:bg-slate-50">
+                                                Landing tracks — race +3/+4/+5
+                                                <svg class="h-4 w-4 shrink-0 transition-transform group-open/lt:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+                                                </svg>
+                                            </summary>
+                                            <div class="border-t border-slate-200 px-4 pb-4 pt-3 space-y-3">
+                                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                                    {% for t in testing_targets %}
+                                                        <div class="rounded-md border p-3 {{ t.favourite ? 'border-amber-300 bg-amber-50' : 'border-slate-200' }}">
+                                                            <p class="t-caption">+{{ t.offset }} → {{ t.season == 'next' ? 'next' : 'this' }} season race {{ t.race }}</p>
+                                                            {% if t.track_name %}
+                                                                <p class="text-sm font-semibold text-slate-900 mt-0.5">{% if t.favourite %}<span class="text-amber-700">★</span> {% endif %}{{ t.track_name }}</p>
+                                                                <p class="t-caption tabular-nums">P {{ t.power }} · H {{ t.handling }} · A {{ t.acceleration }}</p>
+                                                                {% if t.favourite %}<p class="t-caption text-amber-700 mt-0.5">Driver's favourite</p>{% endif %}
+                                                            {% else %}
+                                                                <p class="t-caption mt-0.5 italic">Next-season calendar not published yet.</p>
+                                                            {% endif %}
+                                                        </div>
+                                                    {% endfor %}
+                                                </div>
+                                                <p class="t-caption">
+                                                    Decay applied at 0.5 per race over 3 races (~12.5% survives). Test laps also wear parts — adjust the risk slider on the wear card.
+                                                </p>
                                             </div>
-                                            <p class="t-caption">
-                                                Decay applied at 0.5 per race over 3 races (~12.5% survives). Test laps also wear parts — adjust the risk slider on the wear card.
-                                            </p>
-                                        </div>
-                                    </details>
-                                {% else %}
-                                    <p class="t-caption">
-                                        Decay applied at 0.5 per race over 3 races (~12.5% survives). Test laps also wear parts — adjust the risk slider on the wear card.
-                                    </p>
-                                {% endif %}
-                            </div>
-                        {% endblock %}
-                    {% endembed %}
-                {% endif %}
+                                        </details>
+                                    {% else %}
+                                        <p class="t-caption">
+                                            Decay applied at 0.5 per race over 3 races (~12.5% survives). Test laps also wear parts — adjust the risk slider on the wear card.
+                                        </p>
+                                    {% endif %}
+                                </div>
+                            {% endblock %}
+                        {% endembed %}
+                    {% endif %}
 
-            </div>
+                </div>
+            </section>
+
+            <section aria-labelledby="cockpit-weekend" class="lg:col-span-5">
+                <h3 id="cockpit-weekend" class="t-label mb-2">Weekend</h3>
+                <div class="card divide-y divide-slate-200">
+
+                    {% if weather is defined %}
+                        {% embed 'partials/_acc.twig' with {
+                            id: 'weather',
+                            variant: 'row',
+                            title: 'Weather',
+                            open_default: weather_attention,
+                            weather: weather,
+                            weather_temps: weather_temps,
+                        } only %}
+                            {% block verdict %}
+                                <span class="text-xs font-semibold text-slate-700">Q1 <span class="{{ weather.q1_wet ? 'text-blue-700' : '' }}">{{ weather.q1_wet ? 'Wet' : 'Dry' }}</span> · Q2 <span class="{{ weather.q2_wet ? 'text-blue-700' : '' }}">{{ weather.q2_wet ? 'Wet' : 'Dry' }}</span> · Race <span class="{{ weather.race_start_wet ? 'text-blue-700' : '' }}">{{ weather.race_start_wet ? 'wet' : 'dry' }}</span> ({{ weather.race_rain_avg }}%)</span>
+                            {% endblock %}
+                            {% block body %}
+                                <div class="space-y-4">
+                                    <div class="grid grid-cols-3 gap-3">
+                                        <div class="rounded-lg border border-slate-200 p-3 text-center">
+                                            <p class="t-label">Qualifying 1</p>
+                                            <p class="t-value mt-1 {{ weather.q1_wet ? 'text-blue-600' : 'text-slate-900' }}">{{ weather.q1_wet ? 'Wet' : 'Dry' }}</p>
+                                            {% if weather_temps.q1 is not null %}<p class="t-caption">{{ weather_temps.q1 }}°C</p>{% endif %}
+                                        </div>
+                                        <div class="rounded-lg border border-slate-200 p-3 text-center">
+                                            <p class="t-label">Qualifying 2</p>
+                                            <p class="t-value mt-1 {{ weather.q2_wet ? 'text-blue-600' : 'text-slate-900' }}">{{ weather.q2_wet ? 'Wet' : 'Dry' }}</p>
+                                            {% if weather_temps.q2 is not null %}<p class="t-caption">{{ weather_temps.q2 }}°C</p>{% endif %}
+                                        </div>
+                                        <div class="rounded-lg border p-3 text-center {{ weather.race_start_wet ? 'border-blue-200 bg-blue-50' : 'border-slate-200' }}">
+                                            <p class="t-label">Race start</p>
+                                            <p class="t-value mt-1 {{ weather.race_start_wet ? 'text-blue-700' : 'text-slate-900' }}">{{ weather.race_start_wet ? 'Likely wet' : 'Likely dry' }}</p>
+                                            <p class="t-caption">{{ weather.race_rain_avg }}% rain</p>
+                                        </div>
+                                    </div>
+                                    <p class="t-caption">
+                                        Race-start call uses the average rain probability across the four race quarters
+                                        (≥ 50% = wet). Forecasts drift — recheck closer to qualifying.
+                                    </p>
+                                </div>
+                            {% endblock %}
+                        {% endembed %}
+                    {% endif %}
+
+                    {% if sponsor_negotiations is defined %}
+                        {% embed 'partials/_acc.twig' with {
+                            id: 'sponsors',
+                            variant: 'row',
+                            title: 'Sponsors',
+                            caption: sponsor_negotiations.car_spots_taken ~ ' / ' ~ sponsor_negotiations.car_spots_total ~ ' car spots filled',
+                            open_default: sponsor_attention,
+                            sponsor_negotiations: sponsor_negotiations,
+                            spon_contested: spon_contested,
+                            spon_attention: spon_attention,
+                        } only %}
+                            {% block verdict %}
+                                <span class="text-xs font-semibold text-slate-700">{{ sponsor_negotiations.ongoing|length }} ongoing{% if spon_contested %} · <span class="text-red-700">contested</span>{% endif %}{% if spon_attention %} · <span class="text-amber-700">needs attention</span>{% endif %}</span>
+                            {% endblock %}
+                            {% block body %}
+                                <div class="space-y-4">
+                                    {% if sponsor_negotiations.ongoing is empty %}
+                                        <p class="t-caption">No ongoing negotiations.</p>
+                                    {% else %}
+                                        {% for neg in sponsor_negotiations.ongoing %}
+                                            <div class="rounded-md border border-slate-200 p-3">
+                                                <div class="flex items-baseline justify-between mb-2 gap-3 flex-wrap">
+                                                    <span class="text-sm font-semibold text-slate-900">{{ neg.name }}</span>
+                                                    <span class="t-caption">progress {{ neg.progress }}% · priority {{ neg.priority }}{% if neg.contested == 'Yes' %} · <span class="text-red-700 font-medium">contested</span>{% endif %}{% if neg.attention %} · <span class="text-amber-700 font-medium">needs attention</span>{% endif %}</span>
+                                                </div>
+                                                <div class="flex flex-wrap gap-1 mb-3">
+                                                    {% for k, v in neg.characteristics %}
+                                                        <span class="rounded bg-slate-50 px-1.5 py-0.5 text-xs text-slate-600">{{ k|capitalize }} <span class="font-semibold text-slate-800">{{ v }}/7</span></span>
+                                                    {% endfor %}
+                                                </div>
+                                                <p class="t-label mb-1">Recommended answers</p>
+                                                <ol class="space-y-1 list-decimal list-inside text-sm text-slate-800">
+                                                    <li><span class="text-slate-500">Ad placement:</span> <span class="font-semibold">{{ neg.answers.car_spot }}</span></li>
+                                                    <li><span class="text-slate-500">Next-season expectation:</span> <span class="font-semibold">{{ neg.answers.expectation }}</span></li>
+                                                    <li><span class="text-slate-500">Driver popularity:</span> <span class="font-semibold">{{ neg.answers.driver_popularity }}</span></li>
+                                                    <li><span class="text-slate-500">Amount per race:</span> <span class="font-semibold">{{ neg.answers.amount }}</span></li>
+                                                    <li><span class="text-slate-500">Contract duration:</span> <span class="font-semibold">{{ neg.answers.duration }}</span></li>
+                                                </ol>
+                                            </div>
+                                        {% endfor %}
+                                    {% endif %}
+                                </div>
+                            {% endblock %}
+                        {% endembed %}
+                    {% endif %}
+
+                    {% if training_baseline_count is defined %}
+                        {% embed 'partials/_acc.twig' with {
+                            id: 'training',
+                            variant: 'row',
+                            title: 'Training picks',
+                            caption: training_division ? 'vs ' ~ training_division ~ ' ideal' : '',
+                            training_picks: training_picks|default(null),
+                            training_verdict: training_verdict,
+                        } only %}
+                            {% block verdict %}
+                                {% if training_verdict %}
+                                    <span class="text-xs font-semibold text-slate-700 tabular-nums">{{ training_verdict }}</span>
+                                {% else %}
+                                    <span class="text-xs font-semibold text-slate-500">No baseline yet</span>
+                                {% endif %}
+                            {% endblock %}
+                            {% block body %}
+                                <div class="space-y-3">
+                                    {% if training_picks is not empty %}
+                                        <ul class="space-y-2">
+                                            {% for t in training_picks %}
+                                                <li class="flex items-baseline justify-between gap-3 rounded-md border border-slate-200 px-3 py-2">
+                                                    <div class="min-w-0">
+                                                        <span class="text-sm font-semibold text-slate-900">{{ t.name }}</span>
+                                                        <span class="t-caption ml-1">${{ t.cost|number_format }}</span>
+                                                        <div class="t-caption mt-0.5 truncate">
+                                                            {% for attr, g in t.gains %}
+                                                                <span>{{ g > 0 ? '+' : '' }}{{ g }} {{ attr|replace({'_': ' '}) }}</span>{% if not loop.last %} · {% endif %}
+                                                            {% endfor %}
+                                                            {% if t.name == 'Spa' %}<span> · +energy</span>{% endif %}
+                                                        </div>
+                                                    </div>
+                                                    <span class="text-sm font-bold tabular-nums {{ t.score > 0 ? 'text-slate-900' : 'text-slate-400' }}">{{ t.score > 0 ? '+' : '' }}{{ t.score }}</span>
+                                                </li>
+                                            {% endfor %}
+                                        </ul>
+                                        <p class="t-caption">
+                                            Score = how much closer this training brings your driver to the
+                                            division's ideal profile. Positive is better.
+                                        </p>
+                                    {% else %}
+                                        <p class="text-sm text-slate-600">Not enough division baseline data yet.</p>
+                                        <p class="t-caption">
+                                            Add pilots in <a href="/divisions/baseline" class="underline">Division Baseline</a>
+                                            to unlock training picks tuned to your division's ideal driver.
+                                        </p>
+                                    {% endif %}
+                                </div>
+                            {% endblock %}
+                        {% endembed %}
+                    {% endif %}
+
+                </div>
+            </section>
         </div>
 
         {# SEASON CALENDAR — one row per round with that track's P/H/A demand.
@@ -486,16 +428,6 @@
 
 <script>
 (() => {
-    const board = document.querySelector('[data-tile-board]');
-    if (board) {
-        board.addEventListener('click', (e) => {
-            const a = e.target.closest('a[href^="#"]');
-            if (!a) return;
-            const t = document.getElementById(a.getAttribute('href').slice(1));
-            if (t instanceof HTMLDetailsElement) t.open = true;
-        });
-    }
-
     const card = document.getElementById('wear');
     if (!card) return;
 
@@ -552,14 +484,6 @@
         if (e.target.matches('[data-plan-option]')) recalcPlan();
     });
 
-    const mirrorWear = () => {
-        const src = card.querySelector('[data-wear-verdict]');
-        const dst = document.querySelector('[data-tile-wear]');
-        if (src && dst) {
-            dst.textContent = src.textContent;
-            dst.className = src.className;
-        }
-    };
     let pending = null;
     card.addEventListener('input', (e) => {
         if (!e.target.matches('[data-cockpit-wear-slider]')) return;
@@ -625,7 +549,6 @@
             }
             card.innerHTML = html;
             window.applyAccState(card);
-            mirrorWear();
             recalcPlan();
         } catch (err) {
             if (err.name !== 'AbortError') console.error(err);
