@@ -48,119 +48,86 @@
 <body class="h-full font-sans text-slate-800 antialiased">
 <div class="min-h-full">
 
-    {# HEADER #}
-    <header class="bg-surface shadow-sm border-b border-slate-200">
-        <div class="mx-auto max-w-7xl px-4 py-3 md:py-6 flex flex-col gap-4 md:flex-row md:justify-between md:items-center">
-            <div>
-                <a href="/" class="flex items-center gap-3 hover:opacity-80 transition-opacity">
-                    <img src="/logo.svg" alt="" class="h-8 w-8 md:h-10 md:w-10 shrink-0" width="40" height="40">
-                    <div>
-                        <h1 class="text-xl md:text-3xl font-bold text-slate-900 leading-tight">
-                            <span class="text-blue-600">GPRO</span> Pitwall
-                        </h1>
-                        <p class="mt-1 text-sm text-slate-500 hidden md:block">
-                            Race-weekend cockpit for GPRO managers — strategy, wear, training, recruitment.
-                        </p>
-                    </div>
-                </a>
-            </div>
+    {# HEADER — one bar: the mark on the left, account actions on the right. The
+       brand is not a heading: every page carries its own h1. #}
+    <header class="bg-surface border-b border-slate-200">
+        <div class="mx-auto flex h-14 max-w-7xl items-center justify-between gap-4 px-4">
+            <a href="/" class="flex shrink-0 items-center gap-2 hover:opacity-80">
+                <img src="/logo.svg" alt="" class="h-7 w-7 shrink-0" width="28" height="28">
+                <span class="text-base font-bold text-slate-900"><span class="text-blue-600">GPRO</span> Pitwall</span>
+            </a>
 
-            <div class="flex items-center gap-4 flex-wrap">
-                {% if is_logged_in and api_limit is defined and api_limit != '?' %}
-                    {% set api_tone = (api_limit < 20) ? 'bg-red-50 text-red-700 ring-red-600/20'
-                                      : ((api_limit < 50) ? 'bg-amber-50 text-amber-700 ring-amber-600/20'
-                                                          : 'bg-slate-50 text-slate-700 ring-slate-600/10') %}
-                    {% set api_age = api_limit_updated_at
-                        ? ' · checked ' ~ ((('now'|date('U')) - api_limit_updated_at) // 60) ~ 'm ago'
-                        : '' %}
-                    {% set api_tip = (api_limit < 50)
-                        ? 'Few API calls left this race weekend — avoid hard-refreshing data; the cache keeps recent answers warm for you.' ~ api_age
-                        : 'GPRO API calls remaining for this race.' ~ api_age %}
-                    <span class="inline-flex items-center" data-api-budget-wrap>
-                        <span
-                            class="inline-flex items-center gap-1.5 rounded-l-md px-2.5 py-1 text-xs font-medium ring-1 ring-inset tabular-nums cursor-help {{ api_tone }}"
-                            title="{{ api_tip }}"
-                            data-api-budget-pill
-                        >
-                            {% if api_limit < 50 %}<span aria-hidden="true">⚠</span>{% endif %}
-                            <span class="text-slate-400">API</span>
-                            <span class="font-semibold" data-api-budget-value>{{ api_limit|number_format }}</span>
-                            <span class="text-slate-400">left</span>
-                        </span>
-                        <button
-                            type="button"
-                            class="-ml-px inline-flex items-center px-1.5 py-1 rounded-r-md text-xs ring-1 ring-inset hover:bg-slate-100 cursor-pointer {{ api_tone }}"
-                            title="Refresh the counter (costs 1 API call)"
-                            data-api-budget-refresh
-                            aria-label="Refresh API budget counter"
-                        >
-                            <span aria-hidden="true">↻</span>
-                        </button>
-                    </span>
-                {% endif %}
-                {% if is_logged_in and user.is_admin %}
-                    <a href="/admin/users" class="btn btn-sm btn-secondary">Users</a>
-                    <a href="/admin/telemetry" class="btn btn-sm btn-secondary">Corpus</a>
-                    <a href="/debug" class="btn btn-sm btn-secondary">Debug</a>
-                {% endif %}
+            <div class="flex items-center gap-3 text-sm sm:gap-5">
                 {% if is_logged_in %}
-                    <a href="/control_panel"
-                       class="btn btn-sm font-medium text-slate-600 hover:text-blue-600">
-                        Control Panel
-                    </a>
-
+                    {% if user.is_admin %}
+                        <details class="relative" data-header-menu>
+                            <summary class="cursor-pointer list-none font-medium text-slate-600 hover:text-slate-900">Admin</summary>
+                            <div class="card absolute right-0 z-50 mt-2 w-44 py-1">
+                                <a href="/admin/users" class="block px-4 py-2 text-slate-700 hover:bg-slate-50">Users</a>
+                                <a href="/admin/telemetry" class="block px-4 py-2 text-slate-700 hover:bg-slate-50">Corpus</a>
+                                <a href="/debug" class="block px-4 py-2 text-slate-700 hover:bg-slate-50">Debug</a>
+                            </div>
+                        </details>
+                    {% endif %}
+                    <a href="/control_panel" class="font-medium text-slate-600 hover:text-slate-900">Account</a>
                     <form method="POST" action="/logout">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                        <button type="submit" class="btn btn-sm btn-danger">
-                            Logout
-                        </button>
+                        <button type="submit" class="font-medium text-slate-600 hover:text-slate-900">Log out</button>
                     </form>
                 {% else %}
-                    <a href="/login" class="text-sm font-medium text-slate-600 hover:text-blue-600">
-                        Log In
-                    </a>
-                    <a href="/register" class="btn btn-md btn-primary">
-                        Register
-                    </a>
+                    <a href="/login" class="font-medium text-slate-600 hover:text-slate-900">Log in</a>
+                    <a href="/register" class="btn btn-sm btn-primary">Register</a>
                 {% endif %}
             </div>
         </div>
     </header>
+
     {% if is_logged_in %}
-    <div class="bg-slate-50 border-b border-slate-200">
-        <div class="mx-auto max-w-7xl px-4 py-2 text-sm text-slate-600 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-            <div class="flex items-center gap-3">
-                {# sync_state (App\Support\SyncState) is the single source the
-                   Account page reads too, so the two can never disagree. #}
-                {% if user.username %}
-                    <span class="font-medium text-slate-700">Hello, {{ user.username }}</span>
-                    <span class="text-slate-300" aria-hidden="true">|</span>
-                {% endif %}
+    {# STATUS LINE — where the data stands (sync, API budget) and the team facts
+       every screen leans on. sync_state (App\Support\SyncState) is the same
+       source the Account page reads, so the two never disagree. #}
+    <div class="border-b border-slate-200 bg-slate-50">
+        <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-x-6 gap-y-1 px-4 py-1.5 text-xs text-slate-600">
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
                 {% if sync_state == 'running' %}
-                    <span class="animate-spin">⏳</span>
                     <span>Syncing GPRO data…</span>
                 {% elseif sync_state == 'failed' %}
-                    <span class="text-red-600">⚠ Sync failed</span>
+                    <span class="font-medium text-red-700">Sync failed</span>
                 {% elseif sync_state == 'deferred' %}
-                    <span class="text-amber-600">⏸ Sync paused — GPRO API budget low. It'll resume once your hourly allowance recovers.</span>
+                    <span class="font-medium text-amber-700" title="GPRO API budget low. It'll resume once your hourly allowance recovers.">Sync paused — API budget low</span>
                 {% elseif sync_state == 'synced' %}
-                    <span>Last sync: {{ t.localtime(user.last_synced_at, 'datetime') }}</span>
+                    <span>Synced {{ t.localtime(user.last_synced_at, 'datetime') }}</span>
                 {% elseif sync_state == 'never' %}
                     <span>Not synced yet</span>
                 {% elseif sync_state == 'no_token' %}
                     <a href="/control_panel" class="font-medium text-blue-600 hover:underline">Add your GPRO API token</a>
                 {% endif %}
                 {% if can_submit and sync_state != 'no_token' %}
-                    <span class="text-slate-300" aria-hidden="true">|</span>
-                    <button id="apiWarmupBtn" class="btn btn-sm btn-primary whitespace-nowrap">
-                        <svg id="apiWarmupSpinner" class="hidden h-4 w-4 animate-spin" viewBox="0 0 24 24">
-                            <circle class="opacity-25" cx="12" cy="12" r="10"
-                                    stroke="currentColor" stroke-width="4"></circle>
-                            <path class="opacity-75" fill="currentColor"
-                                  d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/>
+                    <button id="apiWarmupBtn" type="button" class="inline-flex items-center gap-1 font-medium text-blue-600 hover:underline disabled:opacity-60">
+                        <svg id="apiWarmupSpinner" class="hidden h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" aria-hidden="true">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/>
                         </svg>
                         <span id="apiWarmupText">↻ Re-sync</span>
                     </button>
+                {% endif %}
+                {% if api_limit is defined and api_limit != '?' %}
+                    {# Quiet while healthy; takes the caution / failure tone only when low. #}
+                    {% set api_tone = (api_limit < 20) ? 'font-semibold text-red-700'
+                                      : ((api_limit < 50) ? 'font-semibold text-amber-700' : 'text-slate-600') %}
+                    {% set api_age = api_limit_updated_at
+                        ? ' · checked ' ~ ((('now'|date('U')) - api_limit_updated_at) // 60) ~ 'm ago'
+                        : '' %}
+                    {% set api_tip = (api_limit < 50)
+                        ? 'Few API calls left this race weekend — avoid hard-refreshing data; the cache keeps recent answers warm for you.' ~ api_age
+                        : 'GPRO API calls remaining for this race.' ~ api_age %}
+                    <span class="inline-flex items-center gap-1 tabular-nums" data-api-budget-wrap>
+                        <span class="cursor-help {{ api_tone }}" title="{{ api_tip }}" data-api-budget-pill>
+                            <span data-api-budget-value>{{ api_limit|number_format }}</span> API calls left
+                        </span>
+                        <button type="button" class="text-slate-400 hover:text-slate-700" title="Refresh the counter (costs 1 API call)"
+                                data-api-budget-refresh aria-label="Refresh API budget counter">↻</button>
+                    </span>
                 {% endif %}
             </div>
 
@@ -168,24 +135,23 @@
                renders on every signed-in page, cache-only. #}
             {% set strip = billboard() %}
             {% if strip %}
-            <div class="flex items-center divide-x divide-slate-300 text-xs font-medium tabular-nums">
-                <span class="px-3 first:pl-0{% if strip.cash_rank %} cursor-help{% endif %}"
-                      {% if strip.cash_rank %}title="#{{ strip.cash_rank }} of {{ strip.cash_total }} by cash in {{ strip.division ?? 'your group' }}"{% endif %}>
-                    <span class="text-slate-400">Cash</span>
-                    <span class="ml-1 text-slate-700">${{ strip.cash|number_format(0, '.', ',') }}</span>
+            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 tabular-nums">
+                <span{% if strip.cash_rank %} class="cursor-help" title="#{{ strip.cash_rank }} of {{ strip.cash_total }} by cash in {{ strip.division ?? 'your group' }}"{% endif %}>
+                    <span class="hidden text-slate-500 sm:inline">Cash</span>
+                    <span class="font-medium text-slate-900">${{ strip.cash|number_format(0, '.', ',') }}</span>
                 </span>
                 {% if strip.division %}
-                <span class="px-3">
-                    <span class="text-slate-400">Division</span>
-                    <span class="ml-1 text-slate-700">{{ strip.division }}</span>
+                <span>
+                    <span class="hidden text-slate-500 sm:inline">Division</span>
+                    <span class="font-medium text-slate-900">{{ strip.division }}</span>
                 </span>
                 {% endif %}
                 {% if strip.next_track %}
-                <span class="px-3 last:pr-0">
-                    <span class="text-slate-400">⏭ Next</span>
-                    <span class="ml-1 text-slate-700">{{ strip.next_track }}</span>
+                <span>
+                    <span class="text-slate-500">Next</span>
+                    <span class="font-medium text-slate-900">{{ strip.next_track }}</span>
                     {% if strip.season and strip.race %}
-                        <span class="ml-1 text-slate-400">S{{ strip.season }} R{{ strip.race }}</span>
+                        <span class="text-slate-500">S{{ strip.season }} R{{ strip.race }}</span>
                     {% endif %}
                 </span>
                 {% endif %}
@@ -196,7 +162,7 @@
     {% endif %}
 
     <main>
-        <div class="mx-auto max-w-7xl py-6 px-4">
+        <div class="mx-auto max-w-7xl px-4 pt-4 pb-8">
             {% block content %}{% endblock %}
         </div>
     </main>
@@ -389,7 +355,7 @@ document.getElementById('apiWarmupBtn')?.addEventListener('click', async functio
 
     btn.disabled = true;
     spinner.classList.remove('hidden');
-    text.textContent = 'Re-syncing...';
+    text.textContent = 'Re-syncing…';
 
     try {
         const res = await fetch('/api/warmup', {
@@ -402,13 +368,13 @@ document.getElementById('apiWarmupBtn')?.addEventListener('click', async functio
             return;
         }
         const data = await res.json();
-        text.textContent = (data.success ? '✔ ' : '⚠ ') + (data.message || 'Done');
+        text.textContent = data.message || (data.success ? 'Done' : 'Sync failed');
         // Reload so the freshly-synced data shows on the current tab.
         if (data.status === 'synced') {
             setTimeout(() => window.location.reload(), 800);
         }
     } catch {
-        text.textContent = '⚠ Network error';
+        text.textContent = 'Network error';
     }
 
     setTimeout(() => {
@@ -416,6 +382,14 @@ document.getElementById('apiWarmupBtn')?.addEventListener('click', async functio
         spinner.classList.add('hidden');
         text.textContent = '↻ Re-sync';
     }, 3000);
+});
+
+// Header menus (Admin) are native <details>: close an open one when the click
+// lands anywhere outside it, as a menu is expected to.
+document.addEventListener('click', (e) => {
+    document.querySelectorAll('details[data-header-menu][open]').forEach((menu) => {
+        if (!menu.contains(e.target)) menu.open = false;
+    });
 });
 
 // Single-submit guard: any form tagged data-disable-on-submit disables every

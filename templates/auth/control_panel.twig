@@ -1,7 +1,7 @@
 {% extends "layout.twig" %}
 {% import "partials/_localtime.twig" as t %}
 
-{% block title %}Control Panel — GPRO Pitwall{% endblock %}
+{% block title %}Account — GPRO Pitwall{% endblock %}
 {% block robots %}<meta name="robots" content="noindex,nofollow">{% endblock %}
 {% block canonical_path %}/control_panel{% endblock %}
 
@@ -11,8 +11,7 @@
 
         <div class="border-b border-slate-100 pb-6 mb-6 flex justify-between items-center">
             <div>
-                <h1 class="t-display">Control Panel</h1>
-                <p class="t-caption mt-1">Manage your account settings</p>
+                <h1 class="t-display">Account</h1>
             </div>
             {% if user.is_admin %}
                 <span class="inline-flex items-center gap-1 rounded-full bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700 ring-1 ring-inset ring-blue-600/20">

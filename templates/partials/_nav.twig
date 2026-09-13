@@ -77,7 +77,7 @@
                 {% set label = tab_labels[section]|default(section) %}
                 {% set is_active = (section == active_main_tab) %}
                 <a href="{{ _self.tab_href(section, active_division, active_track, division_tabs, section_paths) }}"
-                   class="whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors duration-200
+                   class="whitespace-nowrap border-b-2 py-3 px-1 text-sm font-medium transition-colors duration-200
                           {{ is_active
                              ? 'border-blue-600 text-blue-600'
                              : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700' }}"
