@@ -359,13 +359,15 @@ summary:focus-visible { @apply outline-none ring-2 ring-blue-600; }
 .brief-n-thin { @apply bg-amber-100 text-amber-900; }
 
 /*
- * Type tokens — keep usage consistent across all tabs.
- * Section headers are colour-neutral on purpose: colour is reserved for
- * meaning (success / warning / danger / interactive), not decoration.
+ * Type tokens — the whole scale (P10 D7). Four reading sizes plus one
+ * uppercase micro-label for field labels and table headers:
+ *   t-display 20  page title          t-heading 16  section on a standalone page
+ *   t-section 14  card and row titles t-caption 12  supporting text
+ * Titles are sentence case and ink; colour is reserved for state.
  */
-.t-display { @apply text-2xl font-bold text-slate-900; }
-.t-heading { @apply text-lg font-semibold text-slate-800; }
-.t-section { @apply text-xs font-bold uppercase tracking-wide text-slate-500; }
+.t-display { @apply text-xl font-semibold text-slate-900; }
+.t-heading { @apply text-base font-semibold text-slate-900; }
+.t-section { @apply text-sm font-semibold text-slate-900; }
 .t-label   { @apply text-[10px] font-medium uppercase tracking-wide text-slate-500; }
 .t-value   { @apply text-base font-semibold text-slate-900; }
 .t-caption { @apply text-xs text-slate-500; }

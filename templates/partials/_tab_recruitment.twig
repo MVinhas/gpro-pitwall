@@ -3,7 +3,7 @@
         {# Header Section #}
         <div class="card-hd flex flex-col sm:flex-row justify-between items-start sm:items-center">
             <div>
-                <h2 class="t-heading">Recruitment Analyzer</h2>
+                <h2 class="t-section">Recruitment analyzer</h2>
                 <p class="t-caption">Score the live GPRO driver market against your division's ideal driver.</p>
                 <p class="t-caption">Drivers decide Mondays and Thursdays at 18:00 (Lisbon); offers rise from 10:00 the same days.</p>
             </div>
@@ -61,8 +61,8 @@
             {% elseif recruitment_results is defined %}
                 <div class="mt-8">
                     <div class="flex justify-between items-end mb-4">
-                        <h3 class="t-heading">
-                            Candidates (Found: {{ pagination.total_items }})
+                        <h3 class="t-section">
+                            {{ pagination.total_items }} candidate{{ pagination.total_items == 1 ? '' : 's' }}
                             {% if range_filters|length > 0 %}
                                 <span class="t-caption font-medium">of {{ recruitment_unfiltered_total }}</span>
                             {% endif %}

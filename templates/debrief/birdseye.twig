@@ -15,7 +15,7 @@
     <div>
         <h1 class="t-display">Debrief</h1>
         <p class="t-caption mt-1">
-            Every race Pitwall has seen — yours in full detail, everyone else's as anonymous aggregate.
+            Every race Pitwall has seen.
         </p>
     </div>
 
@@ -50,15 +50,7 @@
         </form>
     </div>
 
-    {% if scope == 'all' %}
-        <div class="notice notice-info notice-slim">
-            <p>
-                <strong>Anonymous.</strong>
-                Everyone-mode rows carry no manager identity — the shared corpus stores none.
-                You are reading what was done, never who did it.
-            </p>
-        </div>
-    {% elseif own_races == 0 %}
+    {% if scope != 'all' and own_races == 0 %}
         <div class="notice notice-warn">
             <p>
                 <strong>No races archived yet.</strong>
@@ -173,7 +165,7 @@
                                 <td class="dt-td text-right hidden lg:table-cell">{{ row.pit_stops ?? '—' }}</td>
                                 <td class="dt-td hidden lg:table-cell">{{ row.race_tyre ?? '—' }}</td>
                                 <td class="dt-td hidden xl:table-cell">
-                                    {{ row.was_wet ? 'Wet' : 'Dry' }}{% if row.avg_temp %} · {{ row.avg_temp }}°{% endif %}
+                                    {{ row.was_wet ? 'Wet' : 'Dry' }}{% if row.avg_temp %} · {{ row.avg_temp|round }}°{% endif %}
                                 </td>
                                 <td class="dt-td text-right font-semibold">{{ row.score }}</td>
                                 {% if scope == 'mine' %}

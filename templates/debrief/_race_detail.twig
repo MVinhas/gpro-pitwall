@@ -81,7 +81,7 @@
 
             <div class="mt-4 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
                 {% set cond = [
-                    {'l': 'Avg temp', 'v': detail.avg_temp ? detail.avg_temp ~ '°' : '—'},
+                    {'l': 'Avg temp', 'v': detail.avg_temp ? detail.avg_temp|round ~ '°' : '—'},
                     {'l': 'Avg humidity', 'v': detail.avg_humidity ? detail.avg_humidity ~ '%' : '—'},
                     {'l': 'Dry laps', 'v': detail.dry_laps ?? '—'},
                     {'l': 'Rain laps', 'v': detail.rain_laps ?? '—'},

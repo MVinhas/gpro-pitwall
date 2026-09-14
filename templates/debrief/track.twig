@@ -297,7 +297,7 @@
                                     <tr>
                                         <td class="dt-td font-medium">{{ row.season }}</td>
                                         <td class="dt-td text-right">{{ row.races }}</td>
-                                        <td class="dt-td text-right">{{ row.temperature ?? '—' }}°</td>
+                                        <td class="dt-td text-right">{{ row.temperature is null ? '—' : row.temperature|round ~ '°' }}</td>
                                         <td class="dt-td text-right hidden sm:table-cell">{{ row.humidity ?? '—' }}%</td>
                                         <td class="dt-td text-right">
                                             {% if row.wet_races == 0 %}
