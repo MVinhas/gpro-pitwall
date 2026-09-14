@@ -214,25 +214,25 @@
                             weather_temps: weather_temps,
                         } only %}
                             {% block verdict %}
-                                <span class="text-xs font-semibold text-slate-700">Q1 {{ weather.q1_wet ? 'Wet' : 'Dry' }} · Q2 {{ weather.q2_wet ? 'Wet' : 'Dry' }} · Race {{ weather.race_start_wet ? 'wet' : 'dry' }} ({{ weather.race_rain_avg }}%)</span>
+                                <span class="text-xs font-semibold text-slate-700">Q1 {{ weather.q1_wet ? 'Wet' : 'Dry' }} · Q2 {{ weather.q2_wet ? 'Wet' : 'Dry' }} · Race {{ weather.race_start_wet ? 'wet' : 'dry' }} ({{ weather.race_rain_avg|round }}% rain)</span>
                             {% endblock %}
                             {% block body %}
                                 <div class="space-y-4">
                                     <div class="grid grid-cols-3 gap-3">
                                         <div class="rounded-lg border border-slate-200 p-3 text-center">
-                                            <p class="t-label">Qualifying 1</p>
+                                            <p class="t-label">Q1</p>
                                             <p class="t-value mt-1">{{ weather.q1_wet ? 'Wet' : 'Dry' }}</p>
                                             {% if weather_temps.q1 is not null %}<p class="t-caption">{{ weather_temps.q1 }}°C</p>{% endif %}
                                         </div>
                                         <div class="rounded-lg border border-slate-200 p-3 text-center">
-                                            <p class="t-label">Qualifying 2</p>
+                                            <p class="t-label">Q2</p>
                                             <p class="t-value mt-1">{{ weather.q2_wet ? 'Wet' : 'Dry' }}</p>
                                             {% if weather_temps.q2 is not null %}<p class="t-caption">{{ weather_temps.q2 }}°C</p>{% endif %}
                                         </div>
                                         <div class="rounded-lg border border-slate-200 p-3 text-center">
                                             <p class="t-label">Race start</p>
-                                            <p class="t-value mt-1">{{ weather.race_start_wet ? 'Likely wet' : 'Likely dry' }}</p>
-                                            <p class="t-caption">{{ weather.race_rain_avg }}% rain</p>
+                                            <p class="t-value mt-1">{{ weather.race_start_wet ? 'Wet' : 'Dry' }}</p>
+                                            <p class="t-caption">{{ weather.race_rain_avg|round }}% rain</p>
                                         </div>
                                     </div>
                                     {% embed 'partials/_how.twig' %}{% block how %}
@@ -468,7 +468,7 @@
         set('[data-plan-after-h]', Math.round(after[1]));
         set('[data-plan-after-a]', Math.round(after[2]));
         set('[data-plan-after-match]', matchLevel(track, after));
-        set('[data-plan-after-fit]', Math.round(fitScore(track, after)) + '% like the track');
+        set('[data-plan-after-fit]', Math.round(fitScore(track, after)));
         set('[data-plan-total]', money(cost));
         const over = panel.querySelector('[data-plan-over-cash]');
         if (over) over.classList.toggle('hidden', cost <= num(panel, 'cash'));

@@ -131,14 +131,14 @@
                         <td class="dt-td text-right text-slate-600">{{ swap_plan.before.pha.power|round }}</td>
                         <td class="dt-td text-right text-slate-600">{{ swap_plan.before.pha.handling|round }}</td>
                         <td class="dt-td text-right text-slate-600">{{ swap_plan.before.pha.acceleration|round }}</td>
-                        <td class="dt-td whitespace-normal text-right text-slate-600">{{ match_labels[swap_plan.before.match] }} <span class="block text-xs sm:inline">{{ swap_plan.before.fit|round }}% like the track</span></td>
+                        <td class="dt-td whitespace-normal text-right text-slate-600">{{ match_labels[swap_plan.before.match] }} <span class="block text-xs sm:inline">{{ swap_plan.before.fit|round }}%<span class="hidden sm:inline"> like the track</span></span></td>
                     </tr>
                     <tr>
                         <th scope="row" class="dt-td text-left font-semibold text-slate-900">Car after plan</th>
                         <td class="dt-td text-right font-semibold text-slate-900" data-plan-after-p>{{ swap_plan.after.pha.power|round }}</td>
                         <td class="dt-td text-right font-semibold text-slate-900" data-plan-after-h>{{ swap_plan.after.pha.handling|round }}</td>
                         <td class="dt-td text-right font-semibold text-slate-900" data-plan-after-a>{{ swap_plan.after.pha.acceleration|round }}</td>
-                        <td class="dt-td whitespace-normal text-right font-semibold text-slate-900"><span data-plan-after-match>{{ match_labels[swap_plan.after.match] }}</span> <span class="block text-xs sm:inline" data-plan-after-fit>{{ swap_plan.after.fit|round }}% like the track</span></td>
+                        <td class="dt-td whitespace-normal text-right font-semibold text-slate-900"><span data-plan-after-match>{{ match_labels[swap_plan.after.match] }}</span> <span class="block text-xs sm:inline"><span data-plan-after-fit>{{ swap_plan.after.fit|round }}</span>%<span class="hidden sm:inline"> like the track</span></span></td>
                     </tr>
                 </tbody>
             </table>

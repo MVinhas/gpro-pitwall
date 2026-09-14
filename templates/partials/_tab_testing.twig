@@ -73,9 +73,9 @@
                     {% for name, pts in r.priority_gains %}
                         <tr>
                             <td class="dt-td whitespace-normal">{{ name }}</td>
-                            <td class="dt-td text-right text-slate-900">{{ pts.power }}</td>
-                            <td class="dt-td text-right text-slate-900">{{ pts.handling }}</td>
-                            <td class="dt-td text-right text-slate-900">{{ pts.acceleration }}</td>
+                            <td class="dt-td text-right text-slate-900">{{ pts.power|number_format(1) }}</td>
+                            <td class="dt-td text-right text-slate-900">{{ pts.handling|number_format(1) }}</td>
+                            <td class="dt-td text-right text-slate-900">{{ pts.acceleration|number_format(1) }}</td>
                         </tr>
                     {% endfor %}
                 </tbody>
@@ -132,10 +132,11 @@
             <div class="dt-inset">
                 <table class="dt">
                     <tbody class="divide-y divide-slate-100">
-                        {% for part in ['Front Wing', 'Rear Wing', 'Engine', 'Brakes', 'Gearbox', 'Suspension'] %}
+                        {# GPRO's own setup-form names, as on the Race sheet. #}
+                        {% for part, label in {'Front Wing': 'Front wing', 'Rear Wing': 'Rear wing', 'Engine': 'Engine', 'Brakes': 'Brakes', 'Gearbox': 'Gear', 'Suspension': 'Suspension'} %}
                             {% set v = r.setup[part] %}
                             <tr>
-                                <th scope="row" class="dt-td text-left font-normal text-slate-700">{{ part }}</th>
+                                <th scope="row" class="dt-td text-left font-normal text-slate-700">{{ label }}</th>
                                 <td class="dt-td text-right font-semibold text-slate-900">
                                     {% if v > 999 %}999<span class="block text-[10px] font-normal text-slate-400" title="Computed {{ v }} — GPRO accepts at most 999">{{ v }}</span>{% else %}{{ v }}{% endif %}
                                 </td>
