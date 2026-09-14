@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Tests\Unit\Support;
 
 use App\Support\SyncState;
+use DateTimeImmutable;
+use DateTimeZone;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -12,6 +14,8 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(SyncState::class)]
 final class SyncStateTest extends TestCase
 {
+    private const array TUE_FRI = [2, 5];
+
     /**
      * @return iterable<string, array{0: ?string, 1: ?string, 2: bool, 3: string}>
      */
@@ -41,6 +45,38 @@ final class SyncStateTest extends TestCase
         string $expected,
     ): void {
         $this->assertSame($expected, SyncState::derive($status, $lastSyncedAt, $hasToken));
+    }
+
+    private function at(string $iso): DateTimeImmutable
+    {
+        return new DateTimeImmutable($iso, new DateTimeZone('Europe/London'));
+    }
+
+    public function testASyncInsideTheCurrentRaceWindowIsFresh(): void
+    {
+        // Wednesday 2026-06-10: the window opened Tuesday; a Tuesday-evening sync is current.
+        $this->assertFalse(SyncState::isStale('2026-06-09 18:00:00', $this->at('2026-06-10 12:00'), self::TUE_FRI, 0, 'Europe/London'));
+    }
+
+    public function testASyncFromThePreviousRaceWindowIsStale(): void
+    {
+        // Saturday's sync belongs to Friday's window; by Tuesday a new race weekend is open.
+        $this->assertTrue(SyncState::isStale('2026-06-06 10:00:00', $this->at('2026-06-09 09:00'), self::TUE_FRI, 0, 'Europe/London'));
+    }
+
+    public function testStoredTimestampsAreReadAsUtc(): void
+    {
+        // 23:30 UTC on Monday is already 00:30 Tuesday in London (BST): the new window.
+        $this->assertFalse(SyncState::isStale('2026-06-08 23:30:00', $this->at('2026-06-09 08:00'), self::TUE_FRI, 0, 'Europe/London'));
+    }
+
+    public function testNeverSyncedOrWindowingDisabledIsNotReportedStale(): void
+    {
+        $now = $this->at('2026-06-10 12:00');
+
+        $this->assertFalse(SyncState::isStale(null, $now, self::TUE_FRI, 0, 'Europe/London'));
+        $this->assertFalse(SyncState::isStale('', $now, self::TUE_FRI, 0, 'Europe/London'));
+        $this->assertFalse(SyncState::isStale('2026-01-01 00:00:00', $now, [], 0, 'Europe/London'));
     }
 
     public function testForUserReadsTheStoredColumnsAndTokenPresence(): void

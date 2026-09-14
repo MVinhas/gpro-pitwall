@@ -86,15 +86,21 @@
     {# STATUS LINE — where the data stands (sync, API budget) and the team facts
        every screen leans on. sync_state (App\Support\SyncState) is the same
        source the Account page reads, so the two never disagree. #}
-    <div class="border-b border-slate-200 bg-slate-50">
-        <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-x-6 gap-y-1 px-4 py-1.5 text-xs text-slate-600">
+    {# Calm when the data is current; the whole line takes the caution / failure
+       tone when a new race weekend has opened since the last sync, or the sync
+       failed — planning on last weekend's car is the costliest silent mistake. #}
+    {% set sync_alarm = sync_state == 'failed' ? 'failed' : ((sync_state == 'synced' and sync_stale) ? 'stale' : '') %}
+    <div class="border-b {{ sync_alarm == 'failed' ? 'border-red-200 bg-red-50' : (sync_alarm == 'stale' ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-slate-50') }}">
+        <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-x-6 gap-y-1.5 px-4 py-1.5 text-xs text-slate-600">
             <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
                 {% if sync_state == 'running' %}
                     <span>Syncing GPRO data…</span>
                 {% elseif sync_state == 'failed' %}
-                    <span class="font-medium text-red-700">Sync failed</span>
+                    <span class="font-semibold text-red-800">Sync failed — data may be out of date</span>
                 {% elseif sync_state == 'deferred' %}
                     <span class="font-medium text-amber-700" title="GPRO API budget low. It'll resume once your hourly allowance recovers.">Sync paused — API budget low</span>
+                {% elseif sync_state == 'synced' and sync_stale %}
+                    <span class="font-semibold text-amber-800">Synced before this race weekend · {{ t.localtime(user.last_synced_at, 'datetime') }}</span>
                 {% elseif sync_state == 'synced' %}
                     <span>Synced {{ t.localtime(user.last_synced_at, 'datetime') }}</span>
                 {% elseif sync_state == 'never' %}
@@ -103,7 +109,7 @@
                     <a href="/control_panel" class="font-medium text-blue-600 hover:underline">Add your GPRO API token</a>
                 {% endif %}
                 {% if can_submit and sync_state != 'no_token' %}
-                    <button id="apiWarmupBtn" type="button" class="inline-flex items-center gap-1 font-medium text-blue-600 hover:underline disabled:opacity-60">
+                    <button id="apiWarmupBtn" type="button" class="btn btn-primary whitespace-nowrap px-2.5 py-1 text-xs">
                         <svg id="apiWarmupSpinner" class="hidden h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" aria-hidden="true">
                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
                             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/>
@@ -121,13 +127,7 @@
                     {% set api_tip = (api_limit < 50)
                         ? 'Few API calls left this race weekend — avoid hard-refreshing data; the cache keeps recent answers warm for you.' ~ api_age
                         : 'GPRO API calls remaining for this race.' ~ api_age %}
-                    <span class="inline-flex items-center gap-1 tabular-nums" data-api-budget-wrap>
-                        <span class="cursor-help {{ api_tone }}" title="{{ api_tip }}" data-api-budget-pill>
-                            <span data-api-budget-value>{{ api_limit|number_format }}</span> API calls left
-                        </span>
-                        <button type="button" class="text-slate-400 hover:text-slate-700" title="Refresh the counter (costs 1 API call)"
-                                data-api-budget-refresh aria-label="Refresh API budget counter">↻</button>
-                    </span>
+                    <span class="cursor-help tabular-nums {{ api_tone }}" title="{{ api_tip }}">{{ api_limit|number_format }} API calls left</span>
                 {% endif %}
             </div>
 
@@ -257,95 +257,6 @@
     </footer>
 </div>
 
-{# API budget refresh confirmation modal — opens when the ↻ next to the
-   budget badge is clicked. Explicit so the user understands the cost. #}
-{% if is_logged_in and api_limit is defined and api_limit != '?' %}
-<div
-    id="apiBudgetModal"
-    class="fixed inset-0 z-50 hidden items-center justify-center bg-scrim"
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="apiBudgetModalTitle"
->
-    <div class="bg-surface rounded-xl shadow-xl border border-slate-200 max-w-sm w-full mx-4 p-5">
-        <h2 id="apiBudgetModalTitle" class="t-heading mb-2">Refresh the API counter?</h2>
-        <p class="t-caption mb-3">
-            Reading the real current value from GPRO <strong>costs 1 API call</strong>.
-            There is no free way to query it.
-        </p>
-        <p class="t-caption mb-4">
-            {% if user.last_synced_at %}
-                Your last data sync was
-                <strong>{{ t.localtime(user.last_synced_at, 'datetime') }}</strong>.
-            {% else %}
-                You haven't synced any data yet.
-            {% endif %}
-            Each sync uses API calls, so the counter may be lower than shown.
-            Unless you've re-synced and are close to the limit, you can skip the refresh.
-        </p>
-        <div class="flex justify-end gap-2">
-            <button type="button" class="btn btn-md btn-secondary" data-api-budget-cancel>Cancel</button>
-            <button type="button" class="btn btn-md btn-primary" data-api-budget-confirm data-busy-text="Refreshing…">
-                Refresh now (1 call)
-            </button>
-        </div>
-    </div>
-</div>
-{% endif %}
-
-<script>
-// API-budget refresh modal: explicit click → confirm → 1 API call.
-(() => {
-    const refreshBtn = document.querySelector('[data-api-budget-refresh]');
-    const modal = document.getElementById('apiBudgetModal');
-    if (!refreshBtn || !modal) return;
-    const cancelBtn = modal.querySelector('[data-api-budget-cancel]');
-    const confirmBtn = modal.querySelector('[data-api-budget-confirm]');
-    const valueEl = document.querySelector('[data-api-budget-value]');
-    const csrf = '{{ csrf_token }}';
-
-    function open() {
-        modal.classList.remove('hidden');
-        modal.classList.add('flex');
-    }
-    function close() {
-        modal.classList.add('hidden');
-        modal.classList.remove('flex');
-    }
-
-    refreshBtn.addEventListener('click', open);
-    cancelBtn.addEventListener('click', close);
-    modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !modal.classList.contains('hidden')) close(); });
-
-    confirmBtn.addEventListener('click', async () => {
-        const original = confirmBtn.textContent;
-        confirmBtn.disabled = true;
-        confirmBtn.textContent = confirmBtn.dataset.busyText || 'Refreshing…';
-        try {
-            const res = await fetch('/api/refresh_budget', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'},
-                body: new URLSearchParams({ csrf_token: csrf })
-            });
-            if (res.status === 401 || res.status === 403) {
-                window.location = '/login?expired=1';
-                return;
-            }
-            const data = await res.json();
-            if (data.success && typeof data.remaining === 'number') {
-                if (valueEl) valueEl.textContent = data.remaining.toLocaleString();
-            }
-        } catch (_) {
-            // Network error — leave the badge as-is; the next page load will update.
-        } finally {
-            confirmBtn.disabled = false;
-            confirmBtn.textContent = original;
-            close();
-        }
-    });
-})();
-</script>
 
 <script>
 document.getElementById('apiWarmupBtn')?.addEventListener('click', async function () {

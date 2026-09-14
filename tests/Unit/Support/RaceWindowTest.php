@@ -72,4 +72,11 @@ final class RaceWindowTest extends TestCase
         $b = RaceWindow::idFor($this->at('2026-06-10 20:00'), self::TUE_FRI, 0, 'Europe/London');
         $this->assertSame($a, $b, 'reads within one window must hit the same key');
     }
+
+    public function testRaceDaysParseFromTheEnvList(): void
+    {
+        $this->assertSame([2, 5], RaceWindow::parseDays('2,5'));
+        $this->assertSame([1, 7], RaceWindow::parseDays(' 1, 9 ,7,x'));
+        $this->assertSame([], RaceWindow::parseDays(''));
+    }
 }

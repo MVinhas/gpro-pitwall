@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Support;
 
+use DateTimeImmutable;
+use DateTimeZone;
+
 /**
  * The one answer to "is this manager's data in sync?", shared by every place
  * that reports it (the header strip, the Account page).
@@ -34,6 +37,30 @@ final class SyncState
             'deferred_low_budget' => self::DEFERRED,
             default               => ($lastSyncedAt ?? '') !== '' ? self::SYNCED : self::NEVER,
         };
+    }
+
+    /**
+     * Whether the last sync happened in an earlier race window than $now — i.e. a
+     * new race weekend has opened since, so the car, driver and forecast on screen
+     * may be out of date. Stored timestamps are UTC. Never-synced and disabled
+     * windowing are not "stale": the never state already says so.
+     *
+     * @param list<int> $raceDays ISO-8601 weekday numbers (see RaceWindow)
+     */
+    public static function isStale(
+        ?string $lastSyncedAt,
+        DateTimeImmutable $now,
+        array $raceDays,
+        int $boundaryHour,
+        string $timezone,
+    ): bool {
+        if ($lastSyncedAt === null || $lastSyncedAt === '' || $raceDays === []) {
+            return false;
+        }
+        $synced = new DateTimeImmutable($lastSyncedAt, new DateTimeZone('UTC'));
+
+        return RaceWindow::idFor($synced, $raceDays, $boundaryHour, $timezone)
+            < RaceWindow::idFor($now, $raceDays, $boundaryHour, $timezone);
     }
 
     /**

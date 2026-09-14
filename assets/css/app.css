@@ -341,6 +341,9 @@ summary:focus-visible { @apply outline-none ring-2 ring-blue-600; }
     /* Horizontal scroll container for the wide tables. Paired with column
        dieting (hidden sm:table-cell) rather than replacing it. */
     .dt-scroll { @apply overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0; }
+    /* When a wide table does scroll, its scrollbar must not paint a light track
+       on a dark page. */
+    .dt-scroll, .dt-inset { scrollbar-width: thin; scrollbar-color: var(--color-slate-300) transparent; }
     /* A table flush inside a card (no card body padding): the inset lines the first
        and last cells up with the card header's text. */
     .dt-inset { @apply overflow-x-auto px-2 sm:px-3; }

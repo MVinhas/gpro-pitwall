@@ -77,7 +77,6 @@ return function (Router $router): void {
 
     // ========== API ==========
     $router->add('POST', '/api/warmup', 'controller.api_warmup', 'warmup');
-    $router->add('POST', '/api/refresh_budget', 'controller.api_warmup', 'refreshBudget');
 
     // ========== HEALTH ==========
     $router->add('GET', '/healthz', 'controller.health', 'check');
