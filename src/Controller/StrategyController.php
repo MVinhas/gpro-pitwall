@@ -431,7 +431,7 @@ class StrategyController
             'pha_match'     => $matchLevel !== PhaMatchService::MATCH_NONE,
             'pha_level'     => $matchLevel,
             'favourite'     => $this->isFavouriteTrack($pilotRaw, (int)($raceSetup['trackId'] ?? 0)),
-            'show_tyres'    => !self::isSupplierlessDivision((string)($menu['group'] ?? '')),
+            'show_tyres'    => self::hasTyreChoice((string)($menu['group'] ?? '')),
             'tyres_weather' => $tyrePerf !== null && $tyrePerf >= 4,
             'tyre_perf'     => $tyrePerf,
             'race_wet'      => $raceIsWet,
@@ -497,6 +497,15 @@ class StrategyController
         } catch (\Throwable) {
             return [];
         }
+    }
+
+    /**
+     * Tyre signals only mean something where a manager picks the supplier:
+     * Pro and up. An unknown division hides them rather than guessing.
+     */
+    public static function hasTyreChoice(string $group): bool
+    {
+        return trim($group) !== '' && !self::isSupplierlessDivision($group);
     }
 
     /** Rookie and Amateur don't pick a tyre supplier, so tyre fit is moot. */

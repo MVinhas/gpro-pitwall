@@ -142,6 +142,22 @@ final class StrategyControllerTest extends TestCase
         $this->assertFalse(StrategyController::isSupplierlessDivision(''));
     }
 
+    /**
+     * Rookie and Amateur race on the one supplier they are given, so tyre fit
+     * says nothing there. An unknown division (the Menu call failed) must not
+     * fall through to "has a choice" either.
+     */
+    public function testTyreSignalsApplyOnlyFromProUpwards(): void
+    {
+        $this->assertFalse(StrategyController::hasTyreChoice('Rookie - 31'));
+        $this->assertFalse(StrategyController::hasTyreChoice('Amateur - 5'));
+        $this->assertTrue(StrategyController::hasTyreChoice('Pro - 8'));
+        $this->assertTrue(StrategyController::hasTyreChoice('Master - 5'));
+        $this->assertTrue(StrategyController::hasTyreChoice('Elite'));
+        $this->assertFalse(StrategyController::hasTyreChoice(''));
+        $this->assertFalse(StrategyController::hasTyreChoice('  '));
+    }
+
     public function testGroupStandingRanksOwnValueAgainstGroup(): void
     {
         // Me (IDM 7) at car level 8; one manager above, two below.
