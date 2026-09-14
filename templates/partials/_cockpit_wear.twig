@@ -63,14 +63,14 @@
     {% if wear_advice.swap is empty and wear_advice.risky is empty %}
         <p class="text-sm font-medium text-slate-700">{{ wear_advice.headline }}</p>
     {% else %}
-        <div class="overflow-x-auto">
-            <table class="min-w-full text-sm">
-                <thead>
-                    <tr class="text-left text-slate-500">
-                        <th class="py-1.5 pr-3 font-medium">Part</th>
-                        <th class="py-1.5 px-2 font-medium text-right">Lvl</th>
-                        <th class="py-1.5 px-2 font-medium text-right">Wear</th>
-                        <th class="py-1.5 pl-2 font-medium text-right">Status</th>
+        <div class="dt-scroll">
+            <table class="dt">
+                <thead class="border-b border-slate-200">
+                    <tr>
+                        <th scope="col" class="dt-th">Part</th>
+                        <th scope="col" class="dt-th text-right">Level</th>
+                        <th scope="col" class="dt-th text-right">Wear</th>
+                        <th scope="col" class="dt-th text-right">Status</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -108,37 +108,37 @@
              data-cash="{{ cockpit_cash|default(0) }}">
             <p class="t-label">What this plan does to your car</p>
 
-            <table class="w-full text-sm">
-                <thead>
+            <table class="dt">
+                <thead class="border-b border-slate-200">
                     <tr>
-                        <th class="t-label text-left font-medium pb-1"><span class="sr-only">Profile</span></th>
-                        <th class="t-label text-center font-medium pb-1">P</th>
-                        <th class="t-label text-center font-medium pb-1">H</th>
-                        <th class="t-label text-center font-medium pb-1">A</th>
-                        <th class="t-label text-right font-medium pb-1">Match</th>
+                        <th scope="col" class="dt-th"><span class="sr-only">Profile</span></th>
+                        <th scope="col" class="dt-th text-right">P</th>
+                        <th scope="col" class="dt-th text-right">H</th>
+                        <th scope="col" class="dt-th text-right">A</th>
+                        <th scope="col" class="dt-th text-right">Match</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-200">
                     <tr>
-                        <td class="py-1.5 t-caption">Track asks</td>
-                        <td class="py-1.5 text-center tabular-nums font-semibold text-slate-900">{{ swap_plan.track.power|round }}</td>
-                        <td class="py-1.5 text-center tabular-nums font-semibold text-slate-900">{{ swap_plan.track.handling|round }}</td>
-                        <td class="py-1.5 text-center tabular-nums font-semibold text-slate-900">{{ swap_plan.track.acceleration|round }}</td>
-                        <td class="py-1.5 text-right t-caption">—</td>
+                        <th scope="row" class="dt-td text-left font-normal text-slate-600">Track asks</th>
+                        <td class="dt-td text-right text-slate-900">{{ swap_plan.track.power|round }}</td>
+                        <td class="dt-td text-right text-slate-900">{{ swap_plan.track.handling|round }}</td>
+                        <td class="dt-td text-right text-slate-900">{{ swap_plan.track.acceleration|round }}</td>
+                        <td class="dt-td text-right text-slate-400">—</td>
                     </tr>
                     <tr>
-                        <td class="py-1.5 t-caption">Car now</td>
-                        <td class="py-1.5 text-center tabular-nums text-slate-700">{{ swap_plan.before.pha.power|round }}</td>
-                        <td class="py-1.5 text-center tabular-nums text-slate-700">{{ swap_plan.before.pha.handling|round }}</td>
-                        <td class="py-1.5 text-center tabular-nums text-slate-700">{{ swap_plan.before.pha.acceleration|round }}</td>
-                        <td class="py-1.5 text-right text-xs font-semibold text-slate-600">{{ match_labels[swap_plan.before.match] }} · {{ swap_plan.before.fit|number_format(1) }}</td>
+                        <th scope="row" class="dt-td text-left font-normal text-slate-600">Car now</th>
+                        <td class="dt-td text-right text-slate-600">{{ swap_plan.before.pha.power|round }}</td>
+                        <td class="dt-td text-right text-slate-600">{{ swap_plan.before.pha.handling|round }}</td>
+                        <td class="dt-td text-right text-slate-600">{{ swap_plan.before.pha.acceleration|round }}</td>
+                        <td class="dt-td whitespace-normal text-right text-slate-600">{{ match_labels[swap_plan.before.match] }} <span class="block text-xs sm:inline">fit {{ swap_plan.before.fit|number_format(1) }}</span></td>
                     </tr>
                     <tr>
-                        <td class="py-1.5 text-xs font-semibold text-slate-900">Car after plan</td>
-                        <td class="py-1.5 text-center tabular-nums font-semibold text-slate-900" data-plan-after-p>{{ swap_plan.after.pha.power|round }}</td>
-                        <td class="py-1.5 text-center tabular-nums font-semibold text-slate-900" data-plan-after-h>{{ swap_plan.after.pha.handling|round }}</td>
-                        <td class="py-1.5 text-center tabular-nums font-semibold text-slate-900" data-plan-after-a>{{ swap_plan.after.pha.acceleration|round }}</td>
-                        <td class="py-1.5 text-right text-xs font-semibold" data-plan-after-match>{{ match_labels[swap_plan.after.match] }} · {{ swap_plan.after.fit|number_format(1) }}</td>
+                        <th scope="row" class="dt-td text-left font-semibold text-slate-900">Car after plan</th>
+                        <td class="dt-td text-right font-semibold text-slate-900" data-plan-after-p>{{ swap_plan.after.pha.power|round }}</td>
+                        <td class="dt-td text-right font-semibold text-slate-900" data-plan-after-h>{{ swap_plan.after.pha.handling|round }}</td>
+                        <td class="dt-td text-right font-semibold text-slate-900" data-plan-after-a>{{ swap_plan.after.pha.acceleration|round }}</td>
+                        <td class="dt-td whitespace-normal text-right font-semibold text-slate-900"><span data-plan-after-match>{{ match_labels[swap_plan.after.match] }}</span> <span class="block text-xs sm:inline" data-plan-after-fit>fit {{ swap_plan.after.fit|number_format(1) }}</span></td>
                     </tr>
                 </tbody>
             </table>
@@ -173,32 +173,32 @@
                     {{ wear_track_name }}{% if wear_laps %} · {{ wear_laps }} laps{% endif %}
                     {%- if cockpit_training_laps > 0 %} · after {{ cockpit_training_laps }} training laps{% endif %}
                 </p>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-xs">
-                        <thead>
-                            <tr class="border-b border-slate-200 text-left text-slate-500">
-                                <th class="pb-1.5 pr-2 font-medium">Part</th>
-                                <th class="pb-1.5 px-2 font-medium text-right">Lvl</th>
-                                <th class="hidden sm:table-cell pb-1.5 px-2 font-medium text-right">Start</th>
+                <div class="dt-scroll">
+                    <table class="dt">
+                        <thead class="border-b border-slate-200">
+                            <tr>
+                                <th scope="col" class="dt-th">Part</th>
+                                <th scope="col" class="dt-th text-right">Level</th>
+                                <th scope="col" class="dt-th text-right hidden sm:table-cell">Start</th>
                                 {% if cockpit_training_laps > 0 %}
-                                    <th class="hidden md:table-cell pb-1.5 px-2 font-medium text-right">Training</th>
+                                    <th scope="col" class="dt-th text-right hidden md:table-cell">Training</th>
                                 {% endif %}
-                                <th class="pb-1.5 px-2 font-medium text-right">Added</th>
-                                <th class="pb-1.5 pl-2 font-medium text-right">End</th>
+                                <th scope="col" class="dt-th text-right">Added</th>
+                                <th scope="col" class="dt-th text-right">End</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
                             {% for part, row in wear_parts %}
                                 <tr>
-                                    <td class="py-1.5 pr-2 font-medium text-slate-900">{{ part }}</td>
-                                    <td class="py-1.5 px-2 text-right tabular-nums text-slate-600">{{ row.level }}</td>
-                                    <td class="hidden sm:table-cell py-1.5 px-2 text-right tabular-nums text-slate-600">{{ row.start }}%</td>
+                                    <td class="dt-td">{{ part }}</td>
+                                    <td class="dt-td text-right text-slate-600">{{ row.level }}</td>
+                                    <td class="dt-td text-right text-slate-600 hidden sm:table-cell">{{ row.start }}%</td>
                                     {% if cockpit_training_laps > 0 %}
-                                        <td class="hidden md:table-cell py-1.5 px-2 text-right tabular-nums text-slate-600">+{{ row.training|default(0) }}%</td>
+                                        <td class="dt-td text-right text-slate-600 hidden md:table-cell">+{{ row.training|default(0) }}%</td>
                                     {% endif %}
-                                    <td class="py-1.5 px-2 text-right tabular-nums text-slate-600">+{{ row.est }}%</td>
-                                    <td class="py-1.5 pl-2 text-right">
-                                        <span class="inline-flex items-center rounded px-1.5 py-0.5 font-semibold tabular-nums
+                                    <td class="dt-td text-right text-slate-600">+{{ row.est }}%</td>
+                                    <td class="dt-td text-right">
+                                        <span class="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-semibold tabular-nums
                                             {{ row.end >= 100 ? 'bg-red-100 text-red-800' : (row.end >= 90 ? 'bg-amber-100 text-amber-800' : 'text-slate-700') }}">{{ row.end|round }}%</span>
                                     </td>
                                 </tr>
@@ -226,13 +226,13 @@
         </summary>
         <div class="border-t border-slate-200 px-4 pb-4 pt-3 space-y-3">
             <p class="t-caption pt-1">P/H/A points each part adds per level.</p>
-            <table class="w-full text-xs">
-                <thead>
-                    <tr class="border-b border-slate-200">
-                        <th class="pb-1.5 text-left font-semibold text-slate-600">Part</th>
-                        <th class="pb-1.5 text-center font-semibold text-slate-600">P</th>
-                        <th class="pb-1.5 text-center font-semibold text-slate-600">H</th>
-                        <th class="pb-1.5 text-center font-semibold text-slate-600">A</th>
+            <table class="dt">
+                <thead class="border-b border-slate-200">
+                    <tr>
+                        <th scope="col" class="dt-th">Part</th>
+                        <th scope="col" class="dt-th text-right">P</th>
+                        <th scope="col" class="dt-th text-right">H</th>
+                        <th scope="col" class="dt-th text-right">A</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
@@ -251,10 +251,10 @@
                     ] %}
                     {% for row in pha_table %}
                         <tr>
-                            <td class="py-1.5 text-slate-700">{{ row.part }}</td>
-                            <td class="py-1.5 text-center {{ row.p > 0 ? 'font-semibold text-slate-900' : 'text-slate-300' }}">{{ row.p > 0 ? row.p : '—' }}</td>
-                            <td class="py-1.5 text-center {{ row.h > 0 ? 'font-semibold text-slate-900' : 'text-slate-300' }}">{{ row.h > 0 ? row.h : '—' }}</td>
-                            <td class="py-1.5 text-center {{ row.a > 0 ? 'font-semibold text-slate-900' : 'text-slate-300' }}">{{ row.a > 0 ? row.a : '—' }}</td>
+                            <td class="dt-td">{{ row.part }}</td>
+                            <td class="dt-td text-right {{ row.p > 0 ? 'text-slate-900' : 'text-slate-300' }}">{{ row.p > 0 ? row.p : '—' }}</td>
+                            <td class="dt-td text-right {{ row.h > 0 ? 'text-slate-900' : 'text-slate-300' }}">{{ row.h > 0 ? row.h : '—' }}</td>
+                            <td class="dt-td text-right {{ row.a > 0 ? 'text-slate-900' : 'text-slate-300' }}">{{ row.a > 0 ? row.a : '—' }}</td>
                         </tr>
                     {% endfor %}
                 </tbody>

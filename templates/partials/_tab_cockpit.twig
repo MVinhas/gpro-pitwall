@@ -79,35 +79,28 @@
                             <span class="text-xs font-semibold">{% if pha.favourite %}<span title="Driver's favourite track">★</span> {% endif %}{% if pha.match == 'perfect' %}<span class="text-emerald-700">Perfect match</span>{% elseif pha.match == 'top' %}<span class="text-slate-700">Top match</span>{% else %}<span class="text-slate-700">No match</span>{% endif %}</span>
                         {% endblock %}
                         {% block body %}
-                            <div class="space-y-6">
-                                <div>
-                                    <div class="grid grid-cols-12 gap-2 pb-2 mb-1 border-b border-slate-100">
-                                        <span class="col-span-4 t-label">Attribute</span>
-                                        <span class="col-span-3 t-label text-center">Track</span>
-                                        <span class="col-span-3 t-label text-center">Car</span>
-                                        <span class="col-span-2 t-label text-center">Match</span>
-                                    </div>
-                                    {% for attr, d in pha.attributes %}
-                                        <div class="grid grid-cols-12 gap-2 py-2 items-center">
-                                            <span class="col-span-4 text-sm font-medium text-slate-800 capitalize pl-1">{{ attr }}</span>
-                                            <span class="col-span-3 text-center">
-                                                <span class="t-value">{{ d.track }}</span>
-                                                <span class="t-caption">#{{ d.track_rank }}</span>
-                                            </span>
-                                            <span class="col-span-3 text-center">
-                                                <span class="t-value">{{ d.car }}</span>
-                                                <span class="t-caption">#{{ d.car_rank }}</span>
-                                            </span>
-                                            <span class="col-span-2 text-center">
-                                                {% if d.aligned %}
-                                                    <span class="text-emerald-600 font-bold">✓</span>
-                                                {% else %}
-                                                    <span class="text-slate-300">—</span>
-                                                {% endif %}
-                                            </span>
-                                        </div>
-                                    {% endfor %}
-                                </div>
+                            <div class="space-y-3">
+                                <table class="dt">
+                                    <caption class="sr-only">Track demand and car rank per attribute</caption>
+                                    <thead class="border-b border-slate-200">
+                                        <tr>
+                                            <th scope="col" class="dt-th">Attribute</th>
+                                            <th scope="col" class="dt-th text-right">Track</th>
+                                            <th scope="col" class="dt-th text-right">Car</th>
+                                            <th scope="col" class="dt-th text-right">Match</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100">
+                                        {% for attr, d in pha.attributes %}
+                                            <tr>
+                                                <td class="dt-td capitalize">{{ attr }}</td>
+                                                <td class="dt-td text-right"><span class="font-semibold text-slate-900">{{ d.track }}</span> <span class="text-xs text-slate-500">#{{ d.track_rank }}</span></td>
+                                                <td class="dt-td text-right"><span class="font-semibold text-slate-900">{{ d.car }}</span> <span class="text-xs text-slate-500">#{{ d.car_rank }}</span></td>
+                                                <td class="dt-td text-right">{% if d.aligned %}<span class="font-bold text-emerald-700">✓</span><span class="sr-only">aligned</span>{% else %}<span class="text-slate-300">—</span><span class="sr-only">not aligned</span>{% endif %}</td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
 
                                 {% embed 'partials/_how.twig' %}{% block how %}
                                     <p>Rank #1 is the attribute the track demands most, or your car's strongest. Top match: the two #1s line up. Perfect match: all three ranks line up.</p>
@@ -140,34 +133,35 @@
                             {% endblock %}
                             {% block body %}
                                 <div class="space-y-4">
-                                    <div class="overflow-x-auto">
-                                        <table class="min-w-full text-sm">
+                                    {# One value per cell: what lands in the car, and the car it leaves.
+                                       Raw test points are the landed value before decay; the "how" says so. #}
+                                    <div class="dt-scroll">
+                                        <table class="dt">
                                             <thead>
-                                                <tr class="text-left text-slate-500">
-                                                    <th class="py-1.5 pr-3 font-medium">Priority</th>
-                                                    <th class="py-1.5 px-2 font-medium text-right sm:hidden">Raw / Landed</th>
-                                                    <th class="py-1.5 px-2 font-medium text-right hidden sm:table-cell">Raw P / H / A</th>
-                                                    <th class="py-1.5 px-2 font-medium text-right hidden sm:table-cell">~ Landed P / H / A</th>
-                                                    <th class="py-1.5 pl-2 font-medium text-right">~ Car after race +3</th>
+                                                <tr>
+                                                    <th scope="col" rowspan="2" class="dt-th align-bottom">Priority</th>
+                                                    <th scope="colgroup" colspan="3" class="dt-th pb-0 text-center">Lands in car</th>
+                                                    <th scope="colgroup" colspan="3" class="dt-th pb-0 text-center">Car after race +3</th>
+                                                </tr>
+                                                <tr class="border-b border-slate-200">
+                                                    <th scope="col" class="dt-th pt-1 text-right">P</th>
+                                                    <th scope="col" class="dt-th pt-1 text-right">H</th>
+                                                    <th scope="col" class="dt-th pt-1 text-right">A</th>
+                                                    <th scope="col" class="dt-th pt-1 text-right">P</th>
+                                                    <th scope="col" class="dt-th pt-1 text-right">H</th>
+                                                    <th scope="col" class="dt-th pt-1 text-right">A</th>
                                                 </tr>
                                             </thead>
                                             <tbody class="divide-y divide-slate-100">
                                                 {% for p in testing_projection %}
-                                                    <tr>
-                                                        <td class="py-1.5 pr-3 font-medium text-slate-800">{{ p.priority }}</td>
-                                                        <td class="py-1.5 px-2 text-right tabular-nums sm:hidden">
-                                                            <span class="text-slate-500">+{{ p.raw.power|number_format(1) }} / +{{ p.raw.handling|number_format(1) }} / +{{ p.raw.acceleration|number_format(1) }}</span>
-                                                            <span class="block text-slate-900">+{{ p.landed.power|number_format(1) }} / +{{ p.landed.handling|number_format(1) }} / +{{ p.landed.acceleration|number_format(1) }}</span>
-                                                        </td>
-                                                        <td class="py-1.5 px-2 text-right tabular-nums text-slate-600 hidden sm:table-cell">
-                                                            +{{ p.raw.power|number_format(1) }} / +{{ p.raw.handling|number_format(1) }} / +{{ p.raw.acceleration|number_format(1) }}
-                                                        </td>
-                                                        <td class="py-1.5 px-2 text-right tabular-nums text-slate-900 hidden sm:table-cell">
-                                                            +{{ p.landed.power|number_format(1) }} / +{{ p.landed.handling|number_format(1) }} / +{{ p.landed.acceleration|number_format(1) }}
-                                                        </td>
-                                                        <td class="py-1.5 pl-2 text-right tabular-nums text-slate-900">
-                                                            P {{ p.new_car.power|number_format(0) }} · H {{ p.new_car.handling|number_format(0) }} · A {{ p.new_car.acceleration|number_format(0) }}
-                                                        </td>
+                                                    <tr class="{{ p is same as(best_test) ? 'bg-emerald-50' : '' }}">
+                                                        <td class="dt-td whitespace-normal">{{ p.priority }}</td>
+                                                        <td class="dt-td text-right text-slate-900">+{{ p.landed.power|number_format(1) }}</td>
+                                                        <td class="dt-td text-right text-slate-900">+{{ p.landed.handling|number_format(1) }}</td>
+                                                        <td class="dt-td text-right text-slate-900">+{{ p.landed.acceleration|number_format(1) }}</td>
+                                                        <td class="dt-td text-right text-slate-600">{{ p.new_car.power|number_format(0) }}</td>
+                                                        <td class="dt-td text-right text-slate-600">{{ p.new_car.handling|number_format(0) }}</td>
+                                                        <td class="dt-td text-right text-slate-600">{{ p.new_car.acceleration|number_format(0) }}</td>
                                                     </tr>
                                                 {% endfor %}
                                             </tbody>
@@ -200,7 +194,7 @@
                                         </details>
                                     {% endif %}
                                     {% embed 'partials/_how.twig' %}{% block how %}
-                                        <p>Test points decay through Test → R&amp;D → Engineering → Car Character at 0.5 per race; about 12.5% of the raw points lands in the car by race +3. Test laps also wear parts.</p>
+                                        <p>100 test laps earn raw points per priority; they decay through Test → R&amp;D → Engineering → Car Character at 0.5 per race, so about 12.5% lands in the car by race +3. The highlighted row lands the most in total. Test laps also wear parts.</p>
                                     {% endblock %}{% endembed %}
                                 </div>
                             {% endblock %}
@@ -278,9 +272,11 @@
                                                     <span class="text-sm font-semibold text-slate-900">{{ neg.name }}</span>
                                                     <span class="t-caption">progress {{ neg.progress }}% · priority {{ neg.priority }}{% if neg.contested == 'Yes' %} · <span class="text-amber-700 font-medium">contested</span>{% endif %}{% if neg.attention %} · <span class="text-amber-700 font-medium">needs attention</span>{% endif %}</span>
                                                 </div>
-                                                <div class="flex flex-wrap gap-1 mb-3">
+                                                {# Every characteristic is on GPRO's 1–7 scale: say it once, not on each chip. #}
+                                                <div class="mb-3 flex flex-wrap items-center gap-1">
+                                                    <span class="mr-1 text-[10px] font-medium uppercase tracking-wide text-slate-500">Scale 1–7</span>
                                                     {% for k, v in neg.characteristics %}
-                                                        <span class="rounded bg-slate-50 px-1.5 py-0.5 text-xs text-slate-600">{{ k|capitalize }} <span class="font-semibold text-slate-800">{{ v }}/7</span></span>
+                                                        <span class="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">{{ k|capitalize }} <span class="font-semibold text-slate-900">{{ v }}</span></span>
                                                     {% endfor %}
                                                 </div>
                                                 <p class="t-label mb-1">Recommended answers</p>
@@ -371,31 +367,31 @@
                     <span class="t-caption tabular-nums">{{ season_calendar|length }} rounds</span>
                 {% endblock %}
                 {% block body %}
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full text-sm">
+                    <div class="dt-scroll">
+                        <table class="dt">
                             <caption class="sr-only">Season calendar with each track's Power, Handling and Acceleration demand</caption>
-                            <thead>
-                                <tr class="t-label border-b border-slate-200">
-                                    <th scope="col" class="py-2 pr-2 text-left">#</th>
-                                    <th scope="col" class="py-2 px-2 text-left">Track</th>
-                                    <th scope="col" class="py-2 px-2 text-right">P</th>
-                                    <th scope="col" class="py-2 px-2 text-right">H</th>
-                                    <th scope="col" class="py-2 pl-2 text-right">A</th>
+                            <thead class="border-b border-slate-200">
+                                <tr>
+                                    <th scope="col" class="dt-th text-right">#</th>
+                                    <th scope="col" class="dt-th">Track</th>
+                                    <th scope="col" class="dt-th text-right">P</th>
+                                    <th scope="col" class="dt-th text-right">H</th>
+                                    <th scope="col" class="dt-th text-right">A</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100">
                                 {% for round in season_calendar %}
                                     <tr class="{{ round.is_current ? 'bg-slate-100 font-semibold' : '' }}">
-                                        <td class="py-1.5 pr-2 tabular-nums text-slate-500">
+                                        <td class="dt-td text-right text-slate-500">
                                             {{ round.race }}
                                             {%- if round.is_current %} <span class="text-xs font-semibold text-slate-900">next</span>{% endif -%}
                                         </td>
-                                        <td class="py-1.5 px-2 text-slate-900 truncate max-w-[10rem] sm:max-w-none">
+                                        <td class="dt-td whitespace-normal text-slate-900">
                                             {{ round.track_name|default('—') }}
                                         </td>
-                                        <td class="py-1.5 px-2 text-right tabular-nums">{{ round.power is null ? '—' : round.power }}</td>
-                                        <td class="py-1.5 px-2 text-right tabular-nums">{{ round.handling is null ? '—' : round.handling }}</td>
-                                        <td class="py-1.5 pl-2 text-right tabular-nums">{{ round.acceleration is null ? '—' : round.acceleration }}</td>
+                                        <td class="dt-td text-right">{{ round.power is null ? '—' : round.power }}</td>
+                                        <td class="dt-td text-right">{{ round.handling is null ? '—' : round.handling }}</td>
+                                        <td class="dt-td text-right">{{ round.acceleration is null ? '—' : round.acceleration }}</td>
                                     </tr>
                                 {% endfor %}
                             </tbody>
@@ -466,7 +462,8 @@
         set('[data-plan-after-p]', Math.round(after[0]));
         set('[data-plan-after-h]', Math.round(after[1]));
         set('[data-plan-after-a]', Math.round(after[2]));
-        set('[data-plan-after-match]', matchLevel(track, after) + ' · ' + fitScore(track, after).toFixed(1));
+        set('[data-plan-after-match]', matchLevel(track, after));
+        set('[data-plan-after-fit]', 'fit ' + fitScore(track, after).toFixed(1));
         set('[data-plan-total]', money(cost));
         const over = panel.querySelector('[data-plan-over-cash]');
         if (over) over.classList.toggle('hidden', cost <= num(panel, 'cash'));
