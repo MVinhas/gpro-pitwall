@@ -301,11 +301,11 @@
                                         <td class="dt-td text-right hidden sm:table-cell">{{ row.humidity ?? '—' }}%</td>
                                         <td class="dt-td text-right">
                                             {% if row.wet_races == 0 %}
-                                                <span class="inline-flex items-center rounded px-1.5 py-px text-xs font-medium bg-slate-100 text-slate-700">Dry</span>
+                                                <span class="inline-flex items-center rounded-md px-1.5 py-px text-xs font-medium bg-slate-100 text-slate-700">Dry</span>
                                             {% elseif row.wet_races == row.races %}
-                                                <span class="inline-flex items-center rounded px-1.5 py-px text-xs font-medium bg-slate-100 text-slate-700">Wet</span>
+                                                <span class="inline-flex items-center rounded-md px-1.5 py-px text-xs font-medium bg-slate-100 text-slate-700">Wet</span>
                                             {% else %}
-                                                <span class="inline-flex items-center rounded px-1.5 py-px text-xs font-medium bg-slate-200 text-slate-700">Mixed</span>
+                                                <span class="inline-flex items-center rounded-md px-1.5 py-px text-xs font-medium bg-slate-200 text-slate-700">Mixed</span>
                                             {% endif %}
                                         </td>
                                     </tr>

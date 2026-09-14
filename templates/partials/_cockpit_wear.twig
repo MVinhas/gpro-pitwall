@@ -39,7 +39,7 @@
             <div class="flex items-center gap-3">
                 <input type="range" id="cockpitRisk" name="cockpit_risk" min="0" max="100" value="{{ cockpit_risk }}"
                        data-cockpit-wear-slider
-                       class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer">
+                       class="range">
                 <span data-slider-value class="text-sm font-semibold text-slate-900 w-10 text-right tabular-nums">{{ cockpit_risk }}</span>
             </div>
         </div>
@@ -49,7 +49,7 @@
                 <input type="range" id="cockpitTrainingLaps" name="cockpit_training_laps" min="0" max="100" step="5"
                        value="{{ cockpit_training_laps }}"
                        data-cockpit-wear-slider
-                       class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer">
+                       class="range">
                 <span data-slider-value class="text-sm font-semibold text-slate-900 w-10 text-right tabular-nums">{{ cockpit_training_laps }}</span>
             </div>
             <p class="t-caption mt-1">Wear from training laps run before this race.</p>
@@ -198,7 +198,7 @@
                                     {% endif %}
                                     <td class="dt-td text-right text-slate-600">+{{ row.est }}%</td>
                                     <td class="dt-td text-right">
-                                        <span class="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-semibold tabular-nums
+                                        <span class="inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-semibold tabular-nums
                                             {{ row.end >= 100 ? 'bg-red-100 text-red-800' : (row.end >= 90 ? 'bg-amber-100 text-amber-800' : 'text-slate-700') }}">{{ row.end|round }}%</span>
                                     </td>
                                 </tr>

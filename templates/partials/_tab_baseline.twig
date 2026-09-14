@@ -30,9 +30,7 @@
                         {% endfor %}
                     </div>
                 {% else %}
-                    <div class="text-center py-12 bg-slate-50 rounded-lg border-2 border-dashed border-slate-200">
-                        <p class="t-caption">No data recorded for {{ active_division }} yet.</p>
-                    </div>
+                    {% include 'partials/_empty.twig' with { title: 'No drivers recorded', body: 'Add a driver below to build the ' ~ active_division ~ ' baseline.' } only %}
                 {% endif %}
             </div>
         </div>
@@ -42,7 +40,7 @@
             {% for div in divisions %}
                 {% set div_cap = config.secrets.division_caps[div] %}
                 <a href="/divisions/baseline?division_tab={{ div }}&track={{ active_track }}"
-                   class="flex flex-col items-center px-4 py-2 rounded-md transition-all {{ div == active_division ? 'bg-surface text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700' }}">
+                   class="flex flex-col items-center px-4 py-2 rounded-md transition-all {{ div == active_division ? 'bg-surface text-blue-600' : 'text-slate-500 hover:text-slate-700' }}">
                     <span class="text-sm font-medium leading-none">{{ div }}</span>
                     <span class="mt-0.5 text-[10px] font-medium uppercase tracking-wide opacity-70">
                         Cap {{ div_cap == 999 ? '∞' : div_cap }}
@@ -87,7 +85,7 @@
             <div class="card-bd flex items-center justify-between">
                 <div>
                     <h4 class="t-section">Season</h4>
-                    <p class="t-caption">Current Data Season</p>
+                    <p class="t-caption">Current data season</p>
                 </div>
                 <form method="POST" action="/update_season" class="flex gap-2">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -102,19 +100,19 @@
         {# Undo / Clear Buttons #}
         <div class="flex gap-3">
              <form method="POST" action="/undo_last_pilot" class="flex-1"
-                   onsubmit="return confirm('Delete the last pilot added to {{ active_division }}? This cannot be undone.');">
+                   onsubmit="return confirm('Delete the last driver added to {{ active_division }}? This cannot be undone.');">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <input type="hidden" name="division" value="{{ active_division }}">
-                <button type="submit" class="btn btn-md btn-soft-warn w-full shadow-sm">
-                    Undo Last
+                <button type="submit" class="btn btn-md btn-soft-warn w-full">
+                    Undo last
                 </button>
             </form>
             <form method="POST" action="/clear_stats" class="flex-1"
-                  onsubmit="return confirm('Delete ALL {{ all_ideal_pilots[active_division].count }} pilot record(s) for {{ active_division }}? This cannot be undone.');">
+                  onsubmit="return confirm('Delete ALL {{ all_ideal_pilots[active_division].count }} driver record(s) for {{ active_division }}? This cannot be undone.');">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <input type="hidden" name="division" value="{{ active_division }}">
-                <button type="submit" class="btn btn-md btn-soft-danger w-full shadow-sm">
-                    Clear All
+                <button type="submit" class="btn btn-md btn-soft-danger w-full">
+                    Clear all
                 </button>
             </form>
         </div>

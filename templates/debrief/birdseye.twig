@@ -65,14 +65,12 @@
     {% embed 'partials/_acc.twig' with {
         id: 'brief-filters',
         title: 'Filters',
-        caption: active_filters == 0 ? 'Showing everything' : active_filters ~ ' active',
+        caption: active_filters == 0 ? 'Showing everything' : '',
         open_default: active_filters > 0
     } %}
         {% block verdict %}{% import "debrief/_shell.twig" as t %}
             {% if active_filters > 0 %}
                 <span class="brief-chip">{{ active_filters }} active</span>
-            {% else %}
-                <span class="t-caption">None</span>
             {% endif %}
         {% endblock %}
         {% block body %}{% import "debrief/_shell.twig" as t %}{% include "debrief/_filters.twig" %}{% endblock %}

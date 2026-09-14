@@ -9,7 +9,7 @@
     <h1 class="sr-only">{{ {'Race Strategy': 'Race strategy', 'Training Planner': 'Training planner', 'Recruitment Analyzer': 'Recruitment', 'Division Baseline': 'Division baseline', 'Division Differences': 'Division differences', 'Cockpit': 'Race weekend cockpit'}[active_main_tab]|default(active_main_tab) }}</h1>
 
     {# Main Content Area #}
-    <div id="main-content-tabs" class="fade-in">
+    <div id="main-content-tabs">
         {% if active_main_tab == 'Cockpit' %}
             {% include 'partials/_tab_cockpit.twig' %}
 

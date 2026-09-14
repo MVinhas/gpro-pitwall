@@ -210,7 +210,7 @@
 ========================= */
 
 .notice {
-    @apply rounded-md border-l-4 p-4 shadow-sm text-sm;
+    @apply rounded-md border-l-4 p-4 text-sm;
 }
 
 .notice-info    { @apply bg-blue-50 border-blue-400 text-blue-800; }
@@ -238,7 +238,7 @@
    p-4; sm+ keeps the original p-6 density.
 ========================= */
 
-.card    { @apply bg-surface rounded-xl shadow-sm border border-slate-200 overflow-hidden; }
+.card    { @apply bg-surface rounded-xl border border-slate-200 overflow-hidden; }
 .card-hd { @apply px-4 py-3 sm:px-6 sm:py-4 border-b border-slate-200 bg-slate-50; }
 .card-bd { @apply p-4 sm:p-6; }
 
@@ -435,15 +435,10 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
     @apply bg-slate-50 text-slate-500 cursor-not-allowed;
 }
 
-/* Tab-content entrance. Referenced by index.twig's #main-content-tabs. */
-.fade-in { animation: fade-in 0.25s ease-out; }
-@keyframes fade-in {
-    from { opacity: 0; transform: translateY(4px); }
-    to   { opacity: 1; transform: none; }
-}
+/* Range sliders keep the native control, tinted with the action colour. */
+.range { @apply w-full cursor-pointer; accent-color: var(--color-blue-600); }
 
 @media (prefers-reduced-motion: reduce) {
-    .fade-in { animation: none; }
     .transition-transform, .transition-all, .transition-colors { transition: none; }
 }
 

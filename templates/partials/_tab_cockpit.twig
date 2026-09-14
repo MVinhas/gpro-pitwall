@@ -9,10 +9,7 @@
             <p class="mt-1">{{ cockpit_error }}</p>
         </div>
     {% elseif pha is not defined %}
-        <div class="rounded-md bg-slate-50 border border-dashed border-slate-200 p-8 text-center">
-            <p class="t-heading text-slate-500">No synced data yet</p>
-            <p class="t-caption mt-1">Add your API token and sync to see your push recommendation.</p>
-        </div>
+        {% include 'partials/_empty.twig' with { title: 'No synced data yet', body: 'Add your GPRO API token and re-sync to fill the cockpit.' } only %}
     {% else %}
 
         {# Verdicts computed once, reused by each card's summary and body. A card
@@ -275,7 +272,7 @@
                                                 <div class="mb-3 flex flex-wrap items-center gap-1">
                                                     <span class="mr-1 text-[10px] font-medium uppercase tracking-wide text-slate-500">Scale 1–7</span>
                                                     {% for k, v in neg.characteristics %}
-                                                        <span class="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">{{ k|capitalize }} <span class="font-semibold text-slate-900">{{ v }}</span></span>
+                                                        <span class="rounded-md bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">{{ k|capitalize }} <span class="font-semibold text-slate-900">{{ v }}</span></span>
                                                     {% endfor %}
                                                 </div>
                                                 <p class="t-label mb-1">Recommended answers</p>
@@ -332,7 +329,7 @@
                                                         </div>
                                                     </div>
                                                     {% if t.score > 0 %}
-                                                        <span class="shrink-0 rounded px-1.5 py-0.5 text-xs font-semibold {{ rank == 1 ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600' }}">{{ rank_labels[rank]|default('#' ~ rank) }}</span>
+                                                        <span class="shrink-0 rounded-md px-1.5 py-0.5 text-xs font-semibold {{ rank == 1 ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600' }}">{{ rank_labels[rank]|default('#' ~ rank) }}</span>
                                                     {% else %}
                                                         <span class="shrink-0 text-xs text-slate-400">No gain</span>
                                                     {% endif %}

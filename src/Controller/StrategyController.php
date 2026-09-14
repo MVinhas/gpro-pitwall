@@ -28,7 +28,7 @@ class StrategyController
         . 're-sync, then race strategy will be available.';
 
     public const string NO_PILOT_MESSAGE =
-        'No driver under contract. Hire a pilot in GPRO, then re-sync.';
+        'No driver under contract. Hire a driver in GPRO, then re-sync.';
 
     public const string GENERIC_ERROR_MESSAGE =
         'Something went wrong loading this data. Please try refreshing or re-syncing.';

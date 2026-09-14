@@ -43,7 +43,7 @@
                 </p>
                 <div class="mt-3">
                     <a href="/cockpit" class="btn btn-md btn-primary">
-                        Go to Race Weekend Cockpit →
+                        Open the cockpit →
                     </a>
                 </div>
             </div>
@@ -56,7 +56,7 @@
                     {% else %}
                         No GPRO data has been loaded yet.
                     {% endif %}
-                    Try ↻ Re-sync above; if it keeps failing, replace your API token below.
+                    Try Re-sync above; if it keeps failing, replace your API token below.
                 </p>
             </div>
         {% elseif sync_state == 'running' %}
@@ -72,7 +72,7 @@
         {% elseif sync_state == 'never' %}
             <div class="notice notice-info mb-8">
                 <p class="font-bold">Token saved — not synced yet.</p>
-                <p class="mt-1">Use ↻ Re-sync above to load your GPRO data.</p>
+                <p class="mt-1">Use Re-sync above to load your GPRO data.</p>
             </div>
         {% else %}
             <div class="notice notice-warn mb-8">
@@ -99,7 +99,6 @@
                     </p>
                     {% if has_token %}
                         <p class="mt-2 inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
-                            <span aria-hidden="true">●</span>
                             Current token ending <span class="font-mono">…{{ token_hint }}</span>
                         </p>
                     {% endif %}
@@ -113,11 +112,10 @@
 
                 <div>
                     <label class="t-label block mb-1">
-                        {{ has_token ? 'Replace API Token' : 'Your API Token' }}
+                        {{ has_token ? 'Replace API token' : 'Your API token' }}
                     </label>
                     {% if has_token %}
                         <p class="mb-2 inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
-                            <span aria-hidden="true">●</span>
                             Token saved — ending <span class="font-mono">…{{ token_hint }}</span>
                         </p>
                     {% endif %}
@@ -139,7 +137,7 @@
 
                 <div class="flex justify-end">
                     <button type="submit" class="btn btn-md btn-primary">
-                        Save Token
+                        Save token
                     </button>
                 </div>
             </form>
@@ -155,7 +153,7 @@
                     <span class="font-medium">{{ user.username }}</span>
                 </div>
                 <div>
-                    <span class="block text-slate-500">Member Since</span>
+                    <span class="block text-slate-500">Member since</span>
                     <span class="font-medium">{{ t.localtime(user.created_at, 'date') }}</span>
                 </div>
             </div>
@@ -173,8 +171,8 @@
         <details class="border-t border-slate-100 pt-6 mt-6 group">
             <summary class="text-xs font-medium text-slate-500 cursor-pointer hover:text-red-600 transition-colors list-none">
                 <span class="inline-flex items-center gap-1">
-                    <span class="text-slate-400 group-open:rotate-90 transition-transform">▸</span>
                     Delete my account
+                    <svg class="size-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
                 </span>
             </summary>
             <div class="mt-4 rounded-md border border-red-200 bg-red-50 p-4">

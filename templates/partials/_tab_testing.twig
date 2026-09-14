@@ -23,14 +23,14 @@
             </div>
             <div class="flex items-center gap-2 text-xs text-slate-600">
                 <span class="font-semibold">{{ r.weather.temp }}°C</span>
-                <span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">{{ r.weather.label }}</span>
+                <span class="px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-700">{{ r.weather.label }}</span>
                 <span class="text-slate-400">·</span>
                 <span>{{ r.weather.hum }}% hum</span>
             </div>
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-slate-200">
             <div class="p-5">
-                <p class="t-label mb-3">Track Demands</p>
+                <p class="t-label mb-3">Track demands</p>
                 <dl class="grid grid-cols-3 gap-3 text-center">
                     {% for label, key in {'Power': 'power', 'Handling': 'handling', 'Accel': 'acceleration'} %}
                         <div>
@@ -41,7 +41,7 @@
                 </dl>
             </div>
             <div class="p-5">
-                <p class="t-label mb-3">Your Car</p>
+                <p class="t-label mb-3">Your car</p>
                 <dl class="grid grid-cols-3 gap-3 text-center">
                     {% for label, key in {'Power': 'power', 'Handling': 'handling', 'Accel': 'acceleration'} %}
                         <div>
@@ -161,7 +161,7 @@
                 </div>
                 <input type="range" min="5" max="{{ r.max_laps }}" step="5" value="{{ r.default_laps }}"
                        data-testing-laps aria-label="Testing laps"
-                       class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer">
+                       class="range">
             </div>
             <div class="dt-inset">
                 <table class="dt">
@@ -228,8 +228,5 @@
     {% endif %}
 
 {% else %}
-    <div class="h-full flex flex-col items-center justify-center bg-slate-50 rounded-xl border border-dashed border-slate-200 p-12">
-        <p class="t-heading">Testing</p>
-        <p class="t-caption mt-1">No testing data yet — sync your account to load the testing track.</p>
-    </div>
+    {% include 'partials/_empty.twig' with { title: 'No testing data yet', body: 'Re-sync to load this race\'s testing track.' } only %}
 {% endif %}

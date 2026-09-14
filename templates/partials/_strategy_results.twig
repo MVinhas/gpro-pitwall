@@ -285,8 +285,5 @@
         </div>
     </div>
 {% else %}
-    <div class="h-full flex flex-col items-center justify-center bg-slate-50 rounded-xl border border-dashed border-slate-200 p-12" data-result-state="empty">
-        <p class="t-heading">Strategy &amp; Setup</p>
-        <p class="t-caption mt-1">No strategy calculated yet.</p>
-    </div>
+    {% include 'partials/_empty.twig' with { title: 'No strategy yet', body: 'Change any race setting to calculate one.', state: 'empty' } only %}
 {% endif %}

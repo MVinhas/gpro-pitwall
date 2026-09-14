@@ -1,0 +1,6 @@
+{# The one empty state: a dashed outline, a title and one line saying what
+   fills it. `state` sets data-result-state for panels that carry one. #}
+<div class="rounded-xl border border-dashed border-slate-300 px-6 py-10 text-center"{% if state|default('') %} data-result-state="{{ state }}"{% endif %}>
+    <p class="t-section">{{ title }}</p>
+    {% if body|default('') %}<p class="t-caption mt-1">{{ body }}</p>{% endif %}
+</div>

@@ -20,7 +20,7 @@
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
                     {# Target Division #}
                     <div>
-                        <label class="t-label block mb-1">Target Division</label>
+                        <label class="t-label block mb-1">Target division</label>
                         <select name="target_division" class="form-select">
                             {% for div in divisions %}
                                 <option value="{{ div }}" {{ div == active_division ? 'selected' : '' }}>{{ div }}</option>
@@ -31,7 +31,7 @@
                     {# Filters #}
                     <div class="pb-2">
                         <label class="inline-flex items-center cursor-pointer">
-                            <input type="checkbox" name="filter_offers" value="1" class="rounded border-slate-300 text-blue-600 shadow-sm focus:ring-blue-500 h-4 w-4">
+                            <input type="checkbox" name="filter_offers" value="1" class="rounded-md border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4">
                             <span class="ml-2 text-sm text-slate-700">Exclude drivers with offers</span>
                         </label>
                     </div>
@@ -39,7 +39,7 @@
                     {# Force a fresh market pull (bypasses cache). #}
                     <div class="pb-2">
                         <label class="inline-flex items-center cursor-pointer">
-                            <input type="checkbox" name="refresh_market" value="1" class="rounded border-slate-300 text-blue-600 shadow-sm focus:ring-blue-500 h-4 w-4">
+                            <input type="checkbox" name="refresh_market" value="1" class="rounded-md border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4">
                             <span class="ml-2 text-sm text-slate-700">Re-fetch market now</span>
                         </label>
                     </div>
@@ -79,15 +79,15 @@
                     {% set hasRangeFilters = range_filters|length > 0 %}
                     <details class="mb-4 rounded-lg border border-slate-200 bg-slate-50 group" {{ hasRangeFilters ? 'open' : '' }}>
                         <summary class="flex items-center justify-between px-4 py-3 cursor-pointer list-none">
+                            <span class="text-sm font-medium text-slate-700">Value range filters</span>
                             <span class="inline-flex items-center gap-2">
-                                <span class="text-slate-400 group-open:rotate-90 transition-transform">▸</span>
-                                <span class="text-sm font-medium text-slate-700">Value range filters</span>
+                                {% if hasRangeFilters %}
+                                    <span class="inline-flex items-center rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
+                                        {{ range_filters|length }} active {{ range_filters|length == 1 ? 'range' : 'ranges' }}
+                                    </span>
+                                {% endif %}
+                                <svg class="size-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
                             </span>
-                            {% if hasRangeFilters %}
-                                <span class="inline-flex items-center rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
-                                    {{ range_filters|length }} active {{ range_filters|length == 1 ? 'range' : 'ranges' }}
-                                </span>
-                            {% endif %}
                         </summary>
 
                         <form method="GET" action="/" class="border-t border-slate-200 bg-surface px-4 py-4">
@@ -131,8 +131,8 @@
 
                             <div class="flex justify-end gap-3 border-t border-slate-100 mt-4 pt-4">
                                 {% set clearFilterHref = '/recruitment?division_tab=' ~ (active_division|url_encode) ~ '&page=1&sort=' ~ (sort.col|url_encode) ~ '&order=' ~ (sort.order|url_encode) %}
-                                <a href="{{ clearFilterHref }}" class="btn btn-md btn-secondary">Clear Filters</a>
-                                <button type="submit" class="btn btn-md btn-primary">Apply Filters</button>
+                                <a href="{{ clearFilterHref }}" class="btn btn-md btn-secondary">Clear filters</a>
+                                <button type="submit" class="btn btn-md btn-primary">Apply filters</button>
                             </div>
                         </form>
                     </details>
@@ -191,7 +191,7 @@
                                                     <span class="font-medium text-slate-900">{{ d.NAME }}</span>
                                                 {% endif %}
                                                 {% if d.OFF > 0 %}
-                                                    <span class="ml-1.5 inline-flex items-center rounded bg-amber-100 px-1.5 py-px text-[10px] font-medium text-amber-800">{{ d.OFF }} offer{{ d.OFF == 1 ? '' : 's' }}</span>
+                                                    <span class="ml-1.5 inline-flex items-center rounded-md bg-amber-100 px-1.5 py-px text-[10px] font-medium text-amber-800">{{ d.OFF }} offer{{ d.OFF == 1 ? '' : 's' }}</span>
                                                 {% endif %}
                                             </td>
                                             <td class="dt-td text-right font-semibold text-slate-900">{{ d.OA }}</td>
@@ -203,9 +203,9 @@
                                                 {% set nxtOn = d.FAV_next > 0 %}
                                                 <td class="dt-td">
                                                     <span class="inline-flex items-center gap-1">
-                                                        <span class="rounded px-1.5 py-px text-[11px] font-semibold {{ curOn ? 'bg-slate-100 text-slate-900' : 'text-slate-400' }}"
+                                                        <span class="rounded-md px-1.5 py-px text-[11px] font-semibold {{ curOn ? 'bg-slate-100 text-slate-900' : 'text-slate-400' }}"
                                                               title="{{ curOn ? 'This season: ' ~ d.FAV_current_names|join(', ') : 'No favourite tracks this season' }}">C·{{ d.FAV_current }}</span>
-                                                        <span class="rounded px-1.5 py-px text-[11px] font-semibold {{ nxtOn ? 'bg-slate-100 text-slate-900' : 'text-slate-400' }}"
+                                                        <span class="rounded-md px-1.5 py-px text-[11px] font-semibold {{ nxtOn ? 'bg-slate-100 text-slate-900' : 'text-slate-400' }}"
                                                               title="{{ nxtOn ? 'Next season: ' ~ d.FAV_next_names|join(', ') : 'No favourite tracks next season' }}">N·{{ d.FAV_next }}</span>
                                                     </span>
                                                 </td>
@@ -252,7 +252,7 @@
                                         </p>
                                     </div>
                                     <div>
-                                        <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                                        <nav class="relative z-0 inline-flex rounded-md -space-x-px" aria-label="Pagination">
                                             {% if pagination.current > 1 %}
                                                 <a href="/recruitment?{{ navigationParams }}&page={{ pagination.current - 1 }}" aria-label="Previous page" class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-slate-300 bg-surface text-sm font-medium text-slate-500 hover:bg-slate-50">
                                                      «
