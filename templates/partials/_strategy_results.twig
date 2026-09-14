@@ -131,47 +131,49 @@
                     <div>
                         <dt class="t-label">Boost laps</dt>
                         {% if planned is not empty %}
-                            <dd class="text-base font-semibold text-slate-900 tabular-nums">{{ planned|join(' · ') }}</dd>
+                            <dd class="text-base font-semibold text-slate-900 tabular-nums">Laps {{ planned|join(', ') }}</dd>
                         {% else %}
                             <dd class="text-base font-semibold text-slate-900">Off</dd>
                             {% if ra.boost.laps is not empty %}
-                                <dd class="text-xs text-slate-500 tabular-nums">suggested {{ ra.boost.laps|join(' · ') }}</dd>
+                                <dd class="text-xs text-slate-500 tabular-nums">suggested: laps {{ ra.boost.laps|join(', ') }}</dd>
                             {% endif %}
                         {% endif %}
                     </div>
                 {% endif %}
             </dl>
             </div>
-            {# PUSH SIGNALS — the evidence for the Clear Track Risk above: one short fact
-               per signal, tinted when it holds. The long explanation is the chip's title. #}
+            {# PUSH SIGNALS — the evidence for the Clear Track Risk above: one plain verdict
+               per signal, tinted when it holds. The figures behind it are the chip's title. #}
             {% if sr.push_signals is defined %}
                 {% set ps = sr.push_signals %}
                 {% set signals = [
                     {ok: ps.pha_match,
-                     short: ps.pha_level == 'perfect' ? 'Perfect P/H/A match' : (ps.pha_level == 'top' ? 'Top P/H/A match' : 'No P/H/A match'),
-                     detail: ps.pha_level == 'perfect' ? 'All three attributes line up with the track.' : (ps.pha_level == 'top' ? 'Your strongest attribute is what the track demands most.' : 'Your car is built for different attributes than this track rewards.')},
+                     short: ps.pha_level == 'perfect' ? 'Car suits the track perfectly' : (ps.pha_level == 'top' ? 'Car suits the track' : "Car doesn't suit the track"),
+                     detail: ps.pha_level == 'perfect' ? 'Perfect P/H/A match: all three attributes line up with what the track demands.' : (ps.pha_level == 'top' ? "Top P/H/A match: your car's strongest attribute is what the track demands most." : "No P/H/A match: your car's strongest attribute is not what this track demands most.")},
                     {ok: ps.favourite,
-                     short: ps.favourite ? 'Favourite track' : 'Not a favourite track',
-                     detail: ps.favourite ? "One of your driver's three favourite tracks." : "Not one of your driver's favourite tracks."},
+                     short: ps.favourite ? "Driver's favourite track" : 'Not a favourite track',
+                     detail: ps.favourite ? "One of your driver's three favourite tracks." : "Not one of your driver's three favourite tracks."},
                 ] %}
                 {% if ps.show_tyres %}
                     {% set signals = signals|merge([
                         {ok: ps.tyres_weather,
-                         short: ps.tyre_perf is null ? 'No tyre rating' : ((ps.race_wet ? 'Wet' : 'Dry') ~ ' tyres ' ~ ps.tyre_perf ~ '/8'),
+                         short: ps.tyre_perf is null ? 'No tyre rating' : ('Tyres ' ~ (ps.tyres_weather ? 'good' : 'not good') ~ (ps.race_wet ? ' for rain' : ' in the dry')),
                          detail: ps.tyre_perf is null ? 'No tyre supplier rating available.' : ('Supplier ' ~ (ps.race_wet ? 'wet' : 'dry') ~ ' rating ' ~ ps.tyre_perf ~ '/8; 4/8 or better counts.')},
                         {ok: ps.temp_match,
-                         short: ps.ideal_temp is null ? 'No ideal temp' : ('Track ' ~ ps.race_temp ~ '° vs ideal ' ~ ps.ideal_temp ~ '°'),
-                         detail: 'Race temperature within ±3°C of the tyre ideal counts.'},
+                         short: ps.ideal_temp is null ? 'No ideal tyre temperature' : (ps.temp_match ? 'Right temperature for the tyres' : (ps.race_temp > ps.ideal_temp ? 'Too hot for the tyres' : 'Too cold for the tyres')),
+                         detail: ps.ideal_temp is null ? 'The supplier publishes no ideal temperature.' : ('Race ' ~ ps.race_temp|round ~ '°C, tyre ideal ' ~ ps.ideal_temp ~ '°C; within 3°C counts.')},
                     ]) %}
                 {% endif %}
                 {% if ps.car_rank is not null %}
-                    {% set signals = signals|merge([{ok: ps.car_above, short: 'Car #' ~ ps.car_rank ~ ' of ' ~ ps.car_total, detail: 'Car level against the group; above the group average counts.'}]) %}
+                    {% set car_below = ps.car_below ?? (not ps.car_above) %}
+                    {% set signals = signals|merge([{ok: ps.car_above, short: 'Car ' ~ (ps.car_above ? 'above average' : (car_below ? 'below average' : 'mid-group')), detail: '#' ~ ps.car_rank ~ ' of ' ~ ps.car_total ~ ' by car level in your group; more cars behind than ahead counts.'}]) %}
                 {% endif %}
                 {% if ps.driver_rank is not null %}
-                    {% set signals = signals|merge([{ok: ps.driver_above, short: 'Driver #' ~ ps.driver_rank ~ ' of ' ~ ps.driver_total, detail: 'Driver OA against the group; above the group average counts.'}]) %}
+                    {% set driver_below = ps.driver_below ?? (not ps.driver_above) %}
+                    {% set signals = signals|merge([{ok: ps.driver_above, short: 'Driver ' ~ (ps.driver_above ? 'above average' : (driver_below ? 'below average' : 'mid-group')), detail: '#' ~ ps.driver_rank ~ ' of ' ~ ps.driver_total ~ ' by overall rating in your group; more drivers behind than ahead counts.'}]) %}
                 {% endif %}
                 {% if ps.wear_ok is not null %}
-                    {% set signals = signals|merge([{ok: ps.wear_ok, short: 'Worst part ' ~ ps.wear_max|number_format(0) ~ '% at CTR ' ~ ps.wear_risk, detail: 'The car can take the push while its worst part stays under 90% wear.'}]) %}
+                    {% set signals = signals|merge([{ok: ps.wear_ok, short: ps.wear_ok ? 'Car can take the push' : 'A part may not last the push', detail: 'Worst part ends at ' ~ ps.wear_max|number_format(0) ~ '% wear at Clear Track Risk ' ~ ps.wear_risk ~ '; under 90% counts.'}]) %}
                 {% endif %}
                 {% set met = signals|filter(x => x.ok)|length %}
                 <div class="border-t border-slate-200 bg-slate-50 px-4 py-3 sm:px-6">

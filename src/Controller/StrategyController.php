@@ -390,8 +390,8 @@ class StrategyController
      *   pha_match: bool, pha_level: string, favourite: bool,
      *   show_tyres: bool, tyres_weather: bool, tyre_perf: ?int, race_wet: bool,
      *   temp_match: bool, race_temp: float, ideal_temp: ?int,
-     *   car_rank: ?int, car_total: ?int, car_above: ?bool,
-     *   driver_rank: ?int, driver_total: ?int, driver_above: ?bool,
+     *   car_rank: ?int, car_total: ?int, car_above: ?bool, car_below: ?bool,
+     *   driver_rank: ?int, driver_total: ?int, driver_above: ?bool, driver_below: ?bool,
      *   wear_ok: ?bool, wear_max: ?float, wear_risk: int
      * }
      */
@@ -441,9 +441,11 @@ class StrategyController
             'car_rank'      => $car['rank'],
             'car_total'     => $car['total'],
             'car_above'     => $car['above'],
+            'car_below'     => $car['below'],
             'driver_rank'   => $driver['rank'],
             'driver_total'  => $driver['total'],
             'driver_above'  => $driver['above'],
+            'driver_below'  => $driver['below'],
             'wear_ok'       => $wearMaxAtPushRisk === null ? null : $wearMaxAtPushRisk <= self::WEAR_HEADROOM_LIMIT,
             'wear_max'      => $wearMaxAtPushRisk,
             'wear_risk'     => self::PUSH_RISK,
@@ -506,17 +508,20 @@ class StrategyController
 
     /**
      * Ranks the manager's own value for `$field` against the whole group.
-     * Standard competition ranking (1 = best, ties share the better rank);
-     * "above" is strictly above the group arithmetic mean. Returns nulls when
-     * the manager can't be located or no group values exist, so callers can
-     * hide the signal cleanly.
+     * Standard competition ranking (1 = best, ties share the better rank).
+     * "above" means more of the group is behind than ahead, "below" the
+     * reverse; equal values count as neither, so the exact middle is neither.
+     * (The arithmetic mean was used before, and a few very weak entries
+     * dragged it down far enough to call a mid-pack driver above average.)
+     * Returns nulls when the manager can't be located or no group values
+     * exist, so callers can hide the signal cleanly.
      *
      * @param list<array<string, mixed>> $managers
-     * @return array{rank: ?int, total: ?int, above: ?bool}
+     * @return array{rank: ?int, total: ?int, above: ?bool, below: ?bool}
      */
     public static function groupStanding(int $myIdm, array $managers, string $field): array
     {
-        $none = ['rank' => null, 'total' => null, 'above' => null];
+        $none = ['rank' => null, 'total' => null, 'above' => null, 'below' => null];
         if ($myIdm <= 0) {
             return $none;
         }
@@ -538,13 +543,14 @@ class StrategyController
             return $none;
         }
 
-        $better = array_filter($values, static fn(int $v): bool => $v > $mine);
-        $mean = array_sum($values) / count($values);
+        $ahead = count(array_filter($values, static fn(int $v): bool => $v > $mine));
+        $behind = count(array_filter($values, static fn(int $v): bool => $v < $mine));
 
         return [
-            'rank'  => count($better) + 1,
+            'rank'  => $ahead + 1,
             'total' => count($values),
-            'above' => $mine > $mean,
+            'above' => $behind > $ahead,
+            'below' => $ahead > $behind,
         ];
     }
 
