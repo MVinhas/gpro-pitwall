@@ -371,7 +371,7 @@ class StrategyController
     }
 
     /**
-     * Push checklist shown under the Race Engineer: binary signals that argue
+     * Push checklist shown on the Race sheet: binary signals that argue
      * for a higher Clear Track Risk. Heuristic, not a game formula.
      *
      * Tyre signals are hidden in Rookie/Amateur (no supplier choice there).
