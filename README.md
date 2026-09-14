@@ -7,7 +7,7 @@
 [![Coverage floor](https://img.shields.io/badge/coverage-%E2%89%A559%25%20CI--enforced-yellow)](.github/workflows/ci.yml)
 [![PSR-12](https://img.shields.io/badge/code%20style-PSR--12-blue)](https://www.php-fig.org/psr/psr-12/)
 
-![GPRO Pitwall — race strategy, setup calculator and car wear analysis for GPRO managers](public/assets/og-image.png)
+![Pitwall — race sheet, car wear and training for GPRO managers](public/assets/og-image.png)
 
 Race-weekend cockpit for [Grand Prix Racing Online](https://www.gpro.net) managers. Pitwall reads your own GPRO data through the official public API and turns it into the answers you need before qualifying: what to train, which parts to swap, what setup to run, how hard to push — and what to bet on the weather.
 

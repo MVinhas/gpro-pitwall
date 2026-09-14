@@ -111,6 +111,9 @@
        themes (a light band would glare in dark mode). */
     --color-board:        light-dark(oklch(.279 .041 260.031), #243141);
     --color-board-strong: light-dark(oklch(.208 .042 265.755), #2b3a4d);
+    /* The logo's board plate. Brand mark only — never a UI accent, where
+       yellow would read as caution (and the coffee ask owns its own yellow). */
+    --color-brand-plate: light-dark(#f4c21b, #f4c21b);
     /* Modal backdrop. Light side = the old bg-slate-900/40 verbatim. */
     --color-scrim: light-dark(oklch(.208 .042 265.755 / .4), rgb(0 0 0 / .55));
 }
