@@ -3,32 +3,40 @@
    same variables as the body — never a hardcoded second copy).
 
    Usage:
-   {% embed 'partials/_acc.twig' with { id: 'wear', title: 'Car wear', caption: '…', open_default: false, lg_open: true } only %}
+   {% embed 'partials/_acc.twig' with { id: 'wear', title: 'Car wear', caption: '…', open_default: false } only %}
        {% block icon %}…{% endblock %}
        {% block verdict %}…{% endblock %}
        {% block body %}…{% endblock %}
    {% endembed %}
 
    id           required — anchor target + sessionStorage persistence key (layout.twig snippet)
-   open_default server-rendered open state (no-JS users and first paint)
+   open_default server-rendered open state — pass the card's "needs attention" flag
    lg_open      first visit on ≥1024px viewports opens it (data-acc-lg-open)
-   extra_class  optional extra classes appended to the <details> (e.g. grid order-*) #}
+   extra_class  optional extra classes appended to the <details>
+   variant      'card' (default) — a standalone card; 'row' — a row inside a grouped
+                list (the parent supplies the card and the dividers)
+   stacked      keep the verdict under the title at every width (narrow side columns)
+
+   The summary is a grid so it holds its shape on a phone: title and verdict
+   stack in the first column and the chevron stays pinned right; from sm up the
+   verdict moves into its own right-aligned column. #}
+{% set is_row = variant|default('card') == 'row' %}
+{% set is_stacked = stacked|default(false) %}
 <details id="{{ id }}" data-acc {% if lg_open|default(false) %}data-acc-lg-open{% endif %}
          {% if open_default|default(false) %}open{% endif %}
-         class="card group scroll-mt-16 {{ extra_class|default('') }}">
-    <summary class="cursor-pointer list-none p-4 sm:p-6 flex flex-wrap items-center justify-between gap-4
-                    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">
-        <span class="flex items-center gap-3">
+         class="{{ is_row ? '' : 'card' }} group/acc scroll-mt-16 {{ extra_class|default('') }}">
+    <summary class="grid cursor-pointer list-none grid-cols-[1fr_auto] items-center gap-x-4 gap-y-1 {{ is_stacked ? '' : 'sm:grid-cols-[1fr_auto_auto]' }}
+                    {{ is_row ? 'px-4 py-3 sm:px-6 sm:py-4' : 'p-4 sm:p-6' }}
+                    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600">
+        <span class="flex min-w-0 items-center gap-3">
             {% block icon %}{% endblock %}
-            <span>
+            <span class="min-w-0">
                 <h4 class="t-section">{{ title }}</h4>
                 {% if caption|default('') %}<p class="t-caption mt-0.5">{{ caption }}</p>{% endif %}
             </span>
         </span>
-        <span class="flex items-center gap-6 text-right">
-            {% block verdict %}{% endblock %}
-            <span class="text-slate-400 group-open:rotate-90 transition-transform" aria-hidden="true">▸</span>
-        </span>
+        <span class="col-start-1 row-start-2 {{ is_stacked ? '' : 'sm:col-start-2 sm:row-start-1 sm:text-right' }}">{% block verdict %}{% endblock %}</span>
+        {% include 'partials/_chevron.twig' with { group: 'acc' } only %}
     </summary>
     <div class="px-4 pb-4 sm:px-6 sm:pb-6">
         {% block body %}{% endblock %}

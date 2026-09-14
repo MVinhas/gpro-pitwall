@@ -15,6 +15,7 @@ use App\Service\RaceWeatherService;
 use App\Service\RiskAdvisorService;
 use App\Service\PhaMatchService;
 use App\Service\CarWearService;
+use App\Support\RaceSettings;
 use Twig\Environment;
 
 class StrategyController
@@ -27,7 +28,7 @@ class StrategyController
         . 're-sync, then race strategy will be available.';
 
     public const string NO_PILOT_MESSAGE =
-        'No driver under contract. Hire a pilot in GPRO, then re-sync.';
+        'No driver under contract. Hire a driver in GPRO, then re-sync.';
 
     public const string GENERIC_ERROR_MESSAGE =
         'Something went wrong loading this data. Please try refreshing or re-syncing.';
@@ -76,9 +77,10 @@ class StrategyController
 
     /**
      * Runs the strategy calculation. Returns the result array, or an
-     * `['error' => '...']` array on failure. No session writes here so
-     * the same call powers the redirect-after-POST flow, the no-reload
-     * fragment refresh, and the auto-populate on first tab open.
+     * `['error' => '...']` array on failure. The only session state it
+     * touches is the shared Clear Track Risk (RaceSettings), so the same
+     * call powers the redirect-after-POST flow, the no-reload fragment
+     * refresh, and the auto-populate on first tab open.
      *
      * @return array<string, mixed>
      */
@@ -242,18 +244,15 @@ class StrategyController
             $defRaceW = $rain['race_start_wet'] ? 'Wet' : 'Dry';
 
             $avgTemp = $this->calculateAvgWeather($weatherData, 'Temp');
-            $avgHum = $this->calculateAvgWeather($weatherData, 'Hum');
             $q1Temp = $w['q1Temp'];
             $q2Temp = $w['q2Temp'];
 
             $finalRaceTemp = $has('temp') ? (float)$request->post('temp') : $avgTemp;
-            $finalRaceHum  = $has('humidity') ? (int)$request->post('humidity') : $avgHum;
 
             $inputs = [
                 'laps' => (int)$request->post('laps', $trackProfile['laps'] ?? 0),
                 'temp' => $finalRaceTemp,
-                'hum'  => $finalRaceHum,
-                'risk' => (int)$request->post('risk', 0),
+                'risk' => RaceSettings::resolve($_SESSION, RaceSettings::CTR, $request->post('risk'), 100),
                 'target_wear' => (int)$request->post('target_wear', 15),
                 'boost_stints' => (int)$request->post('boost_stints', 0),
             ];
@@ -360,6 +359,7 @@ class StrategyController
                 $strategyResults['overtaking'] ?? null,
                 $raceIsWet,
                 $rain['race_rain_avg'],
+                (int)$inputs['boost_stints'],
             );
 
             return $strategyResults;
@@ -371,7 +371,7 @@ class StrategyController
     }
 
     /**
-     * Push checklist shown under the Race Engineer: binary signals that argue
+     * Push checklist shown on the Race sheet: binary signals that argue
      * for a higher Clear Track Risk. Heuristic, not a game formula.
      *
      * Tyre signals are hidden in Rookie/Amateur (no supplier choice there).
@@ -390,8 +390,8 @@ class StrategyController
      *   pha_match: bool, pha_level: string, favourite: bool,
      *   show_tyres: bool, tyres_weather: bool, tyre_perf: ?int, race_wet: bool,
      *   temp_match: bool, race_temp: float, ideal_temp: ?int,
-     *   car_rank: ?int, car_total: ?int, car_above: ?bool,
-     *   driver_rank: ?int, driver_total: ?int, driver_above: ?bool,
+     *   car_rank: ?int, car_total: ?int, car_above: ?bool, car_below: ?bool,
+     *   driver_rank: ?int, driver_total: ?int, driver_above: ?bool, driver_below: ?bool,
      *   wear_ok: ?bool, wear_max: ?float, wear_risk: int
      * }
      */
@@ -431,7 +431,7 @@ class StrategyController
             'pha_match'     => $matchLevel !== PhaMatchService::MATCH_NONE,
             'pha_level'     => $matchLevel,
             'favourite'     => $this->isFavouriteTrack($pilotRaw, (int)($raceSetup['trackId'] ?? 0)),
-            'show_tyres'    => !self::isSupplierlessDivision((string)($menu['group'] ?? '')),
+            'show_tyres'    => self::hasTyreChoice((string)($menu['group'] ?? '')),
             'tyres_weather' => $tyrePerf !== null && $tyrePerf >= 4,
             'tyre_perf'     => $tyrePerf,
             'race_wet'      => $raceIsWet,
@@ -441,9 +441,11 @@ class StrategyController
             'car_rank'      => $car['rank'],
             'car_total'     => $car['total'],
             'car_above'     => $car['above'],
+            'car_below'     => $car['below'],
             'driver_rank'   => $driver['rank'],
             'driver_total'  => $driver['total'],
             'driver_above'  => $driver['above'],
+            'driver_below'  => $driver['below'],
             'wear_ok'       => $wearMaxAtPushRisk === null ? null : $wearMaxAtPushRisk <= self::WEAR_HEADROOM_LIMIT,
             'wear_max'      => $wearMaxAtPushRisk,
             'wear_risk'     => self::PUSH_RISK,
@@ -497,6 +499,15 @@ class StrategyController
         }
     }
 
+    /**
+     * Tyre signals only mean something where a manager picks the supplier:
+     * Pro and up. An unknown division hides them rather than guessing.
+     */
+    public static function hasTyreChoice(string $group): bool
+    {
+        return trim($group) !== '' && !self::isSupplierlessDivision($group);
+    }
+
     /** Rookie and Amateur don't pick a tyre supplier, so tyre fit is moot. */
     public static function isSupplierlessDivision(string $group): bool
     {
@@ -506,17 +517,20 @@ class StrategyController
 
     /**
      * Ranks the manager's own value for `$field` against the whole group.
-     * Standard competition ranking (1 = best, ties share the better rank);
-     * "above" is strictly above the group arithmetic mean. Returns nulls when
-     * the manager can't be located or no group values exist, so callers can
-     * hide the signal cleanly.
+     * Standard competition ranking (1 = best, ties share the better rank).
+     * "above" means more of the group is behind than ahead, "below" the
+     * reverse; equal values count as neither, so the exact middle is neither.
+     * (The arithmetic mean was used before, and a few very weak entries
+     * dragged it down far enough to call a mid-pack driver above average.)
+     * Returns nulls when the manager can't be located or no group values
+     * exist, so callers can hide the signal cleanly.
      *
      * @param list<array<string, mixed>> $managers
-     * @return array{rank: ?int, total: ?int, above: ?bool}
+     * @return array{rank: ?int, total: ?int, above: ?bool, below: ?bool}
      */
     public static function groupStanding(int $myIdm, array $managers, string $field): array
     {
-        $none = ['rank' => null, 'total' => null, 'above' => null];
+        $none = ['rank' => null, 'total' => null, 'above' => null, 'below' => null];
         if ($myIdm <= 0) {
             return $none;
         }
@@ -538,13 +552,14 @@ class StrategyController
             return $none;
         }
 
-        $better = array_filter($values, static fn(int $v): bool => $v > $mine);
-        $mean = array_sum($values) / count($values);
+        $ahead = count(array_filter($values, static fn(int $v): bool => $v > $mine));
+        $behind = count(array_filter($values, static fn(int $v): bool => $v < $mine));
 
         return [
-            'rank'  => count($better) + 1,
+            'rank'  => $ahead + 1,
             'total' => count($values),
-            'above' => $mine > $mean,
+            'above' => $behind > $ahead,
+            'below' => $ahead > $behind,
         ];
     }
 

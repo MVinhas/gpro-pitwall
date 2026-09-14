@@ -142,6 +142,22 @@ final class StrategyControllerTest extends TestCase
         $this->assertFalse(StrategyController::isSupplierlessDivision(''));
     }
 
+    /**
+     * Rookie and Amateur race on the one supplier they are given, so tyre fit
+     * says nothing there. An unknown division (the Menu call failed) must not
+     * fall through to "has a choice" either.
+     */
+    public function testTyreSignalsApplyOnlyFromProUpwards(): void
+    {
+        $this->assertFalse(StrategyController::hasTyreChoice('Rookie - 31'));
+        $this->assertFalse(StrategyController::hasTyreChoice('Amateur - 5'));
+        $this->assertTrue(StrategyController::hasTyreChoice('Pro - 8'));
+        $this->assertTrue(StrategyController::hasTyreChoice('Master - 5'));
+        $this->assertTrue(StrategyController::hasTyreChoice('Elite'));
+        $this->assertFalse(StrategyController::hasTyreChoice(''));
+        $this->assertFalse(StrategyController::hasTyreChoice('  '));
+    }
+
     public function testGroupStandingRanksOwnValueAgainstGroup(): void
     {
         // Me (IDM 7) at car level 8; one manager above, two below.
@@ -154,7 +170,42 @@ final class StrategyControllerTest extends TestCase
         $r = StrategyController::groupStanding(7, $managers, 'carLevel');
         $this->assertSame(2, $r['rank']);
         $this->assertSame(4, $r['total']);
-        $this->assertTrue($r['above']); // 8 > mean 7.0
+        $this->assertTrue($r['above']); // one ahead, two behind
+        $this->assertFalse($r['below']);
+    }
+
+    /**
+     * A handful of very weak entries drags the arithmetic mean down, which
+     * made a mid-pack driver read as a push signal. Standing is judged by who
+     * is ahead versus behind instead, so the exact middle is neither.
+     */
+    public function testGroupStandingMidPackIsNeitherAboveNorBelowEvenWhenWeakEntriesDragTheMeanDown(): void
+    {
+        $managers = [
+            ['IDM' => 1, 'driOA' => 300],
+            ['IDM' => 2, 'driOA' => 250],
+            ['IDM' => 7, 'driOA' => 200],
+            ['IDM' => 3, 'driOA' => 20],
+            ['IDM' => 4, 'driOA' => 10],
+        ];
+        $r = StrategyController::groupStanding(7, $managers, 'driOA');
+        $this->assertSame(3, $r['rank']);
+        $this->assertFalse($r['above']);
+        $this->assertFalse($r['below']);
+    }
+
+    public function testGroupStandingCountsEqualValuesAsNeitherAheadNorBehind(): void
+    {
+        $managers = [
+            ['IDM' => 1, 'carLevel' => 9],
+            ['IDM' => 7, 'carLevel' => 7],
+            ['IDM' => 2, 'carLevel' => 7],
+            ['IDM' => 3, 'carLevel' => 7],
+            ['IDM' => 4, 'carLevel' => 5],
+        ];
+        $r = StrategyController::groupStanding(7, $managers, 'carLevel');
+        $this->assertFalse($r['above']);
+        $this->assertFalse($r['below']);
     }
 
     public function testGroupStandingBelowAverageAndStringValues(): void
@@ -170,6 +221,7 @@ final class StrategyControllerTest extends TestCase
         $this->assertSame(4, $r['rank']);
         $this->assertSame(4, $r['total']);
         $this->assertFalse($r['above']);
+        $this->assertTrue($r['below']);
     }
 
     public function testGroupStandingUsesCompetitionRankingForTies(): void
@@ -194,6 +246,7 @@ final class StrategyControllerTest extends TestCase
         $this->assertNull($r['rank']);
         $this->assertNull($r['total']);
         $this->assertNull($r['above']);
+        $this->assertNull($r['below']);
     }
 
     public function testGroupStandingIgnoresZeroOrMissingValues(): void
@@ -208,7 +261,8 @@ final class StrategyControllerTest extends TestCase
         $r = StrategyController::groupStanding(7, $managers, 'carLevel');
         $this->assertSame(2, $r['rank']);
         $this->assertSame(2, $r['total']);
-        $this->assertFalse($r['above']); // 6 < mean 7.0
+        $this->assertFalse($r['above']); // the only other entry is ahead
+        $this->assertTrue($r['below']);
     }
 
     public function testPickBestCompoundDryRaceExcludesRainEvenWhenCheapest(): void

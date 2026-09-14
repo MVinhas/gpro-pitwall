@@ -210,7 +210,10 @@ class RiskAdvisorService
      * (boosted in-laps = the overcut), or gap defence in the final laps.
      * Sets run 3 laps each and overlapping sets are wasted.
      *
-     * @return array{laps: array<int>, note: string}
+     * `planned` is the subset the fuel plan actually carries (the manager's
+     * boost-stints choice): the highest-priority picks, not the earliest laps.
+     *
+     * @return array{laps: array<int>, planned: array<int>, note: string}
      */
     public function suggestBoostLaps(
         int $raceLaps,
@@ -218,9 +221,10 @@ class RiskAdvisorService
         ?string $overtaking,
         bool $raceWet,
         float $rainAvg,
+        int $plannedSets = 0,
     ): array {
         if ($raceLaps < 12) {
-            return ['laps' => [], 'note' => 'Too few laps to plan boost sets — place them by feel.'];
+            return ['laps' => [], 'planned' => [], 'note' => 'Too few laps to plan boost sets — place them by feel.'];
         }
 
         $rating = isset(self::OVERTAKE_BASE[$overtaking ?? '']) ? (string)$overtaking : 'Normal';
@@ -256,7 +260,9 @@ class RiskAdvisorService
                 break;
             }
         }
+        $planned = array_slice($laps, 0, max(0, min(3, $plannedSets)));
         sort($laps);
+        sort($planned);
 
         $note = $easyPassing
             ? 'One set early while the field is still packed — passing is cheap here, so pace turns '
@@ -270,9 +276,11 @@ class RiskAdvisorService
             $note .= ' Rain could move the pit laps — treat these as dry-plan numbers.';
         }
 
-        $note .= ' Boosts burn extra fuel: set Boost stints in the form so the fuel columns include it.';
+        if ($planned === []) {
+            $note .= ' Boosts burn extra fuel: set Boost stints in the form so the fuel columns include it.';
+        }
 
-        return ['laps' => $laps, 'note' => $note];
+        return ['laps' => $laps, 'planned' => $planned, 'note' => $note];
     }
 
     /**

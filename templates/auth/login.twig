@@ -6,10 +6,10 @@
 
 {% block content %}
 <div class="max-w-md mx-auto mt-10">
-    <h1 class="t-display mb-4">Sign in</h1>
+    <h1 class="t-display mb-4">Log in</h1>
 
     {% if expired %}
-        <div class="notice notice-info mb-4"><strong>Session expired.</strong> Sign in again to pick up where you left off.</div>
+        <div class="notice notice-info mb-4"><strong>Session expired.</strong> Log in again to pick up where you left off.</div>
     {% endif %}
 
     {% if flash %}
@@ -25,7 +25,7 @@
         </label>
 
         <label class="flex items-center gap-2 text-sm text-slate-700">
-            <input type="checkbox" name="remember" value="1" class="rounded border-slate-300">
+            <input type="checkbox" name="remember" value="1" class="rounded-md border-slate-300">
             Keep me signed in
         </label>
 

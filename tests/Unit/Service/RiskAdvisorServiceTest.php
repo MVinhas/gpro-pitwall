@@ -576,5 +576,38 @@ final class RiskAdvisorServiceTest extends TestCase
         $r = $this->service()->suggestBoostLaps(10, 1, 'Normal', false, 10.0);
 
         $this->assertSame([], $r['laps']);
+        $this->assertSame([], $r['planned']);
+    }
+
+    public function testPlannedSetsKeepThePriorityPicksNotTheEarliestLaps(): void
+    {
+        // No stops on a normal track: final laps outrank the early and mid-race
+        // fillers, so a single planned set is lap 58 — not lap 2, which merely
+        // sorts first.
+        $one = $this->service()->suggestBoostLaps(60, 0, 'Normal', false, 10.0, 1);
+        $two = $this->service()->suggestBoostLaps(60, 0, 'Normal', false, 10.0, 2);
+
+        $this->assertSame([2, 30, 58], $one['laps']);
+        $this->assertSame([58], $one['planned']);
+        $this->assertSame([2, 58], $two['planned']);
+    }
+
+    public function testEveryPlannedSetIsASuggestedSet(): void
+    {
+        $r = $this->service()->suggestBoostLaps(60, 2, 'Hard', false, 10.0, 3);
+
+        $this->assertSame($r['laps'], $r['planned']);
+    }
+
+    public function testNoBoostPlannedKeepsTheFuelReminder(): void
+    {
+        $off = $this->service()->suggestBoostLaps(60, 2, 'Hard', false, 10.0, 0);
+        $on = $this->service()->suggestBoostLaps(60, 2, 'Hard', false, 10.0, 2);
+
+        // With no sets in the fuel plan the suggestions are advice only, so the
+        // note says how to fuel them; once sets are planned the fuel covers them.
+        $this->assertSame([], $off['planned']);
+        $this->assertStringContainsString('Boost stints', $off['note']);
+        $this->assertStringNotContainsString('Boost stints', $on['note']);
     }
 }

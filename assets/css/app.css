@@ -111,6 +111,9 @@
        themes (a light band would glare in dark mode). */
     --color-board:        light-dark(oklch(.279 .041 260.031), #243141);
     --color-board-strong: light-dark(oklch(.208 .042 265.755), #2b3a4d);
+    /* The logo's board plate. Brand mark only — never a UI accent, where
+       yellow would read as caution (and the coffee ask owns its own yellow). */
+    --color-brand-plate: light-dark(#f4c21b, #f4c21b);
     /* Modal backdrop. Light side = the old bg-slate-900/40 verbatim. */
     --color-scrim: light-dark(oklch(.208 .042 265.755 / .4), rgb(0 0 0 / .55));
 }
@@ -122,6 +125,12 @@
 :root { color-scheme: light dark; }
 :root[data-theme="light"] { color-scheme: light; }
 :root[data-theme="dark"]  { color-scheme: dark; }
+
+/* Figures in a table are always tabular, so a column of numbers aligns without
+   every cell having to ask for it. */
+@layer base {
+    table { font-variant-numeric: tabular-nums; }
+}
 
 /* Landing screenshots ship one image per theme. light-dark() can't switch an
    <img> src, so mirror the same three states the tokens use: System follows the
@@ -187,8 +196,9 @@
            focus:ring-red-400;
 }
 
-/* Voluntary-support CTA. Warm amber is this project's coffee colour only —
-   it is never an action colour anywhere else in the app. */
+/* Voluntary-support CTA — the one deliberate exception to "colour carries
+   state": the project runs on coffees, so the ask is allowed to stand out.
+   Warm amber here means support, never an action or a caution elsewhere. */
 .btn-coffee {
     @apply bg-amber-400 text-on-amber
            hover:bg-amber-500
@@ -203,7 +213,7 @@
 ========================= */
 
 .notice {
-    @apply rounded-md border-l-4 p-4 shadow-sm text-sm;
+    @apply rounded-md border-l-4 p-4 text-sm;
 }
 
 .notice-info    { @apply bg-blue-50 border-blue-400 text-blue-800; }
@@ -231,7 +241,7 @@
    p-4; sm+ keeps the original p-6 density.
 ========================= */
 
-.card    { @apply bg-surface rounded-xl shadow-sm border border-slate-200 overflow-hidden; }
+.card    { @apply bg-surface rounded-xl border border-slate-200 overflow-hidden; }
 .card-hd { @apply px-4 py-3 sm:px-6 sm:py-4 border-b border-slate-200 bg-slate-50; }
 .card-bd { @apply p-4 sm:p-6; }
 
@@ -258,8 +268,9 @@ summary:focus-visible { @apply outline-none ring-2 ring-blue-600; }
     @apply inline-flex items-center rounded px-1 py-px text-[10px] font-semibold uppercase tracking-wide;
 }
 .plan-tag-best { @apply bg-emerald-100 text-emerald-800; }
-.plan-tag-free { @apply bg-blue-100 text-blue-800; }
-.plan-tag-match { @apply bg-amber-100 text-amber-900; }
+/* Only "best" carries a colour; the other tags are facts, not states. */
+.plan-tag-free,
+.plan-tag-match { @apply bg-slate-100 text-slate-700; }
 
 /* =========================
    TELEMETRY AREA
@@ -304,23 +315,43 @@ summary:focus-visible { @apply outline-none ring-2 ring-blue-600; }
            text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-600/20;
 }
 
-/* Dense data table. Every debrief table uses these three.
-   Dense is not cramped: the horizontal padding has to keep adjacent headers
-   visibly apart (several of them are long phrases), and the row rhythm has to
-   stay readable down a column of 11 driver attributes. */
-.brief-table { @apply w-full text-sm; }
-.brief-th {
-    @apply px-2 sm:px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wide
-           text-slate-500 whitespace-nowrap;
+/* =========================
+   DATA TABLE — the one table component (P10 D6). Born in the Debrief; every
+   table in the app uses it. Labels left, figures right (add text-right on
+   numeric cells), t-label headers, one row rhythm.
+========================= */
+/* In the components layer on purpose: utilities (text-right on a numeric column,
+   font-semibold on a label cell) must be able to override these defaults. */
+@layer components {
+    /* Dense data table.
+       Dense is not cramped: the horizontal padding has to keep adjacent headers
+       visibly apart (several of them are long phrases), and the row rhythm has to
+       stay readable down a column of 11 driver attributes. */
+    .dt { @apply w-full text-sm; }
+    .dt-th {
+        @apply px-2 sm:px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wide
+               text-slate-500 whitespace-nowrap;
+    }
+    /* Long phrase headers ("Relationship to finishing position") need room from
+       whatever sits next to them, which nowrap alone does not give. */
+    .dt-th + .dt-th { @apply pl-2 sm:pl-5; }
+    .dt-td { @apply px-2 sm:px-3 py-2.5 tabular-nums whitespace-nowrap align-middle; }
+    .dt-td + .dt-td { @apply pl-2 sm:pl-5; }
+    /* The first column is the row's label and carries the most text — let it wrap
+       and give the rest of the row something to align against. */
+    .dt tbody tr > .dt-td:first-child { @apply font-normal text-slate-700; }
+
+    /* Horizontal scroll container for the wide tables. Paired with column
+       dieting (hidden sm:table-cell) rather than replacing it. */
+    .dt-scroll { @apply overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0; }
+    /* When a wide table does scroll, its scrollbar must not paint a light track
+       on a dark page. */
+    .dt-scroll, .dt-inset { scrollbar-width: thin; scrollbar-color: var(--color-slate-300) transparent; }
+    /* A table flush inside a card (no card body padding): the inset lines the first
+       and last cells up with the card header's text. */
+    .dt-inset { @apply overflow-x-auto px-2 sm:px-3; }
+
 }
-/* Long phrase headers ("Relationship to finishing position") need room from
-   whatever sits next to them, which nowrap alone does not give. */
-.brief-th + .brief-th { @apply pl-2 sm:pl-5; }
-.brief-td { @apply px-2 sm:px-3 py-2.5 tabular-nums whitespace-nowrap align-middle; }
-.brief-td + .brief-td { @apply pl-2 sm:pl-5; }
-/* The first column is the row's label and carries the most text — let it wrap
-   and give the rest of the row something to align against. */
-.brief-table tbody tr > .brief-td:first-child { @apply font-normal text-slate-700; }
 
 /* Sample-size marker. Colour alone never carries the "thin data" warning —
    the number is always printed next to it. */
@@ -330,24 +361,16 @@ summary:focus-visible { @apply outline-none ring-2 ring-blue-600; }
 }
 .brief-n-thin { @apply bg-amber-100 text-amber-900; }
 
-/* Horizontal scroll container for the wide tables. Paired with column
-   dieting (hidden sm:table-cell) rather than replacing it. */
-.brief-scroll { @apply overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0; }
-
-/* Compact anchor tile for the cockpit decision-summary board. */
-.tile {
-    @apply block rounded-lg border border-slate-200 bg-surface p-3 shadow-sm transition-colors
-           hover:border-blue-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600;
-}
-
 /*
- * Type tokens — keep usage consistent across all tabs.
- * Section headers are colour-neutral on purpose: colour is reserved for
- * meaning (success / warning / danger / interactive), not decoration.
+ * Type tokens — the whole scale (P10 D7). Four reading sizes plus one
+ * uppercase micro-label for field labels and table headers:
+ *   t-display 20  page title          t-heading 16  section on a standalone page
+ *   t-section 14  card and row titles t-caption 12  supporting text
+ * Titles are sentence case and ink; colour is reserved for state.
  */
-.t-display { @apply text-2xl font-bold text-slate-900; }
-.t-heading { @apply text-lg font-semibold text-slate-800; }
-.t-section { @apply text-xs font-bold uppercase tracking-wide text-slate-500; }
+.t-display { @apply text-xl font-semibold text-slate-900; }
+.t-heading { @apply text-base font-semibold text-slate-900; }
+.t-section { @apply text-sm font-semibold text-slate-900; }
 .t-label   { @apply text-[10px] font-medium uppercase tracking-wide text-slate-500; }
 .t-value   { @apply text-base font-semibold text-slate-900; }
 .t-caption { @apply text-xs text-slate-500; }
@@ -415,15 +438,10 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
     @apply bg-slate-50 text-slate-500 cursor-not-allowed;
 }
 
-/* Tab-content entrance. Referenced by index.twig's #main-content-tabs. */
-.fade-in { animation: fade-in 0.25s ease-out; }
-@keyframes fade-in {
-    from { opacity: 0; transform: translateY(4px); }
-    to   { opacity: 1; transform: none; }
-}
+/* Range sliders keep the native control, tinted with the action colour. */
+.range { @apply w-full cursor-pointer; accent-color: var(--color-blue-600); }
 
 @media (prefers-reduced-motion: reduce) {
-    .fade-in { animation: none; }
     .transition-transform, .transition-all, .transition-colors { transition: none; }
 }
 

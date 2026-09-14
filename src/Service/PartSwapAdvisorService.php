@@ -60,6 +60,7 @@ namespace App\Service;
  *     recommended: bool,
  *     recommend_reason: string,
  *     rationale: string,
+ *     balance: string,
  * }
  */
 final class PartSwapAdvisorService
@@ -329,6 +330,7 @@ final class PartSwapAdvisorService
                 'recommend_reason' => '',
 
                 'rationale' => $this->rationale($delta, $fit - $currentFit, $c['is_free']),
+                'balance'   => $this->balance($fit - $currentFit),
             ];
         }
 
@@ -455,6 +457,20 @@ final class PartSwapAdvisorService
         return true;
     }
 
+    /**
+     * Plain-language direction of a fit change: 'closer' / 'further' once it
+     * clears half an alignment band, 'same' inside it — the UI shows this rather
+     * than a raw delta, and the rationale reads from the same verdict.
+     */
+    private function balance(float $fitDelta): string
+    {
+        return match (true) {
+            $fitDelta >= self::FIT_BAND / 2  => 'closer',
+            $fitDelta <= -self::FIT_BAND / 2 => 'further',
+            default                          => 'same',
+        };
+    }
+
     private function rationale(int $delta, float $fitDelta, bool $isFree): string
     {
         $move = match (true) {
@@ -463,10 +479,10 @@ final class PartSwapAdvisorService
             default    => 'Fresh part, same level',
         };
         $price = $isFree ? ' at no cost' : '';
-        $shape = match (true) {
-            $fitDelta >= self::FIT_BAND / 2  => 'brings your car closer to what this track asks for.',
-            $fitDelta <= -self::FIT_BAND / 2 => 'pulls your car further from what this track asks for.',
-            default                          => 'leaves your P/H/A balance where it is.',
+        $shape = match ($this->balance($fitDelta)) {
+            'closer'  => 'brings your car closer to what this track asks for.',
+            'further' => 'pulls your car further from what this track asks for.',
+            default   => 'leaves your P/H/A balance where it is.',
         };
 
         return $move . $price . ' — ' . $shape;

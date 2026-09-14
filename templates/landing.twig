@@ -16,7 +16,7 @@
         "priceCurrency": "EUR"
     },
     "featureList": [
-        "Race engineer advice (overtake and defend risk suggestions)",
+        "Race sheet with overtake and defend risk suggestions",
         "Race strategy planner",
         "Setup calculator",
         "Car wear analysis and calculator",
@@ -43,12 +43,10 @@
     <section class="text-center pt-10 pb-12">
         <div class="flex flex-wrap gap-2 justify-center">
             <span class="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
-                <span aria-hidden="true">●</span>
                 Free to use — no tier, no paywall
             </span>
             <span class="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 ring-1 ring-inset ring-blue-600/20">
-                <span aria-hidden="true">✦</span>
-                New — Advice from the Race Engineer
+                New — One race sheet for the whole race form
             </span>
         </div>
         <h1 class="mt-5 text-4xl sm:text-5xl font-bold text-slate-900 tracking-tight">
@@ -80,14 +78,14 @@
     <section class="mb-12">
         <h2 class="t-display text-center mb-6">Up and running in two minutes</h2>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div class="bg-surface rounded-xl border border-slate-200 p-5 shadow-sm text-center">
+            <div class="bg-surface rounded-xl border border-slate-200 p-5 text-center">
                 <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-on-accent text-sm font-bold">1</span>
                 <h3 class="t-heading mt-3">Register free</h3>
                 <p class="t-caption mt-1">
                     Username + email code. No password to remember, nothing to pay.
                 </p>
             </div>
-            <div class="bg-surface rounded-xl border border-slate-200 p-5 shadow-sm text-center">
+            <div class="bg-surface rounded-xl border border-slate-200 p-5 text-center">
                 <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-on-accent text-sm font-bold">2</span>
                 <h3 class="t-heading mt-3">Paste your GPRO API token</h3>
                 <p class="t-caption mt-1">
@@ -95,7 +93,7 @@
                     official GPRO API. Encrypted at rest, never shared.
                 </p>
             </div>
-            <div class="bg-surface rounded-xl border border-slate-200 p-5 shadow-sm text-center">
+            <div class="bg-surface rounded-xl border border-slate-200 p-5 text-center">
                 <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-on-accent text-sm font-bold">3</span>
                 <h3 class="t-heading mt-3">Open the cockpit</h3>
                 <p class="t-caption mt-1">
@@ -106,38 +104,30 @@
         </div>
     </section>
 
-    {# RACE ENGINEER — flagship highlight #}
+    {# RACE SHEET — flagship highlight #}
     <section class="mb-12">
-        <div class="bg-surface rounded-xl border border-slate-200 p-6 sm:p-8 shadow-sm">
+        <div class="bg-surface rounded-xl border border-slate-200 p-6 sm:p-8">
             <div class="flex items-start gap-4">
-                <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-blue-600 shadow-sm">
-                    {# Race-engineer headset with mic boom #}
+                <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-blue-600">
+                    {# Clipboard with a filled-in form #}
                     <svg class="h-6 w-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 13.5v-2.25a7.5 7.5 0 0 1 15 0v2.25"/>
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 13.5A1.5 1.5 0 0 1 6 12h.75a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5H6a1.5 1.5 0 0 1-1.5-1.5v-3Z"/>
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 13.5a1.5 1.5 0 0 1 1.5-1.5H18a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5h-.75a1.5 1.5 0 0 1-1.5-1.5v-3Z"/>
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 18v.375a2.625 2.625 0 0 1-2.625 2.625H13.5"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 4.5h6M9 4.5a1.5 1.5 0 0 0-1.5 1.5v0h9v0A1.5 1.5 0 0 0 15 4.5M9 4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 6H6a1.5 1.5 0 0 0-1.5 1.5v12A1.5 1.5 0 0 0 6 21h12a1.5 1.5 0 0 0 1.5-1.5v-12A1.5 1.5 0 0 0 18 6h-1.5M8 11h8M8 14.5h8M8 18h5"/>
                     </svg>
                 </span>
                 <div class="min-w-0">
-                    <h2 class="t-display">Advice from the Race Engineer</h2>
+                    <h2 class="t-display">One race sheet, laid out like GPRO's form</h2>
                     <p class="mt-2 text-slate-600">
-                        The strategy screen talks back. The race engineer reads your driver on GPRO's
-                        full 0–250 skill scale, the track's overtaking, grip and tyre-wear
-                        character, and the official weather forecast — then tells you, in plain
-                        words, <strong>how hard to attack, how hard to defend</strong>, where to
-                        place your boost laps, and when the smarter strategy is the one with
-                        fewer pit stops.
+                        The strategy screen puts the whole race form on one card: the setup for
+                        Q1, Q2 and the race in the order GPRO asks for it, fuel per stint, tyres
+                        and stops, <strong>overtake and defend risks</strong>, and where to place
+                        your boost laps. Underneath, push signals say in plain words whether this
+                        is a weekend to attack: the car suits the track, the tyres suit the
+                        weather, your driver is above the group average.
                     </p>
-                    <blockquote class="mt-4 border-l-4 border-blue-600 bg-slate-50 rounded-r-lg px-4 py-3 text-sm text-slate-700 italic">
-                        “Overtaking at Barcelona is hard, so I'd push overtake up to 60 to make
-                        moves stick — and since the track already makes you hard to pass, 35 on
-                        defence is plenty. Grip here is low — sliding cars punish ambition, so
-                        I've shaved both numbers.”
-                    </blockquote>
                     <p class="mt-3 t-caption">
-                        Transparent heuristics built from the game's own attribute semantics —
-                        not a black box, and free like everything else.
+                        Transparent heuristics built from the game's own rules — not a black box,
+                        and free like everything else.
                     </p>
                 </div>
             </div>
@@ -154,9 +144,9 @@
 
         <div class="-mx-4 px-4 overflow-x-auto snap-strip snap-x snap-mandatory flex gap-4 pb-3 touch-pan-x">
             {% for shot in [
-                { file: 'cockpit',  title: 'Race-weekend Cockpit',  caption: 'PHA match, weather, sponsors, training, testing and per-part car wear — in race-prep order.' },
-                { file: 'strategy', title: 'Race Strategy Planner', caption: 'Fuel, tyres and setup per compound, with the cheapest stop count and the risk trade priced.' },
-                { file: 'training', title: 'Training Planner',      caption: 'Combine programs and see projected Overall Ability before you commit the cycle.' }
+                { file: 'cockpit',  title: 'Race-weekend cockpit',  caption: 'PHA match, weather, sponsors, training, testing and per-part car wear — in race-prep order.' },
+                { file: 'strategy', title: 'Race sheet',            caption: 'Setup per session as GPRO lays it out, fuel, tyres, risks and boost laps — with the cheapest stop count.' },
+                { file: 'training', title: 'Training planner',      caption: 'Combine programs and see projected Overall Ability before you commit the cycle.' }
             ] %}
                 <figure class="snap-start shrink-0 w-[85%] sm:w-[28rem] card">
                     <img src="/assets/screenshots/{{ shot.file }}-light.png"
@@ -182,9 +172,9 @@
 
     {# KEYWORD STRIP — explicit feature list for crawlers and skimmers #}
     <section class="bg-surface rounded-xl border border-slate-200 p-5 mb-12 text-center">
-        <p class="t-section mb-2">What's inside</p>
+        <p class="t-label mb-2">What's inside</p>
         <p class="text-sm text-slate-600 leading-relaxed">
-            Race engineer advice (overtake &amp; defend risks) ·
+            Overtake &amp; defend risks · Push signals ·
             Race strategy planner ·
             Setup calculator ·
             Car wear analysis &amp; calculator ·
@@ -254,10 +244,10 @@
     <section class="mb-12">
         <h2 class="t-display text-center mb-6">Frequently asked questions</h2>
         <div class="space-y-3 max-w-3xl mx-auto">
-            <details class="bg-surface rounded-xl border border-slate-200 p-5 shadow-sm group">
+            <details class="bg-surface rounded-xl border border-slate-200 p-5 group">
                 <summary class="cursor-pointer list-none flex items-center justify-between">
                     <h3 class="t-heading">Is GPRO Pitwall really free?</h3>
-                    <span class="text-slate-400 group-open:rotate-90 transition-transform" aria-hidden="true">▸</span>
+                    <svg class="size-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
                 </summary>
                 <p class="t-caption mt-3">
                     Yes — every feature is available to every registered user. There is
@@ -265,10 +255,10 @@
                     supported only by voluntary Buy&nbsp;Me&nbsp;a&nbsp;Coffee donations.
                 </p>
             </details>
-            <details class="bg-surface rounded-xl border border-slate-200 p-5 shadow-sm group">
+            <details class="bg-surface rounded-xl border border-slate-200 p-5 group">
                 <summary class="cursor-pointer list-none flex items-center justify-between">
                     <h3 class="t-heading">Do I need my GPRO API token?</h3>
-                    <span class="text-slate-400 group-open:rotate-90 transition-transform" aria-hidden="true">▸</span>
+                    <svg class="size-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
                 </summary>
                 <p class="t-caption mt-3">
                     Yes. The token lets Pitwall read your own driver, car, weather and
@@ -277,10 +267,10 @@
                     it is stored encrypted (AES-256-GCM) and never shown again.
                 </p>
             </details>
-            <details class="bg-surface rounded-xl border border-slate-200 p-5 shadow-sm group">
+            <details class="bg-surface rounded-xl border border-slate-200 p-5 group">
                 <summary class="cursor-pointer list-none flex items-center justify-between">
                     <h3 class="t-heading">Is GPRO Pitwall affiliated with GPRO?</h3>
-                    <span class="text-slate-400 group-open:rotate-90 transition-transform" aria-hidden="true">▸</span>
+                    <svg class="size-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
                 </summary>
                 <p class="t-caption mt-3">
                     No. Pitwall is an unofficial, open-source fan tool built by a GPRO

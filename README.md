@@ -7,7 +7,7 @@
 [![Coverage floor](https://img.shields.io/badge/coverage-%E2%89%A559%25%20CI--enforced-yellow)](.github/workflows/ci.yml)
 [![PSR-12](https://img.shields.io/badge/code%20style-PSR--12-blue)](https://www.php-fig.org/psr/psr-12/)
 
-![GPRO Pitwall — race strategy, setup calculator and car wear analysis for GPRO managers](public/assets/og-image.png)
+![Pitwall — race sheet, car wear and training for GPRO managers](public/assets/og-image.png)
 
 Race-weekend cockpit for [Grand Prix Racing Online](https://www.gpro.net) managers. Pitwall reads your own GPRO data through the official public API and turns it into the answers you need before qualifying: what to train, which parts to swap, what setup to run, how hard to push — and what to bet on the weather.
 
@@ -24,22 +24,23 @@ Getting started takes two minutes: register with your email (passwordless — a 
 Every screen reads your own GPRO data and answers one race-weekend question. Full
 detail and screenshots live on [gpro-pitwall.com](https://gpro-pitwall.com).
 
-- **Cockpit** — the race-weekend spine. A decision board of verdict tiles over cards for
-  PHA match, testing projection, boost-lap fuel, the weather call, sponsor answers,
-  training picks and per-part car wear — a risk slider, an optional projection through
-  training laps run beforehand, and an inline replacement plan. Also carries the season
-  calendar with each track's P/H/A demand.
+- **Cockpit** — the race-weekend spine. Two grouped lists, Car (PHA match, per-part car wear
+  with an inline replacement plan, testing projection) and Weekend (weather, sponsor answers,
+  training picks); each row states its verdict and opens only when it needs attention. Clear
+  Track Risk is shared with Race Strategy, and wear can be projected through training laps run
+  beforehand. Also carries the season calendar with each track's P/H/A demand.
 - **Race Strategy** — fuel, tyres and setup per compound, with the best plan chosen by
   total time cost rather than tyre life alone. Clear Track Risk is priced as a trade:
-  added wear against clear-air time gained. Includes the **Race Engineer**, which reads
-  the driver, track and forecast and says in plain words how to fill the race form, and a
-  **push-or-hold checklist** for the risk dial.
+  added wear against clear-air time gained. The **Race sheet** lists the setup part by part
+  for Q1, Q2 and the race as GPRO's form does, with fuel, tyres, overtake and defend risks and
+  boost laps, plus plain-worded **push signals** for the risk dial. Every setting recalculates
+  as it changes.
 - **Testing** — the testing track's demands vs your car, the points split across Test /
   R&D / Engineering / Car Character, gains per 5 laps per priority, and the ideal setup.
 - **Training Planner** — cumulative effect of every program × count combination, with
   attribute bounds respected and projected Overall Ability before and after.
 - **Recruitment Analyzer** — scores the full driver market (4–5k) against your division's
-  ideal pilot, with per-attribute filters and a favourite-tracks-this-season column.
+  ideal driver, with per-attribute filters and a favourite-tracks-this-season column.
 - **Debrief** (admin) — reads races back rather than planning them: a filterable,
   ranked Bird's Eye View over your own archived weekends or the anonymous corpus, a
   full per-race report (stints, stops, per-part wear, both qualifying runs), a Track
@@ -145,7 +146,7 @@ Source of truth is GitHub; deployment is a manual file copy to any PHP 8.5 host.
 - **Twig 3** templates; **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile). Light and dark themes ship in one stylesheet: every design token is a CSS `light-dark()` pair switched by `color-scheme`, so System mode tracks the OS with zero JavaScript.
 - **SQLite** via PDO — emails and API tokens encrypted at rest (AES-256-GCM).
 - **PHPMailer 7** for SMTP; dev writes `.eml` files instead.
-- **PHPUnit 13** — 856 tests, 2435 assertions — with **PHPStan level 8** and enforced type-declaration coverage (100% return/property/constant + `strict_types`; 99.5% param). Twig linted by a native `bin/twig_lint.php` built on Twig's own parser. CI measures statement coverage with `pcov` and enforces a floor (currently 59%, ratcheted up as coverage grows).
+- **PHPUnit 13** — 876 tests, 2495 assertions — with **PHPStan level 8** and enforced type-declaration coverage (100% return/property/constant + `strict_types`; 99.5% param). Twig linted by a native `bin/twig_lint.php` built on Twig's own parser. CI measures statement coverage with `pcov` and enforces a floor (currently 59%, ratcheted up as coverage grows).
 - **Timestamps stored and served as UTC**, localised per visitor in the browser — no server-side timezone config.
 
 ## Architecture

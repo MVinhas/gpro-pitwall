@@ -1,7 +1,7 @@
 {% extends "layout.twig" %}
 {% import "partials/_localtime.twig" as t %}
 
-{% block title %}Control Panel — GPRO Pitwall{% endblock %}
+{% block title %}Account — GPRO Pitwall{% endblock %}
 {% block robots %}<meta name="robots" content="noindex,nofollow">{% endblock %}
 {% block canonical_path %}/control_panel{% endblock %}
 
@@ -11,8 +11,7 @@
 
         <div class="border-b border-slate-100 pb-6 mb-6 flex justify-between items-center">
             <div>
-                <h1 class="t-display">Control Panel</h1>
-                <p class="t-caption mt-1">Manage your account settings</p>
+                <h1 class="t-display">Account</h1>
             </div>
             {% if user.is_admin %}
                 <span class="inline-flex items-center gap-1 rounded-full bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700 ring-1 ring-inset ring-blue-600/20">
@@ -22,63 +21,63 @@
         </div>
 
         {% if flash %}
-            <div class="rounded-md bg-blue-50 border-l-4 border-blue-400 p-4 shadow-sm mb-6">
-                <p class="text-sm text-blue-800">{{ flash }}</p>
+            <div class="notice notice-info mb-6">
+                <p>{{ flash }}</p>
             </div>
         {% endif %}
         {% if flash_error %}
-            <div class="rounded-md bg-red-50 border-l-4 border-red-400 p-4 shadow-sm mb-6">
-                <p class="text-sm text-red-800">{{ flash_error }}</p>
+            <div class="notice notice-error mb-6">
+                <p>{{ flash_error }}</p>
             </div>
         {% endif %}
 
         {# Orientation. Reads the same sync_state as the header strip, so this
            notice and the strip always describe the same situation. #}
         {% if sync_state == 'synced' %}
-            <div class="rounded-md bg-emerald-50 border-l-4 border-emerald-400 p-4 shadow-sm mb-8">
-                <p class="text-sm font-bold text-emerald-800">You're connected.</p>
-                <p class="text-sm text-emerald-800 mt-1">
+            <div class="notice notice-success mb-8">
+                <p class="font-bold">You're connected.</p>
+                <p class="mt-1">
                     Last synced {{ t.localtime(user.last_synced_at, 'datetime') }}. Head to the cockpit to plan
                     your race weekend — strategy, car wear, training and recruitment
                     are all in the top navigation.
                 </p>
                 <div class="mt-3">
                     <a href="/cockpit" class="btn btn-md btn-primary">
-                        Go to Race Weekend Cockpit →
+                        Open the cockpit →
                     </a>
                 </div>
             </div>
         {% elseif sync_state == 'failed' %}
-            <div class="rounded-md bg-red-50 border-l-4 border-red-400 p-4 shadow-sm mb-8">
-                <p class="text-sm font-bold text-red-800">Your last sync failed.</p>
-                <p class="text-sm text-red-800 mt-1">
+            <div class="notice notice-error mb-8">
+                <p class="font-bold">Your last sync failed.</p>
+                <p class="mt-1">
                     {% if user.last_synced_at %}
                         Pitwall is showing data from your last successful sync ({{ t.localtime(user.last_synced_at, 'datetime') }}).
                     {% else %}
                         No GPRO data has been loaded yet.
                     {% endif %}
-                    Try ↻ Re-sync above; if it keeps failing, replace your API token below.
+                    Try Re-sync above; if it keeps failing, replace your API token below.
                 </p>
             </div>
         {% elseif sync_state == 'running' %}
-            <div class="rounded-md bg-blue-50 border-l-4 border-blue-400 p-4 shadow-sm mb-8">
-                <p class="text-sm font-bold text-blue-800">Syncing your GPRO data…</p>
-                <p class="text-sm text-blue-800 mt-1">This takes a few seconds. Reload the page to see the result.</p>
+            <div class="notice notice-info mb-8">
+                <p class="font-bold">Syncing your GPRO data…</p>
+                <p class="mt-1">This takes a few seconds. Reload the page to see the result.</p>
             </div>
         {% elseif sync_state == 'deferred' %}
-            <div class="rounded-md bg-amber-50 border-l-4 border-amber-400 p-4 shadow-sm mb-8">
-                <p class="text-sm font-bold text-amber-800">Sync paused — GPRO API budget low.</p>
-                <p class="text-sm text-amber-800 mt-1">It'll resume once your hourly allowance recovers.</p>
+            <div class="notice notice-warn mb-8">
+                <p class="font-bold">Sync paused — GPRO API budget low.</p>
+                <p class="mt-1">It'll resume once your hourly allowance recovers.</p>
             </div>
         {% elseif sync_state == 'never' %}
-            <div class="rounded-md bg-blue-50 border-l-4 border-blue-400 p-4 shadow-sm mb-8">
-                <p class="text-sm font-bold text-blue-800">Token saved — not synced yet.</p>
-                <p class="text-sm text-blue-800 mt-1">Use ↻ Re-sync above to load your GPRO data.</p>
+            <div class="notice notice-info mb-8">
+                <p class="font-bold">Token saved — not synced yet.</p>
+                <p class="mt-1">Use Re-sync above to load your GPRO data.</p>
             </div>
         {% else %}
-            <div class="rounded-md bg-amber-50 border-l-4 border-amber-400 p-4 shadow-sm mb-8">
-                <p class="text-sm font-bold text-amber-800">One step left: add your API token.</p>
-                <p class="text-sm text-amber-800 mt-1">
+            <div class="notice notice-warn mb-8">
+                <p class="font-bold">One step left: add your API token.</p>
+                <p class="mt-1">
                     Paste your GPRO API token below to unlock the cockpit and every
                     analysis tool. It takes a few seconds.
                 </p>
@@ -87,7 +86,7 @@
 
         {# API Token Form #}
         <div class="mb-8">
-            <h2 class="t-heading mb-4">GPRO API Connection</h2>
+            <h2 class="t-heading mb-4">GPRO API connection</h2>
 
             {% if not is_fresh %}
                 {# Changing a token requires a fresh session. Offering the field
@@ -100,7 +99,6 @@
                     </p>
                     {% if has_token %}
                         <p class="mt-2 inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
-                            <span aria-hidden="true">●</span>
                             Current token ending <span class="font-mono">…{{ token_hint }}</span>
                         </p>
                     {% endif %}
@@ -114,11 +112,10 @@
 
                 <div>
                     <label class="t-label block mb-1">
-                        {{ has_token ? 'Replace API Token' : 'Your API Token' }}
+                        {{ has_token ? 'Replace API token' : 'Your API token' }}
                     </label>
                     {% if has_token %}
                         <p class="mb-2 inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
-                            <span aria-hidden="true">●</span>
                             Token saved — ending <span class="font-mono">…{{ token_hint }}</span>
                         </p>
                     {% endif %}
@@ -140,7 +137,7 @@
 
                 <div class="flex justify-end">
                     <button type="submit" class="btn btn-md btn-primary">
-                        Save Token
+                        Save token
                     </button>
                 </div>
             </form>
@@ -149,14 +146,14 @@
 
         {# Account Details (Read Only) #}
         <div class="border-t border-slate-100 pt-6">
-            <h2 class="t-heading mb-4">Profile Info</h2>
+            <h2 class="t-heading mb-4">Profile</h2>
             <div class="grid grid-cols-2 gap-4 text-sm">
                 <div>
                     <span class="block text-slate-500">Username</span>
                     <span class="font-medium">{{ user.username }}</span>
                 </div>
                 <div>
-                    <span class="block text-slate-500">Member Since</span>
+                    <span class="block text-slate-500">Member since</span>
                     <span class="font-medium">{{ t.localtime(user.created_at, 'date') }}</span>
                 </div>
             </div>
@@ -174,12 +171,12 @@
         <details class="border-t border-slate-100 pt-6 mt-6 group">
             <summary class="text-xs font-medium text-slate-500 cursor-pointer hover:text-red-600 transition-colors list-none">
                 <span class="inline-flex items-center gap-1">
-                    <span class="text-slate-400 group-open:rotate-90 transition-transform">▸</span>
                     Delete my account
+                    <svg class="size-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
                 </span>
             </summary>
             <div class="mt-4 rounded-md border border-red-200 bg-red-50 p-4">
-                <p class="text-sm text-red-800">
+                <p>
                     This deactivates your account and logs you out. You won't be able
                     to log back in. This cannot be undone by you — contact an admin to
                     restore it.

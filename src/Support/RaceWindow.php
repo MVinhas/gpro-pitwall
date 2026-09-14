@@ -54,4 +54,18 @@ final class RaceWindow
         // Unreachable for a non-empty $raceDays, but keeps the function total.
         return $cursor->format('Y-m-d');
     }
+
+    /**
+     * Race days from the GPRO_RACE_DAYS list ("2,5"); anything outside 1–7 is
+     * dropped, so an empty or garbage value disables windowing.
+     *
+     * @return list<int>
+     */
+    public static function parseDays(string $csv): array
+    {
+        return array_values(array_filter(
+            array_map('intval', explode(',', $csv)),
+            static fn (int $d): bool => $d >= 1 && $d <= 7,
+        ));
+    }
 }

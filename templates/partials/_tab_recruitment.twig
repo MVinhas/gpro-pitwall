@@ -1,15 +1,11 @@
 <div class="space-y-6">
-    {# Notification Banner #}
-    <div class="notice notice-info notice-slim">
-        <span class="font-bold">Driver decisions:</span> Mondays &amp; Thursdays 18:00 Europe/Lisbon — offers rise incrementally from 10:00 the same days.
-    </div>
-
     <div class="card">
         {# Header Section #}
         <div class="card-hd flex flex-col sm:flex-row justify-between items-start sm:items-center">
             <div>
-                <h2 class="t-heading">Recruitment Analyzer</h2>
-                <p class="t-caption">Score the live GPRO driver market against your division's ideal pilot.</p>
+                <h2 class="t-section">Recruitment analyzer</h2>
+                <p class="t-caption">Score the live GPRO driver market against your division's ideal driver.</p>
+                <p class="t-caption">Drivers decide Mondays and Thursdays at 18:00 (Lisbon); offers rise from 10:00 the same days.</p>
             </div>
         </div>
 
@@ -17,19 +13,14 @@
             <form method="POST" action="/analyze_recruitment" class="space-y-6">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
-                <p class="t-caption">
-                    The full GPRO driver market is pulled directly from
-                    <code class="text-xs">GetMarketFile.asp</code> (refreshes hourly upstream;
-                    cached locally for ~55 minutes).
-                    {% if recruitment_updated_at %}
-                        Last upstream update: <span class="font-semibold">{{ recruitment_updated_at }}</span>.
-                    {% endif %}
-                </p>
+                {% if recruitment_updated_at %}
+                    <p class="t-caption">Market updated {{ recruitment_updated_at }}.</p>
+                {% endif %}
 
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
                     {# Target Division #}
                     <div>
-                        <label class="t-label block mb-1">Target Division</label>
+                        <label class="t-label block mb-1">Target division</label>
                         <select name="target_division" class="form-select">
                             {% for div in divisions %}
                                 <option value="{{ div }}" {{ div == active_division ? 'selected' : '' }}>{{ div }}</option>
@@ -40,7 +31,7 @@
                     {# Filters #}
                     <div class="pb-2">
                         <label class="inline-flex items-center cursor-pointer">
-                            <input type="checkbox" name="filter_offers" value="1" class="rounded border-slate-300 text-blue-600 shadow-sm focus:ring-blue-500 h-4 w-4">
+                            <input type="checkbox" name="filter_offers" value="1" class="rounded-md border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4">
                             <span class="ml-2 text-sm text-slate-700">Exclude drivers with offers</span>
                         </label>
                     </div>
@@ -48,31 +39,16 @@
                     {# Force a fresh market pull (bypasses cache). #}
                     <div class="pb-2">
                         <label class="inline-flex items-center cursor-pointer">
-                            <input type="checkbox" name="refresh_market" value="1" class="rounded border-slate-300 text-blue-600 shadow-sm focus:ring-blue-500 h-4 w-4">
+                            <input type="checkbox" name="refresh_market" value="1" class="rounded-md border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4">
                             <span class="ml-2 text-sm text-slate-700">Re-fetch market now</span>
                         </label>
                     </div>
                 </div>
 
                 <div class="flex justify-end border-t border-slate-100 pt-6">
-                    {% if can_submit %}
-                        <button type="submit" class="btn btn-md btn-primary">
-                            Analyze Candidates
-                        </button>
-                    {% else %}
-                        <div class="w-full md:w-1/2 p-4 bg-amber-50 border border-amber-200 rounded-md text-center">
-                            <p class="text-sm font-medium text-amber-800 mb-2">Account Required</p>
-                            <p class="text-xs text-amber-600 mb-3">
-                                <a href="/login" class="underline hover:text-amber-800">Log in</a>
-                                or
-                                <a href="/register" class="underline hover:text-amber-800">register</a>
-                                to analyze recruitment data.
-                            </p>
-                            <button type="button" disabled class="btn btn-md btn-disabled w-full">
-                                Analyze Candidates (Locked)
-                            </button>
-                        </div>
-                    {% endif %}
+                    <button type="submit" class="btn btn-md btn-primary">
+                        Analyze candidates
+                    </button>
                 </div>
             </form>
 
@@ -85,8 +61,8 @@
             {% elseif recruitment_results is defined %}
                 <div class="mt-8">
                     <div class="flex justify-between items-end mb-4">
-                        <h3 class="t-heading">
-                            Candidates (Found: {{ pagination.total_items }})
+                        <h3 class="t-section">
+                            {{ pagination.total_items }} candidate{{ pagination.total_items == 1 ? '' : 's' }}
                             {% if range_filters|length > 0 %}
                                 <span class="t-caption font-medium">of {{ recruitment_unfiltered_total }}</span>
                             {% endif %}
@@ -103,15 +79,15 @@
                     {% set hasRangeFilters = range_filters|length > 0 %}
                     <details class="mb-4 rounded-lg border border-slate-200 bg-slate-50 group" {{ hasRangeFilters ? 'open' : '' }}>
                         <summary class="flex items-center justify-between px-4 py-3 cursor-pointer list-none">
+                            <span class="text-sm font-medium text-slate-700">Value range filters</span>
                             <span class="inline-flex items-center gap-2">
-                                <span class="text-slate-400 group-open:rotate-90 transition-transform">▸</span>
-                                <span class="text-sm font-medium text-slate-700">Value range filters</span>
+                                {% if hasRangeFilters %}
+                                    <span class="inline-flex items-center rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
+                                        {{ range_filters|length }} active {{ range_filters|length == 1 ? 'range' : 'ranges' }}
+                                    </span>
+                                {% endif %}
+                                <svg class="size-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
                             </span>
-                            {% if hasRangeFilters %}
-                                <span class="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
-                                    {{ range_filters|length }} active {{ range_filters|length == 1 ? 'range' : 'ranges' }}
-                                </span>
-                            {% endif %}
                         </summary>
 
                         <form method="GET" action="/" class="border-t border-slate-200 bg-surface px-4 py-4">
@@ -120,9 +96,6 @@
                             <input type="hidden" name="sort" value="{{ sort.col }}">
                             <input type="hidden" name="order" value="{{ sort.order }}">
 
-                            <p class="t-caption mb-3">
-                                Leave either bound blank for a one-sided range. Minimum and maximum values are inclusive.
-                            </p>
 
                             <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
                                 {% for field, label in range_filter_fields %}
@@ -158,8 +131,8 @@
 
                             <div class="flex justify-end gap-3 border-t border-slate-100 mt-4 pt-4">
                                 {% set clearFilterHref = '/recruitment?division_tab=' ~ (active_division|url_encode) ~ '&page=1&sort=' ~ (sort.col|url_encode) ~ '&order=' ~ (sort.order|url_encode) %}
-                                <a href="{{ clearFilterHref }}" class="btn btn-md btn-secondary">Clear Filters</a>
-                                <button type="submit" class="btn btn-md btn-primary">Apply Filters</button>
+                                <a href="{{ clearFilterHref }}" class="btn btn-md btn-secondary">Clear filters</a>
+                                <button type="submit" class="btn btn-md btn-primary">Apply filters</button>
                             </div>
                         </form>
                     </details>
@@ -167,8 +140,8 @@
                     {% if favourite_tracks_available %}
                         <p class="t-caption mb-3">
                             <span class="font-semibold">Fav</span> = favourite tracks on the calendar.
-                            <span class="font-semibold text-emerald-700">C·n</span> this season,
-                            <span class="font-semibold text-emerald-700">N·n</span> next season. Hover for track names.
+                            <span class="font-semibold">C·n</span> this season,
+                            <span class="font-semibold">N·n</span> next season. Hover for track names.
                         </p>
                     {% endif %}
 
@@ -183,113 +156,72 @@
                         {% if rangeFilterQuery %}
                             {% set href = href ~ '&' ~ rangeFilterQuery %}
                         {% endif %}
-                        <a href="{{ href }}"
-                           class="group inline-flex items-center hover:text-blue-600 transition-colors">
-                             {{ label }}{{ icon }}
-                        </a>
+                        <a href="{{ href }}" class="hover:text-slate-900{{ currentSort.col == col ? ' text-slate-900' : '' }}">{{ label }}{{ icon }}</a>
                     {% endmacro %}
 
-                    <div class="overflow-hidden shadow ring-1 ring-slate-200 sm:rounded-lg">
-                        <div class="overflow-x-auto">
-                            <table class="min-w-full divide-y divide-slate-300">
-                                <thead class="bg-slate-50">
+                    {# First columns are the answer (rating, name, OA); the attribute and money
+                       columns scroll on a phone. #}
+                    <div class="border-t border-slate-200">
+                        <div class="dt-scroll">
+                            <table class="dt">
+                                <thead class="border-b border-slate-200">
                                     <tr>
-                                        <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-slate-900 sm:pl-6 cursor-pointer">
-                                             {{ _self.sortLink('Rtg', 'rating', sort, active_division, range_filter_query) }}
-                                        </th>
-                                        <th scope="col" class="px-2 py-3.5 text-left text-sm font-semibold text-slate-900 cursor-pointer">
-                                            {{ _self.sortLink('Name', 'NAME', sort, active_division, range_filter_query) }}
-                                        </th>
-                                        <th scope="col" class="px-2 py-3.5 text-center text-sm font-semibold text-slate-900 cursor-pointer">
-                                            {{ _self.sortLink('OA', 'OA', sort, active_division, range_filter_query) }}
-                                        </th>
-                                        
-                                        {# Stats #}
-                                        {% set stats = ['CON', 'TAL', 'AGG', 'EXP', 'TEI', 'STA', 'CHA', 'MOT', 'WEI', 'AGE'] %}
-                                        {% for stat in stats %}
-                                            <th scope="col" class="px-1 py-3.5 text-center cursor-pointer">
-                                                <span class="t-label">{{ _self.sortLink(stat|capitalize, stat, sort, active_division, range_filter_query) }}</span>
-                                            </th>
+                                        <th scope="col" class="dt-th text-right">{{ _self.sortLink('Rtg', 'rating', sort, active_division, range_filter_query) }}</th>
+                                        <th scope="col" class="dt-th">{{ _self.sortLink('Name', 'NAME', sort, active_division, range_filter_query) }}</th>
+                                        <th scope="col" class="dt-th text-right">{{ _self.sortLink('OA', 'OA', sort, active_division, range_filter_query) }}</th>
+                                        {% for stat in ['CON', 'TAL', 'AGG', 'EXP', 'TEI', 'STA', 'CHA', 'MOT', 'WEI', 'AGE'] %}
+                                            <th scope="col" class="dt-th text-right">{{ _self.sortLink(stat, stat, sort, active_division, range_filter_query) }}</th>
                                         {% endfor %}
-                                        
                                         {% if favourite_tracks_available %}
-                                            <th scope="col" class="px-2 py-3.5 text-center text-sm font-semibold text-slate-900"
-                                                title="Favourite tracks racing this season (C) and next season (N)">
-                                                <span class="t-label">Fav</span>
-                                            </th>
+                                            <th scope="col" class="dt-th" title="Favourite tracks racing this season (C) and next season (N)">Fav</th>
                                         {% endif %}
-
-                                        <th scope="col" class="px-3 py-3.5 text-right text-sm font-semibold text-slate-900 cursor-pointer">
-                                            {{ _self.sortLink('Salary', 'SAL', sort, active_division, range_filter_query) }}
-                                        </th>
-                                        <th scope="col" class="px-3 py-3.5 text-right text-sm font-semibold text-slate-900 cursor-pointer">
-                                            {{ _self.sortLink('Fee', 'FEE', sort, active_division, range_filter_query) }}
-                                        </th>
-                                        <th scope="col" class="px-3 py-3.5 text-center text-sm font-semibold text-slate-900">Link</th>
+                                        <th scope="col" class="dt-th text-right">{{ _self.sortLink('Salary', 'SAL', sort, active_division, range_filter_query) }}</th>
+                                        <th scope="col" class="dt-th text-right">{{ _self.sortLink('Fee', 'FEE', sort, active_division, range_filter_query) }}</th>
                                     </tr>
                                 </thead>
-                                
-                                <tbody class="divide-y divide-slate-200 bg-surface">
+                                <tbody class="divide-y divide-slate-100">
                                     {% for d in recruitment_results %}
-                                        {% set ratingColor = d.rating >= 90 ? 'text-emerald-600' : (d.rating >= 75 ? 'text-blue-600' : 'text-slate-600') %}
-                                        <tr class="hover:bg-slate-50 transition-colors">
-                                            <td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-bold tabular-nums sm:pl-6 {{ ratingColor }}">
-                                                {{ d.rating }}
-                                            </td>
-                                            <td class="whitespace-nowrap px-2 py-4 text-sm font-medium text-slate-900">
-                                                {{ d.NAME }}
+                                        <tr>
+                                            <td class="dt-td text-right font-semibold text-slate-900">{{ d.rating }}</td>
+                                            <td class="dt-td">
+                                                {% if d.ID > 0 %}
+                                                    <a href="https://gpro.net/gb/DriverProfile.asp?ID={{ d.ID }}" target="_blank" rel="noopener noreferrer"
+                                                       class="font-medium text-blue-600 hover:underline" title="Open the GPRO profile">{{ d.NAME }}</a>
+                                                {% else %}
+                                                    <span class="font-medium text-slate-900">{{ d.NAME }}</span>
+                                                {% endif %}
                                                 {% if d.OFF > 0 %}
-                                                    <span class="ml-2 inline-flex items-center rounded-full bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-700 ring-1 ring-inset ring-red-600/10">{{ d.OFF }} Off</span>
+                                                    <span class="ml-1.5 inline-flex items-center rounded-md bg-amber-100 px-1.5 py-px text-[10px] font-medium text-amber-800">{{ d.OFF }} offer{{ d.OFF == 1 ? '' : 's' }}</span>
                                                 {% endif %}
                                             </td>
-                                            <td class="whitespace-nowrap px-2 py-4 text-center text-sm font-bold tabular-nums text-slate-700">{{ d.OA }}</td>
-
-                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm tabular-nums text-slate-500">{{ d.CON }}</td>
-                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm tabular-nums font-medium text-slate-700">{{ d.TAL }}</td>
-                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm tabular-nums text-slate-500">{{ d.AGG }}</td>
-                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm tabular-nums text-slate-500">{{ d.EXP }}</td>
-                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm tabular-nums text-slate-500">{{ d.TEI }}</td>
-                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm tabular-nums text-slate-500">{{ d.STA }}</td>
-                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm tabular-nums text-slate-500">{{ d.CHA }}</td>
-                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm tabular-nums text-slate-500">{{ d.MOT }}</td>
-                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm tabular-nums text-slate-500">{{ d.WEI }}</td>
-                                            <td class="whitespace-nowrap px-1 py-4 text-center text-sm tabular-nums font-bold text-slate-500">{{ d.AGE }}</td>
-
+                                            <td class="dt-td text-right font-semibold text-slate-900">{{ d.OA }}</td>
+                                            {% for stat in ['CON', 'TAL', 'AGG', 'EXP', 'TEI', 'STA', 'CHA', 'MOT', 'WEI', 'AGE'] %}
+                                                <td class="dt-td text-right text-slate-600">{{ attribute(d, stat) }}</td>
+                                            {% endfor %}
                                             {% if favourite_tracks_available %}
-                                                <td class="whitespace-nowrap px-2 py-4 text-center text-sm">
-                                                    <div class="inline-flex items-center gap-1">
-                                                        {% set curOn = d.FAV_current > 0 %}
-                                                        {% set nxtOn = d.FAV_next > 0 %}
-                                                        <span class="inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ring-1 ring-inset {{ curOn ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/20' : 'bg-slate-50 text-slate-400 ring-slate-200' }}"
+                                                {% set curOn = d.FAV_current > 0 %}
+                                                {% set nxtOn = d.FAV_next > 0 %}
+                                                <td class="dt-td">
+                                                    <span class="inline-flex items-center gap-1">
+                                                        <span class="rounded-md px-1.5 py-px text-[11px] font-semibold {{ curOn ? 'bg-slate-100 text-slate-900' : 'text-slate-400' }}"
                                                               title="{{ curOn ? 'This season: ' ~ d.FAV_current_names|join(', ') : 'No favourite tracks this season' }}">C·{{ d.FAV_current }}</span>
-                                                        <span class="inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ring-1 ring-inset {{ nxtOn ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/20' : 'bg-slate-50 text-slate-400 ring-slate-200' }}"
+                                                        <span class="rounded-md px-1.5 py-px text-[11px] font-semibold {{ nxtOn ? 'bg-slate-100 text-slate-900' : 'text-slate-400' }}"
                                                               title="{{ nxtOn ? 'Next season: ' ~ d.FAV_next_names|join(', ') : 'No favourite tracks next season' }}">N·{{ d.FAV_next }}</span>
-                                                    </div>
+                                                    </span>
                                                 </td>
                                             {% endif %}
-
-                                            <td class="whitespace-nowrap px-3 py-4 text-right text-sm tabular-nums text-slate-600">${{ d.SAL|number_format }}</td>
-                                            <td class="whitespace-nowrap px-3 py-4 text-right text-sm tabular-nums text-slate-600">${{ d.FEE|number_format }}</td>
-                                            
-                                            <td class="whitespace-nowrap px-3 py-4 text-center text-sm">
-                                                {% if d.ID > 0 %}
-                                                    <a href="https://gpro.net/gb/DriverProfile.asp?ID={{ d.ID }}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 transition-colors text-lg" title="Open GPRO Profile">🔗</a>
-                                                {% else %}
-                                                    <span class="text-slate-300">-</span>
-                                                {% endif %}
-                                            </td>
+                                            <td class="dt-td text-right text-slate-600">${{ d.SAL|number_format }}</td>
+                                            <td class="dt-td text-right text-slate-600">${{ d.FEE|number_format }}</td>
                                         </tr>
                                     {% else %}
                                         <tr>
-                                            <td colspan="{{ favourite_tracks_available ? 17 : 16 }}" class="px-6 py-10 text-center text-sm text-slate-500 bg-slate-50">
-                                                No candidates found.
-                                            </td>
+                                            <td colspan="{{ favourite_tracks_available ? 16 : 15 }}" class="dt-td py-8 text-center text-slate-500">No candidates found.</td>
                                         </tr>
                                     {% endfor %}
                                 </tbody>
                             </table>
                         </div>
-                        
+
                         {# Pagination Controls #}
                         {% if pagination.total_pages > 1 %}
                             <div class="bg-surface px-4 py-3 flex items-center justify-between border-t border-slate-200 sm:px-6">
@@ -320,7 +252,7 @@
                                         </p>
                                     </div>
                                     <div>
-                                        <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                                        <nav class="relative z-0 inline-flex rounded-md -space-x-px" aria-label="Pagination">
                                             {% if pagination.current > 1 %}
                                                 <a href="/recruitment?{{ navigationParams }}&page={{ pagination.current - 1 }}" aria-label="Previous page" class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-slate-300 bg-surface text-sm font-medium text-slate-500 hover:bg-slate-50">
                                                      «

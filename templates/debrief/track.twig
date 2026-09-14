@@ -58,31 +58,31 @@
                 <span class="brief-n">{{ total_races }} races</span>
             {% endblock %}
             {% block body %}{% import "debrief/_shell.twig" as t %}
-                <div class="brief-scroll">
-                    <table class="brief-table">
+                <div class="dt-scroll">
+                    <table class="dt">
                         <thead class="bg-slate-50">
                             <tr>
-                                <th class="brief-th">Division</th>
-                                <th class="brief-th text-right">Races</th>
-                                <th class="brief-th text-right hidden sm:table-cell">Seasons</th>
-                                <th class="brief-th text-right hidden md:table-cell">Drivers</th>
-                                <th class="brief-th text-right">Avg finish</th>
-                                <th class="brief-th text-right hidden lg:table-cell">Avg mistake</th>
-                                <th class="brief-th text-right hidden sm:table-cell">DNFs</th>
+                                <th class="dt-th">Division</th>
+                                <th class="dt-th text-right">Races</th>
+                                <th class="dt-th text-right hidden sm:table-cell">Seasons</th>
+                                <th class="dt-th text-right hidden md:table-cell">Drivers</th>
+                                <th class="dt-th text-right">Avg finish</th>
+                                <th class="dt-th text-right hidden lg:table-cell">Avg mistake</th>
+                                <th class="dt-th text-right hidden sm:table-cell">DNFs</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
                             {% for row in totals %}
                                 <tr>
-                                    <td class="brief-td font-medium">{{ row.level }}</td>
-                                    <td class="brief-td text-right">{{ row.races }}</td>
-                                    <td class="brief-td text-right hidden sm:table-cell">{{ row.seasons }}</td>
-                                    <td class="brief-td text-right hidden md:table-cell">{{ row.drivers }}</td>
-                                    <td class="brief-td text-right">{{ row.avg_pos ?? '—' }}</td>
-                                    <td class="brief-td text-right hidden lg:table-cell">
+                                    <td class="dt-td font-medium">{{ row.level }}</td>
+                                    <td class="dt-td text-right">{{ row.races }}</td>
+                                    <td class="dt-td text-right hidden sm:table-cell">{{ row.seasons }}</td>
+                                    <td class="dt-td text-right hidden md:table-cell">{{ row.drivers }}</td>
+                                    <td class="dt-td text-right">{{ row.avg_pos ?? '—' }}</td>
+                                    <td class="dt-td text-right hidden lg:table-cell">
                                         {{ row.avg_mistake is not null ? row.avg_mistake ~ 's' : '—' }}
                                     </td>
-                                    <td class="brief-td text-right hidden sm:table-cell">{{ row.dnfs }}</td>
+                                    <td class="dt-td text-right hidden sm:table-cell">{{ row.dnfs }}</td>
                                 </tr>
                             {% endfor %}
                         </tbody>
@@ -136,33 +136,33 @@
                     <span class="t-caption">{{ risk_avg|length }} division{{ risk_avg|length == 1 ? '' : 's' }}</span>
                 {% endblock %}
                 {% block body %}{% import "debrief/_shell.twig" as t %}
-                    <div class="brief-scroll">
-                        <table class="brief-table">
+                    <div class="dt-scroll">
+                        <table class="dt">
                             <thead class="bg-slate-50">
                                 <tr>
-                                    <th class="brief-th">Division</th>
-                                    <th class="brief-th text-right">Overtake</th>
-                                    <th class="brief-th text-right">Defend</th>
-                                    <th class="brief-th text-right">Clear dry</th>
-                                    <th class="brief-th text-right hidden sm:table-cell">Clear wet</th>
-                                    <th class="brief-th text-right">Malfunction</th>
-                                    <th class="brief-th text-right hidden md:table-cell">Clear dry &gt; 50</th>
-                                    <th class="brief-th text-right">Sample</th>
+                                    <th class="dt-th">Division</th>
+                                    <th class="dt-th text-right">Overtake</th>
+                                    <th class="dt-th text-right">Defend</th>
+                                    <th class="dt-th text-right">Clear dry</th>
+                                    <th class="dt-th text-right hidden sm:table-cell">Clear wet</th>
+                                    <th class="dt-th text-right">Malfunction</th>
+                                    <th class="dt-th text-right hidden md:table-cell">Clear dry &gt; 50</th>
+                                    <th class="dt-th text-right">Sample</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100">
                                 {% for row in risk_avg %}
                                     <tr>
-                                        <td class="brief-td font-medium">{{ row.level }}</td>
-                                        <td class="brief-td text-right">{{ row.overtaking ?? '—' }}</td>
-                                        <td class="brief-td text-right">{{ row.defensive ?? '—' }}</td>
-                                        <td class="brief-td text-right">{{ row.clear_dry ?? '—' }}</td>
-                                        <td class="brief-td text-right hidden sm:table-cell">{{ row.clear_wet ?? '—' }}</td>
-                                        <td class="brief-td text-right">{{ row.malfunctioning ?? '—' }}</td>
-                                        <td class="brief-td text-right hidden md:table-cell">
+                                        <td class="dt-td font-medium">{{ row.level }}</td>
+                                        <td class="dt-td text-right">{{ row.overtaking ?? '—' }}</td>
+                                        <td class="dt-td text-right">{{ row.defensive ?? '—' }}</td>
+                                        <td class="dt-td text-right">{{ row.clear_dry ?? '—' }}</td>
+                                        <td class="dt-td text-right hidden sm:table-cell">{{ row.clear_wet ?? '—' }}</td>
+                                        <td class="dt-td text-right">{{ row.malfunctioning ?? '—' }}</td>
+                                        <td class="dt-td text-right hidden md:table-cell">
                                             {{ row.clear_dry_over_50 is not null ? row.clear_dry_over_50 ~ '%' : '—' }}
                                         </td>
-                                        <td class="brief-td text-right">{{ t.n(row.n, min_sample) }}</td>
+                                        <td class="dt-td text-right">{{ t.n(row.n, min_sample) }}</td>
                                     </tr>
                                 {% endfor %}
                             </tbody>
@@ -191,24 +191,24 @@
                     </span>
                 {% endblock %}
                 {% block body %}{% import "debrief/_shell.twig" as t %}
-                    <div class="brief-scroll">
-                        <table class="brief-table">
+                    <div class="dt-scroll">
+                        <table class="dt">
                             <thead class="bg-slate-50">
                                 <tr>
-                                    <th class="brief-th">Stops</th>
+                                    <th class="dt-th">Stops</th>
                                     {% for level in strategy.levels %}
-                                        <th class="brief-th text-right">{{ level }}</th>
+                                        <th class="dt-th text-right">{{ level }}</th>
                                     {% endfor %}
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100">
                                 {% for row in strategy.rows %}
                                     <tr>
-                                        <td class="brief-td font-medium">
+                                        <td class="dt-td font-medium">
                                             {{ row.stops }} stop{{ row.stops == 1 ? '' : 's' }}
                                         </td>
                                         {% for cell in row.cells %}
-                                            <td class="brief-td text-right">
+                                            <td class="dt-td text-right">
                                                 {% if cell.n == 0 %}—
                                                 {% else %}
                                                     {{ cell.percent }}%
@@ -240,27 +240,27 @@
                     <span class="t-caption">{{ tyres|length }} compound/condition splits</span>
                 {% endblock %}
                 {% block body %}{% import "debrief/_shell.twig" as t %}
-                    <div class="brief-scroll">
-                        <table class="brief-table">
+                    <div class="dt-scroll">
+                        <table class="dt">
                             <thead class="bg-slate-50">
                                 <tr>
-                                    <th class="brief-th">Division</th>
-                                    <th class="brief-th">Compound</th>
-                                    <th class="brief-th">Conditions</th>
-                                    <th class="brief-th text-right">Avg finish</th>
-                                    <th class="brief-th text-right hidden sm:table-cell">Avg points</th>
-                                    <th class="brief-th text-right">Sample</th>
+                                    <th class="dt-th">Division</th>
+                                    <th class="dt-th">Compound</th>
+                                    <th class="dt-th">Conditions</th>
+                                    <th class="dt-th text-right">Avg finish</th>
+                                    <th class="dt-th text-right hidden sm:table-cell">Avg points</th>
+                                    <th class="dt-th text-right">Sample</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100">
                                 {% for row in tyres %}
                                     <tr>
-                                        <td class="brief-td font-medium">{{ row.level }}</td>
-                                        <td class="brief-td">{{ row.race_tyre }}</td>
-                                        <td class="brief-td">{{ row.was_wet ? 'Wet' : 'Dry' }}</td>
-                                        <td class="brief-td text-right">{{ row.avg_pos ?? '—' }}</td>
-                                        <td class="brief-td text-right hidden sm:table-cell">{{ row.avg_points ?? '—' }}</td>
-                                        <td class="brief-td text-right">{{ t.n(row.n, min_sample) }}</td>
+                                        <td class="dt-td font-medium">{{ row.level }}</td>
+                                        <td class="dt-td">{{ row.race_tyre }}</td>
+                                        <td class="dt-td">{{ row.was_wet ? 'Wet' : 'Dry' }}</td>
+                                        <td class="dt-td text-right">{{ row.avg_pos ?? '—' }}</td>
+                                        <td class="dt-td text-right hidden sm:table-cell">{{ row.avg_points ?? '—' }}</td>
+                                        <td class="dt-td text-right">{{ t.n(row.n, min_sample) }}</td>
                                     </tr>
                                 {% endfor %}
                             </tbody>
@@ -281,31 +281,31 @@
                     <span class="t-caption">{{ wet }} wet of {{ total_races }}</span>
                 {% endblock %}
                 {% block body %}{% import "debrief/_shell.twig" as t %}
-                    <div class="brief-scroll">
-                        <table class="brief-table">
+                    <div class="dt-scroll">
+                        <table class="dt">
                             <thead class="bg-slate-50">
                                 <tr>
-                                    <th class="brief-th">Season</th>
-                                    <th class="brief-th text-right">Races</th>
-                                    <th class="brief-th text-right">Temperature</th>
-                                    <th class="brief-th text-right hidden sm:table-cell">Humidity</th>
-                                    <th class="brief-th text-right">Weather</th>
+                                    <th class="dt-th">Season</th>
+                                    <th class="dt-th text-right">Races</th>
+                                    <th class="dt-th text-right">Temperature</th>
+                                    <th class="dt-th text-right hidden sm:table-cell">Humidity</th>
+                                    <th class="dt-th text-right">Weather</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100">
                                 {% for row in weather %}
                                     <tr>
-                                        <td class="brief-td font-medium">{{ row.season }}</td>
-                                        <td class="brief-td text-right">{{ row.races }}</td>
-                                        <td class="brief-td text-right">{{ row.temperature ?? '—' }}°</td>
-                                        <td class="brief-td text-right hidden sm:table-cell">{{ row.humidity ?? '—' }}%</td>
-                                        <td class="brief-td text-right">
+                                        <td class="dt-td font-medium">{{ row.season }}</td>
+                                        <td class="dt-td text-right">{{ row.races }}</td>
+                                        <td class="dt-td text-right">{{ row.temperature is null ? '—' : row.temperature|round ~ '°' }}</td>
+                                        <td class="dt-td text-right hidden sm:table-cell">{{ row.humidity ?? '—' }}%</td>
+                                        <td class="dt-td text-right">
                                             {% if row.wet_races == 0 %}
-                                                <span class="inline-flex items-center rounded px-1.5 py-px text-xs font-medium bg-amber-100 text-amber-900">Dry</span>
+                                                <span class="inline-flex items-center rounded-md px-1.5 py-px text-xs font-medium bg-slate-100 text-slate-700">Dry</span>
                                             {% elseif row.wet_races == row.races %}
-                                                <span class="inline-flex items-center rounded px-1.5 py-px text-xs font-medium bg-blue-100 text-blue-800">Wet</span>
+                                                <span class="inline-flex items-center rounded-md px-1.5 py-px text-xs font-medium bg-slate-100 text-slate-700">Wet</span>
                                             {% else %}
-                                                <span class="inline-flex items-center rounded px-1.5 py-px text-xs font-medium bg-slate-200 text-slate-700">Mixed</span>
+                                                <span class="inline-flex items-center rounded-md px-1.5 py-px text-xs font-medium bg-slate-200 text-slate-700">Mixed</span>
                                             {% endif %}
                                         </td>
                                     </tr>
@@ -331,40 +331,40 @@
                 {% if mine|length == 0 %}
                     <p class="t-caption">You have no archived races at this track yet.</p>
                 {% else %}
-                    <div class="brief-scroll">
-                        <table class="brief-table">
+                    <div class="dt-scroll">
+                        <table class="dt">
                             <thead class="bg-slate-50">
                                 <tr>
-                                    <th class="brief-th">Race</th>
-                                    <th class="brief-th text-right">Grid</th>
-                                    <th class="brief-th text-right">Finish</th>
-                                    <th class="brief-th text-right">+/-</th>
-                                    <th class="brief-th text-right hidden sm:table-cell">Q2</th>
-                                    <th class="brief-th text-right hidden md:table-cell">Best lap</th>
-                                    <th class="brief-th text-right hidden lg:table-cell">Stops</th>
-                                    <th class="brief-th hidden lg:table-cell">Tyre</th>
-                                    <th class="brief-th text-right hidden xl:table-cell">Fuel /km</th>
-                                    <th class="brief-th text-right">Score</th>
+                                    <th class="dt-th">Race</th>
+                                    <th class="dt-th text-right">Grid</th>
+                                    <th class="dt-th text-right">Finish</th>
+                                    <th class="dt-th text-right">+/-</th>
+                                    <th class="dt-th text-right hidden sm:table-cell">Q2</th>
+                                    <th class="dt-th text-right hidden md:table-cell">Best lap</th>
+                                    <th class="dt-th text-right hidden lg:table-cell">Stops</th>
+                                    <th class="dt-th hidden lg:table-cell">Tyre</th>
+                                    <th class="dt-th text-right hidden xl:table-cell">Fuel /km</th>
+                                    <th class="dt-th text-right">Score</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100">
                                 {% for row in mine %}
                                     <tr>
-                                        <td class="brief-td">
+                                        <td class="dt-td">
                                             <a class="text-blue-600 hover:underline"
                                                href="/debrief?scope=mine&amp;season_detail={{ row.season }}&amp;race_detail={{ row.race }}#race-detail">
                                                 S{{ row.season }} R{{ row.race }}
                                             </a>
                                         </td>
-                                        <td class="brief-td text-right">{{ row.grid_pos ?? '—' }}</td>
-                                        <td class="brief-td text-right">{{ t.pos(row.final_pos, row.dnf) }}</td>
-                                        <td class="brief-td text-right">{{ t.delta(row.positions_gained) }}</td>
-                                        <td class="brief-td text-right hidden sm:table-cell">P{{ row.q2_pos ?? '—' }}</td>
-                                        <td class="brief-td text-right hidden md:table-cell">{{ t.laptime(row.best_lap_ms) }}</td>
-                                        <td class="brief-td text-right hidden lg:table-cell">{{ row.pit_stops ?? '—' }}</td>
-                                        <td class="brief-td hidden lg:table-cell">{{ row.race_tyre ?? '—' }}</td>
-                                        <td class="brief-td text-right hidden xl:table-cell">{{ row.fuel_per_km ?? '—' }}</td>
-                                        <td class="brief-td text-right font-semibold">{{ row.score }}</td>
+                                        <td class="dt-td text-right">{{ row.grid_pos ?? '—' }}</td>
+                                        <td class="dt-td text-right">{{ t.pos(row.final_pos, row.dnf) }}</td>
+                                        <td class="dt-td text-right">{{ t.delta(row.positions_gained) }}</td>
+                                        <td class="dt-td text-right hidden sm:table-cell">P{{ row.q2_pos ?? '—' }}</td>
+                                        <td class="dt-td text-right hidden md:table-cell">{{ t.laptime(row.best_lap_ms) }}</td>
+                                        <td class="dt-td text-right hidden lg:table-cell">{{ row.pit_stops ?? '—' }}</td>
+                                        <td class="dt-td hidden lg:table-cell">{{ row.race_tyre ?? '—' }}</td>
+                                        <td class="dt-td text-right hidden xl:table-cell">{{ row.fuel_per_km ?? '—' }}</td>
+                                        <td class="dt-td text-right font-semibold">{{ row.score }}</td>
                                     </tr>
                                 {% endfor %}
                             </tbody>

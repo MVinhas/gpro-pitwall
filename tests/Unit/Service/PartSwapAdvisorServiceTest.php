@@ -193,6 +193,37 @@ final class PartSwapAdvisorServiceTest extends TestCase
         $this->assertLessThan(0.0, $options[2]['fit_delta']);
     }
 
+    public function testEveryOptionCarriesAPlainBalanceVerdictMatchingItsFitChange(): void
+    {
+        // Same handling-hungry track: one level down helps the balance, a fresh
+        // part at the same level changes nothing, one level up hurts it. The UI
+        // shows these words instead of a raw fit delta nobody can read.
+        $track = ['power' => 5, 'handling' => 15, 'acceleration' => 5];
+        $car   = ['power' => 100, 'handling' => 90, 'acceleration' => 85];
+        $carData = $this->carData([
+            ['level' => 5, 'wear' => 0, 'cost' => 1_500_000, 'action' => 5],
+            ['level' => 6, 'wear' => 0, 'cost' => 900_000,   'action' => 6],
+            ['level' => 7, 'wear' => 0, 'cost' => 100_000,   'action' => 7],
+        ]);
+
+        $out = $this->svc->advise($this->flaggedEngine(), $carData, $this->wearParts(), [], $track, $car, 0, [], 10_000_000);
+
+        $byLevel = array_column($out['Engine']['options'], null, 'level');
+        $this->assertSame('closer', $byLevel[5]['balance']);
+        $this->assertSame('same', $byLevel[6]['balance']);
+        $this->assertSame('further', $byLevel[7]['balance']);
+
+        // The words follow the advisor's significance band, not the sign alone.
+        foreach ($out['Engine']['options'] as $option) {
+            $expected = match (true) {
+                $option['fit_delta'] >= 0.25  => 'closer',
+                $option['fit_delta'] <= -0.25 => 'further',
+                default                       => 'same',
+            };
+            $this->assertSame($expected, $option['balance']);
+        }
+    }
+
     public function testTheRankedLeaderIsTheRecommendation(): void
     {
         $track = ['power' => 5, 'handling' => 15, 'acceleration' => 5];

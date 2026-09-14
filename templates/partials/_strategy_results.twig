@@ -18,420 +18,260 @@
         <span class="font-bold">Strategy unavailable.</span> {{ strategy_results.error }}
     </div>
 {% elseif strategy_results and strategy_results.track is defined %}
+    {% set sr = strategy_results %}
+    {% set best = sr.tyres[sr.best_compound] %}
+    {% set ra = sr.risk_advice is defined ? sr.risk_advice : null %}
+    {# Runner-up must be the same tyre type as the winner: dry compares
+       against dry only; Rain (wet) has no same-type rival, so no line. #}
+    {% set runner_name = null %}
+    {% if sr.best_compound != 'Rain' %}
+        {% for comp, data in sr.tyres %}
+            {% if comp != 'Rain' and comp != sr.best_compound and (runner_name is null or data.total_lost < sr.tyres[runner_name].total_lost) %}
+                {% set runner_name = comp %}
+            {% endif %}
+        {% endfor %}
+    {% endif %}
+    {# GPRO's own setup field names, in GPRO's order. #}
+    {% set parts = {'Front Wing': 'Front wing', 'Rear Wing': 'Rear wing', 'Engine': 'Engine', 'Brakes': 'Brakes', 'Gearbox': 'Gear', 'Suspension': 'Suspension'} %}
+    {% set sessions = [
+        {key: 'Q1', temp: sr.weather_inputs.Q1.temp, weather: sr.weather_inputs.Q1.weather},
+        {key: 'Q2', temp: sr.weather_inputs.Q2.temp, weather: sr.weather_inputs.Q2.weather},
+        {key: 'Race', temp: sr.inputs.temp, weather: sr.weather_inputs.Race.weather},
+    ] %}
+
     <div class="space-y-6" data-result-state="results">
-        {# VERDICT STRIP #}
-        {% set best = strategy_results.tyres[strategy_results.best_compound] %}
-        {# Runner-up must be the same tyre type as the winner: dry compares
-           against dry only; Rain (wet) has no same-type rival, so no line. #}
-        {% set runner_name = null %}
-        {% if strategy_results.best_compound != 'Rain' %}
-            {% for comp, data in strategy_results.tyres %}
-                {% if comp != 'Rain' and comp != strategy_results.best_compound and (runner_name is null or data.total_lost < strategy_results.tyres[runner_name].total_lost) %}
-                    {% set runner_name = comp %}
-                {% endif %}
-            {% endfor %}
-        {% endif %}
-        <div class="card border-l-4 border-l-emerald-500">
-            <div class="bg-emerald-50 px-4 py-3 sm:px-6 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                <span class="inline-flex items-center rounded-md bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-on-accent">★ Best</span>
-                <span class="text-lg font-bold text-emerald-900">{{ strategy_results.best_compound }}</span>
-                <span class="text-sm font-semibold text-emerald-900 tabular-nums">{{ best.stops }} stop{{ best.stops == 1 ? '' : 's' }} · {{ best.fuel_recommended }}L per stint · {{ best.total_lost }}s lost</span>
-                {% if runner_name is not null %}
-                    <span class="text-xs text-emerald-700 tabular-nums">beats {{ runner_name }} by {{ (strategy_results.tyres[runner_name].total_lost - best.total_lost)|round(1) }}s</span>
-                {% endif %}
-            </div>
-        </div>
 
-        {# HEADER — track + supplier + fuel billboard #}
-        <div class="border-b border-slate-200 pb-3">
-            <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                <p class="t-heading">
-                    {{ strategy_results.track }}
-                    <span class="t-caption font-normal">Season {{ strategy_results.season }} Race {{ strategy_results.race }} · {{ strategy_results.inputs.laps }} laps</span>
-                </p>
-                <p class="text-sm font-bold text-blue-600 tabular-nums">
-                    {{ strategy_results.supplier }}
-                    {% if strategy_results.supplier_info %}
-                        {% set si = strategy_results.supplier_info %}
-                        <span class="font-normal text-xs" title="Your tyre supplier's characteristics — not the track.">
-                            {% if si.dry is not null %}<span class="text-slate-400">Dry</span> <span class="text-slate-700">{{ si.dry }}/8</span>{% endif %}
-                            {% if si.wet is not null %}<span class="ml-1 text-slate-400">Wet</span> <span class="text-slate-700">{{ si.wet }}/8</span>{% endif %}
-                            {% if si.temp is not null %}<span class="ml-1 text-slate-400">Ideal temp</span> <span class="text-slate-700">{{ si.temp }}°C</span>{% endif %}
-                        </span>
-                    {% endif %}
-                </p>
-            </div>
-            <div class="mt-2 flex flex-wrap items-center divide-x divide-slate-300 text-xs font-medium tabular-nums">
-                <span class="px-3 first:pl-0">
-                    <span class="text-slate-400">Consumption</span>
-                    <span class="ml-1 text-slate-700">{{ strategy_results.fuel.l_per_lap }} litres/lap</span>
-                </span>
-                <span class="px-3">
-                    <span class="text-slate-400">Fuel (dry)</span>
-                    <span class="ml-1 text-slate-700">{{ strategy_results.fuel.dry }} litres</span>
-                </span>
-                <span class="px-3">
-                    <span class="text-slate-400">Fuel (wet)</span>
-                    <span class="ml-1 text-slate-700">{{ strategy_results.fuel.wet }} litres</span>
-                    {% if strategy_results.fuel.wet_estimated %}
-                        <span class="ml-1 font-bold text-amber-700"
-                              title="This track has never run a wet race, so there is no measured wet consumption. The wet figure assumes dry consumption — safe, but over-fuelled.">est.</span>
-                    {% endif %}
-                </span>
-                {% if strategy_results.overtaking %}
-                    {% set ot_class = {
-                        'Very Easy': 'text-emerald-700',
-                        'Easy':      'text-emerald-700',
-                        'Normal':    'text-slate-700',
-                        'Hard':      'text-amber-700',
-                        'Very Hard': 'text-red-700',
-                    }[strategy_results.overtaking] ?? 'text-slate-700' %}
-                    <span class="px-3 last:pr-0"
-                          title="How easily cars pass here. Hard overtaking makes track position more valuable — favour fewer pit stops.">
-                        <span class="text-slate-400">Overtaking</span>
-                        <span class="ml-1 font-bold {{ ot_class }}">{{ strategy_results.overtaking }}</span>
-                    </span>
-                {% endif %}
-            </div>
-            {% if strategy_results.fuel.wet_estimated %}
-                <div class="notice notice-warn notice-slim mt-2">
-                    <strong>Wet fuel is an estimate.</strong> This track has never run a wet race, so no measured wet consumption exists — the wet figures assume dry consumption and will over-fuel you rather than strand you.
+        {# RACE SHEET — the values the manager types into GPRO, in GPRO's own form
+           order: setup, fuel, tyres, risks, boost laps. Start risk and pit-on-problem
+           are deliberately left out: they don't work well in the game (Micael).
+           Sessions are rows and parts are columns, so all three setups fit a phone
+           without scrolling sideways. #}
+        <section class="card" aria-labelledby="race-sheet-title">
+            <div class="bg-board px-4 py-3 sm:px-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div>
+                    <h3 id="race-sheet-title" class="text-[10px] font-semibold uppercase tracking-wide text-white/60">Race sheet</h3>
+                    <p class="text-base font-semibold text-white">
+                        {{ sr.track }}
+                        <span class="text-xs font-normal text-white/60 tabular-nums">Season {{ sr.season }} · Race {{ sr.race }} · {{ sr.inputs.laps }} laps</span>
+                    </p>
                 </div>
-            {% endif %}
-        </div>
-
-        {# COMPOUND TABLE #}
-        <div class="card">
-            <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-slate-200">
-                    <thead class="bg-board">
-                        <tr>
-                            <th rowspan="2" class="px-3 sm:px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-white">Compound</th>
-                            <th rowspan="2" class="px-2 sm:px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-white">Stops</th>
-                            <th colspan="2" class="hidden sm:table-cell px-4 py-2 text-center text-xs font-bold uppercase tracking-wide text-white border-b border-white/15">Fuel / Stint <span class="font-normal normal-case text-white/60">(L)</span></th>
-                            <th class="sm:hidden px-3 py-2 text-center text-xs font-bold uppercase tracking-wide text-white border-b border-white/15">Fuel / Stint <span class="font-normal normal-case text-white/60">(L)</span></th>
-                            <th rowspan="2" class="hidden md:table-cell px-2 py-3 text-center text-xs font-bold uppercase tracking-wide text-white">Est. Pit <span class="font-normal normal-case text-white/60">(s)</span></th>
-                            <th colspan="4" class="hidden md:table-cell px-2 py-2 text-center text-xs font-medium uppercase tracking-wide text-white/60 border-l border-white/15 border-b border-white/15">Time Lost <span class="normal-case">(s)</span></th>
-                            {% if strategy_results.ctr_gain_per_lap > 0 %}
-                                <th rowspan="2" class="hidden sm:table-cell px-4 py-3 text-center text-xs font-medium uppercase tracking-wide text-white/60" title="The most your Clear Track Risk setting can save, in clear air. Not banked when you are stuck behind another car.">CTR Max Gain</th>
-                            {% endif %}
-                            <th rowspan="2" class="px-2 sm:px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-white bg-board-strong">{{ strategy_results.ctr_gain_per_lap > 0 ? 'Net' : 'Total Lost' }}</th>
-                        </tr>
-                        <tr>
-                            <th class="hidden sm:table-cell px-2 py-1.5 text-center text-[10px] font-medium uppercase tracking-wide text-white/60" title="Bare-minimum litres of fuel to finish the stint; no safety margin.">Minimum</th>
-                            <th class="px-2 py-1.5 text-center text-[10px] font-medium uppercase tracking-wide text-white/60" title="Litres to put in the car: the minimum plus one extra lap's worth, as a buffer against bad pit timing.">Recommended</th>
-                            <th class="hidden md:table-cell px-2 py-1.5 text-center text-[10px] font-medium uppercase tracking-wide text-white/60 border-l border-white/15">Pits</th>
-                            <th class="hidden md:table-cell px-2 py-1.5 text-center text-[10px] font-medium uppercase tracking-wide text-white/60">Fuel</th>
-                            <th class="hidden md:table-cell px-2 py-1.5 text-center text-[10px] font-medium uppercase tracking-wide text-white/60">TCD</th>
-                            <th class="hidden md:table-cell px-2 py-1.5 text-center text-[10px] font-medium uppercase tracking-wide text-white/60">Total</th>
-                        </tr>
-                    </thead>
-                    <tbody class="bg-surface divide-y divide-slate-200">
-                        {% for comp, data in strategy_results.tyres %}
-                            {% set is_best = (comp == strategy_results.best_compound) %}
-                            <tr class="transition-colors {{ is_best ? 'bg-emerald-50 hover:bg-emerald-100' : 'hover:bg-slate-50' }}">
-                                <td class="px-3 sm:px-4 py-3 text-sm font-bold text-slate-900">
-                                    {% if is_best %}
-                                        <span class="inline-flex items-center rounded-md bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-on-accent mr-2 align-middle">★ Best</span>
-                                    {% endif %}
-                                    {{ comp }}
-                                </td>
-                                <td class="px-2 sm:px-4 py-3 text-center text-sm font-bold tabular-nums {{ data.stops > 3 ? 'text-red-500' : (is_best ? 'text-emerald-700' : 'text-blue-600') }}">
-                                    {{ data.stops }}
-                                </td>
-                                <td class="hidden sm:table-cell px-2 py-3 text-center text-sm text-slate-500 tabular-nums">{{ data.fuel_load }}</td>
-                                <td class="px-2 py-3 text-center text-sm font-semibold tabular-nums {{ is_best ? 'text-emerald-700' : 'text-blue-600' }}">{{ data.fuel_recommended }}</td>
-                                <td class="hidden md:table-cell px-2 py-3 text-center text-sm text-slate-500 tabular-nums">{{ data.pit_time_est }}</td>
-
-                                <td class="hidden md:table-cell px-2 py-3 text-center text-xs text-slate-500 tabular-nums border-l border-slate-100">
-                                    {{ data.lost_pits }}
-                                </td>
-                                <td class="hidden md:table-cell px-2 py-3 text-center text-xs text-slate-500 tabular-nums">
-                                    {{ data.lost_fuel }}
-                                </td>
-                                <td class="hidden md:table-cell px-2 py-3 text-center text-xs text-slate-500 tabular-nums">
-                                    {{ data.lost_tcd }}
-                                </td>
-                                <td class="hidden md:table-cell px-2 py-3 text-center text-xs text-slate-500 tabular-nums">
-                                    {{ data.total_lost }}
-                                </td>
-                                {% if strategy_results.ctr_gain_per_lap > 0 %}
-                                    <td class="hidden sm:table-cell px-2 py-3 text-center text-xs font-semibold tabular-nums {{ data.ctr_gain > 0 ? 'text-emerald-600' : 'text-slate-400' }}">
-                                        {{ data.ctr_gain > 0 ? '−' ~ data.ctr_gain ~ 's' : '—' }}
-                                    </td>
-                                {% endif %}
-
-                                <td class="px-2 sm:px-4 py-3 text-center text-sm font-bold tabular-nums border-l border-slate-200 {{ is_best ? 'text-emerald-700 bg-emerald-100' : 'text-slate-900 bg-slate-50' }}">
-                                    {{ data.net_lost }}s
-                                </td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                <label class="flex items-center gap-2 whitespace-nowrap text-xs text-white/60">
+                    Race weather
+                    <select form="stratForm" name="race_weather" data-strategy-fragment-trigger class="form-select w-24 text-xs">
+                        <option value="Dry" {{ sr.weather_inputs.Race.weather == 'Dry' ? 'selected' }}>Dry</option>
+                        <option value="Wet" {{ sr.weather_inputs.Race.weather == 'Wet' ? 'selected' }}>Wet</option>
+                    </select>
+                </label>
             </div>
-            {% if strategy_results.ctr_gain_per_lap > 0 and (strategy_results.inputs.risk ?? 0) > 0 %}
-                <div class="px-4 pb-4 sm:px-6 sm:pb-6 pt-3">
-                    <div class="notice notice-warn notice-slim">
-                        <strong>Keep in mind time lost due to blocking.</strong>
-                        The CTR max gain is clear-air only — stuck behind another car you wear
-                        the tyres harder without banking the lap time.
-                    </div>
-                </div>
-            {% endif %}
-        </div>
 
-
-        {# SETUP CALCULATOR TABLE #}
-        <div class="card">
-            <div class="card-hd">
-                <h3 class="t-section">Car Setup</h3>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-slate-200 text-sm">
+            {# Parts are rows and sessions are columns — the same top-to-bottom order as
+               GPRO's setup form, so each value is typed straight across. The rest of the
+               race settings sit beside it on wide screens. #}
+            <div class="grid lg:grid-cols-2">
+            <div class="px-2 py-3 sm:px-4">
+                <table class="w-full text-sm">
+                    <caption class="sr-only">Car setup for each session</caption>
                     <thead>
-                        <tr class="bg-surface">
-                            <th class="px-4 py-3 text-left align-bottom"><span class="t-label">Part</span></th>
-
-                            {# Q1 Column — API-derived, read-only #}
-                            <th class="px-4 py-3 text-center border-l border-slate-200 w-36">
-                                <span class="block font-bold text-slate-700 mb-1">Qualifying 1</span>
-                                <div class="flex justify-center gap-2 items-center text-xs text-slate-600">
-                                    <span class="font-semibold">{{ strategy_results.weather_inputs.Q1.temp }}°C</span>
-                                    <span class="px-1.5 py-0.5 rounded {{ strategy_results.weather_inputs.Q1.weather == 'Wet' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700' }}">
-                                        {{ strategy_results.weather_inputs.Q1.weather }}
-                                    </span>
-                                </div>
-                                <input form="stratForm" type="hidden" name="q1_temp" value="{{ strategy_results.weather_inputs.Q1.temp }}">
-                                <input form="stratForm" type="hidden" name="q1_weather" value="{{ strategy_results.weather_inputs.Q1.weather }}">
-                            </th>
-
-                            {# Q2 Column — API-derived, read-only #}
-                            <th class="px-4 py-3 text-center border-l border-slate-200 w-36">
-                                <span class="block font-bold text-slate-700 mb-1">Qualifying 2</span>
-                                <div class="flex justify-center gap-2 items-center text-xs text-slate-600">
-                                    <span class="font-semibold">{{ strategy_results.weather_inputs.Q2.temp }}°C</span>
-                                    <span class="px-1.5 py-0.5 rounded {{ strategy_results.weather_inputs.Q2.weather == 'Wet' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700' }}">
-                                        {{ strategy_results.weather_inputs.Q2.weather }}
-                                    </span>
-                                </div>
-                                <input form="stratForm" type="hidden" name="q2_temp" value="{{ strategy_results.weather_inputs.Q2.temp }}">
-                                <input form="stratForm" type="hidden" name="q2_weather" value="{{ strategy_results.weather_inputs.Q2.weather }}">
-                            </th>
-
-                            {# Race Column — weather is the only knob; changing it re-runs the calc #}
-                            <th class="px-4 py-3 text-center border-l border-slate-200 bg-blue-50 w-48">
-                                <span class="block font-bold text-blue-800 mb-1">Race</span>
-                                <div class="flex justify-center gap-2 items-center">
-                                    <span class="text-xs font-bold px-2">{{ strategy_results.inputs.temp }}°C</span>
-                                    <select form="stratForm" name="race_weather"
-                                            data-strategy-fragment-trigger
-                                            class="form-select w-24 text-xs py-1">
-                                        <option value="Dry" {{ strategy_results.weather_inputs.Race.weather == 'Dry' ? 'selected' }}>Dry</option>
-                                        <option value="Wet" {{ strategy_results.weather_inputs.Race.weather == 'Wet' ? 'selected' }}>Wet</option>
-                                    </select>
-                                </div>
-                            </th>
+                        <tr>
+                            <th scope="col" class="pb-1.5 pl-2 pr-2 text-left align-bottom t-label font-medium">Setup</th>
+                            {% for s in sessions %}
+                                <th scope="col" class="pb-1.5 pl-4 pr-2 text-right align-bottom sm:pl-6">
+                                    <span class="block text-sm font-semibold text-slate-900">{{ s.key }}</span>
+                                    <span class="block text-xs font-normal text-slate-500 whitespace-nowrap">{{ s.temp }}° {{ s.weather }}</span>
+                                </th>
+                            {% endfor %}
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-200">
-                        {% for part in ['Front Wing', 'Rear Wing', 'Engine', 'Brakes', 'Gearbox', 'Suspension'] %}
-                            <tr class="hover:bg-slate-50">
-                                <td class="px-4 py-2.5 font-bold text-slate-700 pl-6">{{ part }}</td>
-                                <td class="px-4 py-2.5 text-center font-mono tabular-nums text-slate-600 border-l border-slate-100">{{ strategy_results.setups.Q1[part] }}</td>
-                                <td class="px-4 py-2.5 text-center font-mono tabular-nums text-slate-600 border-l border-slate-100">{{ strategy_results.setups.Q2[part] }}</td>
-                                <td class="px-4 py-2.5 text-center font-mono text-base font-bold tabular-nums text-blue-700 bg-blue-50 border-l border-blue-100">
-                                    {{ strategy_results.setups.Race[part] }}
-                                </td>
+                    {# Alternate shading keeps each part's row distinct while the eye
+                       travels down one session's column. #}
+                    <tbody>
+                        {% for key, label in parts %}
+                            <tr class="odd:bg-slate-100/70">
+                                <th scope="row" class="rounded-l-md py-2 pl-2 pr-2 text-left font-normal text-slate-700 whitespace-nowrap">{{ label }}</th>
+                                {% for s in sessions %}
+                                    {% set v = sr.setups[s.key][key] %}
+                                    <td class="py-2 pl-4 pr-2 text-right font-semibold text-slate-900 tabular-nums last:rounded-r-md sm:pl-6">
+                                        {# GPRO caps every setup field at 999: show what to enter,
+                                           and keep the computed value visible beside it. #}
+                                        {% if v > 999 %}999<span class="block text-[10px] font-normal text-slate-400" title="Computed {{ v }} — GPRO accepts at most 999">{{ v }}</span>{% else %}{{ v }}{% endif %}
+                                    </td>
+                                {% endfor %}
                             </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
-            <div class="px-6 py-3 border-t border-slate-100">
-                <p class="text-xs text-slate-500">
-                    Values above 999 should be entered as 999 in GPRO — we don't clamp them, so if your driver complains you know why.
-                </p>
-            </div>
-        </div>
-
-        {# RACE ENGINEER (heuristic advisor, not a game formula) — accordion #}
-        {% if strategy_results.risk_advice is defined %}
-            {% set ra = strategy_results.risk_advice %}
-            <details id="race-engineer" data-acc data-acc-lg-open class="card group scroll-mt-16">
-                <summary class="cursor-pointer list-none p-6 flex flex-wrap items-center justify-between gap-4">
-                    <span class="flex items-center gap-3">
-                        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-600 shadow-sm">
-                            {# Race-engineer headset with mic boom #}
-                            <svg class="h-5 w-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 13.5v-2.25a7.5 7.5 0 0 1 15 0v2.25"/>
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 13.5A1.5 1.5 0 0 1 6 12h.75a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5H6a1.5 1.5 0 0 1-1.5-1.5v-3Z"/>
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 13.5a1.5 1.5 0 0 1 1.5-1.5H18a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5h-.75a1.5 1.5 0 0 1-1.5-1.5v-3Z"/>
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 18v.375a2.625 2.625 0 0 1-2.625 2.625H13.5"/>
-                            </svg>
-                        </span>
-                        <span>
-                            <h4 class="t-section">Advice from the Race Engineer</h4>
-                            <p class="t-caption mt-0.5">Risks, start, problem policy and boost laps</p>
-                        </span>
-                    </span>
-                    <span class="flex items-center gap-6 text-right">
-                        <span>
-                            <p class="text-2xl font-bold text-blue-600 tabular-nums">{{ ra.overtake }}</p>
-                            <p class="t-caption">Overtake risk</p>
-                        </span>
-                        <span class="border-l pl-6 border-slate-100">
-                            <p class="text-2xl font-bold text-blue-600 tabular-nums">{{ ra.defend }}</p>
-                            <p class="t-caption">Defend risk</p>
-                        </span>
-                        <span class="text-slate-400 group-open:rotate-90 transition-transform" aria-hidden="true">▸</span>
-                    </span>
-                </summary>
-                <div class="px-6 pb-6">
-                    <p class="text-sm text-slate-600">{{ ra.phrase }}</p>
-                    {% if ra.tip %}
-                        <p class="text-sm text-slate-600 mt-2">{{ ra.tip }}</p>
-                    {% endif %}
-                    {% if ra.distance_tip %}
-                        <p class="text-sm text-slate-600 mt-2">{{ ra.distance_tip }}</p>
-                    {% endif %}
-                    {% if ra.settings is defined %}
-                        <div class="mt-4 pt-4 border-t border-slate-100 grid gap-4 sm:grid-cols-2">
-                            <div>
-                                <p class="t-label">Race start</p>
-                                <p class="text-sm font-semibold text-slate-800 mt-0.5">{{ ra.settings.start_approach }}</p>
-                                <p class="text-xs text-slate-500 mt-0.5">Start risk stacks with race risks.</p>
-                            </div>
-                            <div>
-                                <p class="t-label">Pit on solvable problem</p>
-                                <p class="text-sm font-semibold text-slate-800 mt-0.5">Yes, if &gt; {{ ra.settings.problem_pit_laps }} laps remain</p>
-                                <p class="text-xs text-slate-500 mt-0.5">A repair stop beats limping 3&ndash;6 s/lap.</p>
-                            </div>
-                        </div>
-                    {% endif %}
-                    {% if ra.boost is defined and ra.boost.laps|length > 0 %}
-                        <div class="mt-4 pt-4 border-t border-slate-100">
-                            <div class="flex flex-wrap items-center gap-2">
-                                <p class="t-label">Suggested boost laps</p>
-                                {% for lap in ra.boost.laps %}
-                                    <span class="inline-flex items-center rounded-md bg-blue-50 px-2.5 py-0.5 text-sm font-bold text-blue-700 tabular-nums">{{ lap }}</span>
-                                {% endfor %}
-                            </div>
-                            <p class="text-sm text-slate-600 mt-2">{{ ra.boost.note }}</p>
-                        </div>
-                    {% endif %}
-                    <p class="text-xs text-slate-400 mt-4">Heuristic guidance from your driver, track and forecast — not a game formula.</p>
+            <dl class="grid grid-cols-2 content-start gap-x-6 gap-y-3 border-t border-slate-200 px-4 py-4 sm:grid-cols-3 sm:px-6 lg:grid-cols-2 lg:border-t-0 lg:border-l">
+                <div>
+                    <dt class="t-label">Fuel per stint</dt>
+                    <dd class="text-base font-semibold text-slate-900 tabular-nums">{{ best.fuel_recommended }} L</dd>
                 </div>
-            </details>
-        {% endif %}
-
-        {# PUSH SIGNALS (heuristic — feeds the Clear Track Risk decision) — accordion #}
-        {% if strategy_results.push_signals is defined %}
-            {% set ps = strategy_results.push_signals %}
-            {% set signals = [
-                {
-                    'ok': ps.pha_match,
-                    'label': 'Car P/H/A matches the track',
-                    'detail': ps.pha_level == 'perfect'
-                        ? 'Perfect — all three attributes line up.'
-                        : (ps.pha_level == 'top'
-                            ? 'Top — your strongest attribute is what the track demands most.'
-                            : 'Your car is built for different attributes than this track rewards.')
-                },
-                {
-                    'ok': ps.favourite,
-                    'label': "Driver's favourite track",
-                    'detail': ps.favourite
-                        ? 'This is one of your driver\'s three favourite tracks.'
-                        : 'Not one of your driver\'s favourite tracks.'
-                }
-            ] %}
-            {% if ps.show_tyres %}
-                {% set signals = signals|merge([
-                    {
-                        'ok': ps.tyres_weather,
-                        'label': 'Tyres suit the ' ~ (ps.race_wet ? 'wet' : 'dry') ~ ' race',
-                        'detail': ps.tyre_perf is null
-                            ? 'No tyre supplier rating available.'
-                            : ('Supplier ' ~ (ps.race_wet ? 'wet' : 'dry') ~ ' rating ' ~ ps.tyre_perf ~ '/8' ~ (ps.tyre_perf >= 4 ? ' — strong enough.' : ' — below 4/8.'))
-                    },
-                    {
-                        'ok': ps.temp_match,
-                        'label': 'Track temp near tyre ideal',
-                        'detail': ps.ideal_temp is null
-                            ? 'No tyre ideal temperature available.'
-                            : ('Race ' ~ ps.race_temp ~ '°C vs ideal ' ~ ps.ideal_temp ~ '°C (±3°C).')
-                    }
-                ]) %}
-            {% endif %}
-            {% if ps.car_rank is not null %}
-                {% set signals = signals|merge([{
-                    'ok': ps.car_above,
-                    'label': 'Car level vs the group',
-                    'detail': '#' ~ ps.car_rank ~ ' of ' ~ ps.car_total ~ ' by car level — ' ~ (ps.car_above ? 'above' : 'below or at') ~ ' the group average.'
-                }]) %}
-            {% endif %}
-            {% if ps.driver_rank is not null %}
-                {% set signals = signals|merge([{
-                    'ok': ps.driver_above,
-                    'label': 'Driver OA vs the group',
-                    'detail': '#' ~ ps.driver_rank ~ ' of ' ~ ps.driver_total ~ ' by driver OA — ' ~ (ps.driver_above ? 'above' : 'below or at') ~ ' the group average.'
-                }]) %}
-            {% endif %}
-            {% if ps.wear_ok is not null %}
-                {% set signals = signals|merge([{
-                    'ok': ps.wear_ok,
-                    'label': 'Car can take the push',
-                    'detail': 'At ' ~ ps.wear_risk ~ ' Clear Track Risk the worst part ends at ' ~ ps.wear_max|number_format(0) ~ '% wear' ~ (ps.wear_ok ? ' — under 90%, headroom to push.' : ' — over 90%, risk of failure.')
-                }]) %}
-            {% endif %}
-            {% set met = signals|filter(s => s.ok)|length %}
-            <details id="push-signals" data-acc data-acc-lg-open class="card group scroll-mt-16">
-                <summary class="cursor-pointer list-none p-6 flex flex-wrap items-center justify-between gap-4">
-                    <span class="flex items-center gap-3">
-                        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-600 shadow-sm">
-                            {# Checklist clipboard #}
-                            <svg class="h-5 w-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5h6a1.5 1.5 0 0 0-1.5-1.5h-3A1.5 1.5 0 0 0 9 5Z"/>
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7.5A1.5 1.5 0 0 0 6 6.5v12A1.5 1.5 0 0 0 7.5 20h9a1.5 1.5 0 0 0 1.5-1.5v-12A1.5 1.5 0 0 0 16.5 5H15"/>
-                                <path stroke-linecap="round" stroke-linejoin="round" d="m9 12 1.5 1.5L13 11"/>
-                            </svg>
-                        </span>
-                        <span>
-                            <h4 class="t-section">Push or hold?</h4>
-                            <p class="t-caption mt-0.5">Signals that argue for a higher Clear Track Risk</p>
-                        </span>
-                    </span>
-                    <span class="flex items-center gap-6 text-right">
-                        <span>
-                            <p class="text-2xl font-bold text-blue-600 tabular-nums">{{ met }} / {{ signals|length }}</p>
-                            <p class="t-caption">Signals met</p>
-                        </span>
-                        <span class="text-slate-400 group-open:rotate-90 transition-transform" aria-hidden="true">▸</span>
-                    </span>
-                </summary>
-                <div class="px-6 pb-6">
-                    <ul class="divide-y divide-slate-100 border-t border-slate-100">
-                        {% for s in signals %}
-                            <li class="flex items-start gap-3 py-3">
-                                <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full {{ s.ok ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400' }}">
-                                    {% if s.ok %}✓{% else %}–{% endif %}
-                                </span>
-                                <span>
-                                    <p class="text-sm font-semibold {{ s.ok ? 'text-slate-800' : 'text-slate-500' }}">{{ s.label }}</p>
-                                    <p class="text-xs text-slate-500 mt-0.5">{{ s.detail }}</p>
-                                </span>
+                <div>
+                    <dt class="t-label">Tyres</dt>
+                    <dd class="text-base font-semibold text-slate-900">{{ sr.best_compound }} <span class="text-sm font-normal text-slate-500">· {{ best.stops }} stop{{ best.stops == 1 ? '' : 's' }}</span></dd>
+                </div>
+                {% if ra %}
+                    <div>
+                        <dt class="t-label">Overtake risk</dt>
+                        <dd class="text-base font-semibold text-slate-900 tabular-nums">{{ ra.overtake }}</dd>
+                    </div>
+                    <div>
+                        <dt class="t-label">Defend risk</dt>
+                        <dd class="text-base font-semibold text-slate-900 tabular-nums">{{ ra.defend }}</dd>
+                    </div>
+                {% endif %}
+                <div>
+                    <dt class="t-label">Clear track risk</dt>
+                    <dd class="text-base font-semibold text-slate-900 tabular-nums">{{ sr.inputs.risk ?? 0 }}</dd>
+                </div>
+                {% if ra and ra.boost is defined %}
+                    {# Only the sets the fuel plan carries (Boost stints); suggestions
+                       beyond that would under-fuel the car, so they stay a hint. #}
+                    {% set planned = ra.boost.planned|default([]) %}
+                    <div>
+                        <dt class="t-label">Boost laps</dt>
+                        {% if planned is not empty %}
+                            <dd class="text-base font-semibold text-slate-900 tabular-nums">Laps {{ planned|join(', ') }}</dd>
+                        {% else %}
+                            <dd class="text-base font-semibold text-slate-900">Off</dd>
+                            {% if ra.boost.laps is not empty %}
+                                <dd class="text-xs text-slate-500 tabular-nums">suggested: laps {{ ra.boost.laps|join(', ') }}</dd>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                {% endif %}
+            </dl>
+            </div>
+            {# PUSH SIGNALS — the evidence for the Clear Track Risk above: one plain verdict
+               per signal, tinted when it holds. The figures behind it are the chip's title. #}
+            {% if sr.push_signals is defined %}
+                {% set ps = sr.push_signals %}
+                {% set signals = [
+                    {ok: ps.pha_match,
+                     short: ps.pha_level == 'perfect' ? 'Car suits the track perfectly' : (ps.pha_level == 'top' ? 'Car suits the track' : "Car doesn't suit the track"),
+                     detail: ps.pha_level == 'perfect' ? 'Perfect P/H/A match: all three attributes line up with what the track demands.' : (ps.pha_level == 'top' ? "Top P/H/A match: your car's strongest attribute is what the track demands most." : "No P/H/A match: your car's strongest attribute is not what this track demands most.")},
+                    {ok: ps.favourite,
+                     short: ps.favourite ? "Driver's favourite track" : 'Not a favourite track',
+                     detail: ps.favourite ? "One of your driver's three favourite tracks." : "Not one of your driver's three favourite tracks."},
+                ] %}
+                {% if ps.show_tyres %}
+                    {% set signals = signals|merge([
+                        {ok: ps.tyres_weather,
+                         short: ps.tyre_perf is null ? 'No tyre rating' : ('Tyres ' ~ (ps.tyres_weather ? 'good' : 'not good') ~ (ps.race_wet ? ' for rain' : ' in the dry')),
+                         detail: ps.tyre_perf is null ? 'No tyre supplier rating available.' : ('Supplier ' ~ (ps.race_wet ? 'wet' : 'dry') ~ ' rating ' ~ ps.tyre_perf ~ '/8; 4/8 or better counts.')},
+                        {ok: ps.temp_match,
+                         short: ps.ideal_temp is null ? 'No ideal tyre temperature' : (ps.temp_match ? 'Right temperature for the tyres' : (ps.race_temp > ps.ideal_temp ? 'Too hot for the tyres' : 'Too cold for the tyres')),
+                         detail: ps.ideal_temp is null ? 'The supplier publishes no ideal temperature.' : ('Race ' ~ ps.race_temp|round ~ '°C, tyre ideal ' ~ ps.ideal_temp ~ '°C; within 3°C counts.')},
+                    ]) %}
+                {% endif %}
+                {% if ps.car_rank is not null %}
+                    {% set car_below = ps.car_below ?? (not ps.car_above) %}
+                    {% set signals = signals|merge([{ok: ps.car_above, short: 'Car ' ~ (ps.car_above ? 'above average' : (car_below ? 'below average' : 'mid-group')), detail: '#' ~ ps.car_rank ~ ' of ' ~ ps.car_total ~ ' by car level in your group; more cars behind than ahead counts.'}]) %}
+                {% endif %}
+                {% if ps.driver_rank is not null %}
+                    {% set driver_below = ps.driver_below ?? (not ps.driver_above) %}
+                    {% set signals = signals|merge([{ok: ps.driver_above, short: 'Driver ' ~ (ps.driver_above ? 'above average' : (driver_below ? 'below average' : 'mid-group')), detail: '#' ~ ps.driver_rank ~ ' of ' ~ ps.driver_total ~ ' by overall rating in your group; more drivers behind than ahead counts.'}]) %}
+                {% endif %}
+                {% if ps.wear_ok is not null %}
+                    {% set signals = signals|merge([{ok: ps.wear_ok, short: ps.wear_ok ? 'Car can take the push' : 'A part may not last the push', detail: 'Worst part ends at ' ~ ps.wear_max|number_format(0) ~ '% wear at Clear Track Risk ' ~ ps.wear_risk ~ '; under 90% counts.'}]) %}
+                {% endif %}
+                {% set met = signals|filter(x => x.ok)|length %}
+                <div class="border-t border-slate-200 bg-slate-50 px-4 py-3 sm:px-6">
+                    <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                        <p class="t-label">Push signals <span class="ml-1 text-slate-900 tabular-nums">{{ met }} of {{ signals|length }}</span></p>
+                        {% embed 'partials/_how.twig' %}{% block how %}
+                            <p>Each signal that holds argues for a higher Clear Track Risk; a full sweep points to a very likely win. Heuristic guidance from your car, driver, track and forecast — not a game formula.</p>
+                        {% endblock %}{% endembed %}
+                    </div>
+                    <ul class="mt-2 flex flex-wrap gap-1.5">
+                        {% for x in signals %}
+                            <li class="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs {{ x.ok ? 'bg-emerald-100 font-medium text-emerald-800' : 'bg-slate-100 text-slate-500' }}" title="{{ x.detail }}">
+                                <span aria-hidden="true">{{ x.ok ? '✓' : '–' }}</span>{{ x.short }}<span class="sr-only">{{ x.ok ? ' — holds' : " — doesn't hold" }}</span>
                             </li>
                         {% endfor %}
                     </ul>
-                    <p class="text-xs text-slate-400 mt-4">More signals met = the weekend is set up in your favour, so carry a higher Clear Track Risk. A full sweep points to a very likely win. Heuristic guidance — not a game formula.</p>
                 </div>
-            </details>
-        {% endif %}
+            {% endif %}
+        </section>
 
-        {# Peak-end support ask: it renders only once a strategy has actually
-           been calculated, so it lands on the one screen where Pitwall has
-           just answered the question the user came for — never on the empty
-           or error states. #}
+        {# TYRE COMPARISON — why the sheet picked this compound. #}
+        <section class="card" aria-labelledby="tyre-comparison-title">
+            <div class="card-hd space-y-1">
+                <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                    <h3 id="tyre-comparison-title" class="t-section">Tyre comparison</h3>
+                    <p class="text-xs text-slate-600 tabular-nums">
+                        {{ sr.best_compound }} loses {{ best.total_lost }}s{% if runner_name is not null %} — {{ (sr.tyres[runner_name].total_lost - best.total_lost)|round(1) }}s less than {{ runner_name }}{% endif %}
+                    </p>
+                </div>
+                <p class="flex flex-wrap gap-x-4 gap-y-1 text-xs tabular-nums">
+                    <span><span class="text-slate-500">Supplier</span> <span class="text-slate-900">{{ sr.supplier }}</span>
+                        {% if sr.supplier_info %}{% set si = sr.supplier_info %}<span class="text-slate-500" title="Your tyre supplier's characteristics — not the track.">({% if si.dry is not null %}dry {{ si.dry }}/8{% endif %}{% if si.wet is not null %}, wet {{ si.wet }}/8{% endif %}{% if si.temp is not null %}, ideal {{ si.temp }}°C{% endif %})</span>{% endif %}
+                    </span>
+                    <span><span class="text-slate-500">Consumption</span> <span class="text-slate-900">{{ sr.fuel.l_per_lap }} L/lap</span></span>
+                    <span><span class="text-slate-500">Race fuel</span> <span class="text-slate-900">{{ sr.fuel.dry }} L dry · {{ sr.fuel.wet }} L wet</span>{% if sr.fuel.wet_estimated %} <span class="font-semibold text-amber-700" title="This track has never run a wet race, so there is no measured wet consumption. The wet figure assumes dry consumption — safe, but over-fuelled.">est.</span>{% endif %}</span>
+                    {% if sr.overtaking %}
+                        <span title="How easily cars pass here. Hard overtaking makes track position more valuable — favour fewer pit stops."><span class="text-slate-500">Overtaking</span> <span class="text-slate-900">{{ sr.overtaking }}</span></span>
+                    {% endif %}
+                </p>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-slate-200 text-sm">
+                    <thead class="bg-slate-50">
+                        <tr>
+                            <th rowspan="2" class="px-3 sm:px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-slate-500">Compound</th>
+                            <th rowspan="2" class="px-2 sm:px-4 py-2 text-right text-[10px] font-semibold uppercase tracking-wide text-slate-500">Stops</th>
+                            <th colspan="2" class="hidden sm:table-cell px-4 pt-2 text-center text-[10px] font-semibold uppercase tracking-wide text-slate-500">Fuel / stint (L)</th>
+                            <th class="sm:hidden px-2 pt-2 text-right text-[10px] font-semibold uppercase tracking-wide text-slate-500">Fuel (L)</th>
+                            <th rowspan="2" class="hidden md:table-cell px-2 py-2 text-right text-[10px] font-semibold uppercase tracking-wide text-slate-500">Est. pit (s)</th>
+                            <th colspan="4" class="hidden md:table-cell px-2 pt-2 text-center text-[10px] font-semibold uppercase tracking-wide text-slate-500 border-l border-slate-200">Time lost (s)</th>
+                            {% if sr.ctr_gain_per_lap > 0 %}
+                                <th rowspan="2" class="hidden sm:table-cell px-2 py-2 text-right text-[10px] font-semibold uppercase tracking-wide text-slate-500" title="The most your Clear Track Risk can save, in clear air only. Stuck behind another car you wear the tyres harder without banking the time.">CTR max gain</th>
+                            {% endif %}
+                            <th rowspan="2" class="px-2 sm:px-4 py-2 text-right text-[10px] font-semibold uppercase tracking-wide text-slate-700 border-l border-slate-200">{{ sr.ctr_gain_per_lap > 0 ? 'Net' : 'Total lost' }}</th>
+                        </tr>
+                        <tr>
+                            <th class="hidden sm:table-cell px-2 pb-2 text-right text-[10px] font-medium uppercase tracking-wide text-slate-400" title="Bare-minimum litres of fuel to finish the stint; no safety margin.">Minimum</th>
+                            <th class="px-2 pb-2 text-right text-[10px] font-medium uppercase tracking-wide text-slate-400" title="Litres to put in the car: the minimum plus one extra lap's worth, as a buffer against bad pit timing.">Recommended</th>
+                            <th class="hidden md:table-cell px-2 pb-2 text-right text-[10px] font-medium uppercase tracking-wide text-slate-400 border-l border-slate-200">Pits</th>
+                            <th class="hidden md:table-cell px-2 pb-2 text-right text-[10px] font-medium uppercase tracking-wide text-slate-400">Fuel</th>
+                            <th class="hidden md:table-cell px-2 pb-2 text-right text-[10px] font-medium uppercase tracking-wide text-slate-400">TCD</th>
+                            <th class="hidden md:table-cell px-2 pb-2 text-right text-[10px] font-medium uppercase tracking-wide text-slate-400">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-surface divide-y divide-slate-200">
+                        {% for comp, data in sr.tyres %}
+                            {% set is_best = (comp == sr.best_compound) %}
+                            <tr class="{{ is_best ? 'bg-emerald-50' : '' }}"{% if is_best %} aria-current="true"{% endif %}>
+                                <th scope="row" class="px-3 sm:px-4 py-2.5 text-left font-semibold text-slate-900">{{ comp }}</th>
+                                <td class="px-2 sm:px-4 py-2.5 text-right text-slate-900">{{ data.stops }}</td>
+                                <td class="hidden sm:table-cell px-2 py-2.5 text-right text-slate-500">{{ data.fuel_load }}</td>
+                                <td class="px-2 py-2.5 text-right text-slate-900">{{ data.fuel_recommended }}</td>
+                                <td class="hidden md:table-cell px-2 py-2.5 text-right text-slate-500">{{ data.pit_time_est }}</td>
+                                <td class="hidden md:table-cell px-2 py-2.5 text-right text-xs text-slate-500 border-l border-slate-100">{{ data.lost_pits }}</td>
+                                <td class="hidden md:table-cell px-2 py-2.5 text-right text-xs text-slate-500">{{ data.lost_fuel }}</td>
+                                <td class="hidden md:table-cell px-2 py-2.5 text-right text-xs text-slate-500">{{ data.lost_tcd }}</td>
+                                <td class="hidden md:table-cell px-2 py-2.5 text-right text-xs text-slate-500">{{ data.total_lost }}</td>
+                                {% if sr.ctr_gain_per_lap > 0 %}
+                                    <td class="hidden sm:table-cell px-2 py-2.5 text-right text-xs {{ data.ctr_gain > 0 ? 'text-slate-700' : 'text-slate-400' }}">{{ data.ctr_gain > 0 ? '−' ~ data.ctr_gain ~ 's' : '—' }}</td>
+                                {% endif %}
+                                <td class="px-2 sm:px-4 py-2.5 text-right font-semibold text-slate-900 border-l border-slate-200">{{ data.net_lost }}s</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% if sr.fuel.wet_estimated %}
+                <div class="px-4 py-3 sm:px-6 border-t border-slate-200">
+                    <div class="notice notice-warn notice-slim">
+                        <strong>Wet fuel is an estimate.</strong> This track has never run a wet race, so the wet figures assume dry consumption and will over-fuel you rather than strand you.
+                    </div>
+                </div>
+            {% endif %}
+        </section>
+
+        {# Peak-end support ask: it renders only once a strategy has actually been
+           calculated — the one screen where Pitwall has just answered the question
+           the user came for. Yellow on purpose (Micael, 2026-09-13). #}
         <div class="support-strip">
             <p class="support-strip-copy">
                 <span aria-hidden="true" class="text-base leading-none">☕</span>
@@ -440,17 +280,10 @@
                     Pitwall is free and always will be — a coffee keeps it running.
                 </span>
             </p>
-            <a
-                href="https://buymeacoffee.com/mvinhas"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="btn btn-sm btn-coffee shrink-0"
-            >Buy me a coffee</a>
+            <a href="https://buymeacoffee.com/mvinhas" target="_blank" rel="noopener noreferrer"
+               class="btn btn-sm btn-coffee shrink-0">Buy me a coffee</a>
         </div>
     </div>
 {% else %}
-    <div class="h-full flex flex-col items-center justify-center bg-slate-50 rounded-xl border border-dashed border-slate-200 p-12" data-result-state="empty">
-        <p class="t-heading">Strategy &amp; Setup</p>
-        <p class="t-caption mt-1">Click "Calculate Strategy" to simulate race outcomes.</p>
-    </div>
+    {% include 'partials/_empty.twig' with { title: 'No strategy yet', body: 'Change any race setting to calculate one.', state: 'empty' } only %}
 {% endif %}

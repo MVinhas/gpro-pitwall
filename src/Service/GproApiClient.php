@@ -449,24 +449,6 @@ final class GproApiClient
         return $data;
     }
 
-    /**
-     * Spend exactly one API call to refresh the apiRequestsRemaining counter
-     * to its real current value. Used by PageController to keep the header
-     * badge honest during idle periods (cache hits don't refresh it).
-     */
-    public function refreshBudgetCounter(): void
-    {
-        try {
-            // getOfficeData is the lightest authenticated endpoint we use.
-            // Force-refresh so the response (and its apiRequestsRemaining)
-            // is read fresh from the API, not from cache.
-            $this->getOfficeData(forceRefresh: true);
-        } catch (\Throwable) {
-            // Swallow — a probe failure shouldn't block page rendering.
-            // The next attempt will retry.
-        }
-    }
-
     /** @param array<string, mixed> $data */
     private function rememberApiLimit(array $data): void
     {
@@ -493,14 +475,9 @@ final class GproApiClient
      */
     private function raceWindow(): string
     {
-        $days = array_values(array_filter(
-            array_map('intval', explode(',', Env::get('GPRO_RACE_DAYS', '2,5'))),
-            static fn (int $d): bool => $d >= 1 && $d <= 7,
-        ));
-
         return RaceWindow::idFor(
             new DateTimeImmutable('now'),
-            $days,
+            RaceWindow::parseDays(Env::get('GPRO_RACE_DAYS', '2,5')),
             Env::int('GPRO_RACE_BOUNDARY_HOUR', 0),
             Env::get('GPRO_RACE_TZ', 'Europe/London'),
         );

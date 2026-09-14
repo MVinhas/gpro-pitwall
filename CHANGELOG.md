@@ -6,6 +6,57 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.18.0] - 2026-09-14
+
+A design pass: one answer in one place, colour only for state, the phone as the pit wall — and a new identity.
+
+### Changed
+- **Cockpit is two grouped lists instead of a tile board over cards.** Car (P/H/A match, car wear
+  and the parts plan, testing) and Weekend (weather, sponsors, training) keep one order on every
+  screen. Each row states its verdict and opens only when it needs attention; a row opened for a
+  problem is not remembered open once the problem is gone.
+- **Strategy is a race sheet laid out like GPRO's setup form.** Parts are rows (Front wing, Rear
+  wing, Engine, Brakes, Gear, Suspension) and Q1 / Q2 / Race are columns, beside fuel per stint,
+  tyres and stops, overtake, defend and clear-track risks and boost laps. The compound table
+  becomes the Tyre comparison. On a phone the answer comes first and the settings close to one
+  summary row.
+- **Every Strategy setting recalculates as it changes;** the Calculate button remains only
+  without JavaScript.
+- **Clear Track Risk is one value.** The Cockpit wear forecast and Strategy read and write the
+  same setting, so the two screens can no longer disagree.
+- **Push signals speak plainly** ("Car suits the track", "Tyres not good for rain", "Driver below
+  average") with the figures behind each in its hover text. Tyre signals appear only from Pro
+  upwards, where managers choose a supplier.
+- **Numbers say what they mean.** Training picks are ranked (Best, Next best, Third), plan
+  options say better, same or worse fit, the plan states "96% like the track", and the testing
+  row names the recommended priority.
+- **Colour carries state only:** blue for interaction, emerald for best, amber for caution, red
+  for failure; everything else is ink. The coffee link keeps its yellow.
+- **Re-sync is prominent.** The status line turns amber when the last sync predates the current
+  race weekend and red when a sync failed.
+- **Less chrome:** a 56 px header with an Admin menu, one status line, a one-line footer with an
+  icon theme switch, flat cards, one table style, one empty state, a four-step type scale and
+  sentence case throughout. Content starts about half as far down the page.
+- **A new identity.** The P in a blue square read as a parking sign at tab size; the new mark is a
+  yellow board held up over the wall, in the same navy and yellow. The logo now says "Pitwall"
+  (page titles keep "GPRO Pitwall"), with new favicons, a real 180 px home-screen icon and a new
+  share image. The header logo follows the light and dark themes.
+- The landing page describes the race sheet and shows re-shot product screens.
+
+### Removed
+- The Race Engineer prose, start-risk and pit-on-problem advice (they don't suit how GPRO plays),
+  the Humidity field (no calculation read it), the API-counter refresh button and its endpoint,
+  permanent "re-sync first" banners, the weekend stepper and the Debrief anonymity notice.
+
+### Fixed
+- A mid-pack driver or car no longer counts as "above average": group standing compares who is
+  ahead with who is behind instead of the group mean, which weak entries dragged down.
+- Boost laps list only the sets the fuel plan carries; extra suggestions stay a hint instead of
+  laps that would under-fuel the car.
+- The car-wear card coloured the same part differently in its two tables; both use the
+  advisor's thresholds.
+- Debrief temperatures print as whole degrees, and Testing's setup uses GPRO's part names.
+
 ## [1.17.3] - 2026-09-13
 
 ### Fixed

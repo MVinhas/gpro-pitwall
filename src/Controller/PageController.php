@@ -9,6 +9,7 @@ use App\Http\Sections;
 use App\Repository\DivisionMetadataRepository;
 use App\Repository\UserRepository;
 use App\Support\Env;
+use App\Support\RaceSettings;
 use App\Service\IdealPilotService;
 use App\Service\InsightService;
 use App\Service\RecruitmentService;
@@ -222,11 +223,13 @@ class PageController
 
         switch ($activeMainTab) {
             case 'Cockpit':
-                $cockpitRisk = max(0, min(100, (int) $request->get('cockpit_risk', 0)));
-                $cockpitTrainingLaps = max(0, min(
+                $cockpitRisk = RaceSettings::resolve($_SESSION, RaceSettings::CTR, $request->get('cockpit_risk'), 100);
+                $cockpitTrainingLaps = RaceSettings::resolve(
+                    $_SESSION,
+                    RaceSettings::TRAINING_LAPS,
+                    $request->get('cockpit_training_laps'),
                     TrainingWearProjectionService::MAX_LAPS,
-                    (int) $request->get('cockpit_training_laps', 0),
-                ));
+                );
                 $viewData['cockpit_risk'] = $cockpitRisk;
                 $viewData['cockpit_training_laps'] = $cockpitTrainingLaps;
                 try {
@@ -529,6 +532,13 @@ class PageController
 
             case 'Race Strategy':
                 $existing = $_SESSION['strategy_results'] ?? null;
+                // A result calculated before the Cockpit's Clear Track Risk
+                // changed answers a different race plan; recalculate instead.
+                $sharedCtr = RaceSettings::resolve($_SESSION, RaceSettings::CTR, null, 100);
+                if (is_array($existing) && (int) ($existing['inputs']['risk'] ?? -1) !== $sharedCtr) {
+                    unset($_SESSION['strategy_results']);
+                    $existing = null;
+                }
 
                 if (is_array($existing)) {
                     $viewData['strategy_results'] = $existing;
