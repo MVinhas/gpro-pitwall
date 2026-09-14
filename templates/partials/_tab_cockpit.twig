@@ -27,14 +27,13 @@
             {% endfor %}
         {% endif %}
 
-        {# Training scores only rank the picks and often tie at the displayed 2 dp; colour
-           would turn a coin-flip into a recommendation, so the verdict is ink and
-           names every pick that shares the top score. #}
+        {# Training scores are internal and often tie: the verdict names every pick
+           sharing the top score, in ink, and never shows the score itself. #}
         {% set training_verdict = '' %}
         {% if training_picks is defined and training_picks is not empty %}
             {% set top_score = training_picks[0].score %}
             {% set top_names = training_picks|filter(p => p.score == top_score)|map(p => p.name) %}
-            {% set training_verdict = top_names|join(' / ') ~ (top_names|length > 1 ? ' (tie)' : '') ~ ' ' ~ (top_score > 0 ? '+' : '') ~ top_score %}
+            {% set training_verdict = top_score > 0 ? top_names|join(' or ') : 'No training helps' %}
         {% endif %}
 
         {% set spon_contested = false %}
@@ -314,8 +313,13 @@
                             {% block body %}
                                 <div class="space-y-3">
                                     {% if training_picks is not empty %}
+                                        {# Rank, not the internal score: picks that help equally share a rank. #}
+                                        {% set ranked_scores = training_picks|map(p => p.score)|reduce((seen, v) => v in seen ? seen : seen|merge([v]), []) %}
+                                        {% set rank_labels = {1: 'Best', 2: 'Next best', 3: 'Third'} %}
                                         <ul class="space-y-2">
                                             {% for t in training_picks %}
+                                                {% set rank = 0 %}
+                                                {% for i, v in ranked_scores %}{% if v == t.score %}{% set rank = i + 1 %}{% endif %}{% endfor %}
                                                 <li class="flex items-baseline justify-between gap-3 rounded-md border border-slate-200 px-3 py-2">
                                                     <div class="min-w-0">
                                                         <span class="text-sm font-semibold text-slate-900">{{ t.name }}</span>
@@ -327,12 +331,16 @@
                                                             {% if t.name == 'Spa' %}<span> · +energy</span>{% endif %}
                                                         </div>
                                                     </div>
-                                                    <span class="text-sm font-bold tabular-nums {{ t.score > 0 ? 'text-slate-900' : 'text-slate-400' }}">{{ t.score > 0 ? '+' : '' }}{{ t.score }}</span>
+                                                    {% if t.score > 0 %}
+                                                        <span class="shrink-0 rounded px-1.5 py-0.5 text-xs font-semibold {{ rank == 1 ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600' }}">{{ rank_labels[rank]|default('#' ~ rank) }}</span>
+                                                    {% else %}
+                                                        <span class="shrink-0 text-xs text-slate-400">No gain</span>
+                                                    {% endif %}
                                                 </li>
                                             {% endfor %}
                                         </ul>
                                         {% embed 'partials/_how.twig' %}{% block how %}
-                                            <p>Score is how much closer the training brings your driver to the division's ideal profile, weighted by what matters most in recruitment. Higher is better; equal scores are a tie.</p>
+                                            <p>Picks are ranked by how much closer each brings your driver to the division's ideal profile, weighted by what matters most in recruitment. Picks that help equally share a rank.</p>
                                         {% endblock %}{% endembed %}
                                     {% else %}
                                         <p class="text-sm text-slate-600">Not enough division baseline data yet.</p>
@@ -463,7 +471,7 @@
         set('[data-plan-after-h]', Math.round(after[1]));
         set('[data-plan-after-a]', Math.round(after[2]));
         set('[data-plan-after-match]', matchLevel(track, after));
-        set('[data-plan-after-fit]', 'fit ' + fitScore(track, after).toFixed(1));
+        set('[data-plan-after-fit]', Math.round(fitScore(track, after)) + '% like the track');
         set('[data-plan-total]', money(cost));
         const over = panel.querySelector('[data-plan-over-cash]');
         if (over) over.classList.toggle('hidden', cost <= num(panel, 'cash'));
