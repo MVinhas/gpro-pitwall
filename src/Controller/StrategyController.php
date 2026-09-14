@@ -15,6 +15,7 @@ use App\Service\RaceWeatherService;
 use App\Service\RiskAdvisorService;
 use App\Service\PhaMatchService;
 use App\Service\CarWearService;
+use App\Support\RaceSettings;
 use Twig\Environment;
 
 class StrategyController
@@ -76,9 +77,10 @@ class StrategyController
 
     /**
      * Runs the strategy calculation. Returns the result array, or an
-     * `['error' => '...']` array on failure. No session writes here so
-     * the same call powers the redirect-after-POST flow, the no-reload
-     * fragment refresh, and the auto-populate on first tab open.
+     * `['error' => '...']` array on failure. The only session state it
+     * touches is the shared Clear Track Risk (RaceSettings), so the same
+     * call powers the redirect-after-POST flow, the no-reload fragment
+     * refresh, and the auto-populate on first tab open.
      *
      * @return array<string, mixed>
      */
@@ -242,18 +244,15 @@ class StrategyController
             $defRaceW = $rain['race_start_wet'] ? 'Wet' : 'Dry';
 
             $avgTemp = $this->calculateAvgWeather($weatherData, 'Temp');
-            $avgHum = $this->calculateAvgWeather($weatherData, 'Hum');
             $q1Temp = $w['q1Temp'];
             $q2Temp = $w['q2Temp'];
 
             $finalRaceTemp = $has('temp') ? (float)$request->post('temp') : $avgTemp;
-            $finalRaceHum  = $has('humidity') ? (int)$request->post('humidity') : $avgHum;
 
             $inputs = [
                 'laps' => (int)$request->post('laps', $trackProfile['laps'] ?? 0),
                 'temp' => $finalRaceTemp,
-                'hum'  => $finalRaceHum,
-                'risk' => (int)$request->post('risk', 0),
+                'risk' => RaceSettings::resolve($_SESSION, RaceSettings::CTR, $request->post('risk'), 100),
                 'target_wear' => (int)$request->post('target_wear', 15),
                 'boost_stints' => (int)$request->post('boost_stints', 0),
             ];

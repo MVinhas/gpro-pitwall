@@ -6,30 +6,26 @@
         <form method="POST" action="/calculate_strategy" id="stratForm">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
-            {# CARD: RACE SETTINGS #}
-            <div class="card mb-4">
-                <div class="px-4 py-3 border-b border-slate-200 bg-slate-50">
-                    <h3 class="t-section">Race settings</h3>
-                </div>
-                <div class="p-4 space-y-3">
+            {# Race settings. Every control recalculates the sheet as it changes,
+               so on a phone (answer first) the card closes to one summary row. #}
+            {% set bs = strategy_results.inputs.boost_stints ?? 0 %}
+            {% embed 'partials/_acc.twig' with { id: 'strategy-settings', title: 'Race settings', lg_open: true, stacked: true, extra_class: 'mb-4' } %}
+                {% block verdict %}
+                    <span class="block text-xs text-slate-600 tabular-nums group-open/acc:hidden" data-settings-summary>CTR {{ strategy_results.inputs.risk ?? 0 }} · pit at {{ strategy_results.inputs.target_wear ?? 15 }}% tyres · {{ bs == 0 ? 'no boost' : bs ~ ' boost stint' ~ (bs == 1 ? '' : 's') }}</span>
+                {% endblock %}
+                {% block body %}
+                <div class="space-y-3">
                     <div class="flex items-center justify-between gap-3">
-                        <label class="t-label">Track Temp</label>
+                        <label class="t-label" for="stratTemp">Track temp</label>
                         <div class="form-input-group w-24">
-                            <input type="number" name="temp" value="{{ strategy_results.inputs.temp ?? '' }}" placeholder="Auto" step="0.1" class="form-input-compact">
+                            <input type="number" id="stratTemp" name="temp" value="{{ strategy_results.inputs.temp ?? '' }}" placeholder="Auto" step="0.1" data-strategy-fragment-trigger class="form-input-compact">
                             <span class="form-input-addon">°C</span>
                         </div>
                     </div>
-                    <div class="flex items-center justify-between gap-3">
-                        <label class="t-label">Humidity</label>
-                        <div class="form-input-group w-24">
-                            <input type="number" name="humidity" value="{{ strategy_results.inputs.hum ?? '' }}" placeholder="Auto" class="form-input-compact">
-                            <span class="form-input-addon">%</span>
-                        </div>
-                    </div>
                     <div>
-                        <label class="t-label block mb-1">Clear Track Risk</label>
+                        <label class="t-label block mb-1" for="stratRisk">Clear track risk</label>
                         <div class="flex items-center gap-3">
-                            <input type="range" name="risk" min="0" max="100"
+                            <input type="range" id="stratRisk" name="risk" min="0" max="100"
                                    value="{{ strategy_results.inputs.risk ?? 0 }}"
                                    data-strategy-fragment-trigger data-slider-live
                                    class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer">
@@ -38,9 +34,9 @@
                         </div>
                     </div>
                     <div>
-                        <label class="t-label block mb-1">Target Wear Limit (%)</label>
+                        <label class="t-label block mb-1" for="stratTyreWear" title="Tyre condition left when each stint ends">Pit at tyre condition (%)</label>
                         <div class="flex items-center gap-3">
-                            <input type="range" name="target_wear" min="0" max="100"
+                            <input type="range" id="stratTyreWear" name="target_wear" min="0" max="100"
                                    value="{{ strategy_results.inputs.target_wear ?? 15 }}"
                                    data-strategy-fragment-trigger data-slider-live
                                    class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer">
@@ -49,9 +45,8 @@
                         </div>
                     </div>
                     <div>
-                        {% set bs = strategy_results.inputs.boost_stints ?? 0 %}
-                        <label class="t-label block mb-1" title="Each stint runs 3 boost laps. Extra fuel is spread across race stints.">Boost Lap Stints</label>
-                        <select name="boost_stints" data-strategy-fragment-trigger class="form-select">
+                        <label class="t-label block mb-1" for="stratBoost" title="Each stint runs 3 boost laps. Extra fuel is spread across race stints.">Boost lap stints</label>
+                        <select id="stratBoost" name="boost_stints" data-strategy-fragment-trigger class="form-select">
                             <option value="0" {{ bs == 0 ? 'selected' }}>0 — no boost (0 laps)</option>
                             <option value="1" {{ bs == 1 ? 'selected' }}>1 stint (3 boost laps)</option>
                             <option value="2" {{ bs == 2 ? 'selected' }}>2 stints (6 boost laps)</option>
@@ -59,7 +54,8 @@
                         </select>
                     </div>
                 </div>
-            </div>
+                {% endblock %}
+            {% endembed %}
 
             {# Session weather the calculation ran with. The Race sheet re-emits these
                (and the race-weather select) with form="stratForm"; these copies keep
@@ -70,10 +66,9 @@
             <input type="hidden" name="q2_weather" value="{{ strategy_results.weather_inputs.Q2.weather }}">
             <input type="hidden" name="race_weather" value="{{ strategy_results.weather_inputs.Race.weather }}">
 
-            <button type="submit" id="stratBtn"
-                class="btn btn-lg btn-primary w-full">
-                Calculate Strategy
-            </button>
+            <noscript>
+                <button type="submit" class="btn btn-lg btn-primary w-full">Calculate strategy</button>
+            </noscript>
         </form>
 
         {# Read-only reference: driver/car/staff snapshot from the last sync #}
@@ -82,6 +77,7 @@
                 id: 'strategy-data',
                 title: 'Data used — from last sync',
                 caption: 'Driver, car and staff snapshot',
+                stacked: true,
                 stats: strategy_results.stats,
                 last_synced_at: user.last_synced_at
             } only %}
@@ -163,22 +159,29 @@
     const card = document.getElementById('strategy-results-card');
     if (!form || !card) return;
 
-    form.addEventListener('submit', () => {
-        const btn = document.getElementById('stratBtn');
-        if (btn) {
-            btn.disabled = true;
-            btn.classList.add('opacity-75', 'cursor-not-allowed');
-            btn.innerHTML = 'Processing...';
-        }
-    });
-
     let pending = null;
+
+    const summary = form.querySelector('[data-settings-summary]');
+    const describe = () => {
+        if (!summary) return;
+        const stints = parseInt(form.elements.boost_stints.value, 10) || 0;
+        const boost = stints === 0 ? 'no boost' : stints + ' boost stint' + (stints === 1 ? '' : 's');
+        summary.textContent = 'CTR ' + form.elements.risk.value + ' · pit at ' + form.elements.target_wear.value + '% tyres · ' + boost;
+    };
 
     // Live slider value labels (dragging updates the number without server roundtrip).
     document.addEventListener('input', (e) => {
         if (!e.target.matches('[data-slider-live]')) return;
         const label = e.target.parentElement.querySelector('[data-slider-value]');
         if (label) label.textContent = e.target.value;
+        describe();
+    });
+
+    // Without a submit button Enter would do nothing; treat it as "done editing".
+    form.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' || !e.target.matches('input[data-strategy-fragment-trigger]')) return;
+        e.preventDefault();
+        e.target.dispatchEvent(new Event('change', { bubbles: true }));
     });
 
     // While a recalculation is in flight the panel still shows the previous
@@ -206,6 +209,7 @@
     // Sliders + selects flagged as fragment triggers re-run the calc and swap the panel.
     document.addEventListener('change', async (e) => {
         if (!e.target.matches('[data-strategy-fragment-trigger]')) return;
+        describe();
         if (pending) pending.abort();
         const request = new AbortController();
         pending = request;
