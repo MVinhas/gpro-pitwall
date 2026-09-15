@@ -40,27 +40,31 @@ final class SyncState
     }
 
     /**
-     * Whether the last sync happened in an earlier race window than $now — i.e. a
-     * new race weekend has opened since, so the car, driver and forecast on screen
-     * may be out of date. Stored timestamps are UTC. Never-synced and disabled
-     * windowing are not "stale": the never state already says so.
+     * GPRO simulates each race from 20:00 CET (GPRO rules) and it runs about two
+     * hours; only a sync after it ends picks up the post-race car, driver and
+     * next-race data. Europe/Paris tracks CET/CEST, so the hour holds year-round.
+     */
+    private const int RACE_END_HOUR = 22;
+    private const string RACE_TZ    = 'Europe/Paris';
+
+    /**
+     * Whether a race has finished since the last sync, so the car, driver and
+     * forecast on screen may be out of date. A race that hasn't run yet (race-day
+     * morning, or mid-simulation) doesn't make an earlier sync stale: re-syncing
+     * would fetch the same data. Stored timestamps are UTC. Never-synced and
+     * disabled windowing are not "stale": the never state already says so.
      *
      * @param list<int> $raceDays ISO-8601 weekday numbers (see RaceWindow)
      */
-    public static function isStale(
-        ?string $lastSyncedAt,
-        DateTimeImmutable $now,
-        array $raceDays,
-        int $boundaryHour,
-        string $timezone,
-    ): bool {
+    public static function isStale(?string $lastSyncedAt, DateTimeImmutable $now, array $raceDays): bool
+    {
         if ($lastSyncedAt === null || $lastSyncedAt === '' || $raceDays === []) {
             return false;
         }
         $synced = new DateTimeImmutable($lastSyncedAt, new DateTimeZone('UTC'));
 
-        return RaceWindow::idFor($synced, $raceDays, $boundaryHour, $timezone)
-            < RaceWindow::idFor($now, $raceDays, $boundaryHour, $timezone);
+        return RaceWindow::idFor($synced, $raceDays, self::RACE_END_HOUR, self::RACE_TZ)
+            < RaceWindow::idFor($now, $raceDays, self::RACE_END_HOUR, self::RACE_TZ);
     }
 
     /**
