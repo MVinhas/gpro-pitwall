@@ -47,36 +47,58 @@ final class SyncStateTest extends TestCase
         $this->assertSame($expected, SyncState::derive($status, $lastSyncedAt, $hasToken));
     }
 
-    private function at(string $iso): DateTimeImmutable
+    private function lisbon(string $iso): DateTimeImmutable
     {
-        return new DateTimeImmutable($iso, new DateTimeZone('Europe/London'));
+        return new DateTimeImmutable($iso, new DateTimeZone('Europe/Lisbon'));
     }
 
-    public function testASyncInsideTheCurrentRaceWindowIsFresh(): void
+    public function testASyncBeforeRaceDayIsFreshUntilTheRaceRuns(): void
     {
-        // Wednesday 2026-06-10: the window opened Tuesday; a Tuesday-evening sync is current.
-        $this->assertFalse(SyncState::isStale('2026-06-09 18:00:00', $this->at('2026-06-10 12:00'), self::TUE_FRI, 0, 'Europe/London'));
+        // Monday 09:39 Lisbon (08:39 UTC); Tuesday 07:42 Lisbon — Tuesday's race hasn't run yet.
+        $this->assertFalse(SyncState::isStale('2026-09-14 08:39:00', $this->lisbon('2026-09-15 07:42'), self::TUE_FRI));
     }
 
-    public function testASyncFromThePreviousRaceWindowIsStale(): void
+    public function testTheWarningWaitsForTheRaceToFinish(): void
     {
-        // Saturday's sync belongs to Friday's window; by Tuesday a new race weekend is open.
-        $this->assertTrue(SyncState::isStale('2026-06-06 10:00:00', $this->at('2026-06-09 09:00'), self::TUE_FRI, 0, 'Europe/London'));
+        // The race runs 20:00–22:00 CET (19:00–21:00 Lisbon); re-syncing mid-race gets nothing new.
+        $this->assertFalse(SyncState::isStale('2026-09-14 08:39:00', $this->lisbon('2026-09-15 20:30'), self::TUE_FRI));
+        $this->assertTrue(SyncState::isStale('2026-09-14 08:39:00', $this->lisbon('2026-09-15 21:00'), self::TUE_FRI));
+    }
+
+    public function testASyncBeforeTheLastRaceIsStale(): void
+    {
+        // Tuesday-morning sync, viewed on Wednesday: Tuesday's race has run since.
+        $this->assertTrue(SyncState::isStale('2026-09-15 09:00:00', $this->lisbon('2026-09-16 10:00'), self::TUE_FRI));
+    }
+
+    public function testASyncDuringTheRaceIsStillStale(): void
+    {
+        // 19:30 UTC is 21:30 CEST: the simulation was still running, so the data is pre-race.
+        $this->assertTrue(SyncState::isStale('2026-09-15 19:30:00', $this->lisbon('2026-09-16 10:00'), self::TUE_FRI));
     }
 
     public function testStoredTimestampsAreReadAsUtc(): void
     {
-        // 23:30 UTC on Monday is already 00:30 Tuesday in London (BST): the new window.
-        $this->assertFalse(SyncState::isStale('2026-06-08 23:30:00', $this->at('2026-06-09 08:00'), self::TUE_FRI, 0, 'Europe/London'));
+        // 20:30 UTC is 22:30 CEST, after the race. Read as Lisbon time it would be 21:30 CEST, mid-race.
+        $this->assertFalse(SyncState::isStale('2026-09-15 20:30:00', $this->lisbon('2026-09-16 10:00'), self::TUE_FRI));
+    }
+
+    public function testTheRaceEndFollowsCentralEuropeanWinterTime(): void
+    {
+        // Friday 2026-11-06, after the clocks change: the race ends 22:00 CET = 21:00 UTC.
+        $saturday = $this->lisbon('2026-11-07 10:00');
+
+        $this->assertTrue(SyncState::isStale('2026-11-06 20:55:00', $saturday, self::TUE_FRI));
+        $this->assertFalse(SyncState::isStale('2026-11-06 21:05:00', $saturday, self::TUE_FRI));
     }
 
     public function testNeverSyncedOrWindowingDisabledIsNotReportedStale(): void
     {
-        $now = $this->at('2026-06-10 12:00');
+        $now = $this->lisbon('2026-09-16 10:00');
 
-        $this->assertFalse(SyncState::isStale(null, $now, self::TUE_FRI, 0, 'Europe/London'));
-        $this->assertFalse(SyncState::isStale('', $now, self::TUE_FRI, 0, 'Europe/London'));
-        $this->assertFalse(SyncState::isStale('2026-01-01 00:00:00', $now, [], 0, 'Europe/London'));
+        $this->assertFalse(SyncState::isStale(null, $now, self::TUE_FRI));
+        $this->assertFalse(SyncState::isStale('', $now, self::TUE_FRI));
+        $this->assertFalse(SyncState::isStale('2026-01-01 00:00:00', $now, []));
     }
 
     public function testForUserReadsTheStoredColumnsAndTokenPresence(): void

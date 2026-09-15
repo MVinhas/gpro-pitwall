@@ -42,9 +42,10 @@ final class RaceWindow
         $cursor = $now->setTimezone(new DateTimeZone($timezone));
 
         // Walk back up to a week to find the most recent race-day boundary
-        // (race day at $boundaryHour) that is at or before $cursor. With two
-        // race days a week this lands within at most a few iterations.
-        for ($daysBack = 0; $daysBack < 7; $daysBack++) {
+        // (race day at $boundaryHour) that is at or before $cursor. A full
+        // seven days back is needed when the only race day is today but its
+        // boundary hour hasn't arrived yet.
+        for ($daysBack = 0; $daysBack <= 7; $daysBack++) {
             $boundary = $cursor->modify("-{$daysBack} days")->setTime($boundaryHour, 0, 0);
             if ($boundary <= $cursor && in_array((int) $boundary->format('N'), $raceDays, true)) {
                 return $boundary->format('Y-m-d');

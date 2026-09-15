@@ -6,6 +6,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.18.1] - 2026-09-15
+
+### Fixed
+- **"Synced before this race weekend" waits for the race to finish.** The warning rolled at
+  midnight on race day, so a Monday sync was flagged on Tuesday morning, before the race had
+  run. It now appears only when a race has finished since the last sync. GPRO races run
+  from 20:00 CET for about two hours, so the cutoff is 22:00 Central European time
+  (21:00 Lisbon), summer and winter. A sync taken during the race still counts as stale.
+
 ## [1.18.0] - 2026-09-14
 
 A design pass: one answer in one place, colour only for state, the phone as the pit wall — and a new identity.

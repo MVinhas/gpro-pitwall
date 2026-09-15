@@ -191,16 +191,13 @@ $container['twig']->addGlobal(
     'sync_state',
     $currentUser !== null ? \App\Support\SyncState::forUser($currentUser) : null,
 );
-// True when a new race weekend has opened since the last sync (the same race
-// window GproApiClient uses for cache keys), so the status line can ask for a
-// re-sync before the manager plans on last weekend's data.
+// True when a race has finished since the last sync, so the status line can ask
+// for a re-sync before the manager plans on last race's data.
 $lastSyncedAt = $currentUser['last_synced_at'] ?? null;
 $container['twig']->addGlobal('sync_stale', \App\Support\SyncState::isStale(
     is_string($lastSyncedAt) ? $lastSyncedAt : null,
     new DateTimeImmutable('now'),
     \App\Support\RaceWindow::parseDays(Env::get('GPRO_RACE_DAYS', '2,5')),
-    Env::int('GPRO_RACE_BOUNDARY_HOUR', 0),
-    Env::get('GPRO_RACE_TZ', 'Europe/London'),
 ));
 
 $mailCfg = [

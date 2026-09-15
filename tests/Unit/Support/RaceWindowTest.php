@@ -61,6 +61,15 @@ final class RaceWindowTest extends TestCase
         $this->assertSame('2026-06-09', $after);
     }
 
+    public function testASingleRaceDayBeforeItsBoundaryReachesBackAWeek(): void
+    {
+        // Tuesday 09:00 with a Tuesday-only 22:00 boundary: the window is last Tuesday's.
+        $this->assertSame(
+            '2026-06-02',
+            RaceWindow::idFor($this->at('2026-06-09 09:00'), [2], 22, 'Europe/London'),
+        );
+    }
+
     public function testEmptyRaceDaysDisablesWindowing(): void
     {
         $this->assertSame('', RaceWindow::idFor($this->at('2026-06-10 14:00'), [], 0, 'Europe/London'));
