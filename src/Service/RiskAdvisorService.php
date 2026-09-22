@@ -204,48 +204,51 @@ class RiskAdvisorService
     }
 
     /**
-     * Suggests the three boost-set start laps for the chosen strategy. Boost
-     * pays where pace converts into something: passing chances in a pack
-     * (the official tutorial's example), track position through the pit cycle
-     * (boosted in-laps = the overcut), or gap defence in the final laps.
-     * Sets run 3 laps each and overlapping sets are wasted.
+     * Suggests the three boost-set start laps for the chosen strategy. Boost is
+     * spent where the car has clear air, as F1 spends its push laps: pace
+     * stuck behind another car is wasted. So the sets go where the pit cycle
+     * and the race spread the field out, never in the opening pack. Sets run
+     * 3 laps each and overlapping sets are wasted.
+     *
+     * The sets follow the plan's real pit laps and always run the in-laps,
+     * ending at the stop. GPRO refuels, as F1 did in 1994-2009, so the laps
+     * before a stop carry the lightest car of the stint and the out-lap after
+     * it the heaviest — the refuelling-era overcut, not today's out-lap
+     * undercut. Without pit laps the stops are assumed at the even split.
      *
      * `planned` is the subset the fuel plan actually carries (the manager's
      * boost-stints choice): the highest-priority picks, not the earliest laps.
      *
+     * @param list<int> $pitLaps
      * @return array{laps: array<int>, planned: array<int>, note: string}
      */
     public function suggestBoostLaps(
         int $raceLaps,
         int $stops,
-        ?string $overtaking,
         bool $raceWet,
         float $rainAvg,
         int $plannedSets = 0,
+        array $pitLaps = [],
+        string $firstStop = StrategyService::FIRST_STOP_EVEN,
     ): array {
         if ($raceLaps < 12) {
             return ['laps' => [], 'planned' => [], 'note' => 'Too few laps to plan boost sets — place them by feel.'];
         }
 
-        $rating = isset(self::OVERTAKE_BASE[$overtaking ?? '']) ? (string)$overtaking : 'Normal';
-        $easyPassing = in_array($rating, ['Very Easy', 'Easy'], true);
-        $stintLen = intdiv($raceLaps, max(1, $stops + 1));
-
-        // Priority order: easy passing cashes pace early while the field is
-        // packed; otherwise in-laps first (overcut), then the final laps,
-        // then early/mid-race as fillers.
-        $candidates = [];
-        if ($easyPassing) {
-            $candidates[] = 2;
+        if (count($pitLaps) !== $stops) {
+            $stintLen = intdiv($raceLaps, max(1, $stops + 1));
+            $pitLaps = $stops > 0 ? range($stintLen, $stops * $stintLen, $stintLen) : [];
         }
-        for ($i = 1; $i <= $stops; $i++) {
-            $candidates[] = $i * $stintLen - 2;
+
+        // Priority order: the pit windows, then the final laps (the field has
+        // spread out by then), then mid-race and quarter-distance as fillers.
+        $candidates = [];
+        foreach ($pitLaps as $pitLap) {
+            $candidates[] = $pitLap - 2;
         }
         $candidates[] = $raceLaps - 2;
-        if (!$easyPassing) {
-            $candidates[] = 2;
-        }
         $candidates[] = intdiv($raceLaps, 2);
+        $candidates[] = intdiv($raceLaps, 4);
 
         $laps = [];
         foreach ($candidates as $lap) {
@@ -264,13 +267,19 @@ class RiskAdvisorService
         sort($laps);
         sort($planned);
 
-        $note = $easyPassing
-            ? 'One set early while the field is still packed — passing is cheap here, so pace turns '
-                . 'straight into positions — then boost into the pit windows.'
-            : ($stops > 0
-                ? 'Boost the in-laps before the stops to jump the cars around you through the pit '
-                    . 'cycle; any spare set defends the final laps.'
-                : 'No stops to play with, so spread the sets — one early, one mid-race, one to bring it home.');
+        $note = match (true) {
+            $firstStop === StrategyService::FIRST_STOP_EARLY && $pitLaps !== [] => 'Boost in clear air, '
+                . 'on the in-laps before each stop. Before your early first stop the car is at its '
+                . 'lightest, so those laps are the fastest you can buy.',
+            $firstStop === StrategyService::FIRST_STOP_LATE && $pitLaps !== [] => 'Boost in clear air. '
+                . 'Your late first stop is an overcut: once the cars around you have pitted, boost the '
+                . 'in-laps before your own stop.',
+            $pitLaps !== [] => 'Boost in clear air: the in-laps before your stops, once the cars around '
+                . 'you have pitted.',
+            default => 'Boost in clear air. With no stops, wait for the field to spread out — never in '
+                . 'the opening pack.',
+        };
+        $note .= ' A spare set goes on the final laps, when the field is strung out.';
 
         if ($raceWet || $rainAvg >= self::RAIN_WATCH_THRESHOLD) {
             $note .= ' Rain could move the pit laps — treat these as dry-plan numbers.';

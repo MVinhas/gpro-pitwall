@@ -473,6 +473,208 @@ final class StrategyServiceTest extends TestCase
         }
     }
 
+    /**
+     * Medium on the default fixture at 45 laps: a set lasts 17 laps (85 km
+     * usable / 5 km), a 17-lap stint is the most the 180 L tank holds with the
+     * safety lap (10 L/lap), and tyre life forces 2 stops — even stints of 15.
+     *
+     * @return array<string, mixed>
+     */
+    private function runFirstStop(?string $firstStop): array
+    {
+        $inputs = $this->inputs();
+        $inputs['laps'] = 45;
+        if ($firstStop !== null) {
+            $inputs['first_stop'] = $firstStop;
+        }
+
+        return $this->service()->calculateStrategy(
+            ['id' => 1, 'name' => 'Imola'],
+            ['lvlEngine' => 1, 'lvlElectronics' => 1, 'lvlSusp' => 1],
+            ['concentration' => 50, 'aggressiveness' => 50, 'experience' => 50,
+             'technical_insight' => 50, 'weight' => 75],
+            ['concentration' => 0, 'stressHandling' => 0],
+            ['id' => 0, 'ownTD' => 0, 'experience' => 0, 'pitCoordination' => 0],
+            $inputs,
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @return list<float>
+     */
+    private static function stintLaps(array $row): array
+    {
+        return array_values(array_map(static fn (array $s): float => (float) $s['laps'], $row['stints']));
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @return list<float>
+     */
+    private static function stintFuel(array $row): array
+    {
+        return array_values(array_map(static fn (array $s): float => (float) $s['fuel'], $row['stints']));
+    }
+
+    public function testEvenFirstStopSplitsTheRaceIntoEqualStints(): void
+    {
+        $row = $this->runFirstStop('even')['tyres']['Medium'];
+
+        self::assertSame(2, $row['stops']);
+        self::assertSame([15.0, 15.0, 15.0], self::stintLaps($row));
+        self::assertSame([160.0, 160.0, 160.0], self::stintFuel($row));
+        self::assertSame([15, 30], $row['pit_laps']);
+    }
+
+    public function testEvenIsTheDefaultAndUnknownModesFallBackToIt(): void
+    {
+        $even = $this->runFirstStop('even')['tyres'];
+
+        self::assertSame($even, $this->runFirstStop(null)['tyres']);
+        self::assertSame($even, $this->runFirstStop('sideways')['tyres']);
+    }
+
+    public function testLateFirstStopRunsTheFirstSetToItsLimit(): void
+    {
+        $row = $this->runFirstStop('late')['tyres']['Medium'];
+
+        self::assertSame(2, $row['stops']);
+        self::assertSame([17.0, 14.0, 14.0], self::stintLaps($row));
+        self::assertSame([180.0, 150.0, 150.0], self::stintFuel($row));
+        self::assertSame([17, 31], $row['pit_laps']);
+        self::assertSame(180.0, (float) $row['fuel_recommended'], 'The start fuel is the first stint.');
+    }
+
+    public function testEarlyFirstStopRunsEveryLaterSetToItsLimit(): void
+    {
+        $row = $this->runFirstStop('early')['tyres']['Medium'];
+
+        self::assertSame(2, $row['stops']);
+        self::assertSame([11.0, 17.0, 17.0], self::stintLaps($row));
+        self::assertSame([120.0, 180.0, 180.0], self::stintFuel($row));
+        self::assertSame([11, 28], $row['pit_laps']);
+        self::assertSame(120.0, (float) $row['fuel_recommended'], 'The start fuel is the first stint.');
+    }
+
+    public function testEveryPitStopFillsToTheSameLevel(): void
+    {
+        // 46 laps, late: the first set runs 17, and the 29 left split evenly
+        // (14.5 + 14.5) rather than 15 + 14 — so the manager enters one pit
+        // fuel figure however many stops there are.
+        $inputs = $this->inputs();
+        $inputs['laps'] = 46;
+        $inputs['first_stop'] = 'late';
+
+        $row = $this->service()->calculateStrategy(
+            ['id' => 1, 'name' => 'Imola'],
+            ['lvlEngine' => 1, 'lvlElectronics' => 1, 'lvlSusp' => 1],
+            ['concentration' => 50, 'aggressiveness' => 50, 'experience' => 50,
+             'technical_insight' => 50, 'weight' => 75],
+            ['concentration' => 0, 'stressHandling' => 0],
+            ['id' => 0, 'ownTD' => 0, 'experience' => 0, 'pitCoordination' => 0],
+            $inputs,
+        )['tyres']['Medium'];
+
+        self::assertSame([17.0, 14.5, 14.5], self::stintLaps($row));
+        self::assertSame([180.0, 155.0, 155.0], self::stintFuel($row));
+        self::assertSame(155.0, (float) $row['fuel_pit']);
+        self::assertSame([17, 32], $row['pit_laps']);
+    }
+
+    public function testANoStopRaceHasNoPitFuel(): void
+    {
+        $secrets = self::SECRETS;
+        $secrets['pit_stop']['base_time'] = 1000.0;
+        $inputs = $this->inputs();
+        $inputs['laps'] = 10;
+
+        $row = (new StrategyService($this->db(), $secrets))->calculateStrategy(
+            ['id' => 1, 'name' => 'Imola'],
+            ['lvlEngine' => 1, 'lvlElectronics' => 1, 'lvlSusp' => 1],
+            ['concentration' => 50, 'aggressiveness' => 50, 'experience' => 50,
+             'technical_insight' => 50, 'weight' => 75],
+            ['concentration' => 0, 'stressHandling' => 0],
+            ['id' => 0, 'ownTD' => 0, 'experience' => 0, 'pitCoordination' => 0],
+            $inputs,
+        )['tyres']['Medium'];
+
+        self::assertNull($row['fuel_pit']);
+    }
+
+    public function testMovingTheFirstStopNeverChangesTheStopCount(): void
+    {
+        $even = $this->runFirstStop('even')['tyres'];
+
+        foreach (['early', 'late'] as $mode) {
+            foreach ($this->runFirstStop($mode)['tyres'] as $comp => $row) {
+                self::assertSame($even[$comp]['stops'], $row['stops'], "$comp, $mode");
+                self::assertSame(45.0, array_sum(self::stintLaps($row)), "$comp, $mode laps must add up");
+                foreach (self::stintFuel($row) as $fuel) {
+                    self::assertLessThanOrEqual(180.0, $fuel, "$comp, $mode overfills the tank");
+                }
+            }
+        }
+    }
+
+    public function testUnevenStintsCarryMoreFuelWeightThanEvenOnes(): void
+    {
+        // Fuel-weight loss grows with the square of each stint's length, so
+        // any split away from even costs time: 312.5 s x sum of (stint share)^2.
+        self::assertSame(104.17, $this->runFirstStop('even')['tyres']['Medium']['lost_fuel']);
+        self::assertSame(105.09, $this->runFirstStop('late')['tyres']['Medium']['lost_fuel']);
+        self::assertSame(107.87, $this->runFirstStop('early')['tyres']['Medium']['lost_fuel']);
+    }
+
+    public function testRefuelTimeFollowsTheFuelEachStopAdds(): void
+    {
+        // 0.1 s per litre refuelled: the early plan's stops each refuel a
+        // 17-lap stint (170 L bare), the even plan's a 15-lap one (150 L).
+        $secrets = self::SECRETS;
+        $secrets['pit_stop']['factor_fuel_no_td'] = 0.1;
+        $inputs = $this->inputs();
+        $inputs['laps'] = 45;
+
+        $run = fn (string $mode): array => (new StrategyService($this->db(), $secrets))->calculateStrategy(
+            ['id' => 1, 'name' => 'Imola'],
+            ['lvlEngine' => 1, 'lvlElectronics' => 1, 'lvlSusp' => 1],
+            ['concentration' => 50, 'aggressiveness' => 50, 'experience' => 50,
+             'technical_insight' => 50, 'weight' => 75],
+            ['concentration' => 0, 'stressHandling' => 0],
+            ['id' => 0, 'ownTD' => 0, 'experience' => 0, 'pitCoordination' => 0],
+            ['first_stop' => $mode] + $inputs,
+        )['tyres']['Medium'];
+
+        // 2 x (30 base + 22 lane + 0.1 x litres)
+        self::assertSame(134.0, $run('even')['lost_pits']);
+        self::assertSame(138.0, $run('early')['lost_pits']);
+    }
+
+    public function testANoStopRaceIsOneStintWhateverTheFirstStopSetting(): void
+    {
+        // Ten laps fit one set, and a 1000 s stop is never worth the fuel it saves.
+        $secrets = self::SECRETS;
+        $secrets['pit_stop']['base_time'] = 1000.0;
+        $inputs = $this->inputs();
+        $inputs['laps'] = 10;
+
+        foreach (['even', 'early', 'late'] as $mode) {
+            $row = (new StrategyService($this->db(), $secrets))->calculateStrategy(
+                ['id' => 1, 'name' => 'Imola'],
+                ['lvlEngine' => 1, 'lvlElectronics' => 1, 'lvlSusp' => 1],
+                ['concentration' => 50, 'aggressiveness' => 50, 'experience' => 50,
+                 'technical_insight' => 50, 'weight' => 75],
+                ['concentration' => 0, 'stressHandling' => 0],
+                ['id' => 0, 'ownTD' => 0, 'experience' => 0, 'pitCoordination' => 0],
+                ['first_stop' => $mode] + $inputs,
+            )['tyres']['Medium'];
+
+            self::assertSame(0, $row['stops'], $mode);
+            self::assertSame([10.0], self::stintLaps($row), $mode);
+            self::assertSame([], $row['pit_laps'], $mode);
+        }
+    }
+
     public function testZeroRiskProducesNoClearTrackGain(): void
     {
         $result = $this->service()->calculateStrategy(

@@ -8,6 +8,13 @@ use PDO;
 
 class StrategyService
 {
+    public const string FIRST_STOP_EVEN = 'even';
+    public const string FIRST_STOP_EARLY = 'early';
+    public const string FIRST_STOP_LATE = 'late';
+
+    /** @var list<string> */
+    public const array FIRST_STOPS = [self::FIRST_STOP_EVEN, self::FIRST_STOP_EARLY, self::FIRST_STOP_LATE];
+
     /**
      * @param array<string, mixed> $secrets
      */
@@ -51,6 +58,9 @@ class StrategyService
         $targetWear = (int)($inputs['target_wear']);
         $temp = (float)$inputs['temp'];
         $risk = (int)($inputs['risk']);
+        $firstStop = in_array($inputs['first_stop'] ?? null, self::FIRST_STOPS, true)
+            ? (string) $inputs['first_stop']
+            : self::FIRST_STOP_EVEN;
 
         // Boost lap stints: 0..3. Each stint runs 3 boost laps (richer
         // engine map). Total boost laps = stints × 3, capped 0..9.
@@ -192,7 +202,8 @@ class StrategyService
             $boostLaps,
             $boostCoeffWet,
             $boostCoeffDry,
-            $ctrGainPerLap
+            $ctrGainPerLap,
+            $firstStop
         ): array {
             $tyreResults = [];
 
@@ -277,10 +288,12 @@ class StrategyService
                 + $ff['ele_lvl']
                 * $cEle;
 
-            // Fuel-weight loss for a whole race run in ($stops + 1) stints.
-                $fuelCostFor = static fn (int $stops): float => 0.005 * (
+            // Fuel-weight loss for the whole race run in one stint. A stint
+            // carrying share s of the race costs s² of it, so even stints cost
+            // this / (stops + 1) and any uneven split costs more.
+                $fuelCostWholeRace = 0.005 * (
                 ((float)$trackDb['distance'] * ($fuel_per_lap_val + $tables_h47))
-                * (float)$trackDb['distance'] / ($stops + 1)
+                * (float)$trackDb['distance']
                 ) / 2;
 
                 $tcdVal = 0.0;
@@ -326,39 +339,76 @@ class StrategyService
                 $maxFuel = 180.0;
 
             /**
+             * Prices a race run in the given stints (laps each, first = start
+             * fuel). Every stop refuels the stint that follows it.
+             *
+             * @param list<float> $stintLaps
              * @return array{stops: int, feasible: bool, total: float,
              *     stint_fuel: float, recommended: float, pit_time: float,
-             *     lost_pits: float, fuel_cost: float}
+             *     lost_pits: float, fuel_cost: float,
+             *     stints: list<array{laps: float, fuel: float}>}
              */
-                $planFor = function (int $stops) use (
+                $planForStints = function (array $stintLaps) use (
+                    $laps,
                     $relevantTotalFuel,
                     $boostExtraTotal,
                     $fuelPerLapAdj,
                     $fFuel,
                     $pitTimeFixed,
                     $pitLaneLoss,
-                    $fuelCostFor,
+                    $fuelCostWholeRace,
                     $tcdVal,
                     $maxFuel
                 ): array {
-                    $fuelPerStint = $relevantTotalFuel / ($stops + 1);
-                    $stintFuel = $fuelPerStint + ($boostExtraTotal / ($stops + 1));
-                    $recommended = ceil($stintFuel + $fuelPerLapAdj);
-                    $pitTime = max(15.0, ($fuelPerStint * $fFuel) + $pitTimeFixed);
-                    $lostPits = $stops * ($pitTime + $pitLaneLoss);
-                    $fuelCost = $fuelCostFor($stops);
+                    $count = count($stintLaps);
+                    $stops = $count - 1;
+                    $stints = [];
+                    $lostPits = 0.0;
+                    $pitTimes = 0.0;
+                    $shareSquares = 0.0;
+                    $feasible = true;
+
+                    foreach ($stintLaps as $i => $stintLap) {
+                        $share = $laps > 0 ? $stintLap / $laps : 1.0;
+                        $bareFuel = $relevantTotalFuel * $share;
+                        $stintFuel = $bareFuel + ($boostExtraTotal / $count);
+                        $recommended = ceil($stintFuel + $fuelPerLapAdj);
+                        $feasible = $feasible && $recommended <= $maxFuel;
+                        $shareSquares += $share ** 2;
+                        $stints[] = ['laps' => $stintLap, 'fuel' => $recommended, 'min' => $stintFuel];
+
+                        if ($i > 0) {
+                            $pitTime = max(15.0, ($bareFuel * $fFuel) + $pitTimeFixed);
+                            $pitTimes += $pitTime;
+                            $lostPits += $pitTime + $pitLaneLoss;
+                        }
+                    }
+
+                    $fuelCost = $fuelCostWholeRace * $shareSquares;
+                    // A no-stop race still shows what one stop would cost.
+                    $pitTime = $stops > 0
+                        ? $pitTimes / $stops
+                        : max(15.0, ($relevantTotalFuel * $fFuel) + $pitTimeFixed);
 
                     return [
                     'stops' => $stops,
-                    'feasible' => $recommended <= $maxFuel,
+                    'feasible' => $feasible,
                     'total' => $lostPits + $fuelCost + $tcdVal,
-                    'stint_fuel' => $stintFuel,
-                    'recommended' => $recommended,
+                    'stint_fuel' => $stints[0]['min'],
+                    'recommended' => $stints[0]['fuel'],
                     'pit_time' => $pitTime,
                     'lost_pits' => $lostPits,
                     'fuel_cost' => $fuelCost,
+                    'stints' => array_map(
+                        static fn (array $s): array => ['laps' => $s['laps'], 'fuel' => $s['fuel']],
+                        $stints,
+                    ),
                     ];
                 };
+
+                $planFor = static fn (int $stops): array => $planForStints(
+                    array_fill(0, $stops + 1, $laps / ($stops + 1))
+                );
 
                 $best = $planFor($minStopsForWear);
 
@@ -385,6 +435,29 @@ class StrategyService
                 }
 
                 $stops = $best['stops'];
+
+            // Where the first stop falls moves fuel between stints but never
+            // changes how many stops the race needs.
+                if ($firstStop !== self::FIRST_STOP_EVEN && $stops > 0) {
+                    $perLapFuel = $laps > 0 ? $relevantTotalFuel / $laps : 0.0;
+                    $tankLaps = $perLapFuel > 0
+                        ? ($maxFuel - $boostExtraTotal / ($stops + 1) - $fuelPerLapAdj) / $perLapFuel
+                        : (float) $laps;
+                    $best = $planForStints(self::stintLaps(
+                        $laps,
+                        $stops,
+                        (int) floor(min($lapsPerSet, $tankLaps)),
+                        $firstStop,
+                    ));
+                }
+
+                $pitLaps = [];
+                $lapsRun = 0.0;
+                foreach (array_slice($best['stints'], 0, -1) as $stint) {
+                    $lapsRun += $stint['laps'];
+                    $pitLaps[] = (int) round($lapsRun);
+                }
+
                 $lapsPerSetForced = floor($laps / ($stops + 1));
 
                 $totalLost = round($best['lost_pits'] + $best['fuel_cost'] + $tcdVal, 2);
@@ -400,6 +473,9 @@ class StrategyService
                 'fuel_load' => ceil($best['stint_fuel']),
                 'fuel_recommended' => $best['recommended'],
                 'fuel_over_capacity' => !$best['feasible'],
+                'stints' => $best['stints'],
+                'fuel_pit' => $best['stints'][1]['fuel'] ?? null,
+                'pit_laps' => $pitLaps,
                 'pit_time_est' => round($best['pit_time'], 2),
                 'lost_pits' => round($best['lost_pits'], 2),
                 'lost_fuel' => round($best['fuel_cost'], 2),
@@ -438,7 +514,27 @@ class StrategyService
                 'staff' => $staff,
                 'td' => $td
             ],
-            'inputs' => $inputs
+            'inputs' => ['first_stop' => $firstStop] + $inputs
         ];
+    }
+
+    /**
+     * Stints for a race whose first stop is moved off the even split. Late
+     * runs the first set as long as it lasts; early runs every later set that
+     * long and leaves the first stint what remains. The first stint is whole
+     * laps (it ends at a real pit lap) and never crosses to the wrong side of
+     * the even split; the rest share their laps exactly evenly, so every pit
+     * stop fills the tank to one level, however many stops there are.
+     *
+     * @return list<float>
+     */
+    private static function stintLaps(int $laps, int $stops, int $stintLimit, string $firstStop): array
+    {
+        $even = $laps / ($stops + 1);
+        $first = $firstStop === self::FIRST_STOP_LATE
+            ? max((int) ceil($even), min($stintLimit, $laps - $stops))
+            : min((int) floor($even), max(1, $laps - $stops * $stintLimit));
+
+        return [(float) $first, ...array_fill(0, $stops, ($laps - $first) / $stops)];
     }
 }

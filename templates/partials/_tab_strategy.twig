@@ -9,9 +9,10 @@
             {# Race settings. Every control recalculates the sheet as it changes,
                so on a phone (answer first) the card closes to one summary row. #}
             {% set bs = strategy_results.inputs.boost_stints ?? 0 %}
+            {% set fs = strategy_results.inputs.first_stop ?? 'even' %}
             {% embed 'partials/_acc.twig' with { id: 'strategy-settings', title: 'Race settings', lg_open: true, stacked: true, extra_class: 'mb-4' } %}
                 {% block verdict %}
-                    <span class="block text-xs text-slate-600 tabular-nums group-open/acc:hidden" data-settings-summary>CTR {{ strategy_results.inputs.risk ?? 0 }} · pit at {{ strategy_results.inputs.target_wear ?? 15 }}% tyres · {{ bs == 0 ? 'no boost' : bs ~ ' boost stint' ~ (bs == 1 ? '' : 's') }}</span>
+                    <span class="block text-xs text-slate-600 tabular-nums group-open/acc:hidden" data-settings-summary>CTR {{ strategy_results.inputs.risk ?? 0 }} · pit at {{ strategy_results.inputs.target_wear ?? 15 }}% tyres · {{ bs == 0 ? 'no boost' : bs ~ ' boost stint' ~ (bs == 1 ? '' : 's') }}{{ fs == 'even' ? '' : ' · ' ~ fs ~ ' first stop' }}</span>
                 {% endblock %}
                 {% block body %}
                 <div class="space-y-3">
@@ -51,6 +52,14 @@
                             <option value="1" {{ bs == 1 ? 'selected' }}>1 stint (3 boost laps)</option>
                             <option value="2" {{ bs == 2 ? 'selected' }}>2 stints (6 boost laps)</option>
                             <option value="3" {{ bs == 3 ? 'selected' }}>3 stints (9 boost laps)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="t-label block mb-1" for="stratFirstStop" title="Q2 is driven on the start fuel, so an early stop means a lighter qualifying lap. The stop count stays the same.">First pit stop</label>
+                        <select id="stratFirstStop" name="first_stop" data-strategy-fragment-trigger class="form-select">
+                            <option value="even" {{ fs == 'even' ? 'selected' }}>Even — equal stints</option>
+                            <option value="early" {{ fs == 'early' ? 'selected' }}>Early — light start fuel</option>
+                            <option value="late" {{ fs == 'late' ? 'selected' }}>Late — first set to the limit</option>
                         </select>
                     </div>
                 </div>
@@ -166,7 +175,9 @@
         if (!summary) return;
         const stints = parseInt(form.elements.boost_stints.value, 10) || 0;
         const boost = stints === 0 ? 'no boost' : stints + ' boost stint' + (stints === 1 ? '' : 's');
-        summary.textContent = 'CTR ' + form.elements.risk.value + ' · pit at ' + form.elements.target_wear.value + '% tyres · ' + boost;
+        const firstStop = form.elements.first_stop.value;
+        const pacing = firstStop === 'even' ? '' : ' · ' + firstStop + ' first stop';
+        summary.textContent = 'CTR ' + form.elements.risk.value + ' · pit at ' + form.elements.target_wear.value + '% tyres · ' + boost + pacing;
     };
 
     // Live slider value labels (dragging updates the number without server roundtrip).

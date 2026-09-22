@@ -6,6 +6,29 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.19.0] - 2026-09-22
+
+### Added
+- **Choose when the first pit stop comes.** A new "First pit stop" setting on Strategy:
+  *Even* (as before, every stint the same length), *Early* (every later set runs to its
+  tyre limit and the first stint takes what is left, so the car starts light for a faster
+  Q2 lap) or *Late* (the first set runs as long as it lasts and the rest of the race is
+  split evenly). The number of stops never changes, and no stint overfills the 180 L tank.
+  Uneven stints carry more fuel weight, and the tyre comparison prices that in.
+
+### Changed
+- **Fuel is one figure per stint, or two when the first stop moves.** With even stints the
+  race sheet shows *Fuel per stint* and the laps the stops are expected on. With an early or
+  late first stop it shows start fuel, then one pit-stop level: the stints after the first
+  are always equal, so every stop fills the tank to the same level however many stops
+  there are. The tyre comparison follows suit (*Fuel* alone, or *Start* and *Then*); the
+  bare minimum moves to hover text.
+- **Boost laps go where the car has clear air, and follow the real pit stops.** Every stop
+  gets a set on its in-laps, ending at the stop: with refuelling, those are the lightest
+  laps of each stint (the refuelling-era overcut). Spare sets go on the final laps, once
+  the field has spread out. No set is suggested in the opening pack any more, including
+  the early set on easy-passing tracks. The reasoning is in the Boost laps hover text.
+
 ## [1.18.1] - 2026-09-15
 
 ### Fixed
