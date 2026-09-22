@@ -23,6 +23,9 @@
     {% set ra = sr.risk_advice is defined ? sr.risk_advice : null %}
     {# Runner-up must be the same tyre type as the winner: dry compares
        against dry only; Rain (wet) has no same-type rival, so no line. #}
+    {# Even stints fill the tank to one level at the start and every stop, so
+       fuel is a single figure; a moved first stop splits it into start + then. #}
+    {% set even_stints = (sr.inputs.first_stop ?? 'even') == 'even' %}
     {% set runner_name = null %}
     {% if sr.best_compound != 'Rain' %}
         {% for comp, data in sr.tyres %}
@@ -102,10 +105,27 @@
                 </table>
             </div>
             <dl class="grid grid-cols-2 content-start gap-x-6 gap-y-3 border-t border-slate-200 px-4 py-4 sm:grid-cols-3 sm:px-6 lg:grid-cols-2 lg:border-t-0 lg:border-l">
-                <div>
-                    <dt class="t-label">Fuel per stint</dt>
-                    <dd class="text-base font-semibold text-slate-900 tabular-nums">{{ best.fuel_recommended }} L</dd>
-                </div>
+                {# GPRO's own fuel fields: start fuel (set in Q2), then the level every
+                   pit stop fills the tank to (the stints after the first are equal, so
+                   it is one figure however many stops). Stop laps are the plan's. #}
+                {% set pit_laps_line %}{% if best.pit_laps is defined and best.pit_laps is not empty %}<dd class="text-xs text-slate-500 tabular-nums">stop{{ best.stops == 1 ? '' : 's' }} at lap{{ best.stops == 1 ? '' : 's' }} {{ best.pit_laps|join(', ') }}</dd>{% endif %}{% endset %}
+                {% if even_stints or best.stops == 0 %}
+                    <div>
+                        <dt class="t-label">{{ best.stops == 0 ? 'Start fuel' : 'Fuel per stint' }}</dt>
+                        <dd class="text-base font-semibold text-slate-900 tabular-nums">{{ best.fuel_recommended }} L</dd>
+                        {{ pit_laps_line }}
+                    </div>
+                {% else %}
+                    <div>
+                        <dt class="t-label">Start fuel</dt>
+                        <dd class="text-base font-semibold text-slate-900 tabular-nums">{{ best.fuel_recommended }} L</dd>
+                    </div>
+                    <div>
+                        <dt class="t-label">Pit stop fuel</dt>
+                        <dd class="text-base font-semibold text-slate-900 tabular-nums">{{ best.fuel_pit ?? best.fuel_recommended }} L</dd>
+                        {{ pit_laps_line }}
+                    </div>
+                {% endif %}
                 <div>
                     <dt class="t-label">Tyres</dt>
                     <dd class="text-base font-semibold text-slate-900">{{ sr.best_compound }} <span class="text-sm font-normal text-slate-500">· {{ best.stops }} stop{{ best.stops == 1 ? '' : 's' }}</span></dd>
@@ -128,7 +148,7 @@
                     {# Only the sets the fuel plan carries (Boost stints); suggestions
                        beyond that would under-fuel the car, so they stay a hint. #}
                     {% set planned = ra.boost.planned|default([]) %}
-                    <div>
+                    <div title="{{ ra.boost.note|default('') }}">
                         <dt class="t-label">Boost laps</dt>
                         {% if planned is not empty %}
                             <dd class="text-base font-semibold text-slate-900 tabular-nums">Laps {{ planned|join(', ') }}</dd>
@@ -220,8 +240,11 @@
                         <tr>
                             <th rowspan="2" class="px-3 sm:px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-slate-500">Compound</th>
                             <th rowspan="2" class="px-2 sm:px-4 py-2 text-right text-[10px] font-semibold uppercase tracking-wide text-slate-500">Stops</th>
-                            <th colspan="2" class="hidden sm:table-cell px-4 pt-2 text-center text-[10px] font-semibold uppercase tracking-wide text-slate-500">Fuel / stint (L)</th>
-                            <th class="sm:hidden px-2 pt-2 text-right text-[10px] font-semibold uppercase tracking-wide text-slate-500">Fuel (L)</th>
+                            {% if even_stints %}
+                                <th rowspan="2" class="px-2 sm:px-4 py-2 text-right text-[10px] font-semibold uppercase tracking-wide text-slate-500" title="Fuel for each stint, set in Q2 for the start and at every stop: the stint's fuel plus one extra lap's worth, as a buffer against bad pit timing.">Fuel (L)</th>
+                            {% else %}
+                                <th colspan="2" class="px-2 sm:px-4 pt-2 text-center text-[10px] font-semibold uppercase tracking-wide text-slate-500">Fuel (L)</th>
+                            {% endif %}
                             <th rowspan="2" class="hidden md:table-cell px-2 py-2 text-right text-[10px] font-semibold uppercase tracking-wide text-slate-500">Est. pit (s)</th>
                             <th colspan="4" class="hidden md:table-cell px-2 pt-2 text-center text-[10px] font-semibold uppercase tracking-wide text-slate-500 border-l border-slate-200">Time lost (s)</th>
                             {% if sr.ctr_gain_per_lap > 0 %}
@@ -230,8 +253,10 @@
                             <th rowspan="2" class="px-2 sm:px-4 py-2 text-right text-[10px] font-semibold uppercase tracking-wide text-slate-700 border-l border-slate-200">{{ sr.ctr_gain_per_lap > 0 ? 'Net' : 'Total lost' }}</th>
                         </tr>
                         <tr>
-                            <th class="hidden sm:table-cell px-2 pb-2 text-right text-[10px] font-medium uppercase tracking-wide text-slate-400" title="Bare-minimum litres of fuel to finish the stint; no safety margin.">Minimum</th>
-                            <th class="px-2 pb-2 text-right text-[10px] font-medium uppercase tracking-wide text-slate-400" title="Litres to put in the car: the minimum plus one extra lap's worth, as a buffer against bad pit timing.">Recommended</th>
+                            {% if not even_stints %}
+                                <th class="px-2 pb-2 text-right text-[10px] font-medium uppercase tracking-wide text-slate-400" title="Start fuel, set in Q2: the stint's fuel plus one extra lap's worth, as a buffer against bad pit timing.">Start</th>
+                                <th class="px-2 pb-2 text-right text-[10px] font-medium uppercase tracking-wide text-slate-400" title="The level every pit stop fills the tank to, one spare lap included.">Then</th>
+                            {% endif %}
                             <th class="hidden md:table-cell px-2 pb-2 text-right text-[10px] font-medium uppercase tracking-wide text-slate-400 border-l border-slate-200">Pits</th>
                             <th class="hidden md:table-cell px-2 pb-2 text-right text-[10px] font-medium uppercase tracking-wide text-slate-400">Fuel</th>
                             <th class="hidden md:table-cell px-2 pb-2 text-right text-[10px] font-medium uppercase tracking-wide text-slate-400">TCD</th>
@@ -244,8 +269,10 @@
                             <tr class="{{ is_best ? 'bg-emerald-50' : '' }}"{% if is_best %} aria-current="true"{% endif %}>
                                 <th scope="row" class="px-3 sm:px-4 py-2.5 text-left font-semibold text-slate-900">{{ comp }}</th>
                                 <td class="px-2 sm:px-4 py-2.5 text-right text-slate-900">{{ data.stops }}</td>
-                                <td class="hidden sm:table-cell px-2 py-2.5 text-right text-slate-500">{{ data.fuel_load }}</td>
-                                <td class="px-2 py-2.5 text-right text-slate-900">{{ data.fuel_recommended }}</td>
+                                <td class="px-2 py-2.5 text-right text-slate-900" title="Minimum {{ data.fuel_load }} L to finish the stint, no spare lap.">{{ data.fuel_recommended }}</td>
+                                {% if not even_stints %}
+                                    <td class="px-2 py-2.5 text-right text-slate-900">{{ data.stops > 0 ? (data.fuel_pit ?? data.fuel_recommended) : '—' }}</td>
+                                {% endif %}
                                 <td class="hidden md:table-cell px-2 py-2.5 text-right text-slate-500">{{ data.pit_time_est }}</td>
                                 <td class="hidden md:table-cell px-2 py-2.5 text-right text-xs text-slate-500 border-l border-slate-100">{{ data.lost_pits }}</td>
                                 <td class="hidden md:table-cell px-2 py-2.5 text-right text-xs text-slate-500">{{ data.lost_fuel }}</td>

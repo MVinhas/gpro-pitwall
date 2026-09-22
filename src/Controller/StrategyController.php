@@ -255,6 +255,7 @@ class StrategyController
                 'risk' => RaceSettings::resolve($_SESSION, RaceSettings::CTR, $request->post('risk'), 100),
                 'target_wear' => (int)$request->post('target_wear', 15),
                 'boost_stints' => (int)$request->post('boost_stints', 0),
+                'first_stop' => $request->post('first_stop'),
             ];
 
             if (empty($trackProfile['name']) && !empty($office['trackName'])) {
@@ -356,10 +357,11 @@ class StrategyController
             $strategyResults['risk_advice']['boost'] = $this->riskAdvisor->suggestBoostLaps(
                 (int)$inputs['laps'],
                 (int)($bestTyre['stops'] ?? 0),
-                $strategyResults['overtaking'] ?? null,
                 $raceIsWet,
                 $rain['race_rain_avg'],
                 (int)$inputs['boost_stints'],
+                array_values(array_map('intval', (array)($bestTyre['pit_laps'] ?? []))),
+                (string)($strategyResults['inputs']['first_stop'] ?? StrategyService::FIRST_STOP_EVEN),
             );
 
             return $strategyResults;

@@ -518,35 +518,85 @@ final class RiskAdvisorServiceTest extends TestCase
         $this->assertSame(8, $unknownLane['settings']['problem_pit_laps']);
     }
 
-    public function testBoostLapsTargetInLapsOnHardTracks(): void
+    public function testBoostLapsTargetTheInLaps(): void
     {
-        $r = $this->service()->suggestBoostLaps(60, 2, 'Hard', false, 10.0);
+        $r = $this->service()->suggestBoostLaps(60, 2, false, 10.0);
 
         // Stints of 20 laps → stops after laps 20 and 40: boost the in-laps
         // (18-20, 38-40) and keep the last set for the final laps (58-60).
         $this->assertSame([18, 38, 58], $r['laps']);
         $this->assertStringContainsString('in-laps', $r['note']);
+        $this->assertStringContainsString('clear air', $r['note']);
     }
 
-    public function testBoostLapsFrontLoadOnEasyTracks(): void
+    public function testBoostLapsFollowTheActualPitLaps(): void
     {
-        $r = $this->service()->suggestBoostLaps(60, 2, 'Easy', false, 10.0);
+        // A late first stop at lap 24 (not the even-split lap 20): the in-lap
+        // set has to move with it, or it burns boost on a lap with no stop.
+        $r = $this->service()->suggestBoostLaps(60, 2, false, 10.0, 0, [24, 42], 'late');
 
-        $this->assertSame([2, 18, 38], $r['laps']);
-        $this->assertStringContainsString('early', $r['note']);
+        $this->assertSame([22, 40, 58], $r['laps']);
+        $this->assertStringContainsString('overcut', $r['note']);
+    }
+
+    public function testEarlyFirstStopBoostsTheLightInLapsBeforeIt(): void
+    {
+        // GPRO refuels, so the laps before an early stop run the lightest car
+        // of the race; the out-lap after it runs the heaviest. The set ends at
+        // the stop (10-12), never after it.
+        $r = $this->service()->suggestBoostLaps(60, 2, false, 10.0, 0, [12, 36], 'early');
+
+        $this->assertSame([10, 34, 58], $r['laps']);
+        $this->assertStringContainsString('light', $r['note']);
+    }
+
+    public function testNoBoostSetStartsAfterAStopItIsMeantFor(): void
+    {
+        foreach (['even', 'early', 'late'] as $mode) {
+            $r = $this->service()->suggestBoostLaps(60, 2, false, 10.0, 3, [12, 36], $mode);
+
+            $this->assertContains(10, $r['laps'], $mode);
+            $this->assertContains(34, $r['laps'], $mode);
+        }
+    }
+
+    public function testEvenFirstStopKeepsTheInLapPlan(): void
+    {
+        $implicit = $this->service()->suggestBoostLaps(60, 2, false, 10.0);
+        $explicit = $this->service()->suggestBoostLaps(60, 2, false, 10.0, 0, [20, 40], 'even');
+
+        $this->assertSame($implicit, $explicit);
+    }
+
+    public function testFirstStopSetOutranksTheFinalLapsWhenOnlyOneIsPlanned(): void
+    {
+        $r = $this->service()->suggestBoostLaps(60, 2, false, 10.0, 1, [12, 36], 'early');
+
+        $this->assertSame([10], $r['planned']);
     }
 
     public function testBoostLapsSpreadWhenNoStops(): void
     {
-        $r = $this->service()->suggestBoostLaps(60, 0, 'Normal', false, 10.0);
+        $r = $this->service()->suggestBoostLaps(60, 0, false, 10.0);
 
-        $this->assertSame([2, 30, 58], $r['laps']);
+        $this->assertSame([15, 30, 58], $r['laps']);
+    }
+
+    public function testBoostLapsStayOutOfTheOpeningPack(): void
+    {
+        // Boost stuck in the lap-1 crowd buys nothing: no plan starts a set
+        // before the field has had laps to spread out.
+        foreach ([[60, 0], [60, 1], [60, 2], [44, 1], [70, 3], [26, 2]] as [$laps, $stops]) {
+            $r = $this->service()->suggestBoostLaps($laps, $stops, false, 10.0);
+
+            $this->assertGreaterThanOrEqual(5, min($r['laps']), "$laps laps, $stops stops");
+        }
     }
 
     public function testBoostLapsNeverOverlapAndStayInRange(): void
     {
-        foreach ([[44, 1, 'Very Hard'], [70, 3, 'Very Easy'], [26, 2, 'Normal']] as [$laps, $stops, $rating]) {
-            $r = $this->service()->suggestBoostLaps($laps, $stops, $rating, false, 10.0);
+        foreach ([[44, 1], [70, 3], [26, 2]] as [$laps, $stops]) {
+            $r = $this->service()->suggestBoostLaps($laps, $stops, false, 10.0);
 
             $this->assertCount(3, $r['laps']);
             $sorted = $r['laps'];
@@ -564,8 +614,8 @@ final class RiskAdvisorServiceTest extends TestCase
 
     public function testBoostLapsWarnWhenRainIsLikely(): void
     {
-        $dry = $this->service()->suggestBoostLaps(60, 2, 'Hard', false, 10.0);
-        $threat = $this->service()->suggestBoostLaps(60, 2, 'Hard', false, 45.0);
+        $dry = $this->service()->suggestBoostLaps(60, 2, false, 10.0);
+        $threat = $this->service()->suggestBoostLaps(60, 2, false, 45.0);
 
         $this->assertStringNotContainsString('dry-plan', $dry['note']);
         $this->assertStringContainsString('dry-plan', $threat['note']);
@@ -573,7 +623,7 @@ final class RiskAdvisorServiceTest extends TestCase
 
     public function testBoostLapsBailOnVeryShortRaces(): void
     {
-        $r = $this->service()->suggestBoostLaps(10, 1, 'Normal', false, 10.0);
+        $r = $this->service()->suggestBoostLaps(10, 1, false, 10.0);
 
         $this->assertSame([], $r['laps']);
         $this->assertSame([], $r['planned']);
@@ -581,28 +631,28 @@ final class RiskAdvisorServiceTest extends TestCase
 
     public function testPlannedSetsKeepThePriorityPicksNotTheEarliestLaps(): void
     {
-        // No stops on a normal track: final laps outrank the early and mid-race
-        // fillers, so a single planned set is lap 58 — not lap 2, which merely
+        // No stops: the final laps outrank the mid-race and quarter-distance
+        // fillers, so a single planned set is lap 58 — not lap 15, which merely
         // sorts first.
-        $one = $this->service()->suggestBoostLaps(60, 0, 'Normal', false, 10.0, 1);
-        $two = $this->service()->suggestBoostLaps(60, 0, 'Normal', false, 10.0, 2);
+        $one = $this->service()->suggestBoostLaps(60, 0, false, 10.0, 1);
+        $two = $this->service()->suggestBoostLaps(60, 0, false, 10.0, 2);
 
-        $this->assertSame([2, 30, 58], $one['laps']);
+        $this->assertSame([15, 30, 58], $one['laps']);
         $this->assertSame([58], $one['planned']);
-        $this->assertSame([2, 58], $two['planned']);
+        $this->assertSame([30, 58], $two['planned']);
     }
 
     public function testEveryPlannedSetIsASuggestedSet(): void
     {
-        $r = $this->service()->suggestBoostLaps(60, 2, 'Hard', false, 10.0, 3);
+        $r = $this->service()->suggestBoostLaps(60, 2, false, 10.0, 3);
 
         $this->assertSame($r['laps'], $r['planned']);
     }
 
     public function testNoBoostPlannedKeepsTheFuelReminder(): void
     {
-        $off = $this->service()->suggestBoostLaps(60, 2, 'Hard', false, 10.0, 0);
-        $on = $this->service()->suggestBoostLaps(60, 2, 'Hard', false, 10.0, 2);
+        $off = $this->service()->suggestBoostLaps(60, 2, false, 10.0, 0);
+        $on = $this->service()->suggestBoostLaps(60, 2, false, 10.0, 2);
 
         // With no sets in the fuel plan the suggestions are advice only, so the
         // note says how to fuel them; once sets are planned the fuel covers them.
