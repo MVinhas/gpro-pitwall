@@ -18,6 +18,7 @@ use App\Service\GproApiClient;
 use App\Service\GproDataMapper;
 use App\Service\PhaMatchService;
 use App\Service\RaceWeatherService;
+use App\Service\EarlyQualifyingBonusService;
 use App\Service\BillboardService;
 use App\Service\CarWearService;
 use App\Service\WearAdvisorService;
@@ -52,6 +53,7 @@ class PageController
         private readonly GproApiClient $apiClient,
         private readonly PhaMatchService $phaMatch,
         private readonly RaceWeatherService $raceWeather,
+        private readonly EarlyQualifyingBonusService $earlyQualiBonus,
         private readonly CarWearService $carWear,
         private readonly WearAdvisorService $wearAdvisor,
         private readonly PartSwapAdvisorService $swapAdvisor,
@@ -337,6 +339,14 @@ class PageController
                     $menu = $this->apiClient->getMenu();
                     $division = $this->divisionFromMenu($menu);
                     $cash = (int) ($menu['cash'] ?? 0);
+
+                    $lastSynced = $user['last_synced_at'] ?? null;
+                    $viewData['quali_bonus'] = $this->earlyQualiBonus->assess(
+                        $office,
+                        $division,
+                        new \DateTimeImmutable('now'),
+                        is_string($lastSynced) ? $lastSynced : null,
+                    );
 
                     $moneyLevels = $this->apiClient->getMoneyLevels();
                     $groupCarLevels = array_values(array_filter(array_map(

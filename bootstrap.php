@@ -372,6 +372,9 @@ use App\Controller\StrategyController;
 use App\Controller\AuthController;
 
 $container['service.race_weather'] = new \App\Service\RaceWeatherService();
+$container['service.early_quali_bonus'] = new \App\Service\EarlyQualifyingBonusService(
+    \App\Support\RaceWindow::parseDays(Env::get('GPRO_RACE_DAYS', '2,5')),
+);
 $container['service.risk_advisor'] = new \App\Service\RiskAdvisorService();
 $container['service.pha_match'] = new \App\Service\PhaMatchService();
 
@@ -437,6 +440,7 @@ $container['controller.page'] = new PageController(
     $container['service.api_client'],
     $container['service.pha_match'],
     $container['service.race_weather'],
+    $container['service.early_quali_bonus'],
     $container['service.car_wear'],
     $container['service.wear_advisor'],
     $container['service.swap_advisor'],
