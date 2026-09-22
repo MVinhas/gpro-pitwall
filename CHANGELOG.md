@@ -6,6 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.19.1] - 2026-09-22
+
+### Added
+- **Early qualifying bonus, in the Cockpit.** From season 113, GPRO pays a bonus for each
+  qualifying session done up to 24 hours before the race ($200,000 per session in Rookie up
+  to $1,000,000 in Elite), falling steadily to nothing when qualifying closes. A quiet row
+  in the Weekend list gives your class's amount and the deadline for the full bonus in your
+  own time zone, and shows which sessions are done. It opens by itself only inside the last
+  24 hours while a session is still outstanding. Until season 113 starts it is a heads-up.
+
 ## [1.19.0] - 2026-09-22
 
 ### Added

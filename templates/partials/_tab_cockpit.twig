@@ -354,6 +354,66 @@
                         {% endembed %}
                     {% endif %}
 
+                    {# GPRO pays per qualifying session done early (from season 113).
+                       A plain row: it opens itself only while the bonus is shrinking
+                       and a session is known to be outstanding. #}
+                    {% if quali_bonus is defined and quali_bonus is not null %}
+                        {% embed 'partials/_acc.twig' with {
+                            id: 'quali-bonus',
+                            variant: 'row',
+                            title: 'Early qualifying bonus',
+                            caption: quali_bonus.division ~ ' · $' ~ quali_bonus.per_session|number_format ~ ' per session',
+                            open_default: quali_bonus.state == 'shrinking' and quali_bonus.sessions is not null,
+                            b: quali_bonus,
+                        } only %}
+                            {% block verdict %}
+                                {% import 'partials/_localtime.twig' as t %}
+                                {% if b.state == 'preview' %}
+                                    <span class="text-xs font-semibold text-slate-700">New from season {{ b.first_season }}</span>
+                                {% elseif b.state == 'banked' %}
+                                    <span class="text-xs font-semibold text-slate-700">Both sessions done</span>
+                                {% elseif b.state == 'full' %}
+                                    <span class="text-xs font-semibold text-slate-700">Full bonus until {{ t.localtime(b.full_until, 'weekday') }}</span>
+                                {% else %}
+                                    <span class="text-xs font-semibold text-amber-700">Shrinking · qualify soon</span>
+                                {% endif %}
+                            {% endblock %}
+                            {% block body %}
+                                {% import 'partials/_localtime.twig' as t %}
+                                <div class="space-y-3 text-sm text-slate-700">
+                                    {% if b.state == 'preview' %}
+                                        <p>From season {{ b.first_season }}, GPRO pays a bonus for each qualifying session finished early: <span class="font-semibold text-slate-900">${{ b.per_session|number_format }} per session</span> in {{ b.division }}, paid with the race income.</p>
+                                        <p>Qualify at least 24 hours before the race for the full amount. After that it falls steadily and is gone when qualifying closes; 12 hours out still pays about half.</p>
+                                    {% else %}
+                                        {% if b.sessions is not null %}
+                                            <div class="grid grid-cols-2 gap-3">
+                                                {% for key, label in {q1: 'Q1', q2: 'Q2'} %}
+                                                    <div class="rounded-lg border border-slate-200 p-3 text-center">
+                                                        <p class="t-label">{{ label }}</p>
+                                                        <p class="t-value mt-1">{{ b.sessions[key] ? 'Done' : 'Not yet' }}</p>
+                                                    </div>
+                                                {% endfor %}
+                                            </div>
+                                        {% endif %}
+                                        {% if b.state == 'shrinking' %}
+                                            <p>Worth about <span class="font-semibold text-slate-900">${{ b.now_per_session|number_format }} per session</span> now, and nothing once qualifying closes at {{ t.localtime(b.closes_at, 'weekday') }}.</p>
+                                        {% elseif b.state == 'full' %}
+                                            <p>Each session done by {{ t.localtime(b.full_until, 'weekday') }} pays the full ${{ b.per_session|number_format }}. After that it shrinks, down to nothing when qualifying closes at {{ t.localtime(b.closes_at, 'weekday') }}.</p>
+                                        {% else %}
+                                            <p>Both sessions are done; the bonus comes with the race income.</p>
+                                        {% endif %}
+                                        {% if b.sessions is null %}
+                                            <p class="t-caption">Re-sync after qualifying to see which sessions GPRO has counted.</p>
+                                        {% endif %}
+                                    {% endif %}
+                                    {% if b.state != 'banked' %}
+                                        <p class="t-caption">Waiting on a new driver? The staff market runs about 24 hours before the race, so qualifying soon after it still earns almost the full bonus.</p>
+                                    {% endif %}
+                                </div>
+                            {% endblock %}
+                        {% endembed %}
+                    {% endif %}
+
                 </div>
             </section>
         </div>

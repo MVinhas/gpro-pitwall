@@ -319,6 +319,7 @@ document.addEventListener('submit', (e) => {
         datetime: { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' },
         date:     { month: 'short', day: 'numeric', year: 'numeric' },
         day:      { month: 'short', day: 'numeric' },
+        weekday:  { weekday: 'short', hour: '2-digit', minute: '2-digit' },
     };
     document.querySelectorAll('time[data-localtime]').forEach((el) => {
         const iso = el.getAttribute('datetime');
