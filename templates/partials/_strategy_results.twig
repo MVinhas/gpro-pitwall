@@ -20,6 +20,10 @@
 {% elseif strategy_results and strategy_results.track is defined %}
     {% set sr = strategy_results %}
     {% set best = sr.tyres[sr.best_compound] %}
+    {# The sheet plans the set the manager races on; the best set stays the default. #}
+    {% set chosen = sr.chosen_compound ?? sr.best_compound %}
+    {% set plan = sr.tyres[chosen] ?? best %}
+    {% set race_wet = (sr.weather_inputs.Race.weather ?? 'Dry') == 'Wet' %}
     {% set ra = sr.risk_advice is defined ? sr.risk_advice : null %}
     {# Runner-up must be the same tyre type as the winner: dry compares
        against dry only; Rain (wet) has no same-type rival, so no line. #}
@@ -108,27 +112,30 @@
                 {# GPRO's own fuel fields: start fuel (set in Q2), then the level every
                    pit stop fills the tank to (the stints after the first are equal, so
                    it is one figure however many stops). Stop laps are the plan's. #}
-                {% set pit_laps_line %}{% if best.pit_laps is defined and best.pit_laps is not empty %}<dd class="text-xs text-slate-500 tabular-nums">stop{{ best.stops == 1 ? '' : 's' }} at lap{{ best.stops == 1 ? '' : 's' }} {{ best.pit_laps|join(', ') }}</dd>{% endif %}{% endset %}
-                {% if even_stints or best.stops == 0 %}
+                {% set pit_laps_line %}{% if plan.pit_laps is defined and plan.pit_laps is not empty %}<dd class="text-xs text-slate-500 tabular-nums">stop{{ plan.stops == 1 ? '' : 's' }} at lap{{ plan.stops == 1 ? '' : 's' }} {{ plan.pit_laps|join(', ') }}</dd>{% endif %}{% endset %}
+                {% if even_stints or plan.stops == 0 %}
                     <div>
-                        <dt class="t-label">{{ best.stops == 0 ? 'Start fuel' : 'Fuel per stint' }}</dt>
-                        <dd class="text-base font-semibold text-slate-900 tabular-nums">{{ best.fuel_recommended }} L</dd>
+                        <dt class="t-label">{{ plan.stops == 0 ? 'Start fuel' : 'Fuel per stint' }}</dt>
+                        <dd class="text-base font-semibold text-slate-900 tabular-nums">{{ plan.fuel_recommended }} L</dd>
                         {{ pit_laps_line }}
                     </div>
                 {% else %}
                     <div>
                         <dt class="t-label">Start fuel</dt>
-                        <dd class="text-base font-semibold text-slate-900 tabular-nums">{{ best.fuel_recommended }} L</dd>
+                        <dd class="text-base font-semibold text-slate-900 tabular-nums">{{ plan.fuel_recommended }} L</dd>
                     </div>
                     <div>
                         <dt class="t-label">Pit stop fuel</dt>
-                        <dd class="text-base font-semibold text-slate-900 tabular-nums">{{ best.fuel_pit ?? best.fuel_recommended }} L</dd>
+                        <dd class="text-base font-semibold text-slate-900 tabular-nums">{{ plan.fuel_pit ?? plan.fuel_recommended }} L</dd>
                         {{ pit_laps_line }}
                     </div>
                 {% endif %}
                 <div>
                     <dt class="t-label">Tyres</dt>
-                    <dd class="text-base font-semibold text-slate-900">{{ sr.best_compound }} <span class="text-sm font-normal text-slate-500">· {{ best.stops }} stop{{ best.stops == 1 ? '' : 's' }}</span></dd>
+                    <dd class="text-base font-semibold text-slate-900">{{ chosen }} <span class="text-sm font-normal text-slate-500">· {{ plan.stops }} stop{{ plan.stops == 1 ? '' : 's' }}</span></dd>
+                    {% if chosen != sr.best_compound %}
+                        <dd class="text-xs text-slate-500 tabular-nums">your pick · {{ (plan.total_lost - best.total_lost)|round(1) }}s slower than {{ sr.best_compound }}</dd>
+                    {% endif %}
                 </div>
                 {% if ra %}
                     <div>
@@ -214,7 +221,8 @@
             {% endif %}
         </section>
 
-        {# TYRE COMPARISON — why the sheet picked this compound. #}
+        {# TYRE COMPARISON — why the best set is best, and where the manager picks
+           the set to race on (dry races only: Rain is the one wet set). #}
         <section class="card" aria-labelledby="tyre-comparison-title">
             <div class="card-hd space-y-1">
                 <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
@@ -223,6 +231,9 @@
                         {{ sr.best_compound }} loses {{ best.total_lost }}s{% if runner_name is not null %} — {{ (sr.tyres[runner_name].total_lost - best.total_lost)|round(1) }}s less than {{ runner_name }}{% endif %}
                     </p>
                 </div>
+                {% if not race_wet %}
+                    <p class="text-xs text-slate-500">Pick another set to plan the race sheet and boost laps on it.</p>
+                {% endif %}
                 <p class="flex flex-wrap gap-x-4 gap-y-1 text-xs tabular-nums">
                     <span><span class="text-slate-500">Supplier</span> <span class="text-slate-900">{{ sr.supplier }}</span>
                         {% if sr.supplier_info %}{% set si = sr.supplier_info %}<span class="text-slate-500" title="Your tyre supplier's characteristics — not the track.">({% if si.dry is not null %}dry {{ si.dry }}/8{% endif %}{% if si.wet is not null %}, wet {{ si.wet }}/8{% endif %}{% if si.temp is not null %}, ideal {{ si.temp }}°C{% endif %})</span>{% endif %}
@@ -266,8 +277,24 @@
                     <tbody class="bg-surface divide-y divide-slate-200">
                         {% for comp, data in sr.tyres %}
                             {% set is_best = (comp == sr.best_compound) %}
-                            <tr class="{{ is_best ? 'bg-emerald-50' : '' }}"{% if is_best %} aria-current="true"{% endif %}>
-                                <th scope="row" class="px-3 sm:px-4 py-2.5 text-left font-semibold text-slate-900">{{ comp }}</th>
+                            {% set is_chosen = (comp == chosen) %}
+                            <tr class="{{ is_best ? 'bg-emerald-50' : (is_chosen ? 'bg-blue-50' : '') }}"{% if is_best %} aria-current="true"{% endif %}>
+                                <th scope="row" class="px-3 sm:px-4 py-2.5 text-left font-semibold text-slate-900 whitespace-nowrap">
+                                    {% if not race_wet and comp != 'Rain' %}
+                                        {# The best row posts an empty choice, so an untouched sheet
+                                           keeps following the best set as the settings change. #}
+                                        <label class="inline-flex cursor-pointer items-center gap-2">
+                                            <input type="radio" form="stratForm" name="compound" value="{{ is_best ? '' : comp }}"
+                                                   {{ is_chosen ? 'checked' }} data-strategy-fragment-trigger
+                                                   class="size-4 cursor-pointer accent-blue-600">{{ comp }}
+                                        </label>
+                                    {% elseif not race_wet %}
+                                        <span class="inline-block size-4 align-middle mr-2" aria-hidden="true"></span>{{ comp }}
+                                    {% else %}
+                                        {{ comp }}
+                                    {% endif %}
+                                    {% if is_best %}<span class="plan-tag plan-tag-best ml-1">Best</span>{% endif %}
+                                </th>
                                 <td class="px-2 sm:px-4 py-2.5 text-right text-slate-900">{{ data.stops }}</td>
                                 <td class="px-2 py-2.5 text-right text-slate-900" title="Minimum {{ data.fuel_load }} L to finish the stint, no spare lap.">{{ data.fuel_recommended }}</td>
                                 {% if not even_stints %}

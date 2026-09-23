@@ -6,6 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.19.2] - 2026-09-23
+
+### Added
+- **Race on the set you prefer.** The Tyre comparison now has a choice beside each dry set.
+  The best set stays marked and is the default, but you can pick another, for example
+  Hards that lose a few seconds on paper but pit less often, so you get stuck in traffic
+  less. The Race sheet then plans that set: fuel, stop laps, stop count and boost laps all
+  follow it, early or late first stop included, and the Tyres line says how much slower it
+  is than the best. Wet races keep Rain, the only wet set.
+
 ## [1.19.1] - 2026-09-22
 
 ### Added

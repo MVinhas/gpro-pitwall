@@ -299,6 +299,37 @@ final class StrategyControllerTest extends TestCase
         $this->assertNull(StrategyController::pickBestCompound(['Soft' => ['total_lost' => 90.0]], true));
     }
 
+    public function testChosenCompoundDefaultsToTheBest(): void
+    {
+        $tyres = ['Medium' => ['total_lost' => 100.0], 'Hard' => ['total_lost' => 110.0]];
+
+        $this->assertSame('Medium', StrategyController::pickChosenCompound($tyres, false, null, 'Medium'));
+        $this->assertSame('Medium', StrategyController::pickChosenCompound($tyres, false, '', 'Medium'));
+    }
+
+    public function testChosenCompoundHonoursADrySetInADryRace(): void
+    {
+        $tyres = ['Medium' => ['total_lost' => 100.0], 'Hard' => ['total_lost' => 110.0], 'Rain' => []];
+
+        $this->assertSame('Hard', StrategyController::pickChosenCompound($tyres, false, 'Hard', 'Medium'));
+    }
+
+    public function testChosenCompoundNeverCrossesTheDryWetBoundary(): void
+    {
+        $tyres = ['Medium' => ['total_lost' => 100.0], 'Hard' => ['total_lost' => 110.0], 'Rain' => []];
+
+        $this->assertSame('Medium', StrategyController::pickChosenCompound($tyres, false, 'Rain', 'Medium'));
+        $this->assertSame('Rain', StrategyController::pickChosenCompound($tyres, true, 'Hard', 'Rain'));
+    }
+
+    public function testChosenCompoundIgnoresAnUnknownSet(): void
+    {
+        $tyres = ['Medium' => ['total_lost' => 100.0]];
+
+        $this->assertSame('Medium', StrategyController::pickChosenCompound($tyres, false, 'Hard', 'Medium'));
+        $this->assertSame('Medium', StrategyController::pickChosenCompound($tyres, false, 'medium', 'Medium'));
+    }
+
     public function testUnexpectedApiFailureReturnsGenericMessageNotRawDetails(): void
     {
         // Past the curated early-exits (season/supplier/pilot all present), the
