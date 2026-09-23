@@ -34,7 +34,8 @@ detail and screenshots live on [gpro-pitwall.com](https://gpro-pitwall.com).
   added wear against clear-air time gained. The **Race sheet** lists the setup part by part
   for Q1, Q2 and the race as GPRO's form does, with start fuel and the fuel for each pit stop,
   tyres, overtake and defend risks and boost laps, plus plain-worded **push signals** for the
-  risk dial. The first pit stop can come early, even or late. Every setting recalculates
+  risk dial. The first pit stop can come early, even or late, and you can race on a set other
+  than the best one; the sheet and boost laps follow it. Every setting recalculates
   as it changes.
 - **Testing** — the testing track's demands vs your car, the points split across Test /
   R&D / Engineering / Car Character, gains per 5 laps per priority, and the ideal setup.
@@ -147,7 +148,7 @@ Source of truth is GitHub; deployment is a manual file copy to any PHP 8.5 host.
 - **Twig 3** templates; **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile). Light and dark themes ship in one stylesheet: every design token is a CSS `light-dark()` pair switched by `color-scheme`, so System mode tracks the OS with zero JavaScript.
 - **SQLite** via PDO — emails and API tokens encrypted at rest (AES-256-GCM).
 - **PHPMailer 7** for SMTP; dev writes `.eml` files instead.
-- **PHPUnit 13** — 909 tests, 2686 assertions — with **PHPStan level 8** and enforced type-declaration coverage (100% return/property/constant + `strict_types`; 99.5% param). Twig linted by a native `bin/twig_lint.php` built on Twig's own parser. CI measures statement coverage with `pcov` and enforces a floor (currently 59%, ratcheted up as coverage grows).
+- **PHPUnit 13** — 918 tests, 2711 assertions — with **PHPStan level 8** and enforced type-declaration coverage (100% return/property/constant + `strict_types`; 99.5% param). Twig linted by a native `bin/twig_lint.php` built on Twig's own parser. CI measures statement coverage with `pcov` and enforces a floor (currently 59%, ratcheted up as coverage grows).
 - **Timestamps stored and served as UTC**, localised per visitor in the browser — no server-side timezone config.
 
 ## Architecture

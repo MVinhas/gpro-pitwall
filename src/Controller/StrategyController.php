@@ -353,14 +353,23 @@ class StrategyController
                 $raceIsWet,
             );
 
-            $bestTyre = $strategyResults['tyres'][$strategyResults['best_compound']] ?? null;
+            $strategyResults['chosen_compound'] = self::pickChosenCompound(
+                $strategyResults['tyres'] ?? [],
+                $raceIsWet,
+                is_string($request->post('compound')) ? $request->post('compound') : null,
+                $strategyResults['best_compound'],
+            );
+
+            // Boost laps follow the set the manager races on: its stop count
+            // and pit laps (already shaped by the first-stop choice).
+            $plannedTyre = $strategyResults['tyres'][$strategyResults['chosen_compound']] ?? null;
             $strategyResults['risk_advice']['boost'] = $this->riskAdvisor->suggestBoostLaps(
                 (int)$inputs['laps'],
-                (int)($bestTyre['stops'] ?? 0),
+                (int)($plannedTyre['stops'] ?? 0),
                 $raceIsWet,
                 $rain['race_rain_avg'],
                 (int)$inputs['boost_stints'],
-                array_values(array_map('intval', (array)($bestTyre['pit_laps'] ?? []))),
+                array_values(array_map('intval', (array)($plannedTyre['pit_laps'] ?? []))),
                 (string)($strategyResults['inputs']['first_stop'] ?? StrategyService::FIRST_STOP_EVEN),
             );
 
@@ -636,5 +645,19 @@ class StrategyController
             }
         }
         return $best;
+    }
+
+    /**
+     * The set the manager races on: their pick when it is the same tyre type
+     * as the race (dry sets in a dry race, Rain in a wet one), else the best.
+     *
+     * @param array<string, array<string, mixed>> $tyres
+     */
+    public static function pickChosenCompound(array $tyres, bool $raceWet, ?string $requested, ?string $best): ?string
+    {
+        if ($requested === null || !isset($tyres[$requested]) || ($requested === 'Rain') !== $raceWet) {
+            return $best;
+        }
+        return $requested;
     }
 }
