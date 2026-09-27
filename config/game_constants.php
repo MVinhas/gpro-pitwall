@@ -11,6 +11,7 @@ return [
         'Race Strategy',
         'Testing',
         'Training Planner',
+        'Car Wear Planner',
         'Recruitment Analyzer',
         'Debrief',
         'Division Baseline',

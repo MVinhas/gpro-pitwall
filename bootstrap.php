@@ -431,6 +431,17 @@ $container['controller.testing'] = new \App\Controller\TestingController(
     $container['config']['secrets']['testing_priority_points'] ?? [],
 );
 
+$container['service.car_wear_planner'] = new \App\Service\CarWearPlannerService(
+    $container['service.car_wear'],
+);
+$container['controller.car_wear'] = new \App\Controller\CarWearController(
+    $container['service.api_client'],
+    $container['service.data_mapper'],
+    $container['service.car_wear'],
+    $container['service.car_wear_planner'],
+    $container['service.season_calendar'],
+);
+
 $container['controller.page'] = new PageController(
     $container['service.ideal_pilot'],
     $container['service.insight'],
@@ -452,6 +463,7 @@ $container['controller.page'] = new PageController(
     $container['service.training_wear_projection'],
     $container['controller.strategy'],
     $container['controller.testing'],
+    $container['controller.car_wear'],
     $container['service.data_mapper'],
     $container['service.recruitment'],
     $container['twig'],

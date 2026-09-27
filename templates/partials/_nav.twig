@@ -6,7 +6,7 @@
 {# Short display labels. Canonical routing keys stay unchanged everywhere;
    PageController::canonicalMainTab resolves these aliases back on the way in,
    so old URLs keep working. #}
-{% set tab_labels = {'Race Strategy': 'Strategy', 'Training Planner': 'Training', 'Recruitment Analyzer': 'Recruitment'} %}
+{% set tab_labels = {'Race Strategy': 'Strategy', 'Training Planner': 'Training', 'Recruitment Analyzer': 'Recruitment', 'Car Wear Planner': 'Car Wear'} %}
 
 {#- Every screen has a real path now; App\Http\Sections owns the map and hands
     it in as `section_paths`. The division and the track stay query parameters:
@@ -31,7 +31,7 @@
    no reordering of the sections themselves. #}
 {% macro group_of(section, division_tabs) %}
 {%- if section in division_tabs or section == 'Debrief' -%}admin
-{%- elseif section in ['Training Planner', 'Recruitment Analyzer'] -%}team
+{%- elseif section in ['Training Planner', 'Recruitment Analyzer', 'Car Wear Planner'] -%}team
 {%- else -%}race
 {%- endif -%}
 {% endmacro %}
@@ -64,7 +64,7 @@
 
     {# Desktop: underline tab bar. #}
     <div class="hidden md:block border-b border-slate-200">
-        <div class="-mb-px flex gap-6">
+        <div class="-mb-px flex gap-4 xl:gap-6 overflow-x-auto no-scrollbar">
             {% for section in main_sections %}
                 {% set group = _self.group_of(section, division_tabs)|trim %}
                 {% set prev_group = loop.first ? '' : _self.group_of(main_sections[loop.index0 - 1], division_tabs)|trim %}

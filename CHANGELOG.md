@@ -6,6 +6,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.20.0] - 2026-09-27
+
+### Added
+- **Car Wear tab: plan the next five races.** A new tab between Training and Recruitment
+  shows each part's wear after every race up to five races ahead, and says when to replace
+  it: "Replace now", "Replace before race 16" or "Lasts to race 17". Everything starts from
+  your last sync. You can change clear track risk per race, any part's level or wear (0% to
+  plan a new part) and the driver's concentration, talent and experience to try a what-if.
+  The next race's risk is the same setting the Cockpit and Strategy use. Each race is
+  rounded to a whole percent, as GPRO reports it.
+- **Season list: where to push.** Every race this season in words: how hard it is on your
+  car (Light, Average or Heavy), the part it wears most, and risk advice (Push, Normal or
+  Hold back). The advice prices the wear extra clear track risk would cause at each race,
+  in new parts at your current levels. Wear on cheap parts means pushing is cheap there. The
+  per-part figures stay in a collapsed table on desktop.
+
+### Changed
+- **"Car Wear" links open the new tab.** Old bookmarks for the Car Wear screen retired in
+  1.15.9 sent you to the Cockpit; they now open the planner.
+- **Desktop tabs fit narrower windows.** The tab bar scrolls sideways instead of widening
+  the page when it runs out of room.
+
 ## [1.19.2] - 2026-09-23
 
 ### Added
