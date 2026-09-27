@@ -93,12 +93,11 @@ final class PageControllerTest extends TestCase
         $this->assertSame('Recruitment Analyzer', PageController::canonicalMainTab('Recruitment'));
     }
 
-    public function testRetiredCarWearTabResolvesToTheCockpit(): void
+    public function testCarWearLabelResolvesToThePlanner(): void
     {
-        // The Car Wear screen was folded into the cockpit's wear card; old
-        // bookmarks and links must land there rather than on the default tab
-        // by accident.
-        $this->assertSame('Cockpit', PageController::canonicalMainTab('Car Wear'));
+        // The label pointed at the Cockpit while the tab was retired
+        // (1.15.9–1.19.x); the planner brought it back.
+        $this->assertSame('Car Wear Planner', PageController::canonicalMainTab('Car Wear'));
     }
 
     public function testCanonicalMainTabPassesCanonicalNamesThrough(): void

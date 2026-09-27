@@ -178,4 +178,44 @@ final class CarWearServiceTest extends TestCase
 
         $this->assertArrayHasKey('error', $result);
     }
+
+    public function testRaceWearIsTheUnroundedIncrementProjectEndWearAdds(): void
+    {
+        // Level 1 factor 1.05; risk 10 → 4.0 × 1.05^10 = 6.5156…
+        $raw = $this->service()->raceWear(trackBase: 4.0, level: 1, driverFactor: 1.0, risk: 10);
+
+        $this->assertEqualsWithDelta(4.0 * 1.05 ** 10, $raw, 1e-9);
+    }
+
+    public function testTrackBaseWearByNameReturnsEveryPartForKnownTracksOnly(): void
+    {
+        $db = new PDO('sqlite::memory:');
+        $db->exec(
+            "CREATE TABLE tracks (id INTEGER PRIMARY KEY, name TEXT,
+             laps INTEGER, wear_chassis REAL, wear_engine REAL, wear_fwing REAL,
+             wear_rwing REAL, wear_underbody REAL, wear_sidepod REAL,
+             wear_cooling REAL, wear_gearbox REAL, wear_brakes REAL,
+             wear_suspension REAL, wear_electronics REAL)"
+        );
+        $db->exec(
+            "INSERT INTO tracks (id, name, laps, wear_chassis, wear_engine, wear_fwing,
+             wear_rwing, wear_underbody, wear_sidepod, wear_cooling, wear_gearbox,
+             wear_brakes, wear_suspension, wear_electronics)
+             VALUES (1, 'Testopolis', 100, 30, 50, 20, 20, 20, 20, 20, 30, 40, 20, 10),
+                    (2, 'Other', 60, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)"
+        );
+
+        $bases = $this->service($db)->trackBaseWearByName(['Testopolis', 'Nowhere', 'Testopolis']);
+
+        $this->assertSame(['Testopolis'], array_keys($bases));
+        $this->assertSame(array_keys(CarWearService::PARTS_MAP), array_keys($bases['Testopolis']));
+        $this->assertSame(50.0, $bases['Testopolis']['Engine']);
+        $this->assertSame(10.0, $bases['Testopolis']['Electronics']);
+    }
+
+    public function testTrackBaseWearByNameWithNoNamesSkipsTheQuery(): void
+    {
+        // No tracks table at all: an empty list must not reach the database.
+        $this->assertSame([], $this->service()->trackBaseWearByName([]));
+    }
 }

@@ -6,7 +6,7 @@
 
     {# The active tab already names the screen visually; the page heading is for
        assistive tech and the document outline. #}
-    <h1 class="sr-only">{{ {'Race Strategy': 'Race strategy', 'Training Planner': 'Training planner', 'Recruitment Analyzer': 'Recruitment', 'Division Baseline': 'Division baseline', 'Division Differences': 'Division differences', 'Cockpit': 'Race weekend cockpit'}[active_main_tab]|default(active_main_tab) }}</h1>
+    <h1 class="sr-only">{{ {'Race Strategy': 'Race strategy', 'Training Planner': 'Training planner', 'Recruitment Analyzer': 'Recruitment', 'Division Baseline': 'Division baseline', 'Division Differences': 'Division differences', 'Cockpit': 'Race weekend cockpit', 'Car Wear Planner': 'Car wear planner'}[active_main_tab]|default(active_main_tab) }}</h1>
 
     {# Main Content Area #}
     <div id="main-content-tabs">
@@ -27,6 +27,9 @@
             
         {% elseif active_main_tab == 'Race Strategy' %}
             {% include 'partials/_tab_strategy.twig' %}
+
+        {% elseif active_main_tab == 'Car Wear Planner' %}
+            {% include 'partials/_tab_car_wear.twig' %}
 
         {% elseif active_main_tab == 'Testing' %}
             {% include 'partials/_tab_testing.twig' %}

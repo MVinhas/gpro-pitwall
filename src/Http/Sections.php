@@ -30,6 +30,7 @@ final class Sections
         'Race Strategy'        => '/strategy',
         'Testing'              => '/testing',
         'Training Planner'     => '/training',
+        'Car Wear Planner'     => '/car-wear',
         'Recruitment Analyzer' => '/recruitment',
         'Debrief'              => '/debrief',
         'Division Baseline'    => '/divisions/baseline',
@@ -37,15 +38,15 @@ final class Sections
     ];
 
     /**
-     * Spellings that must keep resolving. The first three are the short labels
-     * the nav has always shown; 'Car Wear' is the tab retired in 1.15.9, whose
-     * bookmarks should land on the cockpit card that replaced it.
+     * Spellings that must keep resolving: the short labels the nav shows.
+     * 'Car Wear' pointed at the Cockpit between 1.15.9 (when the old tab was
+     * retired) and 1.20.0 (when the planner brought the tab back).
      */
     private const array ALIASES = [
         'Strategy'    => 'Race Strategy',
         'Training'    => 'Training Planner',
         'Recruitment' => 'Recruitment Analyzer',
-        'Car Wear'    => 'Cockpit',
+        'Car Wear'    => 'Car Wear Planner',
     ];
 
     /** The screen a bare '/' means for a signed-in manager. */

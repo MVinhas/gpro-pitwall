@@ -41,6 +41,9 @@ detail and screenshots live on [gpro-pitwall.com](https://gpro-pitwall.com).
   R&D / Engineering / Car Character, gains per 5 laps per priority, and the ideal setup.
 - **Training Planner** — cumulative effect of every program × count combination, with
   attribute bounds respected and projected Overall Ability before and after.
+- **Car Wear** — each part's wear race by race over the next five races, with when to replace
+  it, and a what-if form for risk, levels, wear and driver. A season list rates every race's
+  wear in words and advises where to push clear track risk, priced from your own part costs.
 - **Recruitment Analyzer** — scores the full driver market (4–5k) against your division's
   ideal driver, with per-attribute filters and a favourite-tracks-this-season column.
 - **Debrief** (admin) — reads races back rather than planning them: a filterable,
@@ -148,7 +151,7 @@ Source of truth is GitHub; deployment is a manual file copy to any PHP 8.5 host.
 - **Twig 3** templates; **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile). Light and dark themes ship in one stylesheet: every design token is a CSS `light-dark()` pair switched by `color-scheme`, so System mode tracks the OS with zero JavaScript.
 - **SQLite** via PDO — emails and API tokens encrypted at rest (AES-256-GCM).
 - **PHPMailer 7** for SMTP; dev writes `.eml` files instead.
-- **PHPUnit 13** — 918 tests, 2711 assertions — with **PHPStan level 8** and enforced type-declaration coverage (100% return/property/constant + `strict_types`; 99.5% param). Twig linted by a native `bin/twig_lint.php` built on Twig's own parser. CI measures statement coverage with `pcov` and enforces a floor (currently 59%, ratcheted up as coverage grows).
+- **PHPUnit 13** — 943 tests, 2776 assertions — with **PHPStan level 8** and enforced type-declaration coverage (100% return/property/constant + `strict_types`; 99.5% param). Twig linted by a native `bin/twig_lint.php` built on Twig's own parser. CI measures statement coverage with `pcov` and enforces a floor (currently 59%, ratcheted up as coverage grows).
 - **Timestamps stored and served as UTC**, localised per visitor in the browser — no server-side timezone config.
 
 ## Architecture

@@ -1,0 +1,265 @@
+{% if car_wear_error == no_pilot_message %}
+    {% include 'partials/_no_pilot_notice.twig' %}
+{% elseif car_wear_error == generic_error_message %}
+    <div class="notice notice-error"><span class="font-bold">Couldn't load Car Wear.</span> {{ car_wear_error }}</div>
+{% elseif car_wear_error %}
+    <div class="notice notice-warn"><span class="font-bold">Car Wear unavailable.</span> {{ car_wear_error }}</div>
+{% elseif car_wear %}
+    {% set cw = car_wear %}
+    {% set short = {
+        'Chassis': 'Cha', 'Engine': 'Eng', 'Front Wing': 'FW', 'Rear Wing': 'RW',
+        'Underbody': 'Und', 'Sidepods': 'Side', 'Cooling': 'Cool', 'Gearbox': 'Gear',
+        'Brakes': 'Brk', 'Suspension': 'Susp', 'Electronics': 'Elec',
+    } %}
+
+    <div class="space-y-6">
+
+    {# ===== PLANNER: NEXT RACES ===== #}
+    <div class="card">
+        {% if cw.plan is null %}
+            <div class="card-bd">
+                {% include 'partials/_empty.twig' with {
+                    title: 'No races left this season',
+                    body: 'The planner returns once the next season calendar is out.',
+                } only %}
+            </div>
+        {% else %}
+            {% set plan = cw.plan %}
+            {% set n_now = plan.parts|filter(p => p.status == 'now')|length %}
+            {% set n_later = plan.parts|filter(p => p.status == 'later')|length %}
+            {% set races = plan.races %}
+            <div class="card-hd flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                <div>
+                    <h3 class="t-section">Next {{ races|length }} race{{ races|length == 1 ? '' : 's' }}</h3>
+                    <p class="t-caption">
+                        {% if cw.season_nb %}Season {{ cw.season_nb }} · {% endif %}race {{ races|first.race }}{% if races|length > 1 %}–{{ races|last.race }}{% endif %}
+                    </p>
+                </div>
+                {% if n_now > 0 %}
+                    <span class="text-xs font-semibold text-red-700">{{ n_now }} won't finish</span>
+                {% elseif n_later > 0 %}
+                    <span class="text-xs font-semibold text-amber-700">{{ n_later }} wear{{ n_later == 1 ? 's' : '' }} out</span>
+                {% else %}
+                    <span class="text-xs font-semibold text-slate-700">All OK</span>
+                {% endif %}
+            </div>
+            <div class="card-bd space-y-4">
+                <div>
+                    <p class="text-sm font-medium text-slate-900">{{ plan.headline }}</p>
+                    <p class="t-caption mt-0.5">Wear % after each race. A part at 100 breaks.</p>
+                </div>
+
+                {# Race columns step in by width so Part (with its verdict under
+                   it below md) and the next two races stay on screen at 375 px. #}
+                {% set race_cell = ['', '', 'hidden md:table-cell', 'hidden lg:table-cell', 'hidden lg:table-cell'] %}
+                <div class="dt-scroll">
+                    <table class="dt">
+                        <thead class="border-b border-slate-200">
+                            <tr>
+                                <th scope="col" class="dt-th align-bottom">Part</th>
+                                <th scope="col" class="dt-th align-bottom text-right hidden lg:table-cell">Level</th>
+                                <th scope="col" class="dt-th align-bottom text-right hidden md:table-cell">Now</th>
+                                {% for race in races %}
+                                    <th scope="col" class="dt-th align-bottom text-right {{ race_cell[loop.index0] }}">
+                                        <span class="block">Race {{ race.race }}</span>
+                                        <span class="block max-w-24 truncate font-normal normal-case tracking-normal text-slate-500 ml-auto" title="{{ race.track_name }}">{{ race.track_name ?? '—' }}</span>
+                                        <span class="block font-normal normal-case tracking-normal text-slate-500">CTR {{ race.ctr }}</span>
+                                    </th>
+                                {% endfor %}
+                                <th scope="col" class="dt-th align-bottom text-right hidden md:table-cell">Verdict</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            {% for part, row in plan.parts %}
+                                <tr>
+                                    {% set verdict_ink = row.status == 'now' ? 'text-red-700' : (row.status == 'later' ? 'text-amber-700' : 'text-slate-500 font-normal') %}
+                                    <th scope="row" class="dt-td text-left font-normal text-slate-700">
+                                        {{ part }}
+                                        {# Below md the verdict rides under the part: its own column won't fit. #}
+                                        <span class="block text-xs font-semibold md:hidden {{ verdict_ink }}">{{ row.verdict }}</span>
+                                    </th>
+                                    <td class="dt-td text-right text-slate-600 hidden lg:table-cell">{{ row.level }}</td>
+                                    <td class="dt-td text-right text-slate-600 hidden md:table-cell">{{ row.wear }}</td>
+                                    {% for end in row.ends %}
+                                        {% set cell = row.cells[loop.index0] %}
+                                        <td class="dt-td text-right {{ race_cell[loop.index0] }}">
+                                            {% if end is null %}
+                                                <span class="text-slate-400">—</span>
+                                            {% else %}
+                                                <span class="inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-semibold tabular-nums
+                                                    {{ cell == 'fail' ? 'bg-red-100 text-red-800' : (cell == 'risky' ? 'bg-amber-100 text-amber-800' : 'text-slate-700') }}">{{ end }}</span>
+                                            {% endif %}
+                                        </td>
+                                    {% endfor %}
+                                    <td class="dt-td text-right text-xs font-semibold hidden md:table-cell {{ verdict_ink }}">{{ row.verdict }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                {% if plan.missing_tracks is not empty %}
+                    <p class="notice notice-info notice-slim">
+                        <span class="font-bold">No wear data for {{ plan.missing_tracks|join(', ') }}.</span> The plan stops at the race before.
+                    </p>
+                {% endif %}
+
+                {# The inputs start from the last sync; this is where a what-if
+                   happens (a new part at 0%, a level up, a riskier race). #}
+                <details class="group rounded-lg border border-slate-200"{% if cw.edited %} open{% endif %}>
+                    <summary class="flex cursor-pointer select-none list-none items-center justify-between px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                        Change risk, parts or driver
+                        <svg class="h-4 w-4 shrink-0 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </summary>
+                    <form method="GET" action="{{ section_paths['Car Wear Planner'] }}" class="border-t border-slate-200 px-4 pb-4 pt-3 space-y-5">
+                        <fieldset>
+                            <legend class="t-label mb-2">Clear track risk</legend>
+                            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                                {% for race in races %}
+                                    <label class="block">
+                                        <span class="block text-xs text-slate-700 truncate">Race {{ race.race }} · {{ race.track_name ?? '—' }}</span>
+                                        <input type="number" name="ctr[{{ race.race }}]" value="{{ race.ctr }}" min="0" max="100" inputmode="numeric" class="form-input-sm mt-1">
+                                    </label>
+                                {% endfor %}
+                            </div>
+                            <p class="t-caption mt-2">Race {{ races|first.race }} shares its risk with the Cockpit and Strategy.</p>
+                        </fieldset>
+
+                        <fieldset>
+                            <legend class="t-label mb-2">Parts: level and wear now</legend>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-2">
+                                {% for part, p in cw.parts %}
+                                    {% set slug = cw.slugs[part] %}
+                                    <div class="flex items-center justify-between gap-3">
+                                        <span class="text-sm text-slate-700">{{ part }}</span>
+                                        <span class="flex items-center gap-2">
+                                            <label class="sr-only" for="lvl-{{ slug }}">{{ part }} level</label>
+                                            <input id="lvl-{{ slug }}" type="number" name="level[{{ slug }}]" value="{{ p.level }}" min="1" max="{{ cw.max_level }}" inputmode="numeric" class="form-input-sm" title="Level">
+                                            <label class="sr-only" for="wear-{{ slug }}">{{ part }} wear %</label>
+                                            <input id="wear-{{ slug }}" type="number" name="wear[{{ slug }}]" value="{{ p.wear }}" min="0" max="{{ cw.max_wear }}" inputmode="numeric" class="form-input-sm" title="Wear %">
+                                        </span>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                            <p class="t-caption mt-2">Level, then wear %. Set a part to 0% to plan a replacement.</p>
+                        </fieldset>
+
+                        <fieldset>
+                            <legend class="t-label mb-2">Driver</legend>
+                            <div class="flex flex-wrap gap-4">
+                                {% for key, label in {'concentration': 'Concentration', 'talent': 'Talent', 'experience': 'Experience'} %}
+                                    <label class="block">
+                                        <span class="block text-xs text-slate-700">{{ label }}</span>
+                                        <input type="number" name="{{ key }}" value="{{ cw.driver[key] }}" min="0" max="{{ cw.max_driver }}" inputmode="numeric" class="form-input-sm mt-1">
+                                    </label>
+                                {% endfor %}
+                            </div>
+                        </fieldset>
+
+                        <div class="flex flex-wrap items-center gap-3">
+                            <button type="submit" class="btn btn-md btn-primary">Recalculate</button>
+                            <a href="{{ section_paths['Car Wear Planner'] }}" class="text-sm font-medium text-blue-600 hover:underline">Back to synced values</a>
+                        </div>
+                    </form>
+                </details>
+
+                {% embed 'partials/_how.twig' %}{% block how %}
+                    <p>Each race adds the track's wear for that part, scaled by your driver's concentration, talent and experience, and by clear track risk, which wears lower-level parts faster. Each race is rounded to a whole percent, as GPRO reports it. A part at 100% breaks, so it must be replaced before that race.</p>
+                {% endblock %}{% endembed %}
+            </div>
+        {% endif %}
+    </div>
+
+    {# ===== SEASON WEAR ===== #}
+    {# Words, not figures: how hard each race is on the car, and whether extra
+       clear track risk is cheap there. The per-part numbers stay one click
+       away for whoever wants them. Races already run only appear from lg. #}
+    {% set has_advice = cw.season|filter(r => r.advice is not null)|length > 0 %}
+    {% set advice_ink = { 'Push': 'font-semibold text-emerald-700', 'Hold back': 'font-semibold text-amber-700', 'Normal': 'text-slate-600' } %}
+    <div class="card">
+        <div class="card-hd">
+            <h3 class="t-section">{% if cw.season_nb %}Season {{ cw.season_nb }}{% else %}Season{% endif %}: where to push</h3>
+            <p class="t-caption">How hard each race is on your car{% if has_advice %}, and where extra risk costs least in parts{% endif %}.</p>
+        </div>
+        <div class="dt-scroll">
+            <table class="dt">
+                <thead class="border-b border-slate-200">
+                    <tr>
+                        <th scope="col" class="dt-th text-right">Race</th>
+                        <th scope="col" class="dt-th w-full">Track</th>
+                        <th scope="col" class="dt-th hidden sm:table-cell">Wear</th>
+                        {% if has_advice %}<th scope="col" class="dt-th text-right">Risk advice</th>{% endif %}
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for row in cw.season %}
+                        {% set past = row.is_past %}
+                        <tr class="{{ row.is_next ? 'bg-slate-50' : '' }} {{ past ? 'hidden lg:table-row' : '' }}">
+                            <td class="dt-td text-right align-top sm:align-middle {{ past ? 'text-slate-400' : 'text-slate-600' }}">{{ row.race }}</td>
+                            <th scope="row" class="dt-td text-left align-top sm:align-middle whitespace-normal {{ row.is_next ? 'font-semibold text-slate-900' : 'font-normal ' ~ (past ? 'text-slate-400' : 'text-slate-700') }}">
+                                {{ row.track_name ?? '—' }}
+                                {% if row.is_next %}<span class="ml-1 text-xs font-medium text-slate-500">next</span>{% endif %}
+                                <span class="block text-xs font-normal {{ past ? 'text-slate-400' : 'text-slate-500' }}">
+                                    {%- if row.parts is null -%}
+                                        No wear data for this track
+                                    {%- else -%}
+                                        <span class="sm:hidden">{{ row.rating }} wear, hardest</span><span class="hidden sm:inline">Hardest</span> on the {{ row.hardest|lower }}
+                                    {%- endif -%}
+                                </span>
+                            </th>
+                            <td class="dt-td hidden sm:table-cell {{ past ? 'text-slate-400' : (row.rating == 'Heavy' ? 'font-semibold text-slate-900' : 'text-slate-600') }}">{{ row.rating ?? '—' }}</td>
+                            {% if has_advice %}
+                                <td class="dt-td text-right align-top sm:align-middle {{ past ? 'text-slate-400' : advice_ink[row.advice]|default('text-slate-400') }}">{{ row.advice ?? '—' }}</td>
+                            {% endif %}
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="border-t border-slate-100 px-4 py-3 sm:px-6 space-y-3">
+            {# The figures behind the words: wide, so desktop only. #}
+            <details class="group hidden lg:block rounded-lg border border-slate-200">
+                <summary class="flex cursor-pointer select-none list-none items-center justify-between px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                    Wear per part, race by race
+                    <svg class="h-4 w-4 shrink-0 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </summary>
+                <div class="border-t border-slate-200 px-4 pb-4 pt-3 space-y-2">
+                    <p class="t-caption">Wear % one race adds to each part at 0 clear track risk. Bold is the part the track is hardest on.</p>
+                    <table class="dt">
+                        <thead class="border-b border-slate-200">
+                            <tr>
+                                <th scope="col" class="dt-th text-right">Race</th>
+                                <th scope="col" class="dt-th">Track</th>
+                                {% for part, abbr in short %}
+                                    <th scope="col" class="dt-th text-right"><abbr title="{{ part }}" class="no-underline">{{ abbr }}</abbr></th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            {% for row in cw.season|filter(r => r.parts is not null) %}
+                                {% set ink = row.is_past ? 'text-slate-400' : 'text-slate-600' %}
+                                <tr>
+                                    <td class="dt-td text-right {{ ink }}">{{ row.race }}</td>
+                                    <th scope="row" class="dt-td text-left font-normal {{ ink }}">{{ row.track_name }}</th>
+                                    {% for part, abbr in short %}
+                                        <td class="dt-td text-right {{ part == row.hardest and not row.is_past ? 'font-semibold text-slate-900' : ink }}">{{ row.parts[part] }}</td>
+                                    {% endfor %}
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+            {% embed 'partials/_how.twig' %}{% block how %}
+                <p>Wear compares how much a race wears your car, before clear track risk, with the other races this season: Light, Average or Heavy.</p>
+                <p>Risk advice prices what extra clear track risk would wear out at each race, in new parts at your current levels. Push where that wear lands on cheap parts like brakes or suspension; hold back where it lands on the engine, the chassis or other costly parts. It's a guide for the risk you pick, not a promise of lap time.</p>
+            {% endblock %}{% endembed %}
+        </div>
+    </div>
+
+    </div>
+{% endif %}

@@ -54,8 +54,8 @@ final class SectionsTest extends TestCase
             ['Strategy', 'Race Strategy'],
             ['Training', 'Training Planner'],
             ['Recruitment', 'Recruitment Analyzer'],
-            // Retired in 1.15.9; its bookmarks belong on the cockpit.
-            ['Car Wear', 'Cockpit'],
+            // The nav label of the planner tab (1.20.0).
+            ['Car Wear', 'Car Wear Planner'],
             // A canonical name is already canonical.
             ['Cockpit', 'Cockpit'],
             ['Division Baseline', 'Division Baseline'],
@@ -65,7 +65,7 @@ final class SectionsTest extends TestCase
     public function testAnAliasResolvesToTheTargetsPath(): void
     {
         $this->assertSame('/strategy', Sections::pathFor('Strategy'));
-        $this->assertSame('/cockpit', Sections::pathFor('Car Wear'));
+        $this->assertSame('/car-wear', Sections::pathFor('Car Wear'));
     }
 
     public function testAnUnknownNameHasNoPath(): void

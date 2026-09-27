@@ -89,9 +89,57 @@ class CarWearService
         float $driverFactor,
         int $risk,
     ): float {
+        return $startWear + round($this->raceWear($trackBase, $level, $driverFactor, $risk), 1);
+    }
+
+    /**
+     * The wear (%) one race adds to a part, unrounded, so each caller rounds
+     * it the way it displays it. The season planner rounds race by race to a
+     * whole percent, as GPRO reports it.
+     */
+    public function raceWear(float $trackBase, int $level, float $driverFactor, int $risk): float
+    {
         $levelFactor = $this->levelFactors[$level] ?? 1.019326794;
-        $est = $trackBase * ($levelFactor ** $risk) * $driverFactor;
-        return $startWear + round($est, 1);
+        return $trackBase * ($levelFactor ** $risk) * $driverFactor;
+    }
+
+    /**
+     * Full-race base wear per part for each named track, in one query. Tracks
+     * with no row (new ones GPRO added after the seed) are left out, so the
+     * caller can tell "no data" from "no wear".
+     *
+     * @param list<string> $names
+     * @return array<string, array<string, float>> track name → part label → base wear
+     */
+    public function trackBaseWearByName(array $names): array
+    {
+        $names = array_values(array_unique($names));
+        if ($names === []) {
+            return [];
+        }
+
+        $placeholders = [];
+        $params = [];
+        foreach ($names as $i => $name) {
+            $placeholders[] = ':n' . $i;
+            $params[':n' . $i] = $name;
+        }
+
+        $stmt = $this->db->prepare(
+            'SELECT * FROM tracks WHERE name IN (' . implode(', ', $placeholders) . ')'
+        );
+        $stmt->execute($params);
+
+        $out = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $parts = [];
+            foreach (self::PARTS_MAP as $label => $map) {
+                $parts[$label] = (float) ($row[$map['db']] ?? 0.0);
+            }
+            $out[(string) $row['name']] = $parts;
+        }
+
+        return $out;
     }
 
     /**

@@ -31,6 +31,7 @@ use App\Service\TrainingAdvisorService;
 use App\Service\TrainingWearProjectionService;
 use App\Controller\StrategyController;
 use App\Controller\TestingController;
+use App\Controller\CarWearController;
 use Twig\Environment;
 
 class PageController
@@ -65,6 +66,7 @@ class PageController
         private readonly TrainingWearProjectionService $trainingWear,
         private readonly StrategyController $strategyController,
         private readonly TestingController $testingController,
+        private readonly CarWearController $carWearController,
         private readonly GproDataMapper $mapper,
         private readonly RecruitmentService $recruitmentService,
         private readonly Environment $twig,
@@ -567,6 +569,16 @@ class PageController
 
                 $viewData['strategy_error'] = $_SESSION['strategy_error'] ?? $viewData['strategy_error'] ?? null;
                 unset($_SESSION['strategy_error']);
+                break;
+
+            case 'Car Wear Planner':
+                $this->apiClient->setToken($user['api_token']);
+                $result = $this->carWearController->runCalc($request);
+                if (isset($result['error'])) {
+                    $viewData['car_wear_error'] = $result['error'];
+                } else {
+                    $viewData['car_wear'] = $result;
+                }
                 break;
 
             case 'Testing':
