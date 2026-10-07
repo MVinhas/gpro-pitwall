@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.20.1] - 2026-10-07
+
+### Fixed
+- **Recruitment value range filters work again.** "Apply filters" reloaded the page with
+  every driver still listed. The form still sent its values to the old `?main_tab=` address,
+  and since 1.17.0 that address redirects to the Recruitment page without them. The form now
+  submits to the Recruitment page directly. Closes #119.
+
 ## [1.20.0] - 2026-09-27
 
 ### Added
