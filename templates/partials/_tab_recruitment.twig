@@ -90,12 +90,10 @@
                             </span>
                         </summary>
 
-                        <form method="GET" action="/" class="border-t border-slate-200 bg-surface px-4 py-4">
-                            <input type="hidden" name="main_tab" value="Recruitment Analyzer">
+                        <form method="GET" action="/recruitment" class="border-t border-slate-200 bg-surface px-4 py-4">
                             <input type="hidden" name="division_tab" value="{{ active_division }}">
                             <input type="hidden" name="sort" value="{{ sort.col }}">
                             <input type="hidden" name="order" value="{{ sort.order }}">
-
 
                             <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
                                 {% for field, label in range_filter_fields %}
