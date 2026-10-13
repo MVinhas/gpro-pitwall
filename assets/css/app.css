@@ -114,6 +114,9 @@
     /* The logo's board plate. Brand mark only — never a UI accent, where
        yellow would read as caution (and the coffee ask owns its own yellow). */
     --color-brand-plate: light-dark(#f4c21b, #f4c21b);
+    /* The light band that sweeps across loading skeletons (base = slate-200).
+       Decorative, so no contrast floor; it only has to read as motion. */
+    --color-skeleton-sheen: light-dark(oklch(.984 .003 247.858), #3a4a5c);
     /* Modal backdrop. Light side = the old bg-slate-900/40 verbatim. */
     --color-scrim: light-dark(oklch(.208 .042 265.755 / .4), rgb(0 0 0 / .55));
 }
@@ -441,8 +444,52 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
 /* Range sliders keep the native control, tinted with the action colour. */
 .range { @apply w-full cursor-pointer; accent-color: var(--color-blue-600); }
 
+/* =========================
+   LOADING SKELETONS
+   A screen whose GPRO data is still on its way renders its own shape in grey
+   (partials/_skeleton.twig), then the real content fades in over it. The
+   sheen is one band per viewport (fixed attachment), so every bar shimmers
+   in step instead of each running its own sweep.
+========================= */
+
+/* In the components layer so utilities (hidden, sm:block, size-*) win. */
+@layer components {
+    .skel {
+        @apply block rounded-md bg-slate-200;
+        background-image: linear-gradient(100deg, var(--color-slate-200) 42%, var(--color-skeleton-sheen) 50%, var(--color-slate-200) 58%);
+        background-size: 200vw 100%;
+        background-repeat: no-repeat;
+        background-attachment: fixed;
+        animation: skel-sheen 1.5s ease-in-out infinite;
+    }
+}
+
+@keyframes skel-sheen {
+    from { background-position: -140vw 0; }
+    to   { background-position: 40vw 0; }
+}
+
+/* Content arriving over a skeleton settles in rather than popping. */
+.reveal { animation: reveal .32s cubic-bezier(.2, .7, .3, 1) both; }
+
+@keyframes reveal {
+    from { opacity: 0; transform: translateY(6px); }
+}
+
+/* Page-to-page: the app bar and tabs hold still while the screen crossfades
+   (cross-document view transitions; browsers without them navigate as usual). */
+@view-transition { navigation: auto; }
+::view-transition-old(root),
+::view-transition-new(root) { animation-duration: .18s; }
+.vt-header { view-transition-name: app-header; }
+.vt-status { view-transition-name: app-status; }
+.vt-nav    { view-transition-name: app-nav; }
+
 @media (prefers-reduced-motion: reduce) {
     .transition-transform, .transition-all, .transition-colors { transition: none; }
+    .skel { animation: none; background-image: none; }
+    .reveal { animation: none; }
+    @view-transition { navigation: none; }
 }
 
 /* Hide the scrollbar on the horizontally scrollable mobile pill nav while

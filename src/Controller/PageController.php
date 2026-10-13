@@ -8,13 +8,18 @@ use App\Http\Request;
 use App\Http\Sections;
 use App\Repository\DivisionMetadataRepository;
 use App\Repository\UserRepository;
+use App\Support\DeferredRender;
 use App\Support\Env;
 use App\Support\RaceSettings;
+use App\Support\RaceWindow;
+use App\Support\SyncState;
 use App\Service\IdealPilotService;
 use App\Service\InsightService;
 use App\Service\RecruitmentService;
 use App\Service\TrainingService;
+use App\Service\AuthService;
 use App\Service\GproApiClient;
+use App\Service\GproSyncService;
 use App\Service\GproDataMapper;
 use App\Service\PhaMatchService;
 use App\Service\RaceWeatherService;
@@ -69,6 +74,7 @@ class PageController
         private readonly CarWearController $carWearController,
         private readonly GproDataMapper $mapper,
         private readonly RecruitmentService $recruitmentService,
+        private readonly GproSyncService $syncService,
         private readonly Environment $twig,
         private array $config
     ) {
@@ -171,6 +177,25 @@ class PageController
             $activeMainTab = $defaultTab;
         }
 
+        // A cold screen (or a login whose sync is still owed) is sent as a
+        // skeleton first; its follow-up request (wait=1) does the GPRO work.
+        $syncPending = !empty($_SESSION[AuthService::SYNC_PENDING]);
+        $deferred = (string) $request->get('fragment', '') === '' && DeferredRender::shouldDefer(
+            (string) $request->get(DeferredRender::WAIT_PARAM, '') === '1',
+            $syncPending,
+            $activeMainTab,
+            fn (): bool => $this->apiClient->isWarm(),
+        );
+
+        $freshSync = false;
+        if ($syncPending && !$deferred) {
+            unset($_SESSION[AuthService::SYNC_PENDING]);
+            $this->syncService->trySyncForUser($user, true);
+            // Re-read for the sync outcome and timestamp the status line shows.
+            $user = $this->userRepo->findById((int) $user['id']) ?? $user;
+            $freshSync = true;
+        }
+
         $activeDivision = (string) $request->get('division_tab', 'Rookie');
         if (!in_array($activeDivision, $divisions, true)) {
             $activeDivision = 'Rookie';
@@ -214,6 +239,25 @@ class PageController
             'user'            => $user,
             'can_submit'      => $isLoggedIn,
         ];
+
+        if ($freshSync) {
+            // The layout's sync globals were read before this request synced.
+            $lastSyncedAt = $user['last_synced_at'] ?? null;
+            $viewData['sync_state'] = SyncState::forUser($user);
+            $viewData['sync_stale'] = SyncState::isStale(
+                is_string($lastSyncedAt) ? $lastSyncedAt : null,
+                new \DateTimeImmutable('now'),
+                RaceWindow::parseDays(Env::get('GPRO_RACE_DAYS', '2,5')),
+            );
+        }
+
+        if ($deferred) {
+            // The flash stays in the session for the real render to show.
+            $viewData['flash'] = null;
+            $viewData['deferred_url'] = DeferredRender::followUpUrl($request->getPath(), $request->query());
+            echo $this->twig->render('index.twig', $viewData);
+            return;
+        }
 
         unset($_SESSION['flash']);
 

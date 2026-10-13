@@ -297,6 +297,34 @@ final class GproApiClient
     }
 
     /**
+     * Whether the payloads the screens read are all cached, so rendering one
+     * spends no API call. Cache reads only — never fetches. Race-critical
+     * payloads roll with the race window, so a new weekend reads as cold.
+     */
+    public function isWarm(): bool
+    {
+        $office = $this->cache->get($this->userKey('office_data'));
+        if (!is_array($office) || $this->cache->get($this->userKey('calendar')) === null) {
+            return false;
+        }
+
+        $window = $this->raceWindow();
+        foreach (['car_data', 'race_setup', 'next_race_profile'] as $key) {
+            $key = $this->userKey($key);
+            if ($this->cache->get($window !== '' ? $key . ':w' . $window : $key) === null) {
+                return false;
+            }
+        }
+
+        $driId = trim((string) ($office['driId'] ?? ''));
+        if ($driId === '' || $driId === '0') {
+            return true;
+        }
+
+        return $this->cache->get($this->userKey('driver_profile_' . $driId)) !== null;
+    }
+
+    /**
      * Returns Menu data only if already cached — never spends an API call.
      * Used by the global billboard, which must render on every tab without
      * triggering a fetch. The per-user sync warms this key.

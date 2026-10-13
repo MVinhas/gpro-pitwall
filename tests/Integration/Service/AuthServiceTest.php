@@ -11,7 +11,6 @@ use App\Security\ApiTokenCrypto;
 use App\Security\EmailCrypto;
 use App\Service\AuthService;
 use App\Service\EmailService;
-use App\Service\GproSyncService;
 use App\Service\RateLimiterService;
 use App\Service\ReCaptchaService;
 use PDO;
@@ -110,33 +109,6 @@ final class AuthServiceTest extends TestCase
             'is_dev' => true, 'mail_dir' => $this->mailDir,
         ]);
 
-        // Sync service should never run during register→verify because a
-        // fresh user has no api_token. We still wire a real instance with
-        // an api client pointed at an unreachable port so a regression in
-        // that assumption fails loudly instead of leaking real HTTP.
-        $apiClient = new \App\Service\GproApiClient(
-            new \App\Service\GproApiFetcher(['base_url' => 'http://127.0.0.1:9']),
-            $cache,
-        );
-        $sync = new GproSyncService(
-            $apiClient,
-            $userRepo,
-            $cache,
-            new \App\Service\RaceTelemetryService(
-                new \App\Repository\RaceTelemetryRepository($this->db),
-                new \App\Telemetry\RaceTelemetryMapper(),
-            ),
-            new \App\Service\RaceHistoryService(
-                new \App\Repository\RaceHistoryRepository($this->db),
-                new \App\Telemetry\RaceHistoryMapper(),
-                new \App\Repository\TrackRepository($this->db),
-            ),
-            new \App\Service\BaselineAutoFillService(
-                new \App\Repository\RaceTelemetryRepository($this->db),
-                new \App\Repository\PilotRepository($this->db),
-                new \App\Service\PilotCalculatorService([], []),
-            ),
-        );
 
         $persistentRepo = new \App\Repository\PersistentTokenRepository($this->db);
         $persistentLogin = new \App\Service\PersistentLoginService(
@@ -147,7 +119,7 @@ final class AuthServiceTest extends TestCase
 
         $this->auth = new AuthService(
             $userRepo, $tokenRepo, $pendingRepo, $mailer, $limiter, $captcha,
-            $emailCrypto, $appSecret, $sync, $persistentLogin,
+            $emailCrypto, $appSecret, $persistentLogin,
             new \App\Service\SecurityLogger(static fn(string $l) => null),
         );
     }
@@ -188,6 +160,7 @@ final class AuthServiceTest extends TestCase
         $this->assertSame($userId, $_SESSION['user_id'] ?? null);
         $this->assertSame('alice', $_SESSION['username'] ?? null);
         $this->assertSame('needs_token', $_SESSION['sync_status'] ?? null);
+        $this->assertArrayNotHasKey(AuthService::SYNC_PENDING, $_SESSION);
 
         // The account now exists in users and is verified.
         $row = $this->db->query('SELECT verified_at FROM users WHERE id = ' . $userId)
@@ -200,6 +173,35 @@ final class AuthServiceTest extends TestCase
 
         // A freshly verified session is "fresh" (step-up gate passes).
         $this->assertTrue($_SESSION['auth_fresh'] ?? false);
+    }
+
+    public function testLoginWithATokenDefersTheSyncToTheFirstPage(): void
+    {
+        $userId = $this->makeVerifiedUser('tokenholder');
+        $this->userRepo()->updateApiToken($userId, 'synthetic-token');
+
+        $this->auth->login('tokenholder', '', '127.0.0.1');
+        $this->setLatestLoginCode($userId, '123456');
+
+        $this->assertTrue($this->auth->verifyCode($userId, '123456'));
+        $this->assertTrue($_SESSION[AuthService::SYNC_PENDING] ?? false);
+        // The verify request spends no GPRO call: a sync against the tripwire
+        // API would have left the account marked failed.
+        $this->assertSame('idle', $this->syncStatusOf($userId));
+    }
+
+    public function testLoginRightAfterASyncLeavesNothingPending(): void
+    {
+        $userId = $this->makeVerifiedUser('freshsync');
+        $this->userRepo()->updateApiToken($userId, 'synthetic-token');
+        $this->db->prepare("UPDATE users SET last_synced_at = datetime('now') WHERE id = :id")
+            ->execute(['id' => $userId]);
+
+        $this->auth->login('freshsync', '', '127.0.0.1');
+        $this->setLatestLoginCode($userId, '123456');
+
+        $this->assertTrue($this->auth->verifyCode($userId, '123456'));
+        $this->assertArrayNotHasKey(AuthService::SYNC_PENDING, $_SESSION);
     }
 
     public function testVerifyWithoutRememberIssuesNoPersistentToken(): void
@@ -428,6 +430,32 @@ final class AuthServiceTest extends TestCase
         $this->assertFalse($this->auth->resendRegistrationCode(AuthService::DECOY_PENDING_REGISTRATION_ID));
     }
 
+    private function userRepo(): UserRepository
+    {
+        $appSecret = 'integration-test-secret-do-not-use-in-prod';
+
+        return new UserRepository($this->db, new EmailCrypto($appSecret), new ApiTokenCrypto($appSecret));
+    }
+
+    /** Pin the newest login code to a known plaintext (see setPendingCode). */
+    private function setLatestLoginCode(int $userId, string $code): void
+    {
+        $appSecret = 'integration-test-secret-do-not-use-in-prod';
+        $stmt = $this->db->prepare(
+            'UPDATE verification_tokens SET code_hmac = :h
+             WHERE id = (SELECT MAX(id) FROM verification_tokens WHERE user_id = :uid)'
+        );
+        $stmt->execute(['h' => hash_hmac('sha256', $code, $appSecret), 'uid' => $userId]);
+    }
+
+    private function syncStatusOf(int $userId): string
+    {
+        $stmt = $this->db->prepare('SELECT sync_status FROM users WHERE id = :id');
+        $stmt->execute(['id' => $userId]);
+
+        return (string) $stmt->fetchColumn();
+    }
+
     private function codeSendCount(): int
     {
         return (int) $this->db->query('SELECT COUNT(*) FROM verification_tokens')->fetchColumn();
@@ -470,29 +498,6 @@ final class AuthServiceTest extends TestCase
             'from' => 'test@example.invalid', 'from_name' => 'GPRO Test',
             'is_dev' => true, 'mail_dir' => $this->mailDir,
         ]);
-        $apiClient = new \App\Service\GproApiClient(
-            new \App\Service\GproApiFetcher(['base_url' => 'http://127.0.0.1:9']),
-            $cache,
-        );
-        $sync = new GproSyncService(
-            $apiClient,
-            $userRepo,
-            $cache,
-            new \App\Service\RaceTelemetryService(
-                new \App\Repository\RaceTelemetryRepository($this->db),
-                new \App\Telemetry\RaceTelemetryMapper(),
-            ),
-            new \App\Service\RaceHistoryService(
-                new \App\Repository\RaceHistoryRepository($this->db),
-                new \App\Telemetry\RaceHistoryMapper(),
-                new \App\Repository\TrackRepository($this->db),
-            ),
-            new \App\Service\BaselineAutoFillService(
-                new \App\Repository\RaceTelemetryRepository($this->db),
-                new \App\Repository\PilotRepository($this->db),
-                new \App\Service\PilotCalculatorService([], []),
-            ),
-        );
         $persistentLogin = new \App\Service\PersistentLoginService(
             new \App\Repository\PersistentTokenRepository($this->db),
             new \App\Tests\Support\ArrayCookieJar(),
@@ -501,7 +506,7 @@ final class AuthServiceTest extends TestCase
 
         return new AuthService(
             $userRepo, $tokenRepo, $pendingRepo, $mailer, $limiter, $captcha,
-            $emailCrypto, $appSecret, $sync, $persistentLogin,
+            $emailCrypto, $appSecret, $persistentLogin,
             new \App\Service\SecurityLogger(static fn(string $l) => null),
         );
     }
