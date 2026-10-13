@@ -3,9 +3,8 @@
 # files outside the docroot are not served, and that the public surface
 # (/, /login, /healthz, …) answers 200 with the security headers set.
 #
-# Gentle by design — a shared-host firewall (Hetzner) banned the source IP for
-# a day after an earlier, louder version. What gets an IP banned is less the
-# request rate than what is asked for: scanner-signature paths (/.env,
+# Gentle by design: shared-host firewalls ban IPs that look like scanners,
+# and what trips them is less the request rate than what is asked for: scanner-signature paths (/.env,
 # /.git/HEAD, …), a run of 4xx hits from one address, and one address
 # switching browser identity. So the default run:
 #   - proves the docroot with two plain-looking files that live outside it
