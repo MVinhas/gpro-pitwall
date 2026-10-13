@@ -51,7 +51,11 @@
 
     {# HEADER — one bar: the mark on the left, account actions on the right. The
        brand is not a heading: every page carries its own h1. #}
-    <header class="vt-header bg-surface border-b border-slate-200">
+    {# relative z-50: view-transition-name makes the header, status line and
+       tabs separate stacking contexts, so the Admin menu's own z-index only
+       counts inside the header. Lifting the header keeps the menu above the
+       status line and the sticky tabs that follow it. #}
+    <header class="vt-header relative z-50 bg-surface border-b border-slate-200">
         <div class="mx-auto flex h-14 max-w-7xl items-center justify-between gap-4 px-4">
             <a href="/" class="flex shrink-0 items-center gap-2.5 hover:opacity-80">
                 {% include 'partials/_brand_lockup.twig' %}
