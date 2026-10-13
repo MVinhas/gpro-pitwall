@@ -6,6 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.2] - 2026-10-13
+
+### Changed
+- **The post-deploy security probe is much quieter.** A run once got the probing IP banned
+  by the host's firewall for a day. By default it now proves the document root with two
+  plain files instead of asking for `.env`, `.git` and similar paths. It sends about nine
+  requests instead of 28, keeps one browser identity, doesn't follow redirects and won't
+  run against the same host twice within an hour. `--full` still checks every sensitive
+  path, at a slower pace, for after a document-root or `.htaccess` change.
+
 ## [1.21.1] - 2026-10-13
 
 ### Changed
