@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.4] - 2026-10-13
+
+### Fixed
+- **The layout no longer shifts sideways between screens.** On a short screen, such as
+  Recruitment before the driver list loads, the scrollbar disappeared and the header and
+  tabs moved a few pixels to the right. The scrollbar's space is now always kept.
+
 ## [1.21.3] - 2026-10-13
 
 ### Fixed

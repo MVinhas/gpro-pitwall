@@ -133,6 +133,10 @@
    every cell having to ask for it. */
 @layer base {
     table { font-variant-numeric: tabular-nums; }
+    /* Always reserve the scrollbar's width, so moving between a short screen
+       and a long one (or a skeleton filling in) never nudges the layout
+       sideways. */
+    html { scrollbar-gutter: stable; }
 }
 
 /* Landing screenshots ship one image per theme. light-dark() can't switch an
