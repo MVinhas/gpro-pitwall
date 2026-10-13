@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.1] - 2026-10-13
+
+### Changed
+- **CI runs on Ubuntu 26.04, pinned.** GitHub moves `ubuntu-latest` to Ubuntu 26 from
+  October 19, 2026. Both CI jobs now name `ubuntu-26.04`, so the switch happens now on our
+  schedule, and a later label move can't change the build image unannounced.
+
 ## [1.21.0] - 2026-10-13
 
 ### Changed
