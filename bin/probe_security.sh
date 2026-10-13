@@ -1,29 +1,47 @@
 #!/usr/bin/env bash
 # Post-deploy leak probe. Hits a live deployment with curl and asserts that
-# sensitive paths return 403/404 (or otherwise don't serve content), and that
-# the user-facing surface (/ and /healthz) returns 200.
+# files outside the docroot are not served, and that the public surface
+# (/, /login, /healthz, …) answers 200 with the security headers set.
 #
-# WAF-friendly by design: shared-host firewalls (Hetzner / cPanel) fingerprint
-# scanners by burst rate, fixed cadence, request order and the curl UA — and
-# ban the source IP. So every request here is spaced by a base delay plus
-# random jitter, the probe order is shuffled per run, and each request carries
-# a rotating real-browser User-Agent. Expect a full run to take ~2–3 minutes.
+# Gentle by design: shared-host firewalls ban IPs that look like scanners,
+# and what trips them is less the request rate than what is asked for: scanner-signature paths (/.env,
+# /.git/HEAD, …), a run of 4xx hits from one address, and one address
+# switching browser identity. So the default run:
+#   - proves the docroot with two plain-looking files that live outside it
+#     (/composer.json, /bootstrap.php). Every unknown path is rewritten to the
+#     front controller, so if these two 404, every other file outside public/
+#     does too;
+#   - sends ~9 requests, one fixed User-Agent, no redirects followed, each
+#     spaced by a base delay plus random jitter;
+#   - refuses to run again for the same host within the cooldown.
+# --full adds the 19 sensitive-path checks (the scanner-signature ones
+# included) at a slower pace. Run it rarely: after a docroot or .htaccess
+# change, not after every deploy.
 #
 # Usage:
 #   bin/probe_security.sh https://pitwall.your-domain.tld
+#   bin/probe_security.sh --full https://pitwall.your-domain.tld
 #   PROBE_URL=https://... bin/probe_security.sh
 #
-# Tunables (seconds):
-#   PROBE_DELAY   base pause before every request   (default 3)
-#   PROBE_JITTER  extra random pause, 0..JITTER     (default 4)
+# Tunables:
+#   PROBE_DELAY     base pause before every request, s   (default 5; 10 with --full)
+#   PROBE_JITTER    extra random pause, 0..JITTER s      (default 5; 10 with --full)
+#   PROBE_COOLDOWN  minimum gap between runs per host, s (default 3600)
+#   PROBE_FORCE=1   ignore the cooldown
 #
-# Exit code: 0 if every assertion passes, 1 otherwise.
+# Exit code: 0 if every assertion passes, 1 otherwise, 3 if still cooling down.
 
 set -uo pipefail
 
+FULL=0
+if [[ "${1:-}" == "--full" ]]; then
+    FULL=1
+    shift
+fi
+
 URL="${1:-${PROBE_URL:-}}"
 if [[ -z "$URL" ]]; then
-    echo "usage: $0 <base-url>" >&2
+    echo "usage: $0 [--full] <base-url>" >&2
     exit 2
 fi
 URL="${URL%/}"
@@ -36,25 +54,36 @@ RESET='\033[0m'
 fails=0
 checks=0
 
-PROBE_DELAY="${PROBE_DELAY:-3}"
-PROBE_JITTER="${PROBE_JITTER:-4}"
+if [[ "$FULL" -eq 1 ]]; then
+    PROBE_DELAY="${PROBE_DELAY:-10}"
+    PROBE_JITTER="${PROBE_JITTER:-10}"
+else
+    PROBE_DELAY="${PROBE_DELAY:-5}"
+    PROBE_JITTER="${PROBE_JITTER:-5}"
+fi
+PROBE_COOLDOWN="${PROBE_COOLDOWN:-3600}"
 
-# Plausible, current desktop browser UAs. One is picked at random per request
-# so the probe doesn't announce itself as curl 25 times in a row.
-USER_AGENTS=(
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.4 Safari/605.1.15"
-    "Mozilla/5.0 (X11; Linux x86_64; rv:139.0) Gecko/20100101 Firefox/139.0"
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:139.0) Gecko/20100101 Firefox/139.0"
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
-)
+# Cooldown: back-to-back runs are what add up to a ban. One stamp per host,
+# under the git-ignored var/.
+cd "$(dirname "$0")/.." || exit 2
+host="$(sed -E 's#^[a-z]+://##; s#[/:].*$##' <<<"$URL")"
+stamp="var/probe_security.${host}.last"
+if [[ "${PROBE_FORCE:-0}" != "1" && -f "$stamp" ]]; then
+    last="$(cat "$stamp" 2>/dev/null || echo 0)"
+    age=$(( $(date +%s) - ${last:-0} ))
+    if (( age < PROBE_COOLDOWN )); then
+        echo "✗ ${host} was probed $((age / 60)) min ago; wait $(((PROBE_COOLDOWN - age + 59) / 60)) min more, or set PROBE_FORCE=1." >&2
+        exit 3
+    fi
+fi
+mkdir -p var && date +%s > "$stamp"
 
-random_ua() {
-    printf '%s' "${USER_AGENTS[RANDOM % ${#USER_AGENTS[@]}]}"
-}
+# One ordinary browser identity for the whole run. Rotating it per request
+# made one IP look like five browsers — itself a bot signal.
+UA="Mozilla/5.0 (X11; Linux x86_64; rv:139.0) Gecko/20100101 Firefox/139.0"
 
-# Base delay + uniform random jitter. $RANDOM re-rolls per call, so no two
-# gaps look alike and the cadence can't be fingerprinted.
+# Base delay + uniform random jitter. $RANDOM re-rolls per call, so the
+# cadence isn't a fixed beat.
 pace() {
     local delay
     delay="$(awk -v base="$PROBE_DELAY" -v jit="$PROBE_JITTER" -v r="$RANDOM" \
@@ -62,8 +91,8 @@ pace() {
     sleep "$delay"
 }
 
-# A leak check passes when the path is NOT served (status 4xx / 5xx).
-# 200 OR a redirect into a login flow that returns content of the file = FAIL.
+# A leak check passes when the path is not served: 4xx/5xx, or a redirect
+# (not followed — a redirect hands out no file content).
 leak_must_fail() {
     local path="$1"
     local description="$2"
@@ -71,19 +100,17 @@ leak_must_fail() {
     pace
 
     local response
-    response="$(curl -sS -o /dev/null -A "$(random_ua)" \
-        -w "%{http_code} %{size_download}" -L --max-redirs 2 \
+    response="$(curl -sS -o /dev/null -A "$UA" --max-time 15 \
+        -w "%{http_code} %{size_download}" \
         "${URL}${path}" 2>/dev/null || echo "000 0")"
     local code="${response%% *}"
     local size="${response##* }"
 
-    if [[ "$code" =~ ^[45][0-9][0-9]$ ]]; then
-        printf "  ${GREEN}PASS${RESET}  %-40s %s\n" "$path" "blocked (${code})"
+    if [[ "$code" =~ ^[345][0-9][0-9]$ ]]; then
+        printf "  ${GREEN}PASS${RESET}  %-40s %s\n" "$path" "not served (${code})"
         return 0
     fi
 
-    # 200 with non-zero body = leak. 200 with an empty body shouldn't happen on
-    # static assets, but flag it as suspicious — better a false positive than a miss.
     printf "  ${RED}FAIL${RESET}  %-40s %s — %s\n" "$path" "served (${code}, ${size}B)" "$description"
     fails=$((fails + 1))
 }
@@ -96,7 +123,7 @@ surface_must_pass() {
     pace
 
     local code
-    code="$(curl -sS -o /dev/null -A "$(random_ua)" -w "%{http_code}" \
+    code="$(curl -sS -o /dev/null -A "$UA" --max-time 15 -w "%{http_code}" \
         "${URL}${path}" 2>/dev/null || echo "000")"
 
     if [[ "$code" == "200" ]]; then
@@ -114,7 +141,7 @@ healthz_must_be_ok() {
     pace
 
     local body
-    body="$(curl -sS --max-time 5 -A "$(random_ua)" "${URL}/healthz" 2>/dev/null || true)"
+    body="$(curl -sS --max-time 10 -A "$UA" "${URL}/healthz" 2>/dev/null || true)"
 
     if echo "$body" | grep -q '"status":"ok"'; then
         printf "  ${GREEN}PASS${RESET}  %-40s status=ok\n" "/healthz"
@@ -124,12 +151,22 @@ healthz_must_be_ok() {
     fi
 }
 
-# Security headers on /: ONE request, grepped four times — four identical
-# HEAD requests in a row is exactly the pattern a WAF flags.
-check_security_headers() {
+# The landing page and its security headers from ONE GET: the surface check
+# and the four header checks share a request.
+landing_and_headers() {
+    checks=$((checks + 1))
     pace
-    local headers
-    headers="$(curl -sSI -A "$(random_ua)" "${URL}/" 2>/dev/null || true)"
+
+    local headers code
+    headers="$(curl -sS -o /dev/null -D - -A "$UA" --max-time 15 "${URL}/" 2>/dev/null || true)"
+    code="$(awk 'toupper($1) ~ /^HTTP\// { c = $2 } END { print c }' <<<"$headers")"
+
+    if [[ "$code" == "200" ]]; then
+        printf "  ${GREEN}PASS${RESET}  %-40s 200\n" "/"
+    else
+        printf "  ${RED}FAIL${RESET}  %-40s %s — %s\n" "/" "${code:-000}" "anonymous landing page"
+        fails=$((fails + 1))
+    fi
 
     local header
     for header in \
@@ -141,50 +178,53 @@ check_security_headers() {
         if grep -qi "^${header}:" <<<"$headers"; then
             printf "  ${GREEN}PASS${RESET}  %-40s present\n" "header: ${header}"
         else
+            # Headers are graceful degradation, not blockers — warn only.
             printf "  ${YELLOW}WARN${RESET}  %-40s missing (security header)\n" "header: ${header}"
-            # Headers are graceful-degradation, not blockers — count as a warn
-            # but don't fail the script.
         fi
     done
 }
 
-echo "▶ probing ${URL} (paced: ${PROBE_DELAY}s + 0–${PROBE_JITTER}s jitter per request)"
+mode="$([[ "$FULL" -eq 1 ]] && echo "full" || echo "light")"
+echo "▶ probing ${URL} (${mode}; paced ${PROBE_DELAY}s + 0–${PROBE_JITTER}s jitter per request)"
 echo
 
-# Sensitive paths, "path|description". The list is shuffled per run so the
-# probe never walks the same sequence twice.
+# Docroot proof: plain-looking files that live outside public/. "path|description".
 leak_checks=(
-    "/.env|secrets — APP_SECRET, SMTP password"
-    "/.env.example|placeholder file; still shouldn't be served"
-    "/.deploy.env|SFTP deploy credentials"
-    "/config/secrets.php|game formulas"
-    "/gpro_pilots.sqlite|user data (emails + tokens, encrypted)"
-    "/bootstrap.php|PHP bootstrap; outside docroot"
-    "/composer.json|dep listing"
-    "/composer.lock|exact dep versions"
-    "/CLAUDE.md|project context (should be excluded from bundle)"
-    "/TODO.md|project backlog (should be excluded from bundle)"
-    "/gpro-public-api.yml|private OpenAPI spec"
-    "/src/Service/AuthService.php|PHP source — outside docroot"
-    "/src/|src/ directory listing"
-    "/var/cache/|cache directory listing"
-    "/var/log/|log directory listing"
-    "/var/mail/|dev-only mail directory listing"
-    "/var/|writable runtime dir"
-    "/.git/HEAD|git directory accidentally SFTP'd"
-    "/bin/db_browser.php|CLI-only debug tool"
-    "/bin/seed_tracks.php|CLI seeder"
-    "/data/tracks.csv|tracks fixture"
+    "/composer.json|dep listing — the docroot is not public/"
+    "/bootstrap.php|PHP bootstrap — the docroot is not public/"
 )
 
-echo "Sensitive paths (must be blocked; order shuffled):"
+if [[ "$FULL" -eq 1 ]]; then
+    echo -e "${YELLOW}  --full requests scanner-signature paths (/.env, /.git/HEAD, …). Run it rarely.${RESET}"
+    leak_checks+=(
+        "/.env|secrets — APP_SECRET, SMTP password"
+        "/.env.example|placeholder file; still shouldn't be served"
+        "/.deploy.env|SFTP deploy credentials"
+        "/config/secrets.php|game formulas"
+        "/gpro_pilots.sqlite|user data (emails + tokens, encrypted)"
+        "/composer.lock|exact dep versions"
+        "/CLAUDE.md|project context (should be excluded from bundle)"
+        "/TODO.md|project backlog (should be excluded from bundle)"
+        "/gpro-public-api.yml|private OpenAPI spec"
+        "/src/Service/AuthService.php|PHP source — outside docroot"
+        "/src/|src/ directory listing"
+        "/var/cache/|cache directory listing"
+        "/var/log/|log directory listing"
+        "/var/mail/|dev-only mail directory listing"
+        "/var/|writable runtime dir"
+        "/.git/HEAD|git directory accidentally SFTP'd"
+        "/bin/db_browser.php|CLI-only debug tool"
+        "/bin/seed_tracks.php|CLI seeder"
+        "/data/tracks.csv|tracks fixture"
+    )
+fi
+
+echo "Files outside the docroot (must not be served; order shuffled):"
 while IFS='|' read -r path description; do
     leak_must_fail "$path" "$description"
 done < <(printf '%s\n' "${leak_checks[@]}" | shuf)
 
-# Public surface, also shuffled.
 surface_checks=(
-    "/|anonymous landing page"
     "/login|login form"
     "/register|register form"
     "/assets/app.css|compiled tailwind"
@@ -194,14 +234,11 @@ surface_checks=(
 
 echo
 echo "Public surface (must serve 200; order shuffled):"
+landing_and_headers
 while IFS='|' read -r path description; do
     surface_must_pass "$path" "$description"
 done < <(printf '%s\n' "${surface_checks[@]}" | shuf)
 healthz_must_be_ok
-
-echo
-echo "Security headers on /:"
-check_security_headers
 
 echo
 if [[ "$fails" -eq 0 ]]; then

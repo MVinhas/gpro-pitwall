@@ -122,7 +122,7 @@ bin/build_release.sh --tar             # assemble dist/ deploy bundle (+ tarball
 php bin/seed_tracks.php                # initialise SQLite + seed tracks (one-shot)
 php bin/db_browser.php                 # local SQLite viewer (CLI only — never served)
 bin/check_no_secrets.sh                # pre-commit secret scan
-bin/probe_security.sh <url>            # post-deploy leak probe (must exit 0)
+bin/probe_security.sh [--full] <url>   # post-deploy leak probe (must exit 0)
 ```
 
 ## Deployment
@@ -144,7 +144,7 @@ Source of truth is GitHub; deployment is a manual file copy to any PHP 8.5 host.
    ```bash
    bin/probe_security.sh https://your-domain.example
    ```
-   Must exit 0: 21 sensitive paths blocked, the public surface serving 200, security headers present on `/`. Requests are paced, jittered and shuffled so shared-host WAFs don't ban the probing IP — a run takes ~2–3 minutes (tune with `PROBE_DELAY` / `PROBE_JITTER`).
+   Must exit 0: two files outside `public/` not served (which proves the document root), the public surface serving 200, security headers present on `/`. The default run is deliberately quiet so a shared-host firewall doesn't ban the probing IP: about nine requests, paced and jittered, a single browser identity, and a one-hour cooldown per host (about a minute and a half; tune with `PROBE_DELAY` / `PROBE_JITTER` / `PROBE_COOLDOWN`). `--full` adds 19 sensitive paths (`/.env`, `/.git/HEAD`, …) at a slower pace; run it only after a document-root or `.htaccess` change.
 
 ## Tech stack
 
