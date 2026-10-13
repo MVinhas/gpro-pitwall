@@ -34,6 +34,13 @@ class AuthService
      */
     public const int DECOY_PENDING_REGISTRATION_ID = -1;
 
+    /**
+     * Session flag: the login-time GPRO sync is owed but has not run. Login no
+     * longer waits on GPRO; the first page shows its skeleton and runs the
+     * sync in a follow-up request (see App\Support\DeferredRender).
+     */
+    public const string SYNC_PENDING = 'sync_pending';
+
     public function __construct(
         private readonly UserRepository $users,
         private readonly TokenRepository $tokens,
@@ -43,7 +50,6 @@ class AuthService
         private readonly ReCaptchaService $captcha,
         private readonly EmailCrypto $crypto,
         private readonly string $appSecret,
-        private readonly GproSyncService $syncService,
         private readonly PersistentLoginService $persistentLogin,
         private readonly SecurityLogger $securityLog,
         private readonly int $codeTtlSeconds = 600,
@@ -390,14 +396,11 @@ class AuthService
 
         if (empty($user['api_token'])) {
             $_SESSION['sync_status'] = 'needs_token';
-        } elseif ($this->recentlySynced($user)) {
-            // A sync within the interval already warmed the cache — don't spend
-            // 8 more API calls just because the user re-logged in.
-            $_SESSION['sync_status'] = 'idle';
-        } else {
-            // trySyncForUser persists DB status and never throws; it returns the
-            // outcome, which drives the verify page's immediate feedback.
-            $_SESSION['sync_status'] = $this->syncService->trySyncForUser($user, true);
+        } elseif (!$this->recentlySynced($user)) {
+            // A sync within the interval already warmed the cache, so only an
+            // older one is owed. It runs after the redirect, not in this
+            // request, so the manager lands on the cockpit at once.
+            $_SESSION[self::SYNC_PENDING] = true;
         }
     }
 

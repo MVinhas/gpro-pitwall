@@ -6,6 +6,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.0] - 2026-10-13
+
+### Changed
+- **Logging in no longer waits on GPRO.** Entering the code used to hold the page for
+  several seconds while your data synced. You now land on the Cockpit at once, and the sync
+  runs while the screen loads.
+- **Screens open at once, even before your data is ready.** A screen that would have to wait
+  on GPRO now shows its outline straight away, with a soft shimmer, and fills in when the
+  data arrives. If GPRO is slow, a quiet line says so. The status line updates as soon as
+  the sync finishes.
+- **Moving between tabs feels instant.** Tabs start loading while your pointer rests on them,
+  and in browsers that support it the screen crossfades while the header and tabs stay put.
+  Re-sync refreshes the screen with the same crossfade instead of a hard reload. With
+  reduced motion turned on, the shimmer and crossfades are off.
+
 ## [1.20.1] - 2026-10-07
 
 ### Fixed

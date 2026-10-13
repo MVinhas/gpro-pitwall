@@ -220,4 +220,110 @@ final class GproApiClientTest extends TestCase
             }
         }
     }
+
+    /**
+     * Seeds every payload the screens read straight after a sync, under the
+     * same keys the client uses (race-critical ones carry the window suffix).
+     *
+     * @param list<string> $skip base keys to leave out
+     */
+    private function seedWarm(string $token, string $driId = '30357', array $skip = []): void
+    {
+        $scope = 'u' . GproApiClient::scopeFor($token) . ':';
+        $window = ':w' . RaceWindow::idFor(new DateTimeImmutable('now'), [2, 5], 0, 'Europe/London');
+        $keys = [
+            'office_data'       => $scope . 'office_data',
+            'calendar'          => $scope . 'calendar',
+            'driver_profile'    => $scope . 'driver_profile_' . $driId,
+            'car_data'          => $scope . 'car_data' . $window,
+            'race_setup'        => $scope . 'race_setup' . $window,
+            'next_race_profile' => $scope . 'next_race_profile' . $window,
+        ];
+        foreach ($keys as $name => $key) {
+            if (in_array($name, $skip, true)) {
+                continue;
+            }
+            $this->cache->set($key, $name === 'office_data' ? ['driId' => $driId] : ['x' => 1], 3600);
+        }
+    }
+
+    private function withRaceDays(callable $test): void
+    {
+        $prev = $_ENV['GPRO_RACE_DAYS'] ?? null;
+        $_ENV['GPRO_RACE_DAYS'] = '2,5';
+        try {
+            $test();
+        } finally {
+            if ($prev === null) {
+                unset($_ENV['GPRO_RACE_DAYS']);
+            } else {
+                $_ENV['GPRO_RACE_DAYS'] = $prev;
+            }
+        }
+    }
+
+    public function testIsWarmIsFalseOnAnEmptyCache(): void
+    {
+        $client = $this->client();
+        $client->setToken('token-a');
+
+        $this->assertFalse($client->isWarm());
+    }
+
+    public function testIsWarmIsTrueOnceASyncHasCachedEveryScreenPayload(): void
+    {
+        $this->withRaceDays(function (): void {
+            $this->seedWarm('token-a');
+            $client = $this->client();
+            $client->setToken('token-a');
+
+            $this->assertTrue($client->isWarm());
+        });
+    }
+
+    public function testIsWarmIsFalseWhenARaceCriticalPayloadRolledOver(): void
+    {
+        // A new race window opened: the windowed car key is a miss even though
+        // everything else is still cached, so the next screen would fetch.
+        $this->withRaceDays(function (): void {
+            $this->seedWarm('token-a', skip: ['car_data']);
+            $client = $this->client();
+            $client->setToken('token-a');
+
+            $this->assertFalse($client->isWarm());
+        });
+    }
+
+    public function testIsWarmIsFalseWhenTheDriverProfileIsMissing(): void
+    {
+        $this->withRaceDays(function (): void {
+            $this->seedWarm('token-a', skip: ['driver_profile']);
+            $client = $this->client();
+            $client->setToken('token-a');
+
+            $this->assertFalse($client->isWarm());
+        });
+    }
+
+    public function testIsWarmNeedsNoDriverProfileWithoutADriverUnderContract(): void
+    {
+        $this->withRaceDays(function (): void {
+            $this->seedWarm('token-a', driId: '', skip: ['driver_profile']);
+            $client = $this->client();
+            $client->setToken('token-a');
+
+            $this->assertTrue($client->isWarm());
+        });
+    }
+
+    public function testIsWarmIsScopedToTheToken(): void
+    {
+        $this->withRaceDays(function (): void {
+            $this->seedWarm('token-a');
+            $client = $this->client();
+            $client->setToken('token-b');
+
+            $this->assertFalse($client->isWarm());
+        });
+    }
 }

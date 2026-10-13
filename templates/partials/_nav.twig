@@ -36,7 +36,7 @@
 {%- endif -%}
 {% endmacro %}
 
-<nav class="sticky top-0 z-40 -mx-4 px-4 mb-6 bg-slate-100/95 backdrop-blur-sm" aria-label="Primary">
+<nav class="vt-nav sticky top-0 z-40 -mx-4 px-4 mb-6 bg-slate-100/95 backdrop-blur-sm" aria-label="Primary">
     {# Mobile: horizontally scrollable pill bar (was a dropdown). Plain links —
        works without JS; a tiny script below just centres the active pill. #}
     <div class="md:hidden flex overflow-x-auto gap-2 no-scrollbar py-2" data-nav-pills>
@@ -97,4 +97,12 @@
     const active = document.querySelector('[data-nav-pills] [aria-current="page"]');
     if (active) active.scrollIntoView({ inline: 'center', block: 'nearest' });
 })();
+</script>
+
+{# Fetch a tab's page while the pointer rests on it (or on touch-down), so the
+   click lands on an answer that is already here. Prefetch only, never
+   prerender: a prefetch never runs the page's scripts, so it can't start a
+   sync or spend GPRO budget — a cold screen answers with its skeleton. #}
+<script type="speculationrules">
+{"prefetch": [{"where": {"selector_matches": "nav[aria-label='Primary'] a[href]:not([aria-current])"}, "eagerness": "moderate"}]}
 </script>

@@ -22,7 +22,8 @@ Getting started takes two minutes: register with your email (passwordless — a 
 ## Features
 
 Every screen reads your own GPRO data and answers one race-weekend question. Full
-detail and screenshots live on [gpro-pitwall.com](https://gpro-pitwall.com).
+detail and screenshots live on [gpro-pitwall.com](https://gpro-pitwall.com). Screens never
+wait on GPRO: one whose data isn't cached yet opens as an outline and fills in when it arrives.
 
 - **Cockpit** — the race-weekend spine. Two grouped lists, Car (PHA match, per-part car wear
   with an inline replacement plan, testing projection) and Weekend (weather, sponsor answers,
@@ -151,7 +152,7 @@ Source of truth is GitHub; deployment is a manual file copy to any PHP 8.5 host.
 - **Twig 3** templates; **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile). Light and dark themes ship in one stylesheet: every design token is a CSS `light-dark()` pair switched by `color-scheme`, so System mode tracks the OS with zero JavaScript.
 - **SQLite** via PDO — emails and API tokens encrypted at rest (AES-256-GCM).
 - **PHPMailer 7** for SMTP; dev writes `.eml` files instead.
-- **PHPUnit 13** — 945 tests, 2781 assertions — with **PHPStan level 8** and enforced type-declaration coverage (100% return/property/constant + `strict_types`; 99.5% param). Twig linted by a native `bin/twig_lint.php` built on Twig's own parser. CI measures statement coverage with `pcov` and enforces a floor (currently 59%, ratcheted up as coverage grows).
+- **PHPUnit 13** — 969 tests, 2821 assertions — with **PHPStan level 8** and enforced type-declaration coverage (100% return/property/constant + `strict_types`; 99.5% param). Twig linted by a native `bin/twig_lint.php` built on Twig's own parser. CI measures statement coverage with `pcov` and enforces a floor (currently 59%, ratcheted up as coverage grows).
 - **Timestamps stored and served as UTC**, localised per visitor in the browser — no server-side timezone config.
 
 ## Architecture

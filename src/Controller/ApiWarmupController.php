@@ -6,6 +6,7 @@ namespace App\Controller;
 
 use App\Http\Request;
 use App\Security\Authorize;
+use App\Service\AuthService;
 use App\Service\GproSyncService;
 
 final readonly class ApiWarmupController
@@ -30,6 +31,8 @@ final readonly class ApiWarmupController
             return;
         }
 
+        // A manual re-sync settles any login sync still owed.
+        unset($_SESSION[AuthService::SYNC_PENDING]);
         $status = $this->syncService->trySyncForUser($user, true);
 
         $messages = [

@@ -187,9 +187,15 @@ $container['twig']->addGlobal('is_logged_in', $currentUser !== null);
 $container['twig']->addGlobal('user', $currentUserSafe);
 // A separate global rather than a key on `user`: controllers that pass their own
 // `user` into render would otherwise shadow it (the Account page does).
+// A login sync that is owed but not yet run (see AuthService::SYNC_PENDING)
+// reads as running: the skeleton page is about to run it.
 $container['twig']->addGlobal(
     'sync_state',
-    $currentUser !== null ? \App\Support\SyncState::forUser($currentUser) : null,
+    $currentUser !== null
+        ? (!empty($_SESSION[\App\Service\AuthService::SYNC_PENDING]) && !empty($currentUser['api_token'])
+            ? \App\Support\SyncState::RUNNING
+            : \App\Support\SyncState::forUser($currentUser))
+        : null,
 );
 // True when a race has finished since the last sync, so the status line can ask
 // for a re-sync before the manager plans on last race's data.
@@ -326,7 +332,6 @@ $container['service.auth_service']  = new \App\Service\AuthService(
     $container['service.recaptcha'],
     $container['service.email_crypto'],
     Env::required('APP_SECRET'),
-    $container['service.gpro_sync'],
     $container['service.persistent_login'],
     $container['service.security_log'],
     Env::int('VERIFICATION_CODE_TTL_SECONDS', 600),
@@ -466,6 +471,7 @@ $container['controller.page'] = new PageController(
     $container['controller.car_wear'],
     $container['service.data_mapper'],
     $container['service.recruitment'],
+    $container['service.gpro_sync'],
     $container['twig'],
     $container['config']
 );
