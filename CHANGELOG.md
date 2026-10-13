@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.3] - 2026-10-13
+
+### Fixed
+- **The Admin menu opens on top again.** Since 1.21.0 its items slid behind the status
+  line and the tabs, so Users and Debug couldn't be clicked.
+
 ## [1.21.2] - 2026-10-13
 
 ### Changed
