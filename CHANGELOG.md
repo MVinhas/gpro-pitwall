@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.5] - 2026-10-13
+
+### Fixed
+- **Screen links no longer carry `?track=…`.** No screen lets you pick a track (they all
+  plan your next race), so the tabs, the Cockpit's strategy button and the division
+  switcher now link to plain paths. Old links with `track` still open normally.
+
 ## [1.21.4] - 2026-10-13
 
 ### Fixed
