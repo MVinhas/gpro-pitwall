@@ -8,6 +8,7 @@ use App\Repository\UserRepository;
 use App\Security\Authorize;
 use App\Cache\CacheInterface;
 use App\Support\Env;
+use App\Support\RecruitmentQuery;
 use Twig\Environment;
 
 class DebugController
@@ -115,7 +116,7 @@ class DebugController
             }
 
             unset(
-                $_SESSION['recruitment_results'],
+                $_SESSION[RecruitmentQuery::SESSION_KEY],
                 $_SESSION['training_results'],
                 $_SESSION['strategy_results']
             );

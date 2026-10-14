@@ -72,7 +72,7 @@ return function (Router $router): void {
     $router->add('POST', '/strategy_fragment',  'controller.strategy', 'fragment');
 
     // Recruitment and training
-    $router->add('POST', '/analyze_recruitment', 'controller.recruitment', 'analyze');
+    $router->add('POST', '/recruitment/refresh', 'controller.recruitment', 'refresh');
     $router->add('POST', '/calculate_training', 'controller.training', 'calculate');
 
     // ========== API ==========

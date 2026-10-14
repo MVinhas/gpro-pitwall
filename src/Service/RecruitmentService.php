@@ -11,12 +11,12 @@ class RecruitmentService
 
     /** @var array<string, string> Market field => UI label. */
     public const array RANGE_FILTER_FIELDS = [
-        'OA'  => 'Overall Ability',
+        'OA'  => 'Overall ability',
         'CON' => 'Concentration',
         'TAL' => 'Talent',
         'AGG' => 'Aggressiveness',
         'EXP' => 'Experience',
-        'TEI' => 'Technical Insight',
+        'TEI' => 'Technical insight',
         'STA' => 'Stamina',
         'CHA' => 'Charisma',
         'MOT' => 'Motivation',
@@ -46,7 +46,7 @@ class RecruitmentService
         $idealData = $this->idealPilotService->getIdealPilot($targetDivision);
 
         if (empty($idealData['stats']) || $idealData['count'] === 0) {
-            throw new \Exception("No baseline data found for division: {$targetDivision}");
+            throw new NoBaselineException("No baseline data found for division: {$targetDivision}");
         }
 
         /** @var array<string, int|float> $idealStats */

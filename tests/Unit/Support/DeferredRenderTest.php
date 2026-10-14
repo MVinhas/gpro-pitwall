@@ -25,7 +25,8 @@ final class DeferredRenderTest extends TestCase
         yield 'cold testing shows the skeleton first'   => [false, false, 'Testing', false, true];
         yield 'cold training shows the skeleton first'  => [false, false, 'Training Planner', false, true];
         yield 'a screen with no GPRO data never waits'  => [false, false, 'Division Baseline', false, false];
-        yield 'recruitment reads the cache only'        => [false, false, 'Recruitment Analyzer', false, false];
+        yield 'cold recruitment shows the skeleton first' => [false, false, 'Recruitment Analyzer', false, true];
+        yield 'warm recruitment renders in one go'      => [false, false, 'Recruitment Analyzer', true, false];
         yield 'a pending sync defers even when warm'    => [false, true, 'Cockpit', true, true];
         yield 'a pending sync defers any screen'        => [false, true, 'Division Baseline', true, true];
         yield 'the follow-up request always renders'    => [true, true, 'Cockpit', false, false];

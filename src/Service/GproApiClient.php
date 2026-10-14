@@ -424,6 +424,12 @@ final class GproApiClient
         return $payload;
     }
 
+    /** Whether the market dump is cached, so reading it spends no fetch. */
+    public function hasCachedMarketFile(string $market = 'drivers'): bool
+    {
+        return $this->cache->has('market_file_' . $market);
+    }
+
     /**
      * Last-known remaining API budget, or null if never observed.
      * Read from the shared cache so it survives across requests.
