@@ -86,6 +86,21 @@ final class PageControllerTest extends TestCase
         $this->assertFalse(PageController::isRaceSetupStale(0, 0));
     }
 
+    public function testTrainingLapsRunAtTheTestingTrack(): void
+    {
+        $this->assertSame('Monza', PageController::testingTrackName(['trackName' => 'Monza']));
+    }
+
+    public function testNoTestingTrackWhileTestingIsClosed(): void
+    {
+        // Closed windows still carry a trackName at times; it must not be
+        // used, since no training laps can be run there.
+        $this->assertNull(PageController::testingTrackName(['trackName' => 'Monza', 'endOfSeason' => true]));
+        $this->assertNull(PageController::testingTrackName(['trackName' => 'Monza', 'showError' => true]));
+        $this->assertNull(PageController::testingTrackName(['trackName' => '']));
+        $this->assertNull(PageController::testingTrackName([]));
+    }
+
     public function testShortTabAliasesResolveToCanonicalKeys(): void
     {
         $this->assertSame('Race Strategy', PageController::canonicalMainTab('Strategy'));

@@ -8,8 +8,9 @@ namespace App\Service;
  * Answers "if I train N laps and then race, where does my wear end up?".
  *
  * Chains the two existing calculators rather than reinventing either: training
- * laps age the car at the testing per-lap rate (CarWearService::testingWearRates),
- * and the race is then projected from that already-aged car. The within-limits
+ * laps age the car at the testing per-lap rate (CarWearService::testingWearRates)
+ * of GPRO's testing track — its own circuit, rarely the race track — and the
+ * race is then projected at the race track from that already-aged car. The within-limits
  * verdict reuses WearAdvisorService's thresholds — there is deliberately no
  * second set of limits in the codebase.
  */
@@ -25,13 +26,15 @@ final readonly class TrainingWearProjectionService
     }
 
     /**
-     * @param array<string, mixed> $trackData
+     * @param array<string, mixed> $trackData race track
+     * @param array<string, mixed> $testingTrackData track the training laps run at
      * @param array<string, mixed> $carData
      * @param array<string, mixed> $driver
      * @return array<string, mixed>
      */
     public function project(
         array $trackData,
+        array $testingTrackData,
         array $carData,
         array $driver,
         int $risk,
@@ -39,7 +42,7 @@ final readonly class TrainingWearProjectionService
     ): array {
         $trainingLaps = max(0, min(self::MAX_LAPS, $trainingLaps));
 
-        $rates = $this->wear->testingWearRates($trackData, $carData, $driver);
+        $rates = $this->wear->testingWearRates($testingTrackData, $carData, $driver);
         if (isset($rates['error'])) {
             return ['error' => $rates['error']];
         }
@@ -84,12 +87,13 @@ final readonly class TrainingWearProjectionService
         $advisor = $this->advisor->classify($parts);
 
         return [
-            'track_name'    => $race['track_name'],
-            'laps'          => $race['laps'],
-            'training_laps' => $trainingLaps,
-            'parts'         => $parts,
-            'advisor'       => $advisor,
-            'within_limits' => $advisor['swap'] === [] && $advisor['risky'] === [],
+            'track_name'         => $race['track_name'],
+            'testing_track_name' => $rates['track_name'],
+            'laps'               => $race['laps'],
+            'training_laps'      => $trainingLaps,
+            'parts'              => $parts,
+            'advisor'            => $advisor,
+            'within_limits'      => $advisor['swap'] === [] && $advisor['risky'] === [],
         ];
     }
 }

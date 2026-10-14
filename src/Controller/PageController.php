@@ -368,9 +368,25 @@ class PageController
                         'name' => $trackName,
                         'laps' => $nextRace['laps'] ?? $raceSetup['laps'] ?? null,
                     ];
-                    $wear = $cockpitTrainingLaps > 0
+                    // Training laps run at GPRO's testing track, rarely the
+                    // race track. While testing is closed none can be run, so
+                    // the slider gives way to a note instead of guessing.
+                    try {
+                        $testingTrack = self::testingTrackName($this->apiClient->getTesting());
+                    } catch (\Throwable $e) {
+                        error_log('[Cockpit] testing: ' . $e::class . ': ' . $e->getMessage());
+                        $testingTrack = null;
+                    }
+                    $viewData['cockpit_testing_track'] = $testingTrack;
+                    if ($testingTrack === null) {
+                        $cockpitTrainingLaps = 0;
+                        $viewData['cockpit_training_laps'] = 0;
+                    }
+
+                    $wear = $cockpitTrainingLaps > 0 && $testingTrack !== null
                         ? $this->trainingWear->project(
                             $wearTrack,
+                            ['id' => 0, 'name' => $testingTrack],
                             $carData,
                             $this->mapper->mapDriver($pilot),
                             $cockpitRisk,
@@ -821,6 +837,23 @@ class PageController
             }
         }
         return 0;
+    }
+
+    /**
+     * Track a training session would run at today, or null while testing is
+     * closed (season over, or the race-day window GPRO flags with showError).
+     * The id is GPRO's, not our tracks.id, so only the name is returned.
+     *
+     * @param array<string, mixed> $testing
+     */
+    public static function testingTrackName(array $testing): ?string
+    {
+        if (!empty($testing['endOfSeason']) || !empty($testing['showError'])) {
+            return null;
+        }
+        $name = (string) ($testing['trackName'] ?? '');
+
+        return $name !== '' ? $name : null;
     }
 
     /**
