@@ -1,0 +1,201 @@
+{# Rendered inside the Recruitment screen and alone as its fragment
+   (fragment=recruitment_results), which the filter form swaps in place. Links
+   marked data-recruit-nav are taken over by that script; without it they are
+   plain navigations to the same state. #}
+{% set chips = filter_chips|default([]) %}
+
+{% macro sortLink(label, col, sort, params) %}
+    {% set newOrder = (sort.col == col and sort.order == 'desc') ? 'asc' : 'desc' %}
+    {% set icon = sort.col == col ? (sort.order == 'desc' ? ' ↓' : ' ↑') : '' %}
+    <a href="/recruitment?{{ params|merge({sort: col, order: newOrder})|url_encode }}" data-recruit-nav="sort"
+       class="hover:text-slate-900{{ sort.col == col ? ' text-slate-900' : '' }}">{{ label }}{{ icon }}</a>
+{% endmacro %}
+
+{% if recruitment_error|default(false) %}
+    <div class="notice notice-error" data-result-state="failed">
+        <p class="font-bold">Couldn't load the driver market.</p>
+        <p class="mt-1">GPRO's market file didn't come through. Try again in a moment.</p>
+        <a href="/recruitment?{{ filter_params|url_encode }}" class="btn btn-sm btn-secondary mt-3">Try again</a>
+    </div>
+
+{% elseif recruitment_no_baseline|default(false) %}
+    <div class="notice notice-warn" data-result-state="no-baseline">
+        <p class="font-bold">No {{ active_division }} baseline yet.</p>
+        <p class="mt-1">Drivers are scored against a division's ideal driver, and there is none for {{ active_division }} yet. Pick another division.</p>
+    </div>
+
+{% elseif recruitment_results is defined %}
+    {% if recruitment_refresh_failed|default(false) %}
+        <div class="notice notice-warn notice-slim mb-4">
+            <span class="font-bold">Couldn't refresh the market.</span>
+            Showing the market{{ recruitment_updated_at|default('') ? ' as of ' ~ recruitment_updated_at : ' already loaded' }}.
+        </div>
+    {% endif %}
+
+    <div class="card" data-result-state="{{ pagination.total_items > 0 ? 'results' : 'empty' }}">
+        <div class="card-hd flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <h3 class="t-section" data-results-count>
+                {{ pagination.total_items|number_format }} candidate{{ pagination.total_items == 1 ? '' : 's' }}
+                {% if recruitment_unfiltered_total != pagination.total_items %}
+                    <span class="t-caption font-medium">of {{ recruitment_unfiltered_total|number_format }}</span>
+                {% endif %}
+            </h3>
+            {% if pagination.total_pages > 1 %}
+                <span class="t-caption tabular-nums">Page {{ pagination.current }} of {{ pagination.total_pages }}</span>
+            {% endif %}
+        </div>
+
+        {% if chips|length > 0 %}
+            <div class="flex flex-wrap items-center gap-2 border-b border-slate-200 px-4 py-3 sm:px-6">
+                {% for chip in chips %}
+                    <a href="/recruitment?{{ chip.params|url_encode }}" class="brief-chip" data-recruit-nav="chip"
+                       aria-label="Remove filter: {{ chip.label }}">
+                        {{ chip.label }}
+                        <svg class="size-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M6 6l12 12M18 6 6 18"/></svg>
+                    </a>
+                {% endfor %}
+                <a href="/recruitment?{{ cleared_params|url_encode }}" class="ml-1 text-xs font-medium text-blue-600 hover:underline" data-recruit-nav="clear">Clear all</a>
+            </div>
+        {% endif %}
+
+        {% if pagination.total_items == 0 %}
+            <div class="p-4 sm:p-6">
+                {% if recruitment_unfiltered_total > 0 %}
+                    {% include 'partials/_empty.twig' with {
+                        title: 'No drivers match these filters',
+                        body: 'Loosen or clear a filter above to see the ' ~ recruitment_unfiltered_total|number_format ~ ' candidates for ' ~ active_division ~ '.',
+                    } only %}
+                {% else %}
+                    {% include 'partials/_empty.twig' with {
+                        title: 'No candidates for ' ~ active_division,
+                        body: hide_offers
+                            ? 'No driver without offers is a close enough fit right now. Try showing drivers with offers.'
+                            : 'No driver on the market is a close enough fit right now. Check back after the next market update.',
+                    } only %}
+                {% endif %}
+            </div>
+        {% else %}
+            {% if favourite_tracks_available %}
+                <p class="t-caption px-4 pt-3 sm:px-6">
+                    <span class="font-semibold">Fav</span> = favourite tracks on the calendar.
+                    <span class="font-semibold">C·n</span> this season,
+                    <span class="font-semibold">N·n</span> next season. Hover for track names.
+                </p>
+            {% endif %}
+
+            {# First columns are the answer (rating, name, OA); the attribute and money
+               columns scroll on a phone. #}
+            <div class="dt-inset">
+                <table class="dt">
+                    <thead class="border-b border-slate-200">
+                        <tr>
+                            <th scope="col" class="dt-th text-right">{{ _self.sortLink('Rtg', 'rating', sort, filter_params) }}</th>
+                            <th scope="col" class="dt-th">{{ _self.sortLink('Name', 'NAME', sort, filter_params) }}</th>
+                            <th scope="col" class="dt-th text-right">{{ _self.sortLink('OA', 'OA', sort, filter_params) }}</th>
+                            {% for stat in ['CON', 'TAL', 'AGG', 'EXP', 'TEI', 'STA', 'CHA', 'MOT', 'WEI', 'AGE'] %}
+                                <th scope="col" class="dt-th text-right">{{ _self.sortLink(stat, stat, sort, filter_params) }}</th>
+                            {% endfor %}
+                            {% if favourite_tracks_available %}
+                                <th scope="col" class="dt-th" title="Favourite tracks racing this season (C) and next season (N)">Fav</th>
+                            {% endif %}
+                            <th scope="col" class="dt-th text-right">{{ _self.sortLink('Salary', 'SAL', sort, filter_params) }}</th>
+                            <th scope="col" class="dt-th text-right">{{ _self.sortLink('Fee', 'FEE', sort, filter_params) }}</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        {% for d in recruitment_results %}
+                            <tr>
+                                <td class="dt-td text-right font-semibold text-slate-900">{{ d.rating }}</td>
+                                <td class="dt-td">
+                                    {% if d.ID > 0 %}
+                                        <a href="https://gpro.net/gb/DriverProfile.asp?ID={{ d.ID }}" target="_blank" rel="noopener noreferrer"
+                                           class="font-medium text-blue-600 hover:underline" title="Open the GPRO profile">{{ d.NAME }}</a>
+                                    {% else %}
+                                        <span class="font-medium text-slate-900">{{ d.NAME }}</span>
+                                    {% endif %}
+                                    {% if d.OFF > 0 %}
+                                        <span class="ml-1.5 inline-flex items-center rounded-md bg-amber-100 px-1.5 py-px text-[10px] font-medium text-amber-800">{{ d.OFF }} offer{{ d.OFF == 1 ? '' : 's' }}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="dt-td text-right font-semibold text-slate-900">{{ d.OA }}</td>
+                                {% for stat in ['CON', 'TAL', 'AGG', 'EXP', 'TEI', 'STA', 'CHA', 'MOT', 'WEI', 'AGE'] %}
+                                    <td class="dt-td text-right text-slate-600">{{ attribute(d, stat) }}</td>
+                                {% endfor %}
+                                {% if favourite_tracks_available %}
+                                    {% set curOn = d.FAV_current > 0 %}
+                                    {% set nxtOn = d.FAV_next > 0 %}
+                                    <td class="dt-td">
+                                        <span class="inline-flex items-center gap-1">
+                                            <span class="rounded-md px-1.5 py-px text-[11px] font-semibold {{ curOn ? 'bg-slate-100 text-slate-900' : 'text-slate-400' }}"
+                                                  title="{{ curOn ? 'This season: ' ~ d.FAV_current_names|join(', ') : 'No favourite tracks this season' }}">C·{{ d.FAV_current }}</span>
+                                            <span class="rounded-md px-1.5 py-px text-[11px] font-semibold {{ nxtOn ? 'bg-slate-100 text-slate-900' : 'text-slate-400' }}"
+                                                  title="{{ nxtOn ? 'Next season: ' ~ d.FAV_next_names|join(', ') : 'No favourite tracks next season' }}">N·{{ d.FAV_next }}</span>
+                                        </span>
+                                    </td>
+                                {% endif %}
+                                <td class="dt-td text-right text-slate-600">${{ d.SAL|number_format }}</td>
+                                <td class="dt-td text-right text-slate-600">${{ d.FEE|number_format }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {% if pagination.total_pages > 1 %}
+                {% set pageHref = '/recruitment?' ~ filter_params|url_encode ~ '&page=' %}
+                <div class="flex items-center justify-between border-t border-slate-200 px-4 py-3 sm:px-6">
+                    {# Mobile: prev/next only. #}
+                    <div class="flex flex-1 items-center justify-between sm:hidden">
+                        {% if pagination.current > 1 %}
+                            <a href="{{ pageHref }}{{ pagination.current - 1 }}" data-recruit-nav="page" class="btn btn-md btn-secondary">Previous</a>
+                        {% else %}
+                            <span></span>
+                        {% endif %}
+                        <span class="text-sm text-slate-700 tabular-nums">Page {{ pagination.current }} / {{ pagination.total_pages }}</span>
+                        {% if pagination.current < pagination.total_pages %}
+                            <a href="{{ pageHref }}{{ pagination.current + 1 }}" data-recruit-nav="page" class="btn btn-md btn-secondary">Next</a>
+                        {% else %}
+                            <span></span>
+                        {% endif %}
+                    </div>
+
+                    <div class="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+                        <p class="text-sm text-slate-700 tabular-nums">
+                            Showing <span class="font-medium">{{ (pagination.current - 1) * pagination.per_page + 1 }}</span> to <span class="font-medium">{{ min(pagination.current * pagination.per_page, pagination.total_items) }}</span> of <span class="font-medium">{{ pagination.total_items|number_format }}</span> results
+                        </p>
+                        <nav class="relative z-0 inline-flex rounded-md -space-x-px" aria-label="Pagination">
+                            {% if pagination.current > 1 %}
+                                <a href="{{ pageHref }}{{ pagination.current - 1 }}" data-recruit-nav="page" aria-label="Previous page" class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-slate-300 bg-surface text-sm font-medium text-slate-500 hover:bg-slate-50">«</a>
+                            {% endif %}
+
+                            {# Windowed page list: 1 … current±2 … last. Keeps the bar
+                               usable when the market yields hundreds of pages. #}
+                            {% set window = 2 %}
+                            {% set win_start = max(2, pagination.current - window) %}
+                            {% set win_end = min(pagination.total_pages - 1, pagination.current + window) %}
+                            {% set pages = [1] %}
+                            {% if win_start <= win_end %}
+                                {% set pages = pages|merge(win_start..win_end) %}
+                            {% endif %}
+                            {% set pages = pages|merge([pagination.total_pages]) %}
+                            {% for i in pages %}
+                                {% if not loop.first and i > pages[loop.index0 - 1] + 1 %}
+                                    <span class="relative inline-flex items-center px-3 py-2 border border-slate-300 bg-surface text-sm text-slate-400 select-none">…</span>
+                                {% endif %}
+                                <a href="{{ pageHref }}{{ i }}" data-recruit-nav="page"
+                                    {% if i == pagination.current %}aria-current="page"{% endif %}
+                                    class="relative inline-flex items-center px-4 py-2 border text-sm font-medium {{ i == pagination.current ? 'z-10 bg-blue-50 border-blue-500 text-blue-600' : 'bg-surface border-slate-300 text-slate-500 hover:bg-slate-50' }}">
+                                    {{ i }}
+                                </a>
+                            {% endfor %}
+
+                            {% if pagination.current < pagination.total_pages %}
+                                <a href="{{ pageHref }}{{ pagination.current + 1 }}" data-recruit-nav="page" aria-label="Next page" class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-slate-300 bg-surface text-sm font-medium text-slate-500 hover:bg-slate-50">»</a>
+                            {% endif %}
+                        </nav>
+                    </div>
+                </div>
+            {% endif %}
+        {% endif %}
+    </div>
+{% endif %}

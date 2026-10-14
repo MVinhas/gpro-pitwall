@@ -12,9 +12,11 @@ use App\Support\DeferredRender;
 use App\Support\Env;
 use App\Support\RaceSettings;
 use App\Support\RaceWindow;
+use App\Support\RecruitmentQuery;
 use App\Support\SyncState;
 use App\Service\IdealPilotService;
 use App\Service\InsightService;
+use App\Service\NoBaselineException;
 use App\Service\RecruitmentService;
 use App\Service\TrainingService;
 use App\Service\AuthService;
@@ -184,7 +186,9 @@ class PageController
             (string) $request->get(DeferredRender::WAIT_PARAM, '') === '1',
             $syncPending,
             $activeMainTab,
-            fn (): bool => $this->apiClient->isWarm(),
+            fn (): bool => $activeMainTab === 'Recruitment Analyzer'
+                ? $this->apiClient->hasCachedMarketFile()
+                : $this->apiClient->isWarm(),
         );
 
         $freshSync = false;
@@ -659,50 +663,74 @@ class PageController
             echo $this->twig->render('partials/_cockpit_wear.twig', $viewData);
             return;
         }
+        if ($fragment === 'recruitment_results' && $activeMainTab === 'Recruitment Analyzer') {
+            echo $this->twig->render('partials/_recruitment_results.twig', $viewData);
+            return;
+        }
 
         echo $this->twig->render('index.twig', $viewData);
     }
 
     /**
+     * Scores the cached driver market for the chosen division on every
+     * render (tens of milliseconds), so a filter, sort or page change never
+     * spends a GPRO call. A cold market is fetched here — behind the skeleton,
+     * since DeferredRender treats it as a cold screen.
+     *
      * @param array<string, mixed> $viewData
      */
     private function handleRecruitmentTab(Request $request, array &$viewData): void
     {
-        if (isset($_SESSION['recruitment_error'])) {
-            $viewData['recruitment_error'] = $_SESSION['recruitment_error'];
-            unset($_SESSION['recruitment_error']);
-        }
+        // Results used to live in the session; drop what an older release left.
+        unset($_SESSION['recruitment_results'], $_SESSION['recruitment_updated_at'], $_SESSION['recruitment_error']);
 
-        if (isset($_SESSION['recruitment_updated_at'])) {
-            $viewData['recruitment_updated_at'] = $_SESSION['recruitment_updated_at'];
-            unset($_SESSION['recruitment_updated_at']);
-        }
+        $query = RecruitmentQuery::resolve($request->query(), $_SESSION);
 
-        if (!isset($_SESSION['recruitment_results']) || !is_array($_SESSION['recruitment_results'])) {
+        /** @var list<string> $divisions */
+        $divisions = $this->config['app']['divisions'];
+        $division = $query[RecruitmentQuery::DIVISION] ?? '';
+        if (!in_array($division, $divisions, true)) {
+            $division = $this->divisionFromMenu($this->apiClient->getCachedMenu()) ?? 'Rookie';
+        }
+        $hideOffers = ($query[RecruitmentQuery::NO_OFFERS] ?? '') === '1';
+        $ranges = $this->recruitmentService->normalizeRangeFilters($query);
+        $sortCol = RecruitmentQuery::sortColumn($query['sort'] ?? null);
+        $sortOrder = RecruitmentQuery::sortOrder($query['order'] ?? null);
+        $params = RecruitmentQuery::params($division, $hideOffers, $ranges, $sortCol, $sortOrder);
+
+        $viewData['active_division'] = $division;
+        $viewData['hide_offers'] = $hideOffers;
+        $viewData['range_filter_fields'] = RecruitmentService::RANGE_FILTER_FIELDS;
+        $viewData['range_filters'] = $ranges;
+        $viewData['sort'] = ['col' => $sortCol, 'order' => $sortOrder];
+        $viewData['filter_params'] = $params;
+        $viewData['cleared_params'] = RecruitmentQuery::cleared($params);
+        $viewData['filter_chips'] = RecruitmentQuery::chips($ranges, $hideOffers, $params);
+        $viewData['recruitment_refresh_failed'] = !empty($_SESSION['recruitment_refresh_failed']);
+        unset($_SESSION['recruitment_refresh_failed']);
+
+        try {
+            $market = $this->apiClient->getMarketFile('drivers');
+            $allResults = $this->recruitmentService->analyze($market['rows'], $division, $hideOffers);
+        } catch (NoBaselineException) {
+            $viewData['recruitment_no_baseline'] = true;
+            return;
+        } catch (\Throwable $exception) {
+            error_log('[Recruitment] ' . $exception::class . ': ' . $exception->getMessage());
+            $viewData['recruitment_error'] = true;
             return;
         }
 
-        /** @var list<array<string, mixed>> $allResults */
-        $allResults = $_SESSION['recruitment_results'];
+        $viewData['recruitment_updated_at'] = $market['updated_at'];
         $unfilteredTotal = count($allResults);
+        $allResults = $this->recruitmentService->filterByRanges($allResults, $ranges);
 
-        $rawRangeFilters = [];
-        foreach (RecruitmentService::RANGE_FILTER_FIELDS as $field => $_label) {
-            $rawRangeFilters['min_' . $field] = $request->get('min_' . $field);
-            $rawRangeFilters['max_' . $field] = $request->get('max_' . $field);
-        }
-        $rangeFilters = $this->recruitmentService->normalizeRangeFilters($rawRangeFilters);
-        $allResults = $this->recruitmentService->filterByRanges($allResults, $rangeFilters);
-
-        $sortCol   = (string) $request->get('sort', 'rating');
-        $sortOrder = (string) $request->get('order', 'desc');
-        $perPage     = Env::int('PAGINATION_LIMIT', 20);
-        $currentPage = max(1, (int) $request->get('page', 1));
+        $perPage = Env::int('PAGINATION_LIMIT', 20);
         $resultPage = $this->recruitmentService->sortAndPaginate(
             $allResults,
             $sortCol,
             $sortOrder,
-            $currentPage,
+            max(1, (int) ($query['page'] ?? 1)),
             $perPage,
         );
         $pageRows = $resultPage['data'];
@@ -724,19 +752,6 @@ class PageController
 
         $viewData['recruitment_results'] = $pageRows;
         $viewData['pagination'] = $resultPage['pagination'] + ['per_page' => $perPage];
-        $viewData['sort'] = [
-            'col'   => $sortCol,
-            'order' => $sortOrder,
-        ];
-        $rangeFilterParams = [];
-        foreach ($rangeFilters as $field => $range) {
-            foreach ($range as $bound => $value) {
-                $rangeFilterParams[$bound . '_' . $field] = $value;
-            }
-        }
-        $viewData['range_filter_fields'] = RecruitmentService::RANGE_FILTER_FIELDS;
-        $viewData['range_filters'] = $rangeFilters;
-        $viewData['range_filter_query'] = http_build_query($rangeFilterParams);
         $viewData['recruitment_unfiltered_total'] = $unfilteredTotal;
     }
 

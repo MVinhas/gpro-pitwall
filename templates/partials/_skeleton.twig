@@ -111,6 +111,27 @@
             <div class="lg:col-span-7">{{ _self.table(5, 3, widths) }}</div>
         </div>
 
+    {% elseif tab == 'Recruitment Analyzer' %}
+        <div class="card">
+            <div class="card-hd space-y-2">
+                <span class="skel h-4 w-32"></span>
+                <span class="skel h-2.5 w-2/3"></span>
+            </div>
+            <div class="card-bd space-y-5">
+                <span class="skel h-9 w-full sm:w-96"></span>
+                <div class="grid grid-cols-2 gap-x-4 gap-y-3 lg:grid-cols-4">
+                    {% for i in 1..4 %}
+                        <div class="space-y-2">
+                            <span class="skel h-2.5 w-16"></span>
+                            <span class="skel h-9 w-full"></span>
+                        </div>
+                    {% endfor %}
+                </div>
+                <span class="skel h-10 w-full"></span>
+            </div>
+        </div>
+        {{ _self.table(8, 6, widths) }}
+
     {% else %}
         {{ _self.table(5, 3, widths) }}
     {% endif %}

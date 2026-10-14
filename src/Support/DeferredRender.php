@@ -18,13 +18,18 @@ final class DeferredRender
 {
     public const string WAIT_PARAM = 'wait';
 
-    /** Screens that read the manager's GPRO payloads while rendering. */
+    /**
+     * Screens that read GPRO payloads while rendering. Recruitment reads the
+     * shared driver market rather than the manager's own payloads, so the
+     * caller's warm probe is the market's for that screen.
+     */
     private const array DATA_SECTIONS = [
         'Cockpit',
         'Race Strategy',
         'Car Wear Planner',
         'Testing',
         'Training Planner',
+        'Recruitment Analyzer',
     ];
 
     /**

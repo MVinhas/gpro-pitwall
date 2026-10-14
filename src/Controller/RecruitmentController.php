@@ -8,48 +8,32 @@ use App\Http\Request;
 use App\Http\Sections;
 use App\Security\Authorize;
 use App\Service\GproApiClient;
-use App\Service\RecruitmentService;
 
 class RecruitmentController
 {
     public function __construct(
-        private readonly RecruitmentService $service,
         private readonly GproApiClient $apiClient,
         private readonly Authorize $authorize,
     ) {
     }
 
-    public function analyze(Request $request): void
+    /**
+     * Re-pulls the driver market past the cache. The screen comes back with
+     * the filters the session remembers; a failed pull keeps the cached copy
+     * on screen and says so.
+     */
+    public function refresh(Request $request): void
     {
         $this->authorize->requireAuth();
 
-        $division = (string) $request->post('target_division', 'Rookie');
-
         try {
-            $forceRefresh = (bool) $request->post('refresh_market');
-            $market = $this->apiClient->getMarketFile('drivers', $forceRefresh);
-
-            $results = $this->service->analyze(
-                $market['rows'],
-                $division,
-                (bool) $request->post('filter_offers'),
-            );
-
-            $_SESSION['recruitment_results'] = $results;
-            $_SESSION['recruitment_updated_at'] = $market['updated_at'];
-            $_SESSION['recruitment_error'] = null;
+            $this->apiClient->getMarketFile('drivers', true);
         } catch (\Throwable $exception) {
             error_log('[Recruitment] ' . $exception::class . ': ' . $exception->getMessage());
-
-            $_SESSION['recruitment_results'] = [];
-            $_SESSION['recruitment_updated_at'] = null;
-            $_SESSION['recruitment_error'] = StrategyController::GENERIC_ERROR_MESSAGE;
+            $_SESSION['recruitment_refresh_failed'] = true;
         }
 
-        header('Location: ' . Sections::url('Recruitment Analyzer', [
-            'division_tab' => $division,
-            'page'         => '1',
-        ]));
+        header('Location: ' . Sections::url('Recruitment Analyzer'), true, 303);
         exit;
     }
 }

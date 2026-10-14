@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tests\Unit\Service;
 
 use App\Service\IdealPilotService;
+use App\Service\NoBaselineException;
 use App\Service\RecruitmentService;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -396,5 +397,22 @@ final class RecruitmentServiceTest extends TestCase
         $this->assertSame(0, $out[1]['FAV_current']);
         $this->assertSame(0, $out[2]['FAV_current']);
         $this->assertSame([], $out[2]['FAV_next_names']);
+    }
+
+    public function testADivisionWithoutABaselineSaysSoInsteadOfFailingGenerically(): void
+    {
+        $empty = new class extends IdealPilotService {
+            public function __construct()
+            {
+            }
+            public function getIdealPilot(string $division): array
+            {
+                return ['stats' => [], 'count' => 0];
+            }
+        };
+        $service = new RecruitmentService(self::CSV_MAP, self::CAPS, $empty);
+
+        $this->expectException(NoBaselineException::class);
+        $service->analyze($this->market(), 'Master', false);
     }
 }

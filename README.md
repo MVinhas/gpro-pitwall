@@ -45,8 +45,9 @@ wait on GPRO: one whose data isn't cached yet opens as an outline and fills in w
 - **Car Wear** — each part's wear race by race over the next five races, with when to replace
   it, and a what-if form for risk, levels, wear and driver. A season list rates every race's
   wear in words and advises where to push clear track risk, priced from your own part costs.
-- **Recruitment Analyzer** — scores the full driver market (4–5k) against your division's
-  ideal driver, with per-attribute filters and a favourite-tracks-this-season column.
+- **Recruitment** — scores the full GPRO driver market against your target division's
+  ideal driver as soon as the tab opens, with live filters (remembered per session) and a
+  favourite-tracks-this-season column.
 - **Debrief** (admin) — reads races back rather than planning them: a filterable,
   ranked Bird's Eye View over your own archived weekends or the anonymous corpus, a
   full per-race report (stints, stops, per-part wear, both qualifying runs), a Track
@@ -152,7 +153,7 @@ Source of truth is GitHub; deployment is a manual file copy to any PHP 8.5 host.
 - **Twig 3** templates; **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile). Light and dark themes ship in one stylesheet: every design token is a CSS `light-dark()` pair switched by `color-scheme`, so System mode tracks the OS with zero JavaScript.
 - **SQLite** via PDO — emails and API tokens encrypted at rest (AES-256-GCM).
 - **PHPMailer 7** for SMTP; dev writes `.eml` files instead.
-- **PHPUnit 13** — 973 tests, 2831 assertions — with **PHPStan level 8** and enforced type-declaration coverage (100% return/property/constant + `strict_types`; 99.5% param). Twig linted by a native `bin/twig_lint.php` built on Twig's own parser. CI measures statement coverage with `pcov` and enforces a floor (currently 59%, ratcheted up as coverage grows).
+- **PHPUnit 13** — 1000 tests, 2917 assertions — with **PHPStan level 8** and enforced type-declaration coverage (100% return/property/constant + `strict_types`; 99.5% param). Twig linted by a native `bin/twig_lint.php` built on Twig's own parser. CI measures statement coverage with `pcov` and enforces a floor (currently 59%, ratcheted up as coverage grows).
 - **Timestamps stored and served as UTC**, localised per visitor in the browser — no server-side timezone config.
 
 ## Architecture

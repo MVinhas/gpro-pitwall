@@ -6,6 +6,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.7] - 2026-10-14
+
+### Changed
+- **Recruitment loads the driver market by itself.** Opening the tab no longer shows an
+  empty form waiting for "Analyze candidates": the market is scored for your division at
+  once, behind the same loading outline as the other screens when it has to come from GPRO.
+  A failed fetch says so with a Try again button; an empty result says whether the filters
+  or the market caused it.
+- **Recruitment filters are always on screen and apply as you change them.** Target
+  division is a one-click switch, with the hide-offers toggle beside it. The most-used ranges
+  (overall ability, age, salary, fee) are always visible and the other attributes sit under
+  "More attributes". Results update in place without a page reload. Active filters show as
+  removable chips above the table, with Clear all. The default division is your own, and the
+  filters are kept when you leave the tab and come back.
+- **Refresh pulls the latest market on demand.** If GPRO doesn't answer, the market already
+  loaded stays on screen with a note.
+
 ## [1.21.6] - 2026-10-14
 
 ### Fixed
