@@ -41,17 +41,21 @@
                 <span data-slider-value class="text-sm font-semibold text-slate-900 w-10 text-right tabular-nums">{{ cockpit_risk }}</span>
             </div>
         </div>
-        <div>
-            <label class="t-label block mb-1" for="cockpitTrainingLaps">Training laps first</label>
-            <div class="flex items-center gap-3">
-                <input type="range" id="cockpitTrainingLaps" name="cockpit_training_laps" min="0" max="100" step="5"
-                       value="{{ cockpit_training_laps }}"
-                       data-cockpit-wear-slider
-                       class="range">
-                <span data-slider-value class="text-sm font-semibold text-slate-900 w-10 text-right tabular-nums">{{ cockpit_training_laps }}</span>
+        {% if cockpit_testing_track|default(null) %}
+            <div>
+                <label class="t-label block mb-1" for="cockpitTrainingLaps">Training laps first</label>
+                <div class="flex items-center gap-3">
+                    <input type="range" id="cockpitTrainingLaps" name="cockpit_training_laps" min="0" max="100" step="5"
+                           value="{{ cockpit_training_laps }}"
+                           data-cockpit-wear-slider
+                           class="range">
+                    <span data-slider-value class="text-sm font-semibold text-slate-900 w-10 text-right tabular-nums">{{ cockpit_training_laps }}</span>
+                </div>
+                <p class="t-caption mt-1">Run at {{ cockpit_testing_track }}, the testing track, before this race.</p>
             </div>
-            <p class="t-caption mt-1">Wear from training laps run before this race.</p>
-        </div>
+        {% else %}
+            <p class="t-caption">Testing is closed, so no training laps are counted.</p>
+        {% endif %}
         <noscript><button type="submit" class="btn btn-sm btn-secondary w-full">Update</button></noscript>
     </form>
 
@@ -169,7 +173,7 @@
             <div class="border-t border-slate-200 px-4 pb-4 pt-3 space-y-3">
                 <p class="t-caption">
                     {{ wear_track_name }}{% if wear_laps %} · {{ wear_laps }} laps{% endif %}
-                    {%- if cockpit_training_laps > 0 %} · after {{ cockpit_training_laps }} training laps{% endif %}
+                    {%- if cockpit_training_laps > 0 %} · after {{ cockpit_training_laps }} training laps at {{ cockpit_testing_track }}{% endif %}
                 </p>
                 <div class="dt-scroll">
                     <table class="dt">

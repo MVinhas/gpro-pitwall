@@ -77,7 +77,7 @@ final class TrainingWearProjectionServiceTest extends TestCase
         $plain = (new CarWearService($this->db, self::SECRETS))
             ->calculateWear($this->track(), $this->car(20), [], 0);
 
-        $projected = $this->service()->project($this->track(), $this->car(20), [], 0, 0);
+        $projected = $this->service()->project($this->track(), $this->track(), $this->car(20), [], 0, 0);
 
         $this->assertSame(
             $plain['parts']['Engine']['end'],
@@ -93,7 +93,7 @@ final class TrainingWearProjectionServiceTest extends TestCase
         $plain = (new CarWearService($this->db, self::SECRETS))
             ->calculateWear($this->track(), $this->car(20), [], 0);
 
-        $projected = $this->service()->project($this->track(), $this->car(20), [], 0, 40);
+        $projected = $this->service()->project($this->track(), $this->track(), $this->car(20), [], 0, 40);
 
         foreach (CarWearService::PARTS_MAP as $label => $_) {
             $this->assertSame(
@@ -106,8 +106,8 @@ final class TrainingWearProjectionServiceTest extends TestCase
 
     public function testTrainingLapsRaiseTheProjectedEndWear(): void
     {
-        $without = $this->service()->project($this->track(), $this->car(20), [], 0, 0);
-        $with = $this->service()->project($this->track(), $this->car(20), [], 0, 100);
+        $without = $this->service()->project($this->track(), $this->track(), $this->car(20), [], 0, 0);
+        $with = $this->service()->project($this->track(), $this->track(), $this->car(20), [], 0, 100);
 
         $this->assertGreaterThan(
             $without['parts']['Engine']['end'],
@@ -121,7 +121,7 @@ final class TrainingWearProjectionServiceTest extends TestCase
      */
     public function testTrainingWearIsReportedSeparatelyFromRaceWear(): void
     {
-        $result = $this->service()->project($this->track(), $this->car(20), [], 0, 100);
+        $result = $this->service()->project($this->track(), $this->track(), $this->car(20), [], 0, 100);
         $engine = $result['parts']['Engine'];
 
         $this->assertSame(20, $engine['start']);
@@ -137,15 +137,15 @@ final class TrainingWearProjectionServiceTest extends TestCase
     /** 100 laps on a 100-lap track ≈ half a race distance's wear (factor 0.53). */
     public function testTrainingWearTracksTheTestingWearFactor(): void
     {
-        $result = $this->service()->project($this->track(), $this->car(), [], 0, 100);
+        $result = $this->service()->project($this->track(), $this->track(), $this->car(), [], 0, 100);
 
         $this->assertEqualsWithDelta(5.3, $result['parts']['Engine']['training'], 0.1);
     }
 
     public function testTrainingWearScalesLinearlyWithLapCount(): void
     {
-        $fifty = $this->service()->project($this->track(), $this->car(), [], 0, 50);
-        $hundred = $this->service()->project($this->track(), $this->car(), [], 0, 100);
+        $fifty = $this->service()->project($this->track(), $this->track(), $this->car(), [], 0, 50);
+        $hundred = $this->service()->project($this->track(), $this->track(), $this->car(), [], 0, 100);
 
         $this->assertEqualsWithDelta(
             $fifty['parts']['Engine']['training'] * 2,
@@ -156,7 +156,7 @@ final class TrainingWearProjectionServiceTest extends TestCase
 
     public function testTheLapCountIsCarriedBackForDisplay(): void
     {
-        $result = $this->service()->project($this->track(), $this->car(), [], 0, 75);
+        $result = $this->service()->project($this->track(), $this->track(), $this->car(), [], 0, 75);
 
         $this->assertSame(75, $result['training_laps']);
         $this->assertSame('Testville', $result['track_name']);
@@ -164,7 +164,7 @@ final class TrainingWearProjectionServiceTest extends TestCase
 
     public function testANegativeLapCountIsFlooredAtZero(): void
     {
-        $result = $this->service()->project($this->track(), $this->car(), [], 0, -20);
+        $result = $this->service()->project($this->track(), $this->track(), $this->car(), [], 0, -20);
 
         $this->assertSame(0, $result['training_laps']);
         $this->assertSame(0.0, $result['parts']['Engine']['training']);
@@ -172,8 +172,8 @@ final class TrainingWearProjectionServiceTest extends TestCase
 
     public function testTheLapCountIsCappedAtTheSessionMaximum(): void
     {
-        $atCap = $this->service()->project($this->track(), $this->car(), [], 0, 100);
-        $overCap = $this->service()->project($this->track(), $this->car(), [], 0, 500);
+        $atCap = $this->service()->project($this->track(), $this->track(), $this->car(), [], 0, 100);
+        $overCap = $this->service()->project($this->track(), $this->track(), $this->car(), [], 0, 500);
 
         $this->assertSame(100, $overCap['training_laps']);
         $this->assertSame($atCap['parts']['Engine']['end'], $overCap['parts']['Engine']['end']);
@@ -182,7 +182,7 @@ final class TrainingWearProjectionServiceTest extends TestCase
     /** The headline is the answer: which parts end up over the limit. */
     public function testAComfortableCarIsReportedAsWithinLimits(): void
     {
-        $result = $this->service()->project($this->track(), $this->car(0), [], 0, 100);
+        $result = $this->service()->project($this->track(), $this->track(), $this->car(0), [], 0, 100);
 
         $this->assertTrue($result['within_limits']);
         $this->assertSame([], $result['advisor']['swap']);
@@ -190,7 +190,7 @@ final class TrainingWearProjectionServiceTest extends TestCase
 
     public function testACarPushedOverTheLimitByTrainingIsFlagged(): void
     {
-        $result = $this->service()->project($this->track(), $this->car(95), [], 0, 100);
+        $result = $this->service()->project($this->track(), $this->track(), $this->car(95), [], 0, 100);
 
         $this->assertFalse($result['within_limits']);
         $this->assertNotSame([], $result['advisor']['swap']);
@@ -204,8 +204,8 @@ final class TrainingWearProjectionServiceTest extends TestCase
     {
         // 75 + 10 race = 85, under the 90 "risky" line. Add 100 training
         // laps (+5.3) and the same race finishes at 90.3 — over it.
-        $withoutTraining = $this->service()->project($this->track(), $this->car(75), [], 0, 0);
-        $withTraining = $this->service()->project($this->track(), $this->car(75), [], 0, 100);
+        $withoutTraining = $this->service()->project($this->track(), $this->track(), $this->car(75), [], 0, 0);
+        $withTraining = $this->service()->project($this->track(), $this->track(), $this->car(75), [], 0, 100);
 
         $this->assertTrue($withoutTraining['within_limits']);
         $this->assertFalse($withTraining['within_limits']);
@@ -213,7 +213,7 @@ final class TrainingWearProjectionServiceTest extends TestCase
 
     public function testEveryPartIsProjected(): void
     {
-        $result = $this->service()->project($this->track(), $this->car(), [], 0, 100);
+        $result = $this->service()->project($this->track(), $this->track(), $this->car(), [], 0, 100);
 
         $this->assertCount(count(CarWearService::PARTS_MAP), $result['parts']);
         foreach (array_keys(CarWearService::PARTS_MAP) as $label) {
@@ -225,6 +225,7 @@ final class TrainingWearProjectionServiceTest extends TestCase
     {
         $result = $this->service()->project(
             ['id' => 999, 'name' => 'Nowhere'],
+            $this->track(),
             $this->car(),
             [],
             0,
@@ -232,6 +233,47 @@ final class TrainingWearProjectionServiceTest extends TestCase
         );
 
         $this->assertArrayHasKey('error', $result);
+    }
+
+    public function testAnUnknownTestingTrackIsReportedAsAnErrorRatherThanGuessed(): void
+    {
+        $result = $this->service()->project(
+            $this->track(),
+            ['id' => 0, 'name' => 'Nowhere'],
+            $this->car(),
+            [],
+            0,
+            100
+        );
+
+        $this->assertArrayHasKey('error', $result);
+    }
+
+    /**
+     * GPRO runs testing at its own track, which is rarely the race track.
+     * Training laps wear the car at the testing track's rate; the race that
+     * follows wears it at the race track's.
+     */
+    public function testTrainingWearComesFromTheTestingTrackAndRaceWearFromTheRaceTrack(): void
+    {
+        // 50-lap testing track with a 20% full-race base on every part:
+        // 100 laps × (20 × 0.53 / 50) = 21.2%.
+        $this->db->exec(
+            "INSERT INTO tracks (id, name, laps, wear_chassis, wear_engine, wear_fwing,
+             wear_rwing, wear_underbody, wear_sidepod, wear_cooling, wear_gearbox,
+             wear_brakes, wear_suspension, wear_electronics)
+             VALUES (2, 'Testring', 50, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20)"
+        );
+        $testing = ['id' => 0, 'name' => 'Testring'];
+
+        $sameTrack = $this->service()->project($this->track(), $this->track(), $this->car(), [], 0, 100);
+        $result = $this->service()->project($this->track(), $testing, $this->car(), [], 0, 100);
+        $engine = $result['parts']['Engine'];
+
+        $this->assertEqualsWithDelta(21.2, $engine['training'], 0.1);
+        $this->assertSame($sameTrack['parts']['Engine']['race'], $engine['race']);
+        $this->assertSame('Testville', $result['track_name']);
+        $this->assertSame('Testring', $result['testing_track_name']);
     }
 
     public function testRiskStillRaisesRaceWearOnTopOfTraining(): void
@@ -243,8 +285,8 @@ final class TrainingWearProjectionServiceTest extends TestCase
             new WearAdvisorService(),
         );
 
-        $noRisk = $service->project($this->track(), $this->car(), [], 0, 100);
-        $highRisk = $service->project($this->track(), $this->car(), [], 50, 100);
+        $noRisk = $service->project($this->track(), $this->track(), $this->car(), [], 0, 100);
+        $highRisk = $service->project($this->track(), $this->track(), $this->car(), [], 50, 100);
 
         $this->assertGreaterThan(
             $noRisk['parts']['Engine']['race'],

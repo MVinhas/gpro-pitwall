@@ -6,6 +6,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.6] - 2026-10-14
+
+### Fixed
+- **Training-lap wear in the Cockpit now uses the testing track.** GPRO runs testing at its
+  own circuit, but the car-wear card charged training laps at the race track's wear rate, so
+  the projection was off whenever the two tracks differ. Training laps now wear the car at
+  the testing track and the race at the race track, and the slider names the testing track.
+  While testing is closed the slider gives way to a note and no training wear is counted.
+
 ## [1.21.5] - 2026-10-13
 
 ### Fixed
