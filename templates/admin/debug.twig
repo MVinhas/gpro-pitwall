@@ -38,6 +38,13 @@
         </div>
     {% endif %}
 
+    {% if not system.php_floor_met %}
+        <div class="notice notice-error">
+            <strong>PHP {{ system.php_version }} has a known critical vulnerability.</strong>
+            The security floor is {{ system.php_floor }}: ask the host to upgrade, or switch on maintenance mode until they do.
+        </div>
+    {% endif %}
+
     {# Top Metrics Grid #}
     <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         {# User Metrics #}

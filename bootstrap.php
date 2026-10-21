@@ -476,12 +476,17 @@ $container['controller.page'] = new PageController(
     $container['config']
 );
 
+$container['service.php_floor'] = new \App\Support\PhpSecurityFloor(
+    Env::get('PHP_SECURITY_FLOOR', \App\Support\PhpSecurityFloor::DEFAULT),
+);
+
 $container['controller.debug'] = new \App\Controller\DebugController(
     $container['service.user_repo'],
     $container['service.cache'],
     $container['twig'],
     Database::path(),
     $container['service.authorize'],
+    $container['service.php_floor'],
 );
 
 $container['controller.baseline'] = new BaselineController(
@@ -536,6 +541,7 @@ $container['controller.health'] = new \App\Controller\HealthController(
     $container['service.cache'],
     $container['service.authorize'],
     $container['settings']['is_dev'],
+    $container['service.php_floor'],
 );
 
 $container['service.admin_users'] = new \App\Service\AdminUserService(

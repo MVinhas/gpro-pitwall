@@ -1,6 +1,16 @@
+# Maintenance switch: an empty public/.maintenance file (SFTP put/delete) answers
+# every request with a static 503 before PHP loads, so an unpatched interpreter
+# never sees attacker input. Deploys never delete remote files: remove it by hand.
+ErrorDocument 503 /maintenance.html
+
 # Front controller — every request that doesn't map to a real file goes to index.php.
 <IfModule mod_rewrite.c>
     RewriteEngine On
+
+    RewriteCond %{DOCUMENT_ROOT}/.maintenance -f
+    RewriteCond %{REQUEST_URI} !^/(maintenance\.html|assets/app\.css|logo\.svg|favicon\.svg)$
+    RewriteRule ^ - [R=503,L]
+
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteRule ^ index.php [QSA,L]

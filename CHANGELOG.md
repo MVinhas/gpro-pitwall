@@ -6,6 +6,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.8] - 2026-10-21
+
+### Security
+- **Security:** PHP security floor. PHP 8.5.12 (2026-10-21) fixes two unauthenticated
+  remote code execution bugs, CVE-2026-109618 and CVE-2026-109619. Below the floor
+  (8.5.12, overridable with `PHP_SECURITY_FLOOR`), `/healthz` reports degraded to admins
+  and `/debug` shows a warning, so it's clear whether the host has rolled out the fix.
+  Anonymous callers never see this check.
+- **Security:** maintenance switch. An empty `public/.maintenance` makes Apache answer
+  every request with a static 503 page before PHP loads, keeping an unpatched interpreter
+  out of reach until the host catches up. The release build refuses to bundle the flag.
+
 ## [1.21.7] - 2026-10-14
 
 ### Changed
