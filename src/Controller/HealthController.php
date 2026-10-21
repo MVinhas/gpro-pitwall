@@ -6,6 +6,7 @@ namespace App\Controller;
 
 use App\Cache\CacheInterface;
 use App\Security\Authorize;
+use App\Support\PhpSecurityFloor;
 use PDO;
 use Throwable;
 
@@ -16,6 +17,8 @@ final readonly class HealthController
         private CacheInterface $cache,
         private Authorize $authorize,
         private bool $isDev,
+        private PhpSecurityFloor $phpFloor = new PhpSecurityFloor(),
+        private string $phpVersion = PHP_VERSION,
     ) {
     }
 
@@ -27,6 +30,12 @@ final readonly class HealthController
             'db'    => $this->checkDb($showDetail),
             'cache' => $this->checkCache($showDetail),
         ];
+
+        // Admin/dev only: an anonymous "php: false" would advertise an
+        // unpatched interpreter to whoever is scanning for one.
+        if ($showDetail) {
+            $checks['php'] = $this->checkPhp();
+        }
 
         $ok = !in_array(false, array_column($checks, 'ok'), true);
 
@@ -76,6 +85,16 @@ final readonly class HealthController
             error_log('[healthz] cache check failed: ' . $e::class . ': ' . $e->getMessage());
             return $this->result(false, $e->getMessage(), $showDetail);
         }
+    }
+
+    /** @return array{ok: bool, detail: string} */
+    private function checkPhp(): array
+    {
+        $floor = $this->phpFloor->minimum();
+
+        return $this->phpFloor->isMet($this->phpVersion)
+            ? ['ok' => true, 'detail' => sprintf('PHP %s meets the security floor %s', $this->phpVersion, $floor)]
+            : ['ok' => false, 'detail' => sprintf('PHP %s is below the security floor %s', $this->phpVersion, $floor)];
     }
 
     /** @return array{ok: bool, detail?: string} */

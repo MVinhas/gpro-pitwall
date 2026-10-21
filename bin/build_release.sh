@@ -71,7 +71,8 @@ for forbidden in \
     "${DIST}/CLAUDE.md" \
     "${DIST}/TODO.md" \
     "${DIST}/gpro-public-api.yml" \
-    "${DIST}/.env"; do
+    "${DIST}/.env" \
+    "${DIST}/public/.maintenance"; do
     if [[ -e "$forbidden" ]]; then
         echo "✗ forbidden artefact in bundle: $forbidden" >&2
         exit 1

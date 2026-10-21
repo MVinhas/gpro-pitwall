@@ -8,6 +8,7 @@ use App\Cache\Adapter\FilesystemCache;
 use App\Controller\HealthController;
 use App\Repository\UserRepository;
 use App\Security\Authorize;
+use App\Support\PhpSecurityFloor;
 use PDO;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -86,6 +87,66 @@ final class HealthControllerTest extends TestCase
         }
 
         $this->assertArrayHasKey('detail', $result['checks']['db']);
+    }
+
+    public function testAdminSeesPhpBelowTheSecurityFloorAsDegraded(): void
+    {
+        $users = $this->createStub(UserRepository::class);
+        $users->method('findById')->willReturn(['id' => 1, 'is_admin' => 1]);
+
+        $_SESSION['user_id'] = 1;
+        try {
+            $controller = new HealthController(
+                $this->db,
+                $this->cache,
+                new Authorize($users),
+                false,
+                new PhpSecurityFloor('8.5.12'),
+                '8.5.11',
+            );
+            $result = $this->runCheck($controller);
+        } finally {
+            unset($_SESSION['user_id']);
+        }
+
+        $this->assertSame('degraded', $result['status']);
+        $this->assertFalse($result['checks']['php']['ok']);
+        $this->assertStringContainsString('8.5.11', $result['checks']['php']['detail']);
+        $this->assertStringContainsString('8.5.12', $result['checks']['php']['detail']);
+    }
+
+    public function testAnonymousNeverLearnsThePhpFloorVerdict(): void
+    {
+        $controller = new HealthController(
+            $this->db,
+            $this->cache,
+            $this->anonymousAuthorize(),
+            false,
+            new PhpSecurityFloor('8.5.12'),
+            '8.5.11',
+        );
+
+        $result = $this->runCheck($controller);
+
+        $this->assertSame('ok', $result['status']);
+        $this->assertArrayNotHasKey('php', $result['checks']);
+    }
+
+    public function testDevModeReportsAPatchedInterpreterAsOk(): void
+    {
+        $controller = new HealthController(
+            $this->db,
+            $this->cache,
+            $this->anonymousAuthorize(),
+            true,
+            new PhpSecurityFloor('8.5.12'),
+            '8.5.12',
+        );
+
+        $result = $this->runCheck($controller);
+
+        $this->assertTrue($result['checks']['php']['ok']);
+        $this->assertSame('ok', $result['status']);
     }
 
     public function testAnonymousResponseOmitsDetailOnRealDbFailure(): void

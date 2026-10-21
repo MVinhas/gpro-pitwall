@@ -8,6 +8,7 @@ use App\Repository\UserRepository;
 use App\Security\Authorize;
 use App\Cache\CacheInterface;
 use App\Support\Env;
+use App\Support\PhpSecurityFloor;
 use App\Support\RecruitmentQuery;
 use Twig\Environment;
 
@@ -19,6 +20,7 @@ class DebugController
         private readonly Environment $twig,
         private readonly string $dbPath,
         private readonly Authorize $authorize,
+        private readonly PhpSecurityFloor $phpFloor,
     ) {
     }
 
@@ -29,6 +31,8 @@ class DebugController
         $memLimit = ini_get('memory_limit');
         $systemInfo = [
             'php_version' => PHP_VERSION,
+            'php_floor' => $this->phpFloor->minimum(),
+            'php_floor_met' => $this->phpFloor->isMet(),
             'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? 'Unknown',
             'memory_usage' => $this->formatBytes(memory_get_usage(true)),
             'memory_limit' => ($memLimit === '-1') ? null : $memLimit,
