@@ -6,6 +6,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.10] - 2026-10-23
+
+### Fixed
+- Race history records your facility levels (wind tunnel, pit stop, R&D workshop, R&D
+  design, engineering, lab, commercial) and your staff's stress handling. The archive was
+  reading field names GPRO doesn't send, so these were always empty.
+- Race history records your technical director's name. A manager without a TD (always
+  in Rookie and Amateur, and by choice in Pro, Master and Elite) is now shown as "No TD"
+  instead of GPRO's "Unknown technical director" placeholder.
+- The race-analysis corpus no longer counts races without a TD as having one. TD presence
+  is now read from the TD's stats, and existing rows are corrected once on upgrade, so the
+  with/without-TD comparison stops mixing the two.
+- Each archived race records the driver's age, taken only from the driver who actually ran
+  that race. GPRO's race analysis doesn't include age, and after a driver change the
+  current driver's age would have been wrong.
+- Race Strategy identifies your TD from the id GPRO actually sends.
+- The cache uses the filesystem driver when `CACHE_DRIVER` is unset, as documented, and
+  `/debug` reports that default.
+
 ## [1.21.9] - 2026-10-23
 
 ### Security
