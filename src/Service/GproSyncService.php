@@ -11,7 +11,7 @@ use Throwable;
 final class GproSyncService
 {
     /**
-     * Deadman ceiling for the coalescing lock. A healthy 8-call sync finishes
+     * Deadman ceiling for the coalescing lock. A healthy 14-call sync finishes
      * well under this; the TTL only matters if a process dies mid-sync without
      * releasing, in which case the next request can retry after it expires.
      */
