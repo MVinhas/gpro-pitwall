@@ -88,4 +88,22 @@ final class RaceWindowTest extends TestCase
         $this->assertSame([1, 7], RaceWindow::parseDays(' 1, 9 ,7,x'));
         $this->assertSame([], RaceWindow::parseDays(''));
     }
+
+    public function testRaceStartWindowRollsAtTwentyHoursParis(): void
+    {
+        $paris = new DateTimeZone('Europe/Paris');
+        // 2026-06-09 is a Tuesday race day; the previous race was Fri 2026-06-05.
+        $beforeStart = RaceWindow::raceStartIdFor(new DateTimeImmutable('2026-06-09 19:59', $paris), self::TUE_FRI);
+        $afterStart = RaceWindow::raceStartIdFor(new DateTimeImmutable('2026-06-09 20:01', $paris), self::TUE_FRI);
+        $earlyMorning = RaceWindow::raceStartIdFor(new DateTimeImmutable('2026-06-09 00:30', $paris), self::TUE_FRI);
+
+        $this->assertSame('2026-06-05', $beforeStart, 'the last pre-start snapshot is what raced');
+        $this->assertSame('2026-06-09', $afterStart);
+        $this->assertSame($beforeStart, $earlyMorning);
+    }
+
+    public function testRaceStartWindowIsDisabledWithoutRaceDays(): void
+    {
+        $this->assertSame('', RaceWindow::raceStartIdFor(new DateTimeImmutable('2026-06-09 20:01'), []));
+    }
 }

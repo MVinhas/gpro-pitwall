@@ -76,4 +76,24 @@ final class UserApiArchiveMigrationTest extends TestCase
             (int) $db->query('SELECT COUNT(*) FROM user_api_archive')->fetchColumn(),
         );
     }
+
+    public function testNaturalKeyIncludesTokenScope(): void
+    {
+        $db = new PDO('sqlite::memory:');
+        $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $this->makeSeeder($db)->migrate();
+        $db->exec("INSERT INTO users (username, email_hash, email_encrypted) VALUES ('u', 'h', 'e')");
+        $userId = (int) $db->lastInsertId();
+
+        $insert = $db->prepare(
+            "INSERT INTO user_api_archive (user_id, token_scope, endpoint, params, race_window, fetched_at, payload_gz)
+             VALUES (:u, :s, 'office', '', 'w1', '2026-10-23 10:00:00', x'00')"
+        );
+        $insert->execute(['u' => $userId, 's' => 'scope-a']);
+        $insert->execute(['u' => $userId, 's' => 'scope-b']);
+
+        $this->assertSame(2, (int) $db->query('SELECT COUNT(*) FROM user_api_archive')->fetchColumn());
+        $this->expectException(\PDOException::class);
+        $insert->execute(['u' => $userId, 's' => 'scope-a']);
+    }
 }

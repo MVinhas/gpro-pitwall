@@ -29,6 +29,11 @@ final class CountingGproFetcher implements GproFetcher
                 'email' => 'a@example.com',
                 'apiRequestsRemaining' => 88,
             ],
+            str_contains($endpoint, 'RaceAnalysis') => [
+                'selSeasonNb' => 98,
+                'selRaceNb' => 3,
+                'apiRequestsRemaining' => 85,
+            ],
             str_contains($endpoint, 'UpdateCar') => ['kind' => 'car', 'apiRequestsRemaining' => 87],
             default => ['endpoint' => $endpoint, 'apiRequestsRemaining' => 86],
         };

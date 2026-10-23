@@ -22,6 +22,9 @@ use DateTimeZone;
  */
 final class RaceWindow
 {
+    private const int RACE_START_HOUR = 20;
+    private const string RACE_TZ = 'Europe/Paris';
+
     /**
      * Identifier of the race window containing $now, or '' when windowing is
      * disabled (empty $raceDays) — callers treat '' as "no epoch, use the
@@ -54,6 +57,18 @@ final class RaceWindow
 
         // Unreachable for a non-empty $raceDays, but keeps the function total.
         return $cursor->format('Y-m-d');
+    }
+
+    /**
+     * Window whose boundary is race start (20:00 Paris) rather than midnight:
+     * the last snapshot before the start is the one that raced, and everything
+     * from the start belongs to the next race.
+     *
+     * @param list<int> $raceDays ISO-8601 weekday numbers (1=Mon … 7=Sun)
+     */
+    public static function raceStartIdFor(DateTimeImmutable $now, array $raceDays): string
+    {
+        return self::idFor($now, $raceDays, self::RACE_START_HOUR, self::RACE_TZ);
     }
 
     /**

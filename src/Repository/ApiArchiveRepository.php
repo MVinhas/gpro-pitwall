@@ -10,8 +10,11 @@ use PDO;
 /**
  * Per-user archive of raw GPRO API responses, gzip-compressed JSON.
  *
- * Reads are always scoped to the supplied user_id. A row whose blob cannot be
- * decoded reads as absent so a corrupt archive entry never breaks a page.
+ * Reads are always scoped to the supplied user_id. The read-through lookups
+ * (getRow/get/has) also match the token scope, so a swapped token never reads
+ * the previous account's rows; the history readers (latest/paramsFor) span
+ * scopes. A row whose blob cannot be decoded reads as absent so a corrupt
+ * archive entry never breaks a page.
  */
 final class ApiArchiveRepository
 {
@@ -26,6 +29,7 @@ final class ApiArchiveRepository
      */
     public function put(
         int $userId,
+        string $tokenScope,
         string $endpoint,
         string $params,
         string $window,
@@ -37,16 +41,17 @@ final class ApiArchiveRepository
 
         $stmt = $this->pdo->prepare(
             'INSERT INTO user_api_archive
-                (user_id, endpoint, params, race_window, season, race, fetched_at, payload_gz)
+                (user_id, token_scope, endpoint, params, race_window, season, race, fetched_at, payload_gz)
              VALUES
-                (:user_id, :endpoint, :params, :window, :season, :race, :fetched_at, :payload)
-             ON CONFLICT(user_id, endpoint, params, race_window) DO UPDATE SET
+                (:user_id, :scope, :endpoint, :params, :window, :season, :race, :fetched_at, :payload)
+             ON CONFLICT(user_id, token_scope, endpoint, params, race_window) DO UPDATE SET
                 season = excluded.season,
                 race = excluded.race,
                 fetched_at = excluded.fetched_at,
                 payload_gz = excluded.payload_gz'
         );
         $stmt->bindValue(':user_id', $userId, PDO::PARAM_INT);
+        $stmt->bindValue(':scope', $tokenScope);
         $stmt->bindValue(':endpoint', $endpoint);
         $stmt->bindValue(':params', $params);
         $stmt->bindValue(':window', $window);
@@ -60,21 +65,46 @@ final class ApiArchiveRepository
     /**
      * @return array<string, mixed>|null
      */
-    public function get(int $userId, string $endpoint, string $params, string $window): ?array
+    public function get(int $userId, string $tokenScope, string $endpoint, string $params, string $window): ?array
+    {
+        return $this->getRow($userId, $tokenScope, $endpoint, $params, $window)['payload'] ?? null;
+    }
+
+    /**
+     * The read-through row with its UTC fetched_at, so a caller can tell how
+     * much of a cache TTL it has left.
+     *
+     * @return array{payload: array<string, mixed>, fetched_at: string, season: ?int, race: ?int}|null
+     */
+    public function getRow(int $userId, string $tokenScope, string $endpoint, string $params, string $window): ?array
     {
         $stmt = $this->pdo->prepare(
-            'SELECT payload_gz FROM user_api_archive
-             WHERE user_id = :user_id AND endpoint = :endpoint
+            'SELECT payload_gz, fetched_at, season, race FROM user_api_archive
+             WHERE user_id = :user_id AND token_scope = :scope AND endpoint = :endpoint
                AND params = :params AND race_window = :window'
         );
         $stmt->execute([
             ':user_id' => $userId,
+            ':scope' => $tokenScope,
             ':endpoint' => $endpoint,
             ':params' => $params,
             ':window' => $window,
         ]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!is_array($row)) {
+            return null;
+        }
+        $payload = $this->decode($row['payload_gz'] ?? null);
+        if ($payload === null) {
+            return null;
+        }
 
-        return $this->decode($stmt->fetchColumn());
+        return [
+            'payload' => $payload,
+            'fetched_at' => (string) $row['fetched_at'],
+            'season' => $row['season'] === null ? null : (int) $row['season'],
+            'race' => $row['race'] === null ? null : (int) $row['race'],
+        ];
     }
 
     /**
@@ -95,15 +125,16 @@ final class ApiArchiveRepository
         return $this->decode($stmt->fetchColumn());
     }
 
-    public function has(int $userId, string $endpoint, string $params, string $window): bool
+    public function has(int $userId, string $tokenScope, string $endpoint, string $params, string $window): bool
     {
         $stmt = $this->pdo->prepare(
             'SELECT 1 FROM user_api_archive
-             WHERE user_id = :user_id AND endpoint = :endpoint
+             WHERE user_id = :user_id AND token_scope = :scope AND endpoint = :endpoint
                AND params = :params AND race_window = :window'
         );
         $stmt->execute([
             ':user_id' => $userId,
+            ':scope' => $tokenScope,
             ':endpoint' => $endpoint,
             ':params' => $params,
             ':window' => $window,

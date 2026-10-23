@@ -653,10 +653,13 @@ class DatabaseSeeder
              ON user_race_history (user_id, track_id)"
         );
     }
+
     /**
-     * Raw GPRO API payloads, gzipped, one row per user + endpoint + params +
-     * race window. The column is race_window because WINDOW is an SQLite
-     * keyword; param-addressed history (a past season, a race id) stores ''.
+     * Raw GPRO API payloads, gzipped, one row per user + token scope +
+     * endpoint + params + archive window (the race-start window the row was
+     * fetched in). token_scope is GproApiClient::scopeFor() of the token, so
+     * a swapped token never reads the previous account's rows. The column is
+     * race_window because WINDOW is an SQLite keyword.
      */
     private function createUserApiArchiveTable(): void
     {
@@ -664,6 +667,7 @@ class DatabaseSeeder
             "CREATE TABLE IF NOT EXISTS user_api_archive (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
+                token_scope TEXT NOT NULL DEFAULT '',
                 endpoint TEXT NOT NULL,
                 params TEXT NOT NULL DEFAULT '',
                 race_window TEXT NOT NULL DEFAULT '',
@@ -677,7 +681,7 @@ class DatabaseSeeder
 
         $this->db->exec(
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_user_api_archive_natural
-             ON user_api_archive (user_id, endpoint, params, race_window)"
+             ON user_api_archive (user_id, token_scope, endpoint, params, race_window)"
         );
 
         $this->db->exec(
