@@ -31,9 +31,10 @@ final class RaceTelemetryMapper
     /**
      * @param array<string, mixed> $analysis RaceAnalysis payload
      * @param array<string, mixed> $td       TDProfile payload ([] when none)
+     * @param array<string, mixed> $driverProfile DriProfile payload ([] when none); RaceAnalysis carries no driver age
      * @return array<string, mixed>|null     null when the payload is unusable
      */
-    public function map(array $analysis, array $td = []): ?array
+    public function map(array $analysis, array $td = [], array $driverProfile = []): ?array
     {
         // The NA payload (non-supporter, or no race run) has no driver block
         // and no laps. Nothing to learn from it.
@@ -98,7 +99,7 @@ final class RaceTelemetryMapper
             'driver_mot' => $this->int($driver['mot'] ?? null),
             'driver_rep' => $this->int($driver['rep'] ?? null),
             'driver_wei' => $this->int($driver['wei'] ?? null),
-            'driver_age' => $this->int($driver['age'] ?? null),
+            'driver_age' => $this->int($driver['age'] ?? $driverProfile['age'] ?? null),
 
             'q1_risk'        => $this->str($analysis['q1Risk'] ?? null),
             'q2_risk'        => $this->str($analysis['q2Risk'] ?? null),

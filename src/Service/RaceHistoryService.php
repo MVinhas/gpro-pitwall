@@ -33,10 +33,16 @@ final readonly class RaceHistoryService
      * @param array<string, mixed> $analysis RaceAnalysis payload
      * @param array<string, mixed> $td       TDProfile payload ([] when none)
      * @param array<string, mixed> $staff    StaffAndFacilities payload ([] when none)
+     * @param array<string, mixed> $driverProfile DriProfile payload ([] when none)
      * @return bool true when a previously unarchived race was stored
      */
-    public function archive(int $userId, array $analysis, array $td = [], array $staff = []): bool
-    {
+    public function archive(
+        int $userId,
+        array $analysis,
+        array $td = [],
+        array $staff = [],
+        array $driverProfile = [],
+    ): bool {
         if ($analysis === []) {
             return false;
         }
@@ -48,6 +54,7 @@ final readonly class RaceHistoryService
                 $td,
                 $staff,
                 $this->lapLengthFor($analysis),
+                $driverProfile,
             );
 
             if ($row === null) {

@@ -292,4 +292,15 @@ final class RaceTelemetryMapperTest extends TestCase
         // the corpus needs the attributes, not the label.
         $this->assertArrayNotHasKey('driver_name', $row);
     }
+
+    public function testDriverAgeFallsBackToDriverProfile(): void
+    {
+        $driver = $this->payload()['driver'];
+        unset($driver['age']);
+        $payload = $this->payload(['driver' => $driver]);
+
+        $row = (new RaceTelemetryMapper())->map($payload, [], ['age' => 27]);
+
+        $this->assertSame(27, $row['driver_age']);
+    }
 }

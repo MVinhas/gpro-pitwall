@@ -323,4 +323,50 @@ final class RaceHistoryMapperTest extends TestCase
         $this->assertSame('[]', $row['td_json']);
         $this->assertSame('[]', $row['staff_json']);
     }
+
+    public function testStaffFromReadsSpecFacilityKeys(): void
+    {
+        $staff = [
+            'lvlWindtunnel' => 5, 'lvlPitstop' => 4, 'lvlRDWorkshop' => 3,
+            'lvlRDDesign' => 6, 'lvlEngineering' => 2, 'lvlLab' => 1,
+            'lvlCommercial' => 7, 'stressHandling' => 40, 'experience' => 50,
+        ];
+
+        $row = (new RaceHistoryMapper())->map(1, $this->payload(), [], $staff);
+        $decoded = json_decode((string) $row['staff_json'], true);
+
+        $this->assertSame(
+            [
+                ['label' => 'Wind tunnel', 'value' => 5],
+                ['label' => 'Pit stop', 'value' => 4],
+                ['label' => 'R&D workshop', 'value' => 3],
+                ['label' => 'R&D design', 'value' => 6],
+                ['label' => 'Engineering', 'value' => 2],
+                ['label' => 'Lab', 'value' => 1],
+                ['label' => 'Commercial', 'value' => 7],
+            ],
+            $decoded['facilities'],
+        );
+        $this->assertContains(['label' => 'Stress', 'value' => 40], $decoded['staff']);
+    }
+
+    public function testTdFromReadsTdName(): void
+    {
+        $row = (new RaceHistoryMapper())->map(1, $this->payload(), ['tdName' => 'Ada Byron', 'overall' => 50]);
+        $decoded = json_decode((string) $row['td_json'], true);
+
+        $this->assertSame('Ada Byron', $decoded['name']);
+    }
+
+    public function testDriverAgeFallsBackToDriverProfile(): void
+    {
+        $driver = $this->payload()['driver'];
+        unset($driver['age']);
+        $payload = $this->payload(['driver' => $driver]);
+
+        $row = (new RaceHistoryMapper())->map(1, $payload, [], [], null, ['age' => 27]);
+        $decoded = json_decode((string) $row['driver_json'], true);
+
+        $this->assertSame(27, $decoded['age']);
+    }
 }

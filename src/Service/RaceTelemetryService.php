@@ -29,16 +29,17 @@ final readonly class RaceTelemetryService
     /**
      * @param array<string, mixed> $analysis RaceAnalysis payload
      * @param array<string, mixed> $td       TDProfile payload ([] when none)
+     * @param array<string, mixed> $driverProfile DriProfile payload ([] when none)
      * @return bool true when a previously unseen race was stored
      */
-    public function ingest(array $analysis, array $td = []): bool
+    public function ingest(array $analysis, array $td = [], array $driverProfile = []): bool
     {
         if ($analysis === []) {
             return false;
         }
 
         try {
-            $row = $this->mapper->map($analysis, $td);
+            $row = $this->mapper->map($analysis, $td, $driverProfile);
             if ($row === null) {
                 return false;
             }

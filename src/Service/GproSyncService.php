@@ -94,9 +94,18 @@ final class GproSyncService
             $analysis = $this->apiClient->getRaceAnalysis($force);
             $td = $this->apiClient->getTechnicalDirector();
 
+            // RaceAnalysis carries no driver age; the DriProfile does. Already
+            // refreshed above, and a manager with no driver under contract
+            // makes the call throw — that must not fail the sync.
+            try {
+                $driverProfile = $this->apiClient->getMyPilotDetails();
+            } catch (Throwable) {
+                $driverProfile = [];
+            }
+
             // Anonymous telemetry: contributes race data to the shared corpus
             // without a per-user identifier ever being involved.
-            $this->telemetry->ingest($analysis, $td);
+            $this->telemetry->ingest($analysis, $td, $driverProfile);
 
             // The manager's own detailed archive — same payload, opposite
             // privacy contract, kept in a separate table that is only ever
@@ -106,6 +115,7 @@ final class GproSyncService
                 $analysis,
                 $td,
                 $this->apiClient->getStaffAndFacilities(),
+                $driverProfile,
             );
 
             // Grow the Division Baseline from whatever the corpus has learned.

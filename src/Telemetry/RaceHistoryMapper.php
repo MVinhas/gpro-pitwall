@@ -67,6 +67,7 @@ final class RaceHistoryMapper
      * @param array<string, mixed> $td       TDProfile payload ([] when none)
      * @param array<string, mixed> $staff    StaffAndFacilities payload ([] when none)
      * @param float|null           $lapKm    Track lap length, for per-km rates
+     * @param array<string, mixed> $driverProfile DriProfile payload ([] when none); RaceAnalysis carries no driver age
      * @return array<string, mixed>|null     null when the payload is unusable
      */
     public function map(
@@ -75,6 +76,7 @@ final class RaceHistoryMapper
         array $td = [],
         array $staff = [],
         ?float $lapKm = null,
+        array $driverProfile = [],
     ): ?array {
         $laps = $this->listOf($analysis['laps'] ?? null);
         $driver = $this->arrayOf($analysis['driver'] ?? null);
@@ -185,7 +187,7 @@ final class RaceHistoryMapper
             'stints_json'     => $this->json($stints),
             'pits_json'       => $this->json($this->pitsFrom($pits, $analysis)),
             'parts_json'      => $this->json($this->partsFrom($analysis)),
-            'driver_json'     => $this->json($this->driverFrom($analysis)),
+            'driver_json'     => $this->json($this->driverFrom($analysis, $driverProfile)),
             'td_json'         => $this->json($this->tdFrom($td)),
             'staff_json'      => $this->json($this->staffFrom($staff)),
             'problems_json'   => $this->json($this->problemsFrom($problems)),
@@ -619,9 +621,10 @@ final class RaceHistoryMapper
 
     /**
      * @param array<string, mixed> $analysis
+     * @param array<string, mixed> $driverProfile
      * @return array<string, mixed>
      */
-    private function driverFrom(array $analysis): array
+    private function driverFrom(array $analysis, array $driverProfile): array
     {
         $driver = $this->arrayOf($analysis['driver'] ?? null);
         $changes = $this->arrayOf($analysis['driverChanges'] ?? null);
@@ -644,7 +647,7 @@ final class RaceHistoryMapper
         return [
             'id'         => $this->int($driver['id'] ?? null),
             'name'       => $this->str($driver['name'] ?? null),
-            'age'        => $this->int($driver['age'] ?? null),
+            'age'        => $this->int($driver['age'] ?? $driverProfile['age'] ?? null),
             'attributes' => $attrs,
             'energy'     => [
                 'pre'  => $this->int($energy['from'] ?? null),
@@ -680,7 +683,7 @@ final class RaceHistoryMapper
         }
 
         return [
-            'name'       => $this->str($td['name'] ?? null),
+            'name'       => $this->str($td['tdName'] ?? null),
             'age'        => $this->int($td['age'] ?? null),
             'attributes' => $attrs,
         ];
@@ -700,14 +703,14 @@ final class RaceHistoryMapper
         }
 
         $facilities = [
-            'windTunnel' => 'Wind tunnel', 'pitStop' => 'Pit stop',
-            'workshop' => 'Workshop', 'design' => 'Design',
-            'engineering' => 'Engineering', 'chemical' => 'Chemical',
-            'commercial' => 'Commercial',
+            'lvlWindtunnel' => 'Wind tunnel', 'lvlPitstop' => 'Pit stop',
+            'lvlRDWorkshop' => 'R&D workshop', 'lvlRDDesign' => 'R&D design',
+            'lvlEngineering' => 'Engineering', 'lvlLab' => 'Lab',
+            'lvlCommercial' => 'Commercial',
         ];
         $people = [
             'experience' => 'Experience', 'motivation' => 'Motivation',
-            'technical' => 'Technical', 'stress' => 'Stress',
+            'technical' => 'Technical', 'stressHandling' => 'Stress',
             'concentration' => 'Concentration', 'efficiency' => 'Efficiency',
         ];
 
