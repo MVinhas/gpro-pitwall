@@ -92,12 +92,18 @@ final class ApiArchiveRepositoryTest extends TestCase
         $this->assertSame(['who' => 1], $this->repo->latest(1, 'Driver', 'id=1'));
     }
 
-    public function testLatestWithoutParamsSpansAllParams(): void
+    public function testLatestWithoutParamsIgnoresParameterisedRows(): void
     {
-        $this->repo->put(1, 'Driver', 'id=1', 'w', null, null, ['who' => 1]);
-        $this->repo->put(1, 'Driver', 'id=2', 'w2', null, null, ['who' => 2]);
+        $this->repo->put(1, 'Driver', '', 'w1', null, null, ['who' => 'plain']);
+        $this->repo->put(1, 'Driver', 'id=2', 'w2', null, null, ['who' => 'param']);
+        $this->db->exec("UPDATE user_api_archive SET fetched_at = '2026-01-01 10:00:00' WHERE params = ''");
+        $this->db->exec("UPDATE user_api_archive SET fetched_at = '2026-01-02 10:00:00' WHERE params = 'id=2'");
 
-        $this->assertSame(['who' => 2], $this->repo->latest(1, 'Driver'));
+        $this->assertSame(['who' => 'plain'], $this->repo->latest(1, 'Driver'));
+
+        $this->db->exec("DELETE FROM user_api_archive WHERE params = ''");
+
+        $this->assertNull($this->repo->latest(1, 'Driver'));
     }
 
     public function testEmailIsAbsentAfterGet(): void

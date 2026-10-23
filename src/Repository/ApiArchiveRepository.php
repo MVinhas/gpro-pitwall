@@ -78,21 +78,19 @@ final class ApiArchiveRepository
     }
 
     /**
-     * Newest row for the endpoint; an empty $params spans every params value.
+     * Newest row for the endpoint with exactly these params; the default ''
+     * matches only unparameterised rows, never parameterised (e.g. backfilled) ones.
      *
      * @return array<string, mixed>|null
      */
     public function latest(int $userId, string $endpoint, string $params = ''): ?array
     {
-        $sql = 'SELECT payload_gz FROM user_api_archive
-                WHERE user_id = :user_id AND endpoint = :endpoint';
-        $bind = [':user_id' => $userId, ':endpoint' => $endpoint];
-        if ($params !== '') {
-            $sql .= ' AND params = :params';
-            $bind[':params'] = $params;
-        }
-        $stmt = $this->pdo->prepare($sql . ' ORDER BY fetched_at DESC, id DESC LIMIT 1');
-        $stmt->execute($bind);
+        $stmt = $this->pdo->prepare(
+            'SELECT payload_gz FROM user_api_archive
+             WHERE user_id = :user_id AND endpoint = :endpoint AND params = :params
+             ORDER BY fetched_at DESC, id DESC LIMIT 1'
+        );
+        $stmt->execute([':user_id' => $userId, ':endpoint' => $endpoint, ':params' => $params]);
 
         return $this->decode($stmt->fetchColumn());
     }
