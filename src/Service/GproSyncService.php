@@ -92,15 +92,23 @@ final class GproSyncService
             // Both payloads are already warm at this point, so neither of the
             // two writes below costs an extra API call.
             $analysis = $this->apiClient->getRaceAnalysis($force);
-            $td = $this->apiClient->getTechnicalDirector();
+            $office = $this->apiClient->getOfficeData();
 
-            // RaceAnalysis carries no driver age; the DriProfile does. Already
-            // refreshed above, and a manager with no driver under contract
-            // makes the call throw — that must not fail the sync.
-            try {
-                $driverProfile = $this->apiClient->getMyPilotDetails();
-            } catch (Throwable) {
-                $driverProfile = [];
+            // Technical Directors exist only from Pro up; below that GPRO
+            // answers TDProfile with a placeholder ("Unknown technical
+            // director") that must not be stored as if it were a person.
+            $td = self::hasId($office['tdId'] ?? null) ? $this->apiClient->getTechnicalDirector() : [];
+
+            // RaceAnalysis carries no driver age; the DriProfile does, but it
+            // describes the driver under contract now, so it only fills the
+            // gap when that driver is the one who ran the analysed race.
+            $driverProfile = [];
+            if (self::raceWasRunByCurrentDriver($analysis, $office)) {
+                try {
+                    $driverProfile = $this->apiClient->getMyPilotDetails();
+                } catch (Throwable) {
+                    // Age is a nice-to-have; an evicted cache entry must not fail the sync.
+                }
             }
 
             // Anonymous telemetry: contributes race data to the shared corpus
@@ -132,5 +140,25 @@ final class GproSyncService
         } finally {
             $this->cache->delete($lockKey);
         }
+    }
+
+    /**
+     * @param array<string, mixed> $analysis RaceAnalysis payload
+     * @param array<string, mixed> $office   Office payload
+     */
+    public static function raceWasRunByCurrentDriver(array $analysis, array $office): bool
+    {
+        $driver = $analysis['driver'] ?? null;
+        $raced = is_array($driver) && is_scalar($driver['id'] ?? null) ? (string) $driver['id'] : '';
+        $current = trim((string) ($office['driId'] ?? ''));
+
+        return self::hasId($current) && $raced === $current;
+    }
+
+    private static function hasId(mixed $id): bool
+    {
+        $id = trim(is_scalar($id) ? (string) $id : '');
+
+        return $id !== '' && $id !== '0';
     }
 }
