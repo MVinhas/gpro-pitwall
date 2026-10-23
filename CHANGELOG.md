@@ -6,6 +6,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.11] - 2026-10-24
+
+### Added
+- Every GPRO payload Pitwall fetches for you is now archived, one copy per race
+  window. Your email and account flags are stripped before storing; game data,
+  including manager names, is kept. The archive is the foundation for the upcoming
+  race history and advisor.
+- After a deploy, pages read the current race window's archived data instead of
+  spending GPRO calls to fetch it again, as long as that data is younger than its
+  normal cache lifetime. The archive window turns over at race start (20:00 Paris
+  time), so the snapshot of the car and setup you raced with is kept.
+
+### Changed
+- Saving a new GPRO token starts a fresh sync on your next page. Data archived under
+  a previous token is never shown for the new one.
+- The admin "Flush cache" message now explains that pages keep reading the archive,
+  and that Re-sync forces fresh data.
+
 ## [1.21.10] - 2026-10-23
 
 ### Fixed
