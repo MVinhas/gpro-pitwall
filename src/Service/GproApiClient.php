@@ -490,8 +490,6 @@ final class GproApiClient
         if ($epoch !== '') {
             $key .= ':w' . $epoch;
         }
-        [$archiveEndpoint, $archiveParams] = self::splitEndpoint($endpoint);
-        $window = $this->raceWindow();
         if (!$force) {
             $cached = $this->cache->get($key);
             if ($cached !== null) {
@@ -508,9 +506,13 @@ final class GproApiClient
             // A cache miss (a deploy cold-starts the namespaced cache) is
             // served from this window's archive before spending a fetch. Same
             // reasoning as cache hits: the counter is left alone.
-            $archived = $shared ? null : $this->archivedGet($archiveEndpoint, $archiveParams, $window);
+            $archived = $shared
+                ? null
+                : $this->archivedGet(...self::splitEndpoint($endpoint), window: $this->raceWindow());
             if ($archived !== null) {
-                $this->cache->set($key, $archived, $ttl);
+                // Short re-cache: the row may be days old inside its window,
+                // so it must not be pinned for a full TTL.
+                $this->cache->set($key, $archived, min($ttl, 3600));
 
                 return $archived;
             }
@@ -520,7 +522,7 @@ final class GproApiClient
         $this->cache->set($key, $data, $ttl);
         $this->rememberApiLimit($data);
         if (!$shared) {
-            $this->archivePut($archiveEndpoint, $archiveParams, $window, $data);
+            $this->archivePut(...self::splitEndpoint($endpoint), window: $this->raceWindow(), data: $data);
         }
 
         return $data;
@@ -548,7 +550,8 @@ final class GproApiClient
      */
     private function archivedGet(string $endpoint, string $params, string $window): ?array
     {
-        if ($this->archive === null || $this->archiveUserId === null) {
+        // No window (windowing disabled) means a row can never be "current".
+        if ($this->archive === null || $this->archiveUserId === null || $window === '') {
             return null;
         }
         try {
@@ -562,7 +565,7 @@ final class GproApiClient
 
     private function archivedHas(string $endpoint, string $params, string $window): bool
     {
-        if ($this->archive === null || $this->archiveUserId === null) {
+        if ($this->archive === null || $this->archiveUserId === null || $window === '') {
             return false;
         }
         try {
@@ -621,17 +624,17 @@ final class GproApiClient
         return Env::int('CACHE_TTL_SHORT', 259200);
     }
 
+    public function archiveWindow(): string
+    {
+        return $this->raceWindow();
+    }
+
     /**
      * Current race-window id used to namespace race-critical cache keys. Pure
      * clock arithmetic against GPRO's fixed weekly schedule — no API call.
      * Configurable via env (days, boundary hour, timezone); an empty
      * GPRO_RACE_DAYS disables windowing and falls back to the plain TTL.
      */
-    public function archiveWindow(): string
-    {
-        return $this->raceWindow();
-    }
-
     private function raceWindow(): string
     {
         return RaceWindow::idFor(

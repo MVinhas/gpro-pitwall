@@ -10,6 +10,7 @@ use App\Database\DatabaseSeeder;
 use App\Repository\ApiArchiveRepository;
 use App\Security\ApiTokenCrypto;
 use App\Tests\Support\CountingGproFetcher;
+use App\Tests\Support\TtlRecordingCache;
 use App\Service\GproApiClient;
 use PDO;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -27,11 +28,13 @@ final class GproApiClientArchiveTest extends TestCase
     private CountingGproFetcher $fetcher;
     private string $logFile = '';
     private ?string $priorErrorLog = null;
+    private mixed $priorRaceDays = null;
 
     protected function setUp(): void
     {
         $this->cacheDir = sys_get_temp_dir() . '/gpro_archive_' . bin2hex(random_bytes(6));
         $this->cache = new FilesystemCache($this->cacheDir);
+        $this->priorRaceDays = $_ENV['GPRO_RACE_DAYS'] ?? null;
 
         $this->db = new PDO('sqlite::memory:');
         $this->db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -56,6 +59,11 @@ final class GproApiClientArchiveTest extends TestCase
 
     protected function tearDown(): void
     {
+        if ($this->priorRaceDays === null) {
+            unset($_ENV['GPRO_RACE_DAYS']);
+        } else {
+            $_ENV['GPRO_RACE_DAYS'] = $this->priorRaceDays;
+        }
         foreach (glob($this->cacheDir . '/*') ?: [] as $f) {
             @unlink($f);
         }
@@ -256,6 +264,50 @@ final class GproApiClientArchiveTest extends TestCase
         $this->flushCache();
         $clone->getOfficeData();
         $this->assertCount(3, $this->fetcher->calls, 'clone must not read the original user archive');
+    }
+
+    public function testDisabledWindowNeverReadsArchive(): void
+    {
+        $_ENV['GPRO_RACE_DAYS'] = '';
+        $client = $this->client();
+        $this->assertSame('', $client->archiveWindow());
+
+        $client->getOfficeData();
+        $this->flushCache();
+        $client->getOfficeData();
+
+        $this->assertCount(2, $this->fetcher->calls, 'a row without a window is never current');
+        $this->assertSame(1, (int) $this->db->query('SELECT COUNT(*) FROM user_api_archive')->fetchColumn());
+    }
+
+    public function testIsWarmFalseWithDisabledWindowEvenWithArchiveRows(): void
+    {
+        $_ENV['GPRO_RACE_DAYS'] = '';
+        $client = $this->client();
+        $this->assertSame('', $client->archiveWindow());
+        $this->archive->put(1, 'office', '', '', 99, 4, ['driId' => '77']);
+        foreach (['Calendar', 'UpdateCar', 'RaceSetup', 'TrackProfile'] as $endpoint) {
+            $this->archive->put(1, $endpoint, '', '', 99, 4, ['x' => 1]);
+        }
+        $this->archive->put(1, 'DriProfile', 'id=77', '', 99, 4, ['x' => 1]);
+
+        $this->assertFalse($client->isWarm());
+    }
+
+    public function testArchiveHitIsRecachedBrieflyButFreshFetchKeepsFullTtl(): void
+    {
+        $cache = new TtlRecordingCache($this->cache);
+        $client = new GproApiClient($this->fetcher, $cache, $this->archive);
+        $client->setToken(self::TOKEN, 1);
+        $key = 'u' . GproApiClient::scopeFor(self::TOKEN) . ':office_data';
+
+        $client->getOfficeData();
+        $this->assertSame(259200, $cache->ttls[$key]);
+
+        $this->flushCache();
+        $client->getOfficeData();
+        $this->assertLessThanOrEqual(3600, $cache->ttls[$key]);
+        $this->assertCount(1, $this->fetcher->calls);
     }
 
     private function captureErrorLog(): string
