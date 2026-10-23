@@ -50,7 +50,7 @@ class StrategyController
     public function calculate(Request $request): void
     {
         $user = $this->authorize->requireAuth();
-        $this->api->setToken($user['api_token']);
+        $this->api->setToken($user['api_token'], (int) $user['id']);
 
         $result = $this->runCalc($request);
         if (isset($result['error'])) {
@@ -66,7 +66,7 @@ class StrategyController
     public function fragment(Request $request): void
     {
         $user = $this->authorize->requireAuth();
-        $this->api->setToken($user['api_token']);
+        $this->api->setToken($user['api_token'], (int) $user['id']);
 
         $result = $this->runCalc($request);
         echo $this->twig->render('partials/_strategy_results.twig', [

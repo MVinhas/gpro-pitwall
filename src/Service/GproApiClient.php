@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Service;
 
 use App\Cache\CacheInterface;
+use App\Repository\ApiArchiveRepository;
 use App\Support\Env;
 use App\Support\RaceWindow;
 use DateTimeImmutable;
@@ -26,18 +27,28 @@ final class GproApiClient
      */
     private string $scope = '';
 
+    /** Owner of the raw-payload archive for this client; null disables it. */
+    private ?int $archiveUserId = null;
+
     public function __construct(
-        private readonly GproApiFetcher $fetcher,
+        private readonly GproFetcher $fetcher,
         private readonly CacheInterface $cache,
+        private readonly ?ApiArchiveRepository $archive = null,
     ) {
     }
 
-    public function setToken(string $token): void
+    /**
+     * @param int|null $userId Owner of the archived payloads. Null (the
+     *   default) turns the archive off, so a caller that cannot name the
+     *   token's owner can never read or write another user's rows.
+     */
+    public function setToken(string $token, ?int $userId = null): void
     {
         $this->fetcher->setToken($token);
         // Bind the cache namespace to the exact credential that produces the
         // data. Hash so the raw token never lands in a cache key/filename.
         $this->scope = self::scopeFor($token);
+        $this->archiveUserId = $userId;
     }
 
     /**
@@ -53,6 +64,8 @@ final class GproApiClient
     {
         $copy = clone $this;
         $copy->scope = self::scopeFor($token);
+        // The token may belong to someone other than the archive's owner.
+        $copy->archiveUserId = null;
 
         return $copy;
     }
@@ -303,15 +316,29 @@ final class GproApiClient
      */
     public function isWarm(): bool
     {
+        $window = $this->raceWindow();
+
         $office = $this->cache->get($this->userKey('office_data'));
-        if (!is_array($office) || $this->cache->get($this->userKey('calendar')) === null) {
+        if (!is_array($office)) {
+            $office = $this->archivedGet('office', '', $window);
+        }
+        if ($office === null) {
+            return false;
+        }
+        if (
+            $this->cache->get($this->userKey('calendar')) === null
+            && !$this->archivedHas('Calendar', '', $window)
+        ) {
             return false;
         }
 
-        $window = $this->raceWindow();
-        foreach (['car_data', 'race_setup', 'next_race_profile'] as $key) {
+        $raceCritical = ['car_data' => 'UpdateCar', 'race_setup' => 'RaceSetup', 'next_race_profile' => 'TrackProfile'];
+        foreach ($raceCritical as $key => $endpoint) {
             $key = $this->userKey($key);
-            if ($this->cache->get($window !== '' ? $key . ':w' . $window : $key) === null) {
+            if (
+                $this->cache->get($window !== '' ? $key . ':w' . $window : $key) === null
+                && !$this->archivedHas($endpoint, '', $window)
+            ) {
                 return false;
             }
         }
@@ -321,7 +348,8 @@ final class GproApiClient
             return true;
         }
 
-        return $this->cache->get($this->userKey('driver_profile_' . $driId)) !== null;
+        return $this->cache->get($this->userKey('driver_profile_' . $driId)) !== null
+            || $this->archivedHas('DriProfile', 'id=' . $driId, $window);
     }
 
     /**
@@ -462,6 +490,8 @@ final class GproApiClient
         if ($epoch !== '') {
             $key .= ':w' . $epoch;
         }
+        [$archiveEndpoint, $archiveParams] = self::splitEndpoint($endpoint);
+        $window = $this->raceWindow();
         if (!$force) {
             $cached = $this->cache->get($key);
             if ($cached !== null) {
@@ -474,13 +504,103 @@ final class GproApiClient
                 // ping-pong as the user navigates between tabs.
                 return $cached;
             }
+
+            // A cache miss (a deploy cold-starts the namespaced cache) is
+            // served from this window's archive before spending a fetch. Same
+            // reasoning as cache hits: the counter is left alone.
+            $archived = $shared ? null : $this->archivedGet($archiveEndpoint, $archiveParams, $window);
+            if ($archived !== null) {
+                $this->cache->set($key, $archived, $ttl);
+
+                return $archived;
+            }
         }
 
         $data = $this->fetcher->fetchJson($endpoint);
         $this->cache->set($key, $data, $ttl);
         $this->rememberApiLimit($data);
+        if (!$shared) {
+            $this->archivePut($archiveEndpoint, $archiveParams, $window, $data);
+        }
 
         return $data;
+    }
+
+    /**
+     * "/gb/backend/api/v2/DriProfile?id=7" → ['DriProfile', 'id=7'].
+     *
+     * @return array{string, string}
+     */
+    private static function splitEndpoint(string $path): array
+    {
+        $versioned = strpos($path, '/v2/');
+        $rest = $versioned === false ? ltrim($path, '/') : substr($path, $versioned + 4);
+        $parts = explode('?', $rest, 2);
+
+        return [$parts[0], $parts[1] ?? ''];
+    }
+
+    /**
+     * Archive failures must never break a page or a sync: log the class only
+     * (a message could carry payload data) and carry on as if there were none.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function archivedGet(string $endpoint, string $params, string $window): ?array
+    {
+        if ($this->archive === null || $this->archiveUserId === null) {
+            return null;
+        }
+        try {
+            return $this->archive->get($this->archiveUserId, $endpoint, $params, $window);
+        } catch (\Throwable $e) {
+            error_log('[ApiArchive] ' . $e::class);
+
+            return null;
+        }
+    }
+
+    private function archivedHas(string $endpoint, string $params, string $window): bool
+    {
+        if ($this->archive === null || $this->archiveUserId === null) {
+            return false;
+        }
+        try {
+            return $this->archive->has($this->archiveUserId, $endpoint, $params, $window);
+        } catch (\Throwable $e) {
+            error_log('[ApiArchive] ' . $e::class);
+
+            return false;
+        }
+    }
+
+    /** @param array<string, mixed> $data */
+    private function archivePut(string $endpoint, string $params, string $window, array $data): void
+    {
+        if ($this->archive === null || $this->archiveUserId === null) {
+            return;
+        }
+        // The office payload names its own season and race; every other
+        // endpoint is dated by the office the page was built from.
+        $stamp = $endpoint === 'office' ? $data : $this->getCachedOfficeData();
+        try {
+            $this->archive->put(
+                $this->archiveUserId,
+                $endpoint,
+                $params,
+                $window,
+                self::intOrNull($stamp['seasonNb'] ?? null),
+                self::intOrNull($stamp['raceNb'] ?? null),
+                $data,
+            );
+        } catch (\Throwable $e) {
+            error_log('[ApiArchive] ' . $e::class);
+        }
+    }
+
+    private static function intOrNull(mixed $value): ?int
+    {
+        return is_numeric($value) ? (int) $value : null;
     }
 
     /** @param array<string, mixed> $data */
@@ -507,6 +627,11 @@ final class GproApiClient
      * Configurable via env (days, boundary hour, timezone); an empty
      * GPRO_RACE_DAYS disables windowing and falls back to the plain TTL.
      */
+    public function archiveWindow(): string
+    {
+        return $this->raceWindow();
+    }
+
     private function raceWindow(): string
     {
         return RaceWindow::idFor(
