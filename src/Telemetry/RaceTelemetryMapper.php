@@ -116,7 +116,7 @@ final class RaceTelemetryMapper
             'ot_attempts_on_you' => $this->int($analysis['otAttemptsOnYou'] ?? null),
             'overtakes_on_you'   => $this->int($analysis['overtakesOnYou'] ?? null),
 
-            'has_td'           => $td === [] ? 0 : 1,
+            'has_td'           => ($this->int($td['overall'] ?? null) ?? 0) > 0 ? 1 : 0,
             'td_overall'       => $this->int($td['overall'] ?? null),
             'td_leadership'    => $this->int($td['leadership'] ?? null),
             'td_mechanics'     => $this->int($td['mechanics'] ?? null),
