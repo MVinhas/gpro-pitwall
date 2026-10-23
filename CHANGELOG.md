@@ -6,6 +6,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.9] - 2026-10-23
+
+### Security
+- **Security:** the post-deploy security probe actually checks the document root on macOS.
+  Both check loops were fed through `shuf`, which macOS doesn't ship, so on a Mac they
+  silently ran no checks at all and the probe still reported a pass. The order is now
+  shuffled with a portable `awk` + `sort`, and a check group that runs zero checks fails
+  the run instead of passing it.
+
+### Changed
+- `bin/build_tailwind.sh` downloads the Tailwind standalone binary for the host OS
+  (macOS or Linux) instead of always fetching the Linux build, and keeps it under a
+  per-platform name so a binary copied from another machine is never executed.
+- `docs/screenshots.md` takes screenshots with headless Google Chrome instead of
+  headless Firefox.
+
 ## [1.21.8] - 2026-10-21
 
 ### Security

@@ -91,6 +91,23 @@ pace() {
     sleep "$delay"
 }
 
+# Portable shuffle: macOS has no GNU shuf, and a missing shuffler empties the
+# loop below instead of failing it.
+shuffle() {
+    awk -v seed="$RANDOM" 'BEGIN { srand(seed) } { printf "%.8f\t%s\n", rand(), $0 }' \
+        | sort -n | cut -f2-
+}
+
+# A group that ran no checks fails the run; it must never read as a pass.
+require_ran() {
+    local before="$1"
+    local group="$2"
+    if (( checks == before )); then
+        printf "  ${RED}FAIL${RESET}  no %s checks ran\n" "$group"
+        fails=$((fails + 1))
+    fi
+}
+
 # A leak check passes when the path is not served: 4xx/5xx, or a redirect
 # (not followed — a redirect hands out no file content).
 leak_must_fail() {
@@ -220,9 +237,11 @@ if [[ "$FULL" -eq 1 ]]; then
 fi
 
 echo "Files outside the docroot (must not be served; order shuffled):"
+before=$checks
 while IFS='|' read -r path description; do
     leak_must_fail "$path" "$description"
-done < <(printf '%s\n' "${leak_checks[@]}" | shuf)
+done < <(printf '%s\n' "${leak_checks[@]}" | shuffle)
+require_ran "$before" "docroot"
 
 surface_checks=(
     "/login|login form"
@@ -235,9 +254,11 @@ surface_checks=(
 echo
 echo "Public surface (must serve 200; order shuffled):"
 landing_and_headers
+before=$checks
 while IFS='|' read -r path description; do
     surface_must_pass "$path" "$description"
-done < <(printf '%s\n' "${surface_checks[@]}" | shuf)
+done < <(printf '%s\n' "${surface_checks[@]}" | shuffle)
+require_ran "$before" "public surface"
 healthz_must_be_ok
 
 echo
