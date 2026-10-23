@@ -26,23 +26,9 @@ final class GproDataMapper
             'weight'            => $apiData['weight'] ?? 0,
             'age'               => $apiData['age'] ?? 0,
 
-            'name'              => $this->resolveName($apiData),
-            'id'                => $apiData['id'] ?? 0,
+            'name'              => $apiData['driName'] ?? 'Unknown',
             'overall'           => $apiData['overall'] ?? 0,
             'salary'            => $apiData['salary'] ?? 0,
-            'fee'               => $apiData['fee'] ?? 0,
         ];
-    }
-
-    /**
-     * @param array<string, mixed> $data
-     */
-    private function resolveName(array $data): string
-    {
-        if (isset($data['fName'], $data['lName'])) {
-            return trim($data['fName'] . ' ' . $data['lName']);
-        }
-
-        return $data['name'] ?? 'Unknown';
     }
 }

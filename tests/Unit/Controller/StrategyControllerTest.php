@@ -375,4 +375,24 @@ final class StrategyControllerTest extends TestCase
 
         $this->assertSame(StrategyController::NO_SUPPLIER_MESSAGE, $result['error'] ?? null);
     }
+
+    public function testTdIdComesFromTheOfficeTdId(): void
+    {
+        $td = StrategyController::buildTd(['experience' => 55, 'pitCoord' => 120], ['tdId' => '476']);
+
+        $this->assertSame(476, $td['id']);
+        $this->assertSame(55.0, $td['experience']);
+        $this->assertSame(120.0, $td['pitCoordination']);
+    }
+
+    public function testTdIdIsZeroWhenTheOfficeHasNoTd(): void
+    {
+        $this->assertSame(0, StrategyController::buildTd([], ['tdId' => ''])['id']);
+        $this->assertSame(0, StrategyController::buildTd([], [])['id']);
+    }
+
+    public function testTdIdIgnoresAnIdOnTheTdProfile(): void
+    {
+        $this->assertSame(0, StrategyController::buildTd(['id' => 99], [])['id']);
+    }
 }

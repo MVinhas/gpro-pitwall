@@ -56,7 +56,7 @@ $container['db.seeder']->migrate();
 use App\Cache\CacheFactory;
 
 $cacheConfig = [
-    'CACHE_DRIVER'   => Env::get('CACHE_DRIVER', 'none'),
+    'CACHE_DRIVER'   => Env::get('CACHE_DRIVER', 'filesystem'),
     'REDIS_HOST'     => Env::get('REDIS_HOST', '127.0.0.1'),
     'REDIS_PORT'     => Env::int('REDIS_PORT', 6379),
     'REDIS_PASSWORD' => Env::get('REDIS_PASSWORD'),

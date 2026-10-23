@@ -34,10 +34,8 @@ final class GproDataMapperTest extends TestCase
             'weight',
             'age',
             'name',
-            'id',
             'overall',
             'salary',
-            'fee',
         ], array_keys($mapped));
     }
 
@@ -101,32 +99,11 @@ final class GproDataMapperTest extends TestCase
         $this->assertSame(70, $mapped['technical_insight']);
     }
 
-    public function testNameIsComposedFromTheFirstAndLastNameFields(): void
+    public function testMapDriverReadsDriName(): void
     {
-        $mapped = $this->mapper->mapDriver(['fName' => 'Ada', 'lName' => 'Lovelace']);
+        $mapped = $this->mapper->mapDriver(['driName' => 'Kimi R', 'overall' => 120]);
 
-        $this->assertSame('Ada Lovelace', $mapped['name']);
-    }
-
-    public function testAComposedNameIsTrimmed(): void
-    {
-        $mapped = $this->mapper->mapDriver(['fName' => '  Ada ', 'lName' => ' Lovelace  ']);
-
-        $this->assertSame('Ada   Lovelace', $mapped['name']);
-    }
-
-    public function testAPlainNameFieldIsUsedWhenTheSplitFieldsAreAbsent(): void
-    {
-        $mapped = $this->mapper->mapDriver(['name' => 'Ada Lovelace']);
-
-        $this->assertSame('Ada Lovelace', $mapped['name']);
-    }
-
-    public function testAHalfPresentSplitNameFallsBackRatherThanProducingAStray(): void
-    {
-        $mapped = $this->mapper->mapDriver(['fName' => 'Ada', 'name' => 'Fallback Name']);
-
-        $this->assertSame('Fallback Name', $mapped['name']);
+        $this->assertSame('Kimi R', $mapped['name']);
     }
 
     public function testAnUnnamedDriverBecomesUnknown(): void
@@ -134,19 +111,24 @@ final class GproDataMapperTest extends TestCase
         $this->assertSame('Unknown', $this->mapper->mapDriver([])['name']);
     }
 
+    public function testFieldsDriProfileDoesNotReturnAreNotInvented(): void
+    {
+        $mapped = $this->mapper->mapDriver(['id' => 12345, 'fee' => 120000, 'fName' => 'Ada', 'lName' => 'Lovelace']);
+
+        $this->assertArrayNotHasKey('id', $mapped);
+        $this->assertArrayNotHasKey('fee', $mapped);
+        $this->assertSame('Unknown', $mapped['name']);
+    }
+
     public function testContractFieldsAreCarriedAcross(): void
     {
         $mapped = $this->mapper->mapDriver([
-            'id' => 12345,
             'overall' => 104,
             'salary' => 55000,
-            'fee' => 120000,
         ]);
 
-        $this->assertSame(12345, $mapped['id']);
         $this->assertSame(104, $mapped['overall']);
         $this->assertSame(55000, $mapped['salary']);
-        $this->assertSame(120000, $mapped['fee']);
     }
 
     public function testUnknownApiFieldsAreDroppedRatherThanPassedThrough(): void

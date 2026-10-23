@@ -99,7 +99,7 @@ class DebugController
             'user_stats' => $userStats,
             'env_vars' => $maskedEnv,
             'api_limit' => $_SESSION['api_limit'] ?? 'Unknown',
-            'cache_driver' => Env::get('CACHE_DRIVER', 'unknown'),
+            'cache_driver' => Env::get('CACHE_DRIVER', 'filesystem'),
             'flash' => $_SESSION['flash'] ?? null,
             'csrf_token' => $_SESSION['csrf_token'] ?? '',
             'is_logged_in' => true,

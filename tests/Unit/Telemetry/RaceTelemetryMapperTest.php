@@ -220,6 +220,20 @@ final class RaceTelemetryMapperTest extends TestCase
         $this->assertSame(65, $with['td_pit_coord']);
     }
 
+    public function testEmptyTechnicalDirectorStatsDoNotCountAsHavingATd(): void
+    {
+        $mapper = new RaceTelemetryMapper();
+
+        $zero = $mapper->map($this->payload(), ['overall' => 0, 'leadership' => 0]);
+        $this->assertSame(0, $zero['has_td']);
+
+        $missing = $mapper->map($this->payload(), ['leadership' => 0, 'mechanics' => 0]);
+        $this->assertSame(0, $missing['has_td']);
+
+        $real = $mapper->map($this->payload(), ['overall' => 150]);
+        $this->assertSame(1, $real['has_td']);
+    }
+
     #[DataProvider('lapTimeProvider')]
     public function testParsesQualifyingLapTimes(string $input, ?int $expected): void
     {
@@ -291,5 +305,16 @@ final class RaceTelemetryMapperTest extends TestCase
         // The driver's display name is a market entity, but still not stored:
         // the corpus needs the attributes, not the label.
         $this->assertArrayNotHasKey('driver_name', $row);
+    }
+
+    public function testDriverAgeFallsBackToDriverProfile(): void
+    {
+        $driver = $this->payload()['driver'];
+        unset($driver['age']);
+        $payload = $this->payload(['driver' => $driver]);
+
+        $row = (new RaceTelemetryMapper())->map($payload, [], ['age' => 27]);
+
+        $this->assertSame(27, $row['driver_age']);
     }
 }

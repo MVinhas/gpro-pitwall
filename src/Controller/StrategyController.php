@@ -169,12 +169,7 @@ class StrategyController
                 'stressHandling' => (float)($staffRaw['stressHandling'] ?? 0)
             ];
 
-            $td = [
-                'id' => $tdRaw['id'] ?? 0,
-                'ownTD' => $tdRaw['ownTD'] ?? 0,
-                'experience' => (float)($tdRaw['experience'] ?? 0),
-                'pitCoordination' => (float)($tdRaw['pitCoord'] ?? ($tdRaw['pitCoordination'] ?? 0))
-            ];
+            $td = self::buildTd($tdRaw, $office);
 
             $has = fn(string $k): bool => ($request->post($k) !== null && $request->post($k) !== '');
 
@@ -379,6 +374,24 @@ class StrategyController
 
             return ['error' => self::GENERIC_ERROR_MESSAGE];
         }
+    }
+
+    /**
+     * TDProfile carries no id; the TD under contract is `tdId` in the office
+     * payload (a string, empty when there is none).
+     *
+     * @param array<string, mixed> $tdRaw
+     * @param array<string, mixed> $office
+     * @return array{id: int, ownTD: mixed, experience: float, pitCoordination: float}
+     */
+    public static function buildTd(array $tdRaw, array $office): array
+    {
+        return [
+            'id' => (int)($office['tdId'] ?? 0),
+            'ownTD' => $tdRaw['ownTD'] ?? 0,
+            'experience' => (float)($tdRaw['experience'] ?? 0),
+            'pitCoordination' => (float)($tdRaw['pitCoord'] ?? ($tdRaw['pitCoordination'] ?? 0)),
+        ];
     }
 
     /**

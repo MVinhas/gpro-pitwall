@@ -10,6 +10,7 @@ use App\Service\GproApiClient;
 use App\Service\GproSyncService;
 use App\Service\RaceTelemetryService;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(GproSyncService::class)]
@@ -17,15 +18,23 @@ final class GproSyncServiceTest extends TestCase
 {
     private string $cacheDir;
     private FilesystemCache $cache;
+    private mixed $priorRaceDays = null;
 
     protected function setUp(): void
     {
         $this->cacheDir = sys_get_temp_dir() . '/gpro_sync_' . bin2hex(random_bytes(6));
         $this->cache = new FilesystemCache($this->cacheDir);
+        $this->priorRaceDays = $_ENV['GPRO_RACE_DAYS'] ?? null;
+        $_ENV['GPRO_RACE_DAYS'] = '';
     }
 
     protected function tearDown(): void
     {
+        if ($this->priorRaceDays === null) {
+            unset($_ENV['GPRO_RACE_DAYS']);
+        } else {
+            $_ENV['GPRO_RACE_DAYS'] = $this->priorRaceDays;
+        }
         foreach (glob($this->cacheDir . '/*') ?: [] as $f) {
             @unlink($f);
         }
@@ -201,5 +210,167 @@ final class GproSyncServiceTest extends TestCase
 
         $this->assertSame('running', $statuses[0] ?? null, 'first status must be running');
         $this->assertContains('failed', $statuses, 'unreachable API must end in failed');
+    }
+
+    /**
+     * Seeds every payload the fixed sync sequence reads, so a full sync runs
+     * to the archive/ingest step without touching the unreachable host. The
+     * race window is disabled so the race-critical keys carry no epoch suffix.
+     *
+     * @param array<string, mixed> $office
+     * @param array<string, mixed> $analysis
+     * @param array<string, mixed> $driverProfile
+     * @param array<string, mixed> $td
+     */
+    private function seedWarmCache(string $token, array $office, array $analysis, array $driverProfile, array $td): void
+    {
+        $scope = 'u' . GproApiClient::scopeFor($token) . ':';
+        $filler = ['seeded' => true];
+        $payloads = [
+            'office_data' => $office,
+            'car_data' => $filler,
+            'next_race_profile' => $filler,
+            'race_setup' => $filler,
+            'testing' => $filler,
+            'staff_facilities' => $filler,
+            'td_profile' => $td,
+            'manager_menu' => $filler,
+            'money_levels' => $filler,
+            'sponsor_negotiations' => $filler,
+            'calendar' => $filler,
+            'race_analysis' => $analysis,
+        ];
+        foreach ($payloads as $key => $payload) {
+            $this->cache->set($scope . $key, $payload, 3600);
+        }
+        $this->cache->set('tyre_suppliers', $filler, 3600);
+
+        $driId = trim((string) ($office['driId'] ?? ''));
+        if ($driId !== '' && $driId !== '0') {
+            $this->cache->set($scope . 'driver_profile_' . $driId, $driverProfile, 3600);
+        }
+    }
+
+    /** @return array<string, mixed> */
+    private function analysisPayload(int $driverId): array
+    {
+        $laps = [['idx' => 0, 'pos' => 8, 'tyres' => 'Hard', 'weather' => 'Sunny', 'temp' => 44, 'hum' => 35]];
+        for ($i = 1; $i <= 5; $i++) {
+            $laps[] = ['idx' => $i, 'pos' => 5, 'tyres' => 'Hard', 'weather' => 'Sunny', 'temp' => 44, 'hum' => 35, 'lapTime' => '1:14.100'];
+        }
+
+        return [
+            'selSeasonNb' => '107',
+            'selRaceNb' => '13',
+            'group' => 'Amateur - 4',
+            'trackName' => 'Hockenheim (Germany)',
+            'driver' => ['name' => 'Test Driver', 'id' => $driverId, 'OA' => '140'],
+            'laps' => $laps,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $office
+     * @param array<string, mixed> $analysis
+     * @param array<string, mixed> $driverProfile
+     * @param array<string, mixed> $td
+     * @return array{history: array<string, mixed>, telemetry: array<string, mixed>}
+     */
+    private function runFullSync(array $office, array $analysis, array $driverProfile, array $td): array
+    {
+        $db = $this->sink();
+        $this->seedWarmCache('tok', $office, $analysis, $driverProfile, $td);
+
+        $users = $this->createStub(UserRepository::class);
+        $svc = new GproSyncService(
+            $this->apiClient(),
+            $users,
+            $this->cache,
+            $this->telemetry($db),
+            $this->history($db),
+            $this->autofill($db),
+        );
+        $this->assertSame('synced', $svc->trySyncForUser(['id' => 7, 'api_token' => 'tok'], false));
+
+        $history = $db->query('SELECT driver_json, td_json FROM user_race_history')->fetch(\PDO::FETCH_ASSOC);
+        $telemetry = $db->query('SELECT has_td, td_overall, driver_age FROM race_telemetry')->fetch(\PDO::FETCH_ASSOC);
+        $this->assertIsArray($history);
+        $this->assertIsArray($telemetry);
+
+        return ['history' => $history, 'telemetry' => $telemetry];
+    }
+
+    /** @return array<string, array{string}> */
+    public static function noTdIds(): array
+    {
+        return ['empty' => [''], 'zero' => ['0']];
+    }
+
+    #[DataProvider('noTdIds')]
+    public function testManagerWithoutTdArchivesNoTdBlockNotThePlaceholder(string $tdId): void
+    {
+        $rows = $this->runFullSync(
+            ['driId' => '1234', 'tdId' => $tdId],
+            $this->analysisPayload(1234),
+            ['age' => 27],
+            ['tdName' => 'Unknown technical director', 'ownTD' => 0, 'overall' => 0],
+        );
+
+        $this->assertSame('[]', $rows['history']['td_json']);
+        $this->assertSame(0, (int) $rows['telemetry']['has_td']);
+        $this->assertNull($rows['telemetry']['td_overall']);
+    }
+
+    public function testManagerWithTdArchivesTheTd(): void
+    {
+        $rows = $this->runFullSync(
+            ['driId' => '1234', 'tdId' => '55'],
+            $this->analysisPayload(1234),
+            ['age' => 27],
+            ['tdName' => 'Ada Byron', 'overall' => 50],
+        );
+
+        $this->assertSame('Ada Byron', json_decode((string) $rows['history']['td_json'], true)['name']);
+        $this->assertSame(1, (int) $rows['telemetry']['has_td']);
+        $this->assertSame(50, (int) $rows['telemetry']['td_overall']);
+    }
+
+    public function testDriverAgeComesFromTheProfileWhenItIsTheRacingDriver(): void
+    {
+        $rows = $this->runFullSync(
+            ['driId' => '1234', 'tdId' => ''],
+            $this->analysisPayload(1234),
+            ['age' => 27],
+            [],
+        );
+
+        $this->assertSame(27, json_decode((string) $rows['history']['driver_json'], true)['age']);
+        $this->assertSame(27, (int) $rows['telemetry']['driver_age']);
+    }
+
+    public function testDriverAgeIsNotTakenFromADifferentCurrentDriver(): void
+    {
+        $rows = $this->runFullSync(
+            ['driId' => '9999', 'tdId' => ''],
+            $this->analysisPayload(1234),
+            ['age' => 40],
+            [],
+        );
+
+        $this->assertNull(json_decode((string) $rows['history']['driver_json'], true)['age']);
+        $this->assertNull($rows['telemetry']['driver_age']);
+    }
+
+    public function testNoDriverUnderContractNeverMatchesTheRacingDriver(): void
+    {
+        $analysis = $this->analysisPayload(1234);
+
+        $this->assertTrue(GproSyncService::raceWasRunByCurrentDriver($analysis, ['driId' => ' 1234 ']));
+        $this->assertFalse(GproSyncService::raceWasRunByCurrentDriver($analysis, ['driId' => '9999']));
+        $this->assertFalse(GproSyncService::raceWasRunByCurrentDriver($analysis, ['driId' => '']));
+        $this->assertFalse(GproSyncService::raceWasRunByCurrentDriver($analysis, ['driId' => '0']));
+        $this->assertFalse(GproSyncService::raceWasRunByCurrentDriver($analysis, []));
+        $this->assertFalse(GproSyncService::raceWasRunByCurrentDriver([], ['driId' => '']));
+        $this->assertFalse(GproSyncService::raceWasRunByCurrentDriver(['driver' => ['id' => 0]], ['driId' => '0']));
     }
 }
