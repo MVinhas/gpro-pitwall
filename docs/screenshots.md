@@ -12,7 +12,7 @@ from the synthetic demo account below, which exists only for this purpose.
 
 ## 1. Isolated instance + synthetic upstream
 
-Both servers run on the host (`flatpak-spawn --host`). The mock stands in for
+Both servers run locally (PHP ≥ 8.5). The mock stands in for
 the GPRO API so no real budget is spent and no real data can reach an image.
 
 ```bash
@@ -58,13 +58,15 @@ code lands in `var/mail/`). Race Strategy needs a POST to
 before shooting.
 
 For each screen and each theme, rewrite the stylesheet href to a `file://`
-path, strip `fade-in`, stamp `data-theme`, force accordions open, then:
+path, strip `fade-in`, stamp `data-theme`, force accordions open, then shoot
+it with headless Google Chrome (`chrome-shot.mjs` is a dependency-free DevTools
+script kept outside the repo, at `~/.claude/bin/`):
 
 ```bash
-firefox --headless --screenshot "$PWD/out.png" --window-size=1280 "file://$PWD/page.html"
+node ~/.claude/bin/chrome-shot.mjs page.html out.png --width 1280
 ```
 
-Width-only `--window-size` gives a full-page capture.
+Omitting `--height` gives a full-page capture.
 
 ## 3. Crop, resize, commit
 

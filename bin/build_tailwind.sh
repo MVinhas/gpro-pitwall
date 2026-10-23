@@ -12,15 +12,22 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 BIN_DIR="bin"
-BIN_PATH="${BIN_DIR}/.tailwindcss"
 RELEASE_VERSION="v4.0.6"
-ARCH="$(uname -m)"
 
-case "$ARCH" in
-    x86_64) TARGET="linux-x64" ;;
-    aarch64|arm64) TARGET="linux-arm64" ;;
-    *) echo "Unsupported arch: $ARCH" >&2; exit 1 ;;
+case "$(uname -s)" in
+    Darwin) OS="macos" ;;
+    Linux) OS="linux" ;;
+    *) echo "Unsupported OS: $(uname -s)" >&2; exit 1 ;;
 esac
+
+case "$(uname -m)" in
+    x86_64) TARGET="${OS}-x64" ;;
+    aarch64|arm64) TARGET="${OS}-arm64" ;;
+    *) echo "Unsupported arch: $(uname -m)" >&2; exit 1 ;;
+esac
+
+# Per-target filename: a binary copied over from another OS is never exec'd.
+BIN_PATH="${BIN_DIR}/.tailwindcss-${TARGET}"
 
 URL="https://github.com/tailwindlabs/tailwindcss/releases/download/${RELEASE_VERSION}/tailwindcss-${TARGET}"
 
