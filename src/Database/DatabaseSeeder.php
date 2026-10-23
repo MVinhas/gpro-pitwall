@@ -16,7 +16,7 @@ class DatabaseSeeder
      * calls migrate() on every request; this version lets a warm database skip
      * the entire DDL + scan + legacy-encryption pass.
      */
-    private const int SCHEMA_VERSION = 13;
+    private const int SCHEMA_VERSION = 14;
 
     /**
      * @param array<string, string> $statsSchema
@@ -66,6 +66,7 @@ class DatabaseSeeder
         $this->createCarPartCoefficientsTable();
         $this->createGameConstantsTable();
         $this->createRaceTelemetryTable();
+        $this->repairPhantomTdFlags();
         $this->createUserRaceHistoryTable();
         $this->dropDeprecatedTables();
 
@@ -495,6 +496,19 @@ class DatabaseSeeder
         $this->db->exec(
             "CREATE INDEX IF NOT EXISTS idx_race_telemetry_level_wet
              ON race_telemetry (level, was_wet)"
+        );
+    }
+
+    /**
+     * A TD is optional (never available in Rookie/Amateur), but the old mapper
+     * set has_td = 1 off GPRO's empty placeholder payload. Repair is keyed on
+     * the empty stats, never on the division. Idempotent.
+     */
+    private function repairPhantomTdFlags(): void
+    {
+        $this->db->exec(
+            'UPDATE race_telemetry SET has_td = 0
+             WHERE has_td = 1 AND (td_overall IS NULL OR td_overall = 0)'
         );
     }
 
