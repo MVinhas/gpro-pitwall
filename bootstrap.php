@@ -345,6 +345,11 @@ $container['service.baseline_autofill'] = new \App\Service\BaselineAutoFillServi
     $container['repo.pilot'],
     $container['service.calculator'],
 );
+$container['sync.contexts'] = new \App\Sync\SyncContextFactory(
+    $container['service.api_client'],
+    $container['repo.api_archive'],
+);
+$container['sync.fetcher'] = new \App\Sync\EndpointFetcher($container['service.api_client']);
 $container['service.gpro_sync'] = new GproSyncService(
     $container['service.api_client'],
     $container['service.user_repo'],
@@ -352,7 +357,8 @@ $container['service.gpro_sync'] = new GproSyncService(
     $container['service.race_telemetry'],
     $container['service.race_history'],
     $container['service.baseline_autofill'],
-    $container['repo.api_archive'],
+    $container['sync.contexts'],
+    $container['sync.fetcher'],
     new \App\Sync\SyncPlanner(),
     Env::int('SYNC_SAFETY_MARGIN', 20),
 );

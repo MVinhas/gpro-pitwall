@@ -73,8 +73,9 @@ final class ApiWarmupControllerTest extends TestCase
         ))->migrate();
         $archive = new ApiArchiveRepository($db, new ArchiveSanitizer());
 
+        $client = new GproApiClient($fetcher, $this->cache, $archive);
         $sync = new GproSyncService(
-            new GproApiClient($fetcher, $this->cache, $archive),
+            $client,
             $users,
             $this->cache,
             new RaceTelemetryService(
@@ -91,7 +92,8 @@ final class ApiWarmupControllerTest extends TestCase
                 new \App\Repository\PilotRepository($db),
                 new PilotCalculatorService([], []),
             ),
-            $archive,
+            new \App\Sync\SyncContextFactory($client, $archive),
+            new \App\Sync\EndpointFetcher($client),
             new SyncPlanner(),
         );
 

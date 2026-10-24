@@ -11,6 +11,8 @@ use App\Repository\UserRepository;
 use App\Service\GproApiClient;
 use App\Service\GproSyncService;
 use App\Service\RaceTelemetryService;
+use App\Sync\EndpointFetcher;
+use App\Sync\SyncContextFactory;
 use App\Sync\SyncOutcome;
 use App\Sync\SyncPlanner;
 use App\Tests\Support\ScriptedGproFetcher;
@@ -108,15 +110,17 @@ final class GproSyncServiceTest extends TestCase
     private function service(UserRepository $users, ?GproApiClient $client = null, ?\PDO $db = null, int $margin = 20): GproSyncService
     {
         $db ??= $this->sink();
+        $client ??= $this->apiClient();
 
         return new GproSyncService(
-            $client ?? $this->apiClient(),
+            $client,
             $users,
             $this->cache,
             $this->telemetry($db),
             $this->history($db),
             $this->autofill($db),
-            new ApiArchiveRepository($db, new ArchiveSanitizer()),
+            new SyncContextFactory($client, new ApiArchiveRepository($db, new ArchiveSanitizer())),
+            new EndpointFetcher($client),
             new SyncPlanner(),
             $margin,
         );
