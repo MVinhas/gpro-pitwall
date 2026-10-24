@@ -102,7 +102,7 @@
                 {% elseif sync_state == 'failed' %}
                     <span class="font-semibold text-red-800">Sync failed — data may be out of date</span>
                 {% elseif sync_state == 'deferred' %}
-                    <span class="font-medium text-amber-700" title="GPRO API budget low. It'll resume once your hourly allowance recovers.">Sync paused — API budget low</span>
+                    <span class="font-medium text-amber-700" title="GPRO API budget low. Pitwall keeps calls in reserve for you and syncs again as the budget refills each race.">Sync paused — API budget low</span>
                 {% elseif sync_state == 'synced' and sync_stale %}
                     <span class="font-semibold text-amber-800">Synced before this race weekend · {{ t.localtime(user.last_synced_at, 'datetime') }}</span>
                 {% elseif sync_state == 'synced' %}
@@ -164,6 +164,53 @@
             {% endif %}
         </div>
     </div>
+    {% endif %}
+
+    {% if is_logged_in %}
+    <script>
+    // Fetch a screen from the server and swap it, and the status line (a sync
+    // may have just changed both), into this page. Shared by the skeleton fill
+    // and the idle revalidation. Resolves 'swapped', or:
+    //  - 'held' when allow() vetoed replacing the content (checked right before
+    //    the swap, after the fetch; the status line is still updated);
+    //  - 'invalid' when the response is not a screen (auth lapsed, token lost)
+    //    and redirect is false; with the default redirect it is followed and
+    //    'redirected' comes back.
+    window.swapScreen = async (url, { content = true, allow = null, redirect = true } = {}) => {
+        const res = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
+        const next = doc.getElementById('main-content-tabs');
+        if (!next || next.hasAttribute('data-deferred')) {
+            if (!redirect) return 'invalid';
+            window.location.assign(res.redirected ? res.url : window.location.href);
+            return 'redirected';
+        }
+        const status = doc.getElementById('statusLine');
+        if (status) document.getElementById('statusLine')?.replaceWith(status);
+        if (content && allow && !allow()) {
+            window.localizeTimes?.(document);
+            return 'held';
+        }
+        if (content) {
+            [...next.children].forEach((el, i) => {
+                el.classList.add('reveal');
+                el.style.animationDelay = Math.min(i, 4) * 50 + 'ms';
+            });
+            document.getElementById('main-content-tabs').replaceWith(next);
+            // Parsed scripts never run; re-create each so the screen wires itself up.
+            next.querySelectorAll('script').forEach((old) => {
+                const fresh = document.createElement('script');
+                for (const a of old.attributes) fresh.setAttribute(a.name, a.value);
+                fresh.textContent = old.textContent;
+                old.replaceWith(fresh);
+            });
+            window.applyAccState?.(next);
+        }
+        window.localizeTimes?.(document);
+        return 'swapped';
+    };
+    </script>
     {% endif %}
 
     <main>
@@ -379,6 +426,102 @@ window.localizeTimes(document);
     picker.hidden = false;
 })();
 </script>
+
+{% if idle_sync is defined and idle_sync %}
+<script>
+// The login sync is owed but the page already rendered from warm data: run it
+// once the browser is idle. The sync is cheap (it only spends what changed);
+// when it did fetch something, fetch the screen again to show it. The server
+// marked the offer in the session: if this never runs (no JavaScript) the next
+// page request sees the sync still owed and runs it inline instead.
+(() => {
+    const followUp = '{{ idle_follow_url|e('js') }}';
+    const inMain = (el) => el instanceof Element && !!el.closest('#main-content-tabs');
+    // A swap would drop whatever the manager typed or moved meanwhile, so any
+    // edit inside the screen, or a field still holding focus, vetoes it.
+    let touched = false;
+    const mark = (e) => { if (inMain(e.target)) touched = true; };
+    document.addEventListener('input', mark, true);
+    document.addEventListener('change', mark, true);
+    const editing = () => touched
+        || (inMain(document.activeElement) && document.activeElement.matches('input, select, textarea'));
+    const offerReload = () => {
+        if (document.getElementById('newDataNotice')) return;
+        const wrap = document.createElement('div');
+        wrap.id = 'newDataNotice';
+        wrap.className = 'mx-auto max-w-7xl px-4 pt-2';
+        // The live region goes in empty and is filled afterwards, so assistive
+        // technology announces the text as a change rather than skipping it.
+        wrap.setAttribute('role', 'status');
+        const note = document.createElement('div');
+        note.className = 'notice notice-info notice-slim';
+        const lead = document.createElement('span');
+        lead.className = 'font-bold';
+        lead.textContent = 'New data available';
+        const link = document.createElement('a');
+        link.href = window.location.href;
+        link.className = 'underline';
+        link.textContent = 'reload to update';
+        note.append(lead, ' \u2014 ', link);
+        const anchor = document.getElementById('statusLine');
+        if (anchor) anchor.after(wrap);
+        else document.querySelector('main')?.before(wrap);
+        setTimeout(() => wrap.append(note), 100);
+    };
+    // The page was served saying "Syncing…". When the answer can not say the
+    // sync finished (still running elsewhere, or the request failed), look at the
+    // status once more shortly after, so the line never stays stuck. Status only:
+    // no content swap, no navigation.
+    let rechecked = false;
+    const recheckStatus = () => {
+        if (rechecked) return;
+        rechecked = true;
+        setTimeout(() => {
+            window.swapScreen(followUp, { content: false, redirect: false }).catch(() => {});
+        }, 3000);
+    };
+    const run = async () => {
+        try {
+            const res = await fetch('/api/sync', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'},
+                body: new URLSearchParams({ csrf_token: '{{ csrf_token }}' })
+            });
+            if (res.status === 401 || res.status === 403) {
+                window.location = '/login?expired=1';
+                return;
+            }
+            if (!res.ok) {
+                recheckStatus();
+                return;
+            }
+            const data = await res.json();
+            if (data.status === 'in_progress') {
+                recheckStatus();
+                return;
+            }
+            const fetched = Array.isArray(data.fetched) ? data.fetched : [];
+            // The office is fetched on every sync: only the other endpoints
+            // change what a screen shows. The status line follows either way.
+            const changed = fetched.some((e) => e !== 'OFFICE');
+            // editing() is asked again right before the content is replaced, after
+            // the screen has been fetched: typing during that fetch counts too.
+            const result = await window.swapScreen(followUp, {
+                content: changed,
+                allow: () => !editing(),
+                redirect: false,
+            });
+            if (changed && result !== 'swapped') offerReload();
+        } catch {
+            // Best effort: the data on screen is still the warm data.
+            recheckStatus();
+        }
+    };
+    if ('requestIdleCallback' in window) window.requestIdleCallback(run, { timeout: 2000 });
+    else setTimeout(run, 200);
+})();
+</script>
+{% endif %}
 
 </body>
 </html>

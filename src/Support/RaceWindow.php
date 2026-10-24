@@ -23,6 +23,7 @@ use DateTimeZone;
 final class RaceWindow
 {
     private const int RACE_START_HOUR = 20;
+    private const int POST_RACE_HOUR = 21;
     private const string RACE_TZ = 'Europe/Paris';
 
     /**
@@ -69,6 +70,20 @@ final class RaceWindow
     public static function raceStartIdFor(DateTimeImmutable $now, array $raceDays): string
     {
         return self::idFor($now, $raceDays, self::RACE_START_HOUR, self::RACE_TZ);
+    }
+
+    /**
+     * When the race of a race-start window is over: 21:00 Paris wall-clock on
+     * the window's day. GPRO moves races with the European DST change (they
+     * are always 19:00 in Lisbon, 20:00 in Paris), so the threshold is a
+     * Paris wall-clock time, never window start plus a fixed duration.
+     *
+     * @param string $windowId a non-empty id from raceStartIdFor()
+     */
+    public static function postRaceAt(string $windowId): DateTimeImmutable
+    {
+        return (new DateTimeImmutable($windowId, new DateTimeZone(self::RACE_TZ)))
+            ->setTime(self::POST_RACE_HOUR, 0, 0);
     }
 
     /**

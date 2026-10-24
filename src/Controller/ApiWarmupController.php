@@ -8,6 +8,7 @@ use App\Http\Request;
 use App\Security\Authorize;
 use App\Service\AuthService;
 use App\Service\GproSyncService;
+use App\Sync\SyncPlanner;
 
 final readonly class ApiWarmupController
 {
@@ -32,7 +33,7 @@ final readonly class ApiWarmupController
         }
 
         // A manual re-sync settles any login sync still owed.
-        unset($_SESSION[AuthService::SYNC_PENDING]);
+        unset($_SESSION[AuthService::SYNC_PENDING], $_SESSION[AuthService::IDLE_SYNC_OFFERED]);
         $status = $this->syncService->trySyncForUser($user, true);
 
         $messages = [
@@ -55,5 +56,63 @@ final readonly class ApiWarmupController
             'status'  => $status,
             'message' => $messages[$status] ?? 'Unknown sync state',
         ]);
+    }
+
+    /**
+     * The login sync a warm page left owed, run once the browser is idle. Login
+     * mode: the plan spends only what changed, so it is cheap as well as late.
+     */
+    public function idle(Request $request): void
+    {
+        $user = $this->authorize->requireAuth();
+
+        header('Content-Type: application/json');
+
+        if (empty($_SESSION[AuthService::SYNC_PENDING])) {
+            echo json_encode(['status' => 'idle', 'fetched' => []]);
+            return;
+        }
+
+        unset($_SESSION[AuthService::SYNC_PENDING], $_SESSION[AuthService::IDLE_SYNC_OFFERED]);
+        // PHP holds the session file lock until the request ends; releasing it
+        // keeps the manager's next navigation from queueing behind the sync.
+        $released = session_status() === PHP_SESSION_ACTIVE && session_write_close();
+        $stamp = $_SESSION['api_limit_updated_at'] ?? null;
+
+        $outcome = $this->syncService->sync($user, SyncPlanner::MODE_LOGIN);
+
+        if ($released && ($_SESSION['api_limit_updated_at'] ?? null) !== $stamp) {
+            $this->storeBudget(
+                (int) $user['id'],
+                $_SESSION['api_limit'] ?? null,
+                $_SESSION['api_limit_updated_at'] ?? null,
+            );
+        }
+
+        echo json_encode(['status' => $outcome->status, 'fetched' => $outcome->fetched]);
+    }
+
+    /**
+     * The sync wrote the remaining-calls figure while the session was released,
+     * so it only reached memory. Reopen the session just long enough to save it,
+     * so the status line and the next page show the figure after the sync. The
+     * session may have changed hands meanwhile (logout, another login in the
+     * same browser): then the figure belongs to nobody here and is dropped.
+     */
+    private function storeBudget(int $userId, mixed $limit, mixed $updatedAt): void
+    {
+        // The id is already known from the first start; re-sending its cookie
+        // on every idle response would only churn the browser's cookie jar.
+        if (!session_start(['use_cookies' => 0, 'use_only_cookies' => 1, 'cache_limiter' => ''])) {
+            return;
+        }
+        $owner = $_SESSION['user_id'] ?? null;
+        if (!is_scalar($owner) || (int) $owner !== $userId) {
+            session_abort();
+            return;
+        }
+        $_SESSION['api_limit'] = $limit;
+        $_SESSION['api_limit_updated_at'] = $updatedAt;
+        session_write_close();
     }
 }

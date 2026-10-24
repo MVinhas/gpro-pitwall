@@ -41,6 +41,13 @@ class AuthService
      */
     public const string SYNC_PENDING = 'sync_pending';
 
+    /**
+     * Session flag: a warm page has handed the owed sync to the browser's idle
+     * time. Seeing SYNC_PENDING again with this set means that never happened,
+     * so the page syncs inline.
+     */
+    public const string IDLE_SYNC_OFFERED = 'idle_sync_offered';
+
     public function __construct(
         private readonly UserRepository $users,
         private readonly TokenRepository $tokens,

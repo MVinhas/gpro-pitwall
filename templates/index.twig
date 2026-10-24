@@ -56,8 +56,8 @@
 
     {% if deferred_url is defined %}
     <script>
-    // Fill the skeleton: fetch the real screen and swap it, and the status line
-    // (the sync it may have just run changes both), into this page.
+    // Fill the skeleton: fetch the real screen and swap it in (see swapScreen
+    // in the layout).
     (() => {
         const host = document.getElementById('main-content-tabs');
         const slow = setTimeout(() => host.querySelector('[data-slow]')?.removeAttribute('hidden'), 4000);
@@ -68,36 +68,7 @@
             host.replaceChildren(tpl ? tpl.content.cloneNode(true) : '');
         };
 
-        // Parsed scripts never run; re-create each so the screen wires itself up.
-        const runScripts = (root) => root.querySelectorAll('script').forEach((old) => {
-            const fresh = document.createElement('script');
-            for (const a of old.attributes) fresh.setAttribute(a.name, a.value);
-            fresh.textContent = old.textContent;
-            old.replaceWith(fresh);
-        });
-
-        fetch(host.dataset.deferred, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-            .then(async (res) => {
-                if (!res.ok) throw new Error('HTTP ' + res.status);
-                const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
-                const next = doc.getElementById('main-content-tabs');
-                // Auth lapsed or the account lost its token: go where the server sent us.
-                if (!next || next.hasAttribute('data-deferred')) {
-                    window.location.assign(res.redirected ? res.url : window.location.href);
-                    return;
-                }
-                const status = doc.getElementById('statusLine');
-                if (status) document.getElementById('statusLine')?.replaceWith(status);
-
-                [...next.children].forEach((el, i) => {
-                    el.classList.add('reveal');
-                    el.style.animationDelay = Math.min(i, 4) * 50 + 'ms';
-                });
-                host.replaceWith(next);
-                runScripts(next);
-                window.applyAccState?.(next);
-                window.localizeTimes?.(document);
-            })
+        window.swapScreen(host.dataset.deferred)
             .catch(fail)
             .finally(() => clearTimeout(slow));
     })();

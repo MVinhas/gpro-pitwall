@@ -67,7 +67,7 @@
         {% elseif sync_state == 'deferred' %}
             <div class="notice notice-warn mb-8">
                 <p class="font-bold">Sync paused — GPRO API budget low.</p>
-                <p class="mt-1">It'll resume once your hourly allowance recovers.</p>
+                <p class="mt-1">Pitwall keeps calls in reserve for you and syncs again as the budget refills each race.</p>
             </div>
         {% elseif sync_state == 'never' %}
             <div class="notice notice-info mb-8">

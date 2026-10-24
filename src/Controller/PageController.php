@@ -179,22 +179,32 @@ class PageController
             $activeMainTab = $defaultTab;
         }
 
-        // A cold screen (or a login whose sync is still owed) is sent as a
-        // skeleton first; its follow-up request (wait=1) does the GPRO work.
+        // A cold screen (or a login whose sync is still owed on cold data) is
+        // sent as a skeleton first; its follow-up request (wait=1) does the
+        // GPRO work. A login owed on warm data renders from what is cached and
+        // leaves the sync to an idle POST /api/sync.
         $syncPending = !empty($_SESSION[AuthService::SYNC_PENDING]);
-        $deferred = (string) $request->get('fragment', '') === '' && DeferredRender::shouldDefer(
-            (string) $request->get(DeferredRender::WAIT_PARAM, '') === '1',
-            $syncPending,
-            $activeMainTab,
-            fn (): bool => $activeMainTab === 'Recruitment Analyzer'
+        $wait = (string) $request->get(DeferredRender::WAIT_PARAM, '') === '1';
+        $warm = null;
+        $isWarm = function () use (&$warm, $activeMainTab): bool {
+            return $warm ??= $activeMainTab === 'Recruitment Analyzer'
                 ? $this->apiClient->hasCachedMarketFile()
-                : $this->apiClient->isWarm(),
+                : $this->apiClient->isWarm();
+        };
+        $deferred = (string) $request->get('fragment', '') === ''
+            && DeferredRender::shouldDefer($wait, $syncPending, $activeMainTab, $isWarm);
+        $idleSync = DeferredRender::idleSync(
+            $wait,
+            $syncPending,
+            $deferred,
+            !empty($_SESSION[AuthService::IDLE_SYNC_OFFERED]),
+            $isWarm,
         );
 
         $freshSync = false;
-        if ($syncPending && !$deferred) {
-            unset($_SESSION[AuthService::SYNC_PENDING]);
-            $this->syncService->trySyncForUser($user, true);
+        if (DeferredRender::syncsInline($syncPending, $deferred, $idleSync)) {
+            unset($_SESSION[AuthService::SYNC_PENDING], $_SESSION[AuthService::IDLE_SYNC_OFFERED]);
+            $this->syncService->trySyncForUser($user, false);
             // Re-read for the sync outcome and timestamp the status line shows.
             $user = $this->userRepo->findById((int) $user['id']) ?? $user;
             $freshSync = true;
@@ -243,6 +253,15 @@ class PageController
             'user'            => $user,
             'can_submit'      => $isLoggedIn,
         ];
+
+        if ($idleSync) {
+            // Only a full page carries the script that answers the offer.
+            if ((string) $request->get('fragment', '') === '') {
+                $_SESSION[AuthService::IDLE_SYNC_OFFERED] = true;
+            }
+            $viewData['idle_sync'] = true;
+            $viewData['idle_follow_url'] = DeferredRender::followUpUrl($request->getPath(), $request->query());
+        }
 
         if ($freshSync) {
             // The layout's sync globals were read before this request synced.

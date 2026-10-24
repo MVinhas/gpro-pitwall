@@ -125,6 +125,22 @@ final class ApiArchiveRepository
         return $this->decode($stmt->fetchColumn());
     }
 
+    /**
+     * UTC fetched_at of the row latest() would return, or null when there is none.
+     */
+    public function latestFetchedAt(int $userId, string $endpoint, string $params = ''): ?string
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT fetched_at FROM user_api_archive
+             WHERE user_id = :user_id AND endpoint = :endpoint AND params = :params
+             ORDER BY fetched_at DESC, id DESC LIMIT 1'
+        );
+        $stmt->execute([':user_id' => $userId, ':endpoint' => $endpoint, ':params' => $params]);
+        $value = $stmt->fetchColumn();
+
+        return is_string($value) ? $value : null;
+    }
+
     public function has(int $userId, string $tokenScope, string $endpoint, string $params, string $window): bool
     {
         $stmt = $this->pdo->prepare(
@@ -153,6 +169,39 @@ final class ApiArchiveRepository
              WHERE user_id = :user_id AND endpoint = :endpoint'
         );
         $stmt->execute([':user_id' => $userId, ':endpoint' => $endpoint]);
+
+        return array_values(array_map(strval(...), $stmt->fetchAll(PDO::FETCH_COLUMN)));
+    }
+
+    /**
+     * Archive endpoint names that have a row stamped with exactly this race,
+     * whatever their params or token scope.
+     *
+     * @return list<string>
+     */
+    public function endpointsForRace(int $userId, int $season, int $race): array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT DISTINCT endpoint FROM user_api_archive
+             WHERE user_id = :user_id AND season = :season AND race = :race'
+        );
+        $stmt->execute([':user_id' => $userId, ':season' => $season, ':race' => $race]);
+
+        return array_values(array_map(strval(...), $stmt->fetchAll(PDO::FETCH_COLUMN)));
+    }
+
+    /**
+     * Archive endpoint names that have a row stamped with any race of this season.
+     *
+     * @return list<string>
+     */
+    public function endpointsForSeason(int $userId, int $season): array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT DISTINCT endpoint FROM user_api_archive
+             WHERE user_id = :user_id AND season = :season'
+        );
+        $stmt->execute([':user_id' => $userId, ':season' => $season]);
 
         return array_values(array_map(strval(...), $stmt->fetchAll(PDO::FETCH_COLUMN)));
     }

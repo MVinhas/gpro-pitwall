@@ -34,6 +34,7 @@ final class GproApiClient
         private readonly GproFetcher $fetcher,
         private readonly CacheInterface $cache,
         private readonly ?ApiArchiveRepository $archive = null,
+        private readonly ?\Closure $clock = null,
     ) {
     }
 
@@ -118,7 +119,9 @@ final class GproApiClient
     /** @return array<string, mixed> */
     public function getMyPilotDetails(bool $forceRefresh = false): array
     {
-        $office = $this->getOfficeData($forceRefresh);
+        // The office only names the driver: $forceRefresh applies to the
+        // profile, never to a second office call.
+        $office = $this->getOfficeData();
         $driId = trim((string) ($office['driId'] ?? ''));
         if ($driId === '' || $driId === '0') {
             throw new RuntimeException('No driver under contract');
@@ -231,6 +234,12 @@ final class GproApiClient
         }
     }
 
+    /** Whether the shared tyre feed is cached, so reading it spends no fetch. */
+    public function hasCachedTyreSuppliers(): bool
+    {
+        return $this->cache->has('tyre_suppliers');
+    }
+
     /** @return array<string, mixed> */
     public function getTyreSuppliers(bool $forceRefresh = false): array
     {
@@ -321,14 +330,14 @@ final class GproApiClient
 
         $office = $this->cache->get($this->userKey('office_data'));
         if (!is_array($office)) {
-            $office = $this->archivedRow('office', '', $archiveWindow)['payload'] ?? null;
+            $office = $this->archivedFresh('office', '', $archiveWindow);
         }
         if ($office === null) {
             return false;
         }
         if (
             $this->cache->get($this->userKey('calendar')) === null
-            && !$this->archivedHas('Calendar', '', $archiveWindow)
+            && $this->archivedFresh('Calendar', '', $archiveWindow) === null
         ) {
             return false;
         }
@@ -338,7 +347,7 @@ final class GproApiClient
             $key = $this->userKey($key);
             if (
                 $this->cache->get($window !== '' ? $key . ':w' . $window : $key) === null
-                && !$this->archivedHas($endpoint, '', $archiveWindow)
+                && $this->archivedFresh($endpoint, '', $archiveWindow) === null
             ) {
                 return false;
             }
@@ -350,7 +359,7 @@ final class GproApiClient
         }
 
         return $this->cache->get($this->userKey('driver_profile_' . $driId)) !== null
-            || $this->archivedHas('DriProfile', 'id=' . $driId, $archiveWindow);
+            || $this->archivedFresh('DriProfile', 'id=' . $driId, $archiveWindow) !== null;
     }
 
     /**
@@ -566,18 +575,21 @@ final class GproApiClient
         }
     }
 
-    private function archivedHas(string $endpoint, string $params, string $window): bool
+    /**
+     * The archived payload the read-through would serve: only a row younger
+     * than the TTL counts, so a page judged warm never fetches after all.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function archivedFresh(string $endpoint, string $params, string $window): ?array
     {
-        if ($this->archive === null || $this->archiveUserId === null || $window === '') {
-            return false;
+        $row = $this->archivedRow($endpoint, $params, $window);
+        if ($row === null) {
+            return null;
         }
-        try {
-            return $this->archive->has($this->archiveUserId, $this->scope, $endpoint, $params, $window);
-        } catch (\Throwable $e) {
-            error_log('[ApiArchive] ' . $e::class);
+        $age = time() - (int) strtotime($row['fetched_at'] . ' UTC');
 
-            return false;
-        }
+        return $age < $this->ttlShort() ? $row['payload'] : null;
     }
 
     /** @param array<string, mixed> $data */
@@ -630,6 +642,11 @@ final class GproApiClient
         $this->cache->set($this->apiLimitKey(), $remaining, 3600);
     }
 
+    private function now(): DateTimeImmutable
+    {
+        return $this->clock === null ? new DateTimeImmutable('now') : ($this->clock)();
+    }
+
     private function ttlShort(): int
     {
         return Env::int('CACHE_TTL_SHORT', 259200);
@@ -643,9 +660,54 @@ final class GproApiClient
     public function archiveWindow(): string
     {
         return RaceWindow::raceStartIdFor(
-            new DateTimeImmutable('now'),
+            $this->now(),
             RaceWindow::parseDays(Env::get('GPRO_RACE_DAYS', '2,5')),
         );
+    }
+
+    /**
+     * When the race of the current archive window is over (21:00 Paris), or
+     * null when windowing is disabled.
+     */
+    public function postRaceAt(): ?DateTimeImmutable
+    {
+        $window = $this->archiveWindow();
+
+        return $window === '' ? null : RaceWindow::postRaceAt($window);
+    }
+
+    /**
+     * Notes that this window's RaceAnalysis was asked for after the race
+     * ended, even though the answer was an error: the next login does not ask
+     * again. Per user, like every cache key here.
+     */
+    public function markAnalysisAttempt(): void
+    {
+        $window = $this->archiveWindow();
+        if ($window === '' || $this->now() < RaceWindow::postRaceAt($window)) {
+            return;
+        }
+        $this->cache->set($this->userKey('analysis_attempt:w' . $window), time(), 8 * 86400);
+    }
+
+    public function hasAnalysisAttempt(): bool
+    {
+        $window = $this->archiveWindow();
+
+        return $window !== '' && $this->cache->has($this->userKey('analysis_attempt:w' . $window));
+    }
+
+    /**
+     * Files the office a sync is about to plan against under params 'sync', so
+     * the next sync detects changes against it and not against a page-level
+     * office fetch (which archives under ''). Read-through only ever asks for
+     * '', so this row is never served as a page's office.
+     *
+     * @param array<string, mixed> $office
+     */
+    public function archiveSyncOffice(array $office): void
+    {
+        $this->archivePut('office', 'sync', $this->archiveWindow(), $office);
     }
 
     /**
@@ -657,7 +719,7 @@ final class GproApiClient
     private function raceWindow(): string
     {
         return RaceWindow::idFor(
-            new DateTimeImmutable('now'),
+            $this->now(),
             RaceWindow::parseDays(Env::get('GPRO_RACE_DAYS', '2,5')),
             Env::int('GPRO_RACE_BOUNDARY_HOUR', 0),
             Env::get('GPRO_RACE_TZ', 'Europe/London'),

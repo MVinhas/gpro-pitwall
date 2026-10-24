@@ -106,4 +106,15 @@ final class RaceWindowTest extends TestCase
     {
         $this->assertSame('', RaceWindow::raceStartIdFor(new DateTimeImmutable('2026-06-09 20:01'), []));
     }
+
+    public function testPostRaceThresholdIsTwentyOneParisWhateverTheOffset(): void
+    {
+        $utc = new DateTimeZone('UTC');
+
+        $cest = RaceWindow::postRaceAt('2026-10-23');
+        $cet = RaceWindow::postRaceAt('2026-10-27');
+
+        $this->assertSame('2026-10-23 19:00', $cest->setTimezone($utc)->format('Y-m-d H:i'));
+        $this->assertSame('2026-10-27 20:00', $cet->setTimezone($utc)->format('Y-m-d H:i'));
+    }
 }

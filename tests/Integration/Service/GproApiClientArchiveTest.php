@@ -12,6 +12,7 @@ use App\Security\ApiTokenCrypto;
 use App\Tests\Support\CountingGproFetcher;
 use App\Tests\Support\TtlRecordingCache;
 use App\Service\GproApiClient;
+use App\Support\DeferredRender;
 use App\Support\RaceWindow;
 use DateTimeImmutable;
 use PDO;
@@ -225,6 +226,45 @@ final class GproApiClientArchiveTest extends TestCase
         $this->assertSame(6, count($this->fetcher->calls), 'isWarm never fetches');
     }
 
+    public function testIsWarmFalseWhenTheArchiveRowsAreOlderThanTheTtl(): void
+    {
+        $client = $this->client();
+        $client->getOfficeData();
+        $client->getCalendar();
+        $client->getCarData();
+        $client->getRaceSetup();
+        $client->getNextRaceProfile();
+        $client->getMyPilotDetails();
+
+        $this->ageArchive(1000);
+        $this->flushCache();
+        $this->assertTrue($client->isWarm(), 'a row inside its TTL still counts');
+
+        $this->ageArchive(259200);
+        $this->flushCache();
+        $this->assertFalse($client->isWarm(), 'an expired row would be fetched again, so the page is not warm');
+    }
+
+    public function testDecidingAWarmPendingPageRendersNowAndFetchesNothing(): void
+    {
+        $client = $this->client();
+        $client->getOfficeData();
+        $client->getCalendar();
+        $client->getCarData();
+        $client->getRaceSetup();
+        $client->getNextRaceProfile();
+        $client->getMyPilotDetails();
+        $this->flushCache();
+        $spent = count($this->fetcher->calls);
+
+        $isWarm = static fn (): bool => $client->isWarm();
+        $deferred = DeferredRender::shouldDefer(false, true, 'Cockpit', $isWarm);
+
+        $this->assertFalse($deferred, 'a warm login renders now');
+        $this->assertTrue(DeferredRender::idleSync(false, true, $deferred, false, $isWarm));
+        $this->assertSame($spent, count($this->fetcher->calls), 'deciding costs no GPRO call');
+    }
+
     public function testIsWarmFalseWhenArchiveIncompleteAndWithoutUser(): void
     {
         $client = $this->client();
@@ -405,5 +445,33 @@ final class GproApiClientArchiveTest extends TestCase
         $this->priorErrorLog = $prior === false ? '' : $prior;
 
         return $this->logFile;
+    }
+
+    public function testForcedPilotDetailsReadTheOfficeThroughTheCache(): void
+    {
+        $client = $this->client();
+        $client->getOfficeData(true);
+        $this->fetcher->calls = [];
+
+        $client->getMyPilotDetails(true);
+
+        $this->assertCount(1, $this->fetcher->calls, 'only the DriProfile is fetched, never the office');
+        $this->assertStringContainsString('DriProfile', $this->fetcher->calls[0]);
+    }
+
+    public function testSyncOfficeRowIsNeverServedAsThePagesOffice(): void
+    {
+        $_ENV['GPRO_RACE_DAYS'] = '2,5';
+        $client = $this->client();
+        $window = $client->archiveWindow();
+        $client->archiveSyncOffice(['name' => 'Synced', 'seasonNb' => 99, 'raceNb' => 4]);
+
+        $row = $this->archive->getRow(1, self::scope(), 'office', 'sync', $window);
+        $this->assertNotNull($row);
+        $this->assertSame(99, $row['season']);
+        $this->assertSame(4, $row['race']);
+        $this->assertNull($this->archive->get(1, self::scope(), 'office', '', $window));
+
+        $this->assertSame('Alice', $client->getOfficeData()['name'], 'a cold read fetches instead of serving the sync row');
     }
 }
