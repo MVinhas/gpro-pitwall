@@ -134,8 +134,6 @@ final class GproSyncService
                 return $this->outcome('deferred_low_budget', $fetched, $calls, $started);
             }
 
-            $this->apiClient->archiveSyncOffice($office);
-
             $plan = $this->planner->plan($this->context($userId, $previousOffice, $office, $remaining, $mode));
 
             /** @var array<string, array<string, mixed>> $results */
@@ -143,6 +141,7 @@ final class GproSyncService
             /** @var list<string> $attempted */
             $attempted = [];
             $names = [];
+            $complete = !$plan->trimmed;
             foreach ($plan->phase1 as $entry) {
                 $endpoint = $entry['endpoint'];
                 $names[] = $endpoint;
@@ -158,7 +157,13 @@ final class GproSyncService
                     $fetched[] = $endpoint;
                 } catch (Throwable $e) {
                     error_log('[GproSync] user ' . $userId . ': ' . $endpoint . ' failed: ' . $e::class);
+                    $complete = false;
                 }
+            }
+            // Only a fully paid-for plan moves the baseline the next sync
+            // diffs against; otherwise the next sync sees the same changes again.
+            if ($complete) {
+                $this->apiClient->archiveSyncOffice($office);
             }
             error_log(sprintf(
                 '[GproSync] user %d mode %s plan: %d calls (%s) in %d ms',

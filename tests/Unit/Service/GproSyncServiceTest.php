@@ -746,4 +746,60 @@ final class GproSyncServiceTest extends TestCase
             $this->assertSame(['office', 'RaceAnalysis'], $fetcher->calls);
         });
     }
+
+    private function syncRowDoneRaceSetup(\PDO $db): ?bool
+    {
+        $stmt = $db->prepare(
+            "SELECT payload_gz FROM user_api_archive WHERE endpoint = 'office' AND params = 'sync' "
+            . 'ORDER BY fetched_at DESC, id DESC LIMIT 1'
+        );
+        $stmt->execute();
+        $blob = $stmt->fetchColumn();
+        if (!is_string($blob)) {
+            return null;
+        }
+
+        return (bool) (json_decode((string) gzdecode($blob), true)['doneRaceSetup'] ?? false);
+    }
+
+    public function testCompletePlanRecordsTheSyncOffice(): void
+    {
+        [$svc, $fetcher, $db] = $this->scripted();
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+        $fetcher->office['doneRaceSetup'] = true;
+
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+
+        $this->assertTrue($this->syncRowDoneRaceSetup($db));
+    }
+
+    public function testFailedPlannedFetchLeavesTheSyncOfficeAndTheNextSyncPlansItAgain(): void
+    {
+        [$svc, $fetcher, $db] = $this->scripted();
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+        $fetcher->office['doneRaceSetup'] = true;
+        $fetcher->failing = ['RaceSetup'];
+
+        $failed = $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+
+        $this->assertSame('synced', $failed->status);
+        $this->assertFalse($this->syncRowDoneRaceSetup($db), 'previous sync row is left alone');
+
+        $fetcher->failing = [];
+        $fetcher->calls = [];
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+
+        $this->assertSame(['office', 'RaceSetup'], $fetcher->calls);
+        $this->assertTrue($this->syncRowDoneRaceSetup($db));
+    }
+
+    public function testTrimmedPlanDoesNotRecordTheSyncOffice(): void
+    {
+        [$svc, $fetcher, $db] = $this->scripted();
+        $fetcher->remaining = 55;
+
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+
+        $this->assertNull($this->syncRowDoneRaceSetup($db), 'no sync row after a first, trimmed plan');
+    }
 }

@@ -160,6 +160,28 @@ final class SyncPlannerTest extends TestCase
         $this->assertSame($expectedPhase2, self::names($plan->phase2));
     }
 
+    public function testPlanIsTrimmedWhenTheFloorCutsPhase1(): void
+    {
+        $plan = (new SyncPlanner())->plan(self::ctx(['race' => [], 'remaining' => 52], self::office(), null));
+
+        $this->assertSame(['DRIVER', 'CAR'], self::names($plan->phase1));
+        $this->assertTrue($plan->trimmed);
+    }
+
+    public function testPlanIsNotTrimmedWhenTheBudgetCoversPhase1(): void
+    {
+        $plan = (new SyncPlanner())->plan(self::ctx(['race' => [], 'remaining' => 100], self::office(), null));
+        $this->assertFalse($plan->trimmed);
+
+        $exact = (new SyncPlanner())->plan(self::ctx(
+            ['remaining' => 52],
+            self::office(['doneRaceSetup' => true]),
+            self::office(),
+        ));
+        $this->assertSame(['SETUP'], self::names($exact->phase1));
+        $this->assertFalse($exact->trimmed);
+    }
+
     /**
      * @param list<array{endpoint: string, params: string}> $entries
      *

@@ -49,11 +49,13 @@ final class SyncPlanner
     {
         $phase1 = $ctx->mode === self::MODE_HARVEST ? [] : $this->phase1($ctx);
         $floor = $ctx->mode === self::MODE_MANUAL ? self::MANUAL_FLOOR : self::LOGIN_FLOOR;
-        $phase1 = array_slice($phase1, 0, $this->budget($ctx->remaining, $floor));
+        $allowed = $this->budget($ctx->remaining, $floor);
+        $trimmed = count($phase1) > $allowed;
+        $phase1 = array_slice($phase1, 0, $allowed);
 
         $phase2 = $this->phase2($ctx, $ctx->remaining - count($phase1));
 
-        return new SyncPlan(array_map(self::entry(...), $phase1), $phase2);
+        return new SyncPlan(array_map(self::entry(...), $phase1), $phase2, $trimmed);
     }
 
     /**
