@@ -6,6 +6,32 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.12] - 2026-10-24
+
+### Changed
+- Syncing checks your GPRO office first and fetches only what changed. A re-login with
+  nothing new costs 1 API call instead of about 15; finishing your setup or repairs in
+  GPRO costs 1–2. A new race fetches the full set once.
+- Logging in when your data is already cached shows the page straight away, with no
+  loading skeleton. The sync runs in the background once the page is idle, and the
+  screen refreshes only if something changed. If you've started typing in a form, it
+  is left alone and a "New data available — reload to update" notice appears instead.
+- Automatic syncing never takes your API budget below 50 calls, and a manual Re-sync
+  never below 20, so you always keep calls for your own refreshes. When the floor cuts
+  a sync short, the status line says "Sync paused — API budget low" instead of
+  "Synced", and the next login tries again.
+- The budget-low notice now says the budget refills each race, not hourly.
+
+### Fixed
+- A manager without a driver under contract no longer fails the whole sync.
+- Opening driver details no longer spends a hidden extra office call.
+- A manager who isn't a GPRO supporter, or who skipped a race, is no longer charged a
+  race-analysis call on every login; once per race is enough.
+- A change you make in GPRO is no longer missed when another page refreshed your office
+  data in between syncs.
+- Race-day checks use 21:00 Paris time on the race day, so they follow the European
+  clock change like GPRO's races do.
+
 ## [1.21.11] - 2026-10-24
 
 ### Added
