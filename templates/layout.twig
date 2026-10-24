@@ -166,6 +166,44 @@
     </div>
     {% endif %}
 
+    {% if is_logged_in %}
+    <script>
+    // Fetch a screen from the server and swap it, and the status line (a sync
+    // may have just changed both), into this page. Shared by the skeleton fill
+    // and the idle revalidation. Resolves true once swapped; a response that is
+    // not a screen (auth lapsed, token lost) is followed instead.
+    window.swapScreen = async (url, { content = true } = {}) => {
+        const res = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
+        const next = doc.getElementById('main-content-tabs');
+        if (!next || next.hasAttribute('data-deferred')) {
+            window.location.assign(res.redirected ? res.url : window.location.href);
+            return false;
+        }
+        const status = doc.getElementById('statusLine');
+        if (status) document.getElementById('statusLine')?.replaceWith(status);
+        if (content) {
+            [...next.children].forEach((el, i) => {
+                el.classList.add('reveal');
+                el.style.animationDelay = Math.min(i, 4) * 50 + 'ms';
+            });
+            document.getElementById('main-content-tabs').replaceWith(next);
+            // Parsed scripts never run; re-create each so the screen wires itself up.
+            next.querySelectorAll('script').forEach((old) => {
+                const fresh = document.createElement('script');
+                for (const a of old.attributes) fresh.setAttribute(a.name, a.value);
+                fresh.textContent = old.textContent;
+                old.replaceWith(fresh);
+            });
+            window.applyAccState?.(next);
+        }
+        window.localizeTimes?.(document);
+        return true;
+    };
+    </script>
+    {% endif %}
+
     <main>
         <div class="mx-auto max-w-7xl px-4 pt-4 pb-8">
             {% block content %}{% endblock %}
@@ -379,6 +417,42 @@ window.localizeTimes(document);
     picker.hidden = false;
 })();
 </script>
+
+{% if idle_sync is defined and idle_sync %}
+<script>
+// The login sync is owed but the page already rendered from warm data: run it
+// once the browser is idle. The sync is cheap (it only spends what changed);
+// when it did fetch something, fetch the screen again to show it. A page that
+// never runs this leaves the flag set, and the next navigation syncs inline.
+(() => {
+    const followUp = '{{ idle_follow_url|e('js') }}';
+    const run = async () => {
+        try {
+            const res = await fetch('/api/sync', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'},
+                body: new URLSearchParams({ csrf_token: '{{ csrf_token }}' })
+            });
+            if (res.status === 401 || res.status === 403) {
+                window.location = '/login?expired=1';
+                return;
+            }
+            if (!res.ok) return;
+            const data = await res.json();
+            if (data.status === 'in_progress') return;
+            const fetched = Array.isArray(data.fetched) ? data.fetched : [];
+            // The office is fetched on every sync: only the other endpoints
+            // change what a screen shows. The status line follows either way.
+            await window.swapScreen(followUp, { content: fetched.some((e) => e !== 'OFFICE') });
+        } catch {
+            // Best effort: the data on screen is still the warm data.
+        }
+    };
+    if ('requestIdleCallback' in window) window.requestIdleCallback(run, { timeout: 2000 });
+    else setTimeout(run, 200);
+})();
+</script>
+{% endif %}
 
 </body>
 </html>

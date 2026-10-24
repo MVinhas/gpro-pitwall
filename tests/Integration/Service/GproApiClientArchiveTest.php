@@ -12,6 +12,7 @@ use App\Security\ApiTokenCrypto;
 use App\Tests\Support\CountingGproFetcher;
 use App\Tests\Support\TtlRecordingCache;
 use App\Service\GproApiClient;
+use App\Support\DeferredRender;
 use App\Support\RaceWindow;
 use DateTimeImmutable;
 use PDO;
@@ -223,6 +224,45 @@ final class GproApiClientArchiveTest extends TestCase
         $this->flushCache();
         $this->assertTrue($client->isWarm());
         $this->assertSame(6, count($this->fetcher->calls), 'isWarm never fetches');
+    }
+
+    public function testIsWarmFalseWhenTheArchiveRowsAreOlderThanTheTtl(): void
+    {
+        $client = $this->client();
+        $client->getOfficeData();
+        $client->getCalendar();
+        $client->getCarData();
+        $client->getRaceSetup();
+        $client->getNextRaceProfile();
+        $client->getMyPilotDetails();
+
+        $this->ageArchive(1000);
+        $this->flushCache();
+        $this->assertTrue($client->isWarm(), 'a row inside its TTL still counts');
+
+        $this->ageArchive(259200);
+        $this->flushCache();
+        $this->assertFalse($client->isWarm(), 'an expired row would be fetched again, so the page is not warm');
+    }
+
+    public function testAWarmPendingPageRequestSpendsNoCalls(): void
+    {
+        $client = $this->client();
+        $client->getOfficeData();
+        $client->getCalendar();
+        $client->getCarData();
+        $client->getRaceSetup();
+        $client->getNextRaceProfile();
+        $client->getMyPilotDetails();
+        $this->flushCache();
+        $spent = count($this->fetcher->calls);
+
+        $isWarm = static fn (): bool => $client->isWarm();
+        $deferred = DeferredRender::shouldDefer(false, true, 'Cockpit', $isWarm);
+
+        $this->assertFalse($deferred, 'a warm login renders now');
+        $this->assertTrue(DeferredRender::idleSync(false, true, $deferred, $isWarm));
+        $this->assertSame($spent, count($this->fetcher->calls), 'deciding costs no GPRO call');
     }
 
     public function testIsWarmFalseWhenArchiveIncompleteAndWithoutUser(): void

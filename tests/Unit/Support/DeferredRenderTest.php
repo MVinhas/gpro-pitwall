@@ -27,8 +27,10 @@ final class DeferredRenderTest extends TestCase
         yield 'a screen with no GPRO data never waits'  => [false, false, 'Division Baseline', false, false];
         yield 'cold recruitment shows the skeleton first' => [false, false, 'Recruitment Analyzer', false, true];
         yield 'warm recruitment renders in one go'      => [false, false, 'Recruitment Analyzer', true, false];
-        yield 'a pending sync defers even when warm'    => [false, true, 'Cockpit', true, true];
-        yield 'a pending sync defers any screen'        => [false, true, 'Division Baseline', true, true];
+        yield 'a pending sync on a warm screen renders now' => [false, true, 'Cockpit', true, false];
+        yield 'a pending sync on a cold screen defers'  => [false, true, 'Cockpit', false, true];
+        yield 'a pending sync defers any cold screen'   => [false, true, 'Division Baseline', false, true];
+        yield 'a pending sync on a warm baseline renders now' => [false, true, 'Division Baseline', true, false];
         yield 'the follow-up request always renders'    => [true, true, 'Cockpit', false, false];
         yield 'the follow-up request on a cold screen'  => [true, false, 'Testing', false, false];
     }
@@ -49,8 +51,50 @@ final class DeferredRenderTest extends TestCase
         };
 
         $this->assertFalse(DeferredRender::shouldDefer(true, false, 'Cockpit', $probe));
-        $this->assertTrue(DeferredRender::shouldDefer(false, true, 'Cockpit', $probe));
         $this->assertFalse(DeferredRender::shouldDefer(false, false, 'Division Baseline', $probe));
+    }
+
+    public function testWarmPendingRendersNow(): void
+    {
+        $this->assertFalse(DeferredRender::shouldDefer(false, true, 'Cockpit', static fn (): bool => true));
+    }
+
+    public function testColdPendingDefers(): void
+    {
+        $this->assertTrue(DeferredRender::shouldDefer(false, true, 'Cockpit', static fn (): bool => false));
+    }
+
+    /**
+     * @return iterable<string, array{0: bool, 1: bool, 2: bool, 3: bool, 4: bool}>
+     */
+    public static function idleCases(): iterable
+    {
+        // wait, syncPending, deferred, isWarm => idle sync
+        yield 'warm pending page revalidates when idle' => [false, true, false, true, true];
+        yield 'nothing owed, nothing to revalidate'     => [false, false, false, true, false];
+        yield 'a cold page syncs inline instead'        => [false, true, false, false, false];
+        yield 'a skeleton does no GPRO work'            => [false, true, true, true, false];
+        yield 'the follow-up request syncs inline'      => [true, true, false, true, false];
+    }
+
+    #[DataProvider('idleCases')]
+    public function testIdleSync(bool $wait, bool $syncPending, bool $deferred, bool $isWarm, bool $expected): void
+    {
+        $this->assertSame(
+            $expected,
+            DeferredRender::idleSync($wait, $syncPending, $deferred, static fn (): bool => $isWarm),
+        );
+    }
+
+    public function testIdleSyncProbesNothingWhenNoSyncIsOwed(): void
+    {
+        $probe = function (): bool {
+            $this->fail('isWarm must not be called');
+        };
+
+        $this->assertFalse(DeferredRender::idleSync(false, false, false, $probe));
+        $this->assertFalse(DeferredRender::idleSync(true, true, false, $probe));
+        $this->assertFalse(DeferredRender::idleSync(false, true, true, $probe));
     }
 
     public function testTheFollowUpUrlKeepsTheQueryAndAddsTheWaitFlag(): void

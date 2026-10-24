@@ -330,14 +330,14 @@ final class GproApiClient
 
         $office = $this->cache->get($this->userKey('office_data'));
         if (!is_array($office)) {
-            $office = $this->archivedRow('office', '', $archiveWindow)['payload'] ?? null;
+            $office = $this->archivedFresh('office', '', $archiveWindow);
         }
         if ($office === null) {
             return false;
         }
         if (
             $this->cache->get($this->userKey('calendar')) === null
-            && !$this->archivedHas('Calendar', '', $archiveWindow)
+            && $this->archivedFresh('Calendar', '', $archiveWindow) === null
         ) {
             return false;
         }
@@ -347,7 +347,7 @@ final class GproApiClient
             $key = $this->userKey($key);
             if (
                 $this->cache->get($window !== '' ? $key . ':w' . $window : $key) === null
-                && !$this->archivedHas($endpoint, '', $archiveWindow)
+                && $this->archivedFresh($endpoint, '', $archiveWindow) === null
             ) {
                 return false;
             }
@@ -359,7 +359,7 @@ final class GproApiClient
         }
 
         return $this->cache->get($this->userKey('driver_profile_' . $driId)) !== null
-            || $this->archivedHas('DriProfile', 'id=' . $driId, $archiveWindow);
+            || $this->archivedFresh('DriProfile', 'id=' . $driId, $archiveWindow) !== null;
     }
 
     /**
@@ -575,18 +575,21 @@ final class GproApiClient
         }
     }
 
-    private function archivedHas(string $endpoint, string $params, string $window): bool
+    /**
+     * The archived payload the read-through would serve: only a row younger
+     * than the TTL counts, so a page judged warm never fetches after all.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function archivedFresh(string $endpoint, string $params, string $window): ?array
     {
-        if ($this->archive === null || $this->archiveUserId === null || $window === '') {
-            return false;
+        $row = $this->archivedRow($endpoint, $params, $window);
+        if ($row === null) {
+            return null;
         }
-        try {
-            return $this->archive->has($this->archiveUserId, $this->scope, $endpoint, $params, $window);
-        } catch (\Throwable $e) {
-            error_log('[ApiArchive] ' . $e::class);
+        $age = time() - (int) strtotime($row['fetched_at'] . ' UTC');
 
-            return false;
-        }
+        return $age < $this->ttlShort() ? $row['payload'] : null;
     }
 
     /** @param array<string, mixed> $data */

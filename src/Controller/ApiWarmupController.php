@@ -8,6 +8,7 @@ use App\Http\Request;
 use App\Security\Authorize;
 use App\Service\AuthService;
 use App\Service\GproSyncService;
+use App\Sync\SyncPlanner;
 
 final readonly class ApiWarmupController
 {
@@ -55,5 +56,27 @@ final readonly class ApiWarmupController
             'status'  => $status,
             'message' => $messages[$status] ?? 'Unknown sync state',
         ]);
+    }
+
+    /**
+     * The login sync a warm page left owed, run once the browser is idle. Login
+     * mode: the plan spends only what changed, so it is cheap as well as late.
+     */
+    public function idle(Request $request): void
+    {
+        $user = $this->authorize->requireAuth();
+
+        header('Content-Type: application/json');
+
+        unset($_SESSION[AuthService::SYNC_PENDING]);
+        // PHP holds the session file lock until the request ends; releasing it
+        // keeps the manager's next navigation from queueing behind the sync.
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_write_close();
+        }
+
+        $outcome = $this->syncService->sync($user, SyncPlanner::MODE_LOGIN);
+
+        echo json_encode(['status' => $outcome->status, 'fetched' => $outcome->fetched]);
     }
 }

@@ -40,16 +40,29 @@ final class DeferredRender
         if ($wait) {
             return false;
         }
-        // The login sync has not run yet. Whatever screen this is, its status
-        // line and data change once it does.
+        // A login sync is owed. Warm, the page renders now and the sync runs
+        // when the browser is idle (see idleSync); cold, whatever screen this
+        // is has nothing to show until the sync has run, so it waits.
         if ($syncPending) {
-            return true;
+            return !$isWarm();
         }
         if (!in_array($section, self::DATA_SECTIONS, true)) {
             return false;
         }
 
         return !$isWarm();
+    }
+
+    /**
+     * Whether a page that rendered from warm data should ask the browser to
+     * run the owed login sync once idle, instead of syncing inline. The
+     * follow-up request (`wait`) always syncs inline: it exists to do the work.
+     *
+     * @param Closure(): bool $isWarm probed only when a sync is owed
+     */
+    public static function idleSync(bool $wait, bool $syncPending, bool $deferred, Closure $isWarm): bool
+    {
+        return $syncPending && !$wait && !$deferred && $isWarm();
     }
 
     /**
