@@ -55,6 +55,7 @@ final class ApiWarmupControllerTest extends TestCase
             @unlink($f);
         }
         @rmdir($this->cacheDir);
+        @unlink($this->cacheDir . '.log');
     }
 
     private function controller(
@@ -64,6 +65,8 @@ final class ApiWarmupControllerTest extends TestCase
     ): ApiWarmupController {
         $harvest = $this->createStub(HarvestService::class);
         $harvest->method('isDueSafely')->willReturn($harvestDue);
+        // The sync logs through error_log(); keep the run quiet (PHPUnit swaps the setting per test).
+        ini_set('error_log', $this->cacheDir . '.log');
 
         $db = new PDO('sqlite::memory:');
         $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);

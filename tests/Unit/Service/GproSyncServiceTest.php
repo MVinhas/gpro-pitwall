@@ -32,13 +32,11 @@ final class GproSyncServiceTest extends TestCase
     protected function setUp(): void
     {
         $this->cacheDir = sys_get_temp_dir() . '/gpro_sync_' . bin2hex(random_bytes(6));
-        // The service logs through error_log(); tests that read the log redirect it themselves.
         $logDir = dirname(__DIR__, 3) . '/var/test';
         if (!is_dir($logDir)) {
             mkdir($logDir, 0750, true);
         }
         $this->quietLog = $logDir . '/sync-quiet-' . bin2hex(random_bytes(6)) . '.log';
-        $this->priorErrorLog = ini_set('error_log', $this->quietLog);
         $this->cache = new FilesystemCache($this->cacheDir);
         $this->priorRaceDays = $_ENV['GPRO_RACE_DAYS'] ?? null;
         $_ENV['GPRO_RACE_DAYS'] = '';
@@ -90,6 +88,13 @@ final class GproSyncServiceTest extends TestCase
 
     private function service(UserRepository $users, ?GproApiClient $client = null, ?\PDO $db = null, int $margin = 20): GproSyncService
     {
+        // The service logs through error_log(); PHPUnit swaps that setting per
+        // test, so it is redirected here, inside the test. Tests that read the
+        // log redirect it again themselves.
+        $prior = ini_set('error_log', $this->quietLog);
+        if ($this->priorErrorLog === false) {
+            $this->priorErrorLog = $prior;
+        }
         $db ??= $this->sink();
         $client ??= $this->apiClient();
 
