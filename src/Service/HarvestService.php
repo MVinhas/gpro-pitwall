@@ -9,6 +9,7 @@ use App\Archive\RaceSnapshotReader;
 use App\Archive\SupporterGate;
 use App\Cache\CacheInterface;
 use App\Repository\ApiArchiveRepository;
+use App\Repository\RaceHistoryRepository;
 use App\Sync\Endpoint;
 use App\Sync\EndpointFetcher;
 use App\Sync\HarvestResult;
@@ -46,6 +47,7 @@ class HarvestService
         private readonly RaceSnapshotReader $snapshots,
         private readonly RaceTelemetryService $telemetry,
         private readonly BaselineAutoFillService $baselineAutoFill,
+        private readonly RaceHistoryRepository $history,
     ) {
     }
 
@@ -220,13 +222,17 @@ class HarvestService
     /**
      * Unlocked races the latest analysis lists that have no analysis yet, oldest
      * first, as 'season,race'. A race counts as having one when any analysis row
-     * is stamped with it or was asked for it, so a NonSup answer is not retried.
+     * is stamped with it or was asked for it, so a NonSup answer is not retried,
+     * or when it is already in the manager's history: its telemetry is in the
+     * corpus, and the call would only buy a ledger row.
      *
      * @return list<string>
      */
     private function backfillPending(int $userId, string $scope): array
     {
         try {
+            // Only the current token's list says which races it can still unlock; the
+            // races already answered are read across scopes, so none is asked twice.
             $latest = $this->archive->latest($userId, 'RaceAnalysis', '', $scope);
             $listed = is_array($latest) && is_array($latest['racesToSelect'] ?? null) ? $latest['racesToSelect'] : [];
             if ($listed === []) {
@@ -241,6 +247,9 @@ class HarvestService
                 if (str_starts_with($params, 'SR=')) {
                     $known[substr($params, 3)] = true;
                 }
+            }
+            foreach ($this->history->storedRaces($userId) as $race) {
+                $known[$race['season'] . ',' . $race['race']] = true;
             }
 
             $pending = [];
@@ -310,7 +319,9 @@ class HarvestService
 
     /**
      * The TD and driver profile that raced come from the snapshot archived for
-     * the analysed race, never from today's office.
+     * the analysed race, never from today's office. A race whose TD status
+     * the archive does not know gives no telemetry row: guessing "no TD" would
+     * file a TD-run race in the wrong corpus bucket.
      *
      * @param array<string, mixed> $analysis
      */
@@ -319,17 +330,16 @@ class HarvestService
         try {
             $season = $analysis['selSeasonNb'] ?? null;
             $race = $analysis['selRaceNb'] ?? null;
-            $td = [];
-            $driver = [];
-            if (is_numeric($season) && is_numeric($race)) {
-                $snapshot = $this->snapshots->read($userId, (int) $season, (int) $race);
-                $td = $snapshot->td;
-                $driver = GproSyncService::raceWasRunByCurrentDriver($analysis, $snapshot->office)
-                    ? $snapshot->driver
-                    : [];
+            if (!is_numeric($season) || !is_numeric($race)) {
+                return false;
+            }
+            $snapshot = $this->snapshots->read($userId, (int) $season, (int) $race);
+            $td = $snapshot->tdThatRaced();
+            if ($td === null) {
+                return false;
             }
 
-            return $this->telemetry->ingest($analysis, $td, $driver);
+            return $this->telemetry->ingest($analysis, $td, $snapshot->driverThatRaced($analysis) ?? []);
         } catch (Throwable $e) {
             error_log('[Harvest] user ' . $userId . ': telemetry failed: ' . $e::class);
 

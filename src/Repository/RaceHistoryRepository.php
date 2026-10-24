@@ -157,6 +157,24 @@ class RaceHistoryRepository
         return $stmt->fetchColumn() !== false;
     }
 
+    /**
+     * Every race this manager has stored, unordered.
+     *
+     * @return list<array{season: int, race: int}>
+     */
+    public function storedRaces(int $userId): array
+    {
+        $stmt = $this->pdo->prepare('SELECT season, race FROM user_race_history WHERE user_id = :u');
+        $stmt->execute(['u' => $userId]);
+
+        $races = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $races[] = ['season' => (int) $row['season'], 'race' => (int) $row['race']];
+        }
+
+        return $races;
+    }
+
     /** How many races this manager has archived. */
     public function countFor(int $userId): int
     {

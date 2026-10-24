@@ -187,6 +187,7 @@ final class HarvestServiceTest extends TestCase
             new RaceSnapshotReader($this->archive),
             $this->telemetry(),
             $this->autofill(),
+            new RaceHistoryRepository($this->db),
         );
     }
 
@@ -473,7 +474,63 @@ final class HarvestServiceTest extends TestCase
             $this->gpro->requests,
         );
         $this->assertSame(5, $this->client->backfillCount());
-        $this->assertSame(5, $this->rows('race_telemetry'));
+        // No snapshot was archived for any of those races: their TD status is unknown.
+        $this->assertSame(0, $this->rows('race_telemetry'));
+    }
+
+    public function testBackfillSkipsRacesAlreadyInTheManagersHistory(): void
+    {
+        $this->userWithOnlyBackfillLeft();
+        foreach (['1', '2'] as $race) {
+            $this->history()->archive(1, array_merge($this->gpro->analysis, ['selRaceNb' => $race]));
+        }
+
+        $this->harvest()->runSlice(self::USER);
+
+        $this->assertSame(
+            ['RaceAnalysis?SR=107,4', 'RaceAnalysis?SR=107,5', 'RaceAnalysis?SR=107,6'],
+            $this->gpro->requests,
+        );
+    }
+
+    public function testBackfillTelemetryIsWrittenOnlyWhenThatRacesTdStatusIsKnown(): void
+    {
+        $this->userWithOnlyBackfillLeft();
+        $scope = GproApiClient::scopeFor('tok');
+        // Race 1: the office stamped for it says no TD. Race 2: a TD and that race's profile.
+        // Race 4: nothing archived says whether there was a TD.
+        $this->archive->put(1, $scope, 'office', '', 'w1', 107, 1, ['tdId' => ''] + $this->gpro->office);
+        $this->archive->put(1, $scope, 'office', '', 'w2', 107, 2, $this->gpro->office);
+        $this->archive->put(1, $scope, 'TDProfile', '', 'w2', 107, 2, $this->gpro->td);
+
+        $result = $this->harvest()->runSlice(self::USER);
+
+        $this->assertSame(
+            ['RaceAnalysis?SR=107,1', 'RaceAnalysis?SR=107,2', 'RaceAnalysis?SR=107,4'],
+            $this->gpro->requests,
+        );
+        $this->assertSame(3, $result->calls);
+        $this->assertSame(2, $this->rows('race_telemetry'));
+        $this->assertSame(
+            [0, 1],
+            array_map('intval', $this->db->query('SELECT has_td FROM race_telemetry ORDER BY has_td')->fetchAll(PDO::FETCH_COLUMN)),
+        );
+        $this->assertSame(
+            3,
+            (int) $this->db->query('SELECT COUNT(*) FROM user_race_history WHERE race IN (1, 2, 4)')->fetchColumn(),
+            'history still projects the race whose TD status is unknown',
+        );
+    }
+
+    public function testAnOfficeNamingATdWithoutThatRacesProfileWritesNoTelemetry(): void
+    {
+        $this->userAtANewRace();
+        $this->db->exec("DELETE FROM user_api_archive WHERE endpoint = 'TDProfile'");
+
+        $this->harvest()->runSlice(self::USER);
+
+        $this->assertSame(0, $this->rows('race_telemetry'));
+        $this->assertSame(1, $this->rows('user_race_history'));
     }
 
     public function testBackfillBudgetOfOneWindowIsSpentForThatUser(): void

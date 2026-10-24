@@ -377,6 +377,7 @@ $container['service.harvest'] = new \App\Service\HarvestService(
     $container['archive.snapshots'],
     $container['service.race_telemetry'],
     $container['service.baseline_autofill'],
+    $container['repo.race_history'],
 );
 $container['service.auth_service']  = new \App\Service\AuthService(
     $container['service.user_repo'],
