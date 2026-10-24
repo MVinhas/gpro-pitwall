@@ -277,6 +277,29 @@ final class ApiArchiveRepository
         return array_values(array_map(strval(...), $stmt->fetchAll(PDO::FETCH_COLUMN)));
     }
 
+    /**
+     * Races (oldest first) the endpoint has a row stamped with, whatever its
+     * params and token scope. One indexed query, no payload decoded.
+     *
+     * @return list<array{season: int, race: int}>
+     */
+    public function stampedRaces(int $userId, string $endpoint): array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT DISTINCT season, race FROM user_api_archive
+             WHERE user_id = :user_id AND endpoint = :endpoint AND season IS NOT NULL AND race IS NOT NULL
+             ORDER BY season ASC, race ASC'
+        );
+        $stmt->execute([':user_id' => $userId, ':endpoint' => $endpoint]);
+
+        $out = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $out[] = ['season' => (int) $row['season'], 'race' => (int) $row['race']];
+        }
+
+        return $out;
+    }
+
     private static function scopeClause(?string $tokenScope): string
     {
         return $tokenScope === null ? '' : ' AND token_scope = :scope';

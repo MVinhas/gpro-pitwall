@@ -100,8 +100,11 @@ final class SyncPlannerTest extends TestCase
             'analysis in phase 2 heals a missing analysis' => [['race' => array_diff(self::SNAPSHOT, ['ANALYSIS'])], [], $same, true, [], ['ANALYSIS']],
             'new season not archived' => [['race' => [], 'season' => []], ['seasonNb' => 11, 'raceNb' => 1], self::office(['seasonNb' => 10, 'raceNb' => 17]), false,
                 ['DRIVER', 'CAR', 'TRACK', 'SETUP', 'TESTING', 'STAFF', 'TD', 'SPONSORS', 'MONEY', 'ANALYSIS', 'CALENDAR', 'TYRES', 'MENU'],
-                ['STANDINGS', 'ECONOMY', 'SF_HISTORY', 'CCP_HISTORY']],
-            'season endpoints missing on unchanged office' => [['season' => ['TYRES']], [], $same, false, ['CALENDAR', 'MENU'], ['SF_HISTORY', 'CCP_HISTORY']],
+                ['STANDINGS', 'ECONOMY', 'SF_HISTORY[season=10]', 'CCP_HISTORY[season=10]']],
+            'season endpoints missing on unchanged office' => [['season' => ['TYRES']], [], $same, false, ['CALENDAR', 'MENU'], ['SF_HISTORY[season=9]', 'CCP_HISTORY[season=9]']],
+            'one season history already archived' => [['season' => ['CALENDAR', 'TYRES', 'MENU', 'SF_HISTORY']], [], $same, false, [], ['CCP_HISTORY[season=9]']],
+            'first season has no completed season to ask about' => [['season' => ['CALENDAR', 'TYRES', 'MENU']], ['seasonNb' => 1], self::office(['seasonNb' => 1]), false, [], []],
+            'unknown season plans no history' => [['season' => ['CALENDAR', 'TYRES', 'MENU']], ['seasonNb' => ''], self::office(['seasonNb' => '']), false, [], []],
             'heal a missing endpoint' => [['race' => array_diff(self::SNAPSHOT, ['MONEY'])], [], $same, false, ['MONEY'], []],
             'heal keeps priority order' => [['race' => array_diff(self::SNAPSHOT, ['MONEY', 'CAR'])], ['doneRaceSetup' => true], $same, false, ['CAR', 'SETUP', 'MONEY'], []],
             'heal never plans TD without a TD' => [['race' => array_diff(self::SNAPSHOT, ['TD'])], ['tdId' => ''], self::office(['tdId' => '']), false, [], []],
@@ -136,7 +139,7 @@ final class SyncPlannerTest extends TestCase
             'backfill full allowance at 68 left' => [['remaining' => 68, 'pending' => ['10,1', '10,2', '10,3', '10,4', '10,5']], [], $same, false, [],
                 ['ANALYSIS[SR=10,1]', 'ANALYSIS[SR=10,2]', 'ANALYSIS[SR=10,3]', 'ANALYSIS[SR=10,4]', 'ANALYSIS[SR=10,5]']],
             'harvest new race has no phase 1' => [['mode' => SyncPlanner::MODE_HARVEST, 'race' => []], [], null, false, [], ['STANDINGS', 'ECONOMY']],
-            'harvest ignores season-scoped phase 1' => [['mode' => SyncPlanner::MODE_HARVEST, 'season' => []], [], $same, false, [], ['SF_HISTORY', 'CCP_HISTORY']],
+            'harvest ignores season-scoped phase 1' => [['mode' => SyncPlanner::MODE_HARVEST, 'season' => []], [], $same, false, [], ['SF_HISTORY[season=9]', 'CCP_HISTORY[season=9]']],
             'harvest backfill' => [['mode' => SyncPlanner::MODE_HARVEST, 'remaining' => 80, 'pending' => ['9,3']], [], $same, false, [], ['ANALYSIS[SR=9,3]']],
         ];
     }

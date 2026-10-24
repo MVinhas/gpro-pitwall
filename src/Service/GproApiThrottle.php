@@ -59,6 +59,36 @@ final class GproApiThrottle
      */
     public function reserve(float $now): float
     {
+        $tokens = $this->update($now, 1.0);
+        if ($tokens === null || $tokens >= 0.0) {
+            return 0.0;
+        }
+
+        $wait = (-$tokens) / $this->ratePerSecond;
+        return min($wait, $this->maxBlockMs / 1000.0);
+    }
+
+    /**
+     * Tokens in the shared bucket right now, without taking one. A caller that
+     * must not queue behind other users (the harvest) asks this first and
+     * leaves the call for later when it is below 1. Throttling disabled, or an
+     * unreadable state file, count as a full bucket, like reserve().
+     */
+    public function available(float $now): float
+    {
+        if ($this->ratePerSecond <= 0.0) {
+            return $this->burst;
+        }
+
+        return $this->update($now, 0.0) ?? $this->burst;
+    }
+
+    /**
+     * Refill the shared bucket to $now (capped at burst), take $cost from it and
+     * return what is left, or null when the state file cannot be used.
+     */
+    private function update(float $now, float $cost): ?float
+    {
         $dir = dirname($this->stateFile);
         if (!is_dir($dir)) {
             @mkdir($dir, 0750, true);
@@ -68,32 +98,24 @@ final class GproApiThrottle
         if ($handle === false) {
             // Can't open the state file (e.g. var/ not writable). Fail open —
             // a throttle problem must never stop the app from talking to GPRO.
-            return 0.0;
+            return null;
         }
 
         try {
             if (!flock($handle, LOCK_EX)) {
-                return 0.0;
+                return null;
             }
 
             [$tokens, $ts] = $this->readState($handle);
 
             // Refill for elapsed time, clamped to the burst ceiling.
             $elapsed = max(0.0, $now - $ts);
-            $tokens = min($this->burst, $tokens + $elapsed * $this->ratePerSecond);
-
-            // Reserve this call's slot.
-            $tokens -= 1.0;
+            $tokens = min($this->burst, $tokens + $elapsed * $this->ratePerSecond) - $cost;
 
             $this->writeState($handle, $tokens, $now);
             flock($handle, LOCK_UN);
 
-            if ($tokens >= 0.0) {
-                return 0.0;
-            }
-
-            $wait = (-$tokens) / $this->ratePerSecond;
-            return min($wait, $this->maxBlockMs / 1000.0);
+            return $tokens;
         } finally {
             fclose($handle);
         }

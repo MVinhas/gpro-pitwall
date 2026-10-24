@@ -25,6 +25,10 @@ final class ArchiveEndpoints
         'TyreSuppliers' => Endpoint::TYRES,
         'Menu' => Endpoint::MENU,
         'RaceAnalysis' => Endpoint::ANALYSIS,
+        'Standings' => Endpoint::STANDINGS,
+        'EconomyHistory' => Endpoint::ECONOMY,
+        'SFHistory' => Endpoint::SF_HISTORY,
+        'CCPHistory' => Endpoint::CCP_HISTORY,
     ];
 
     /**

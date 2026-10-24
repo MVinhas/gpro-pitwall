@@ -826,6 +826,26 @@ final class GproApiClient
     }
 
     /**
+     * How many backfill (`SR=`) analyses this user's harvest has fetched in the
+     * current race window: the planner's allowance is per window, not per slice.
+     */
+    public function backfillCount(): int
+    {
+        $count = $this->cache->get($this->userKey('backfill_count:w' . $this->archiveWindow()));
+
+        return is_numeric($count) ? (int) $count : 0;
+    }
+
+    public function addBackfill(): void
+    {
+        $this->cache->set(
+            $this->userKey('backfill_count:w' . $this->archiveWindow()),
+            $this->backfillCount() + 1,
+            8 * 86400,
+        );
+    }
+
+    /**
      * Files the office a sync is about to plan against under params 'sync', so
      * the next sync detects changes against it and not against a page-level
      * office fetch (which archives under ''). Read-through only ever asks for

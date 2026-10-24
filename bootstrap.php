@@ -362,6 +362,19 @@ $container['service.gpro_sync'] = new GproSyncService(
     new \App\Sync\SyncPlanner(),
     Env::int('SYNC_SAFETY_MARGIN', 20),
 );
+$container['service.harvest'] = new \App\Service\HarvestService(
+    $container['service.api_client'],
+    $container['service.cache'],
+    $container['repo.api_archive'],
+    $container['sync.contexts'],
+    $container['sync.fetcher'],
+    new \App\Sync\SyncPlanner(),
+    $container['service.api_throttle'],
+    $container['archive.projector'],
+    $container['archive.snapshots'],
+    $container['service.race_telemetry'],
+    $container['service.baseline_autofill'],
+);
 $container['service.auth_service']  = new \App\Service\AuthService(
     $container['service.user_repo'],
     $container['service.token_repo'],

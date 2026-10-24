@@ -38,4 +38,29 @@ final class GproApiClientScopeTest extends TestCase
 
         $this->assertSame(['cash' => 2], $client->getCachedMenu());
     }
+
+    public function testBackfillCallsAreCountedPerUserAndPerRaceWindow(): void
+    {
+        $cache = new ArrayCache();
+        $client = new GproApiClient(
+            new GproApiFetcher(['base_url' => 'http://127.0.0.1:9']),
+            $cache,
+            null,
+            static fn (): \DateTimeImmutable => new \DateTimeImmutable('2026-10-23 12:00:00', new \DateTimeZone('Europe/Paris')),
+        );
+        $client->setToken('token-a');
+        $window = $client->archiveWindow();
+
+        $this->assertSame(0, $client->backfillCount());
+        $client->addBackfill();
+        $client->addBackfill();
+        $this->assertSame(2, $client->backfillCount());
+        $this->assertSame(
+            2,
+            $cache->get('u' . GproApiClient::scopeFor('token-a') . ':backfill_count:w' . $window),
+        );
+
+        $client->setToken('token-b');
+        $this->assertSame(0, $client->backfillCount());
+    }
 }

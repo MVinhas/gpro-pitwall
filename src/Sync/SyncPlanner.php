@@ -28,6 +28,7 @@ final class SyncPlanner
     ];
 
     private const array SEASON_PHASE1 = [Endpoint::CALENDAR, Endpoint::TYRES, Endpoint::MENU];
+    /** Fetched for the last completed season, which never changes. */
     private const array SEASON_PHASE2 = [Endpoint::SF_HISTORY, Endpoint::CCP_HISTORY];
 
     /** @var array<string, list<string>> done-flag => endpoints it unlocks when it flips to true */
@@ -98,13 +99,16 @@ final class SyncPlanner
                 $planned[] = $endpoint;
             }
         }
-        $planned = [...$planned, ...$this->missing(self::SEASON_PHASE2, $ctx->archivedThisSeason)];
+        $entries = array_map(self::entry(...), $planned);
 
-        $entries = array_slice(
-            array_map(self::entry(...), $planned),
-            0,
-            $this->budget($left, self::PHASE2_FLOOR),
-        );
+        $completed = is_numeric($ctx->office['seasonNb'] ?? null) ? (int) $ctx->office['seasonNb'] - 1 : 0;
+        if ($completed >= 1) {
+            foreach ($this->missing(self::SEASON_PHASE2, $ctx->archivedThisSeason) as $endpoint) {
+                $entries[] = ['endpoint' => $endpoint, 'params' => 'season=' . $completed];
+            }
+        }
+
+        $entries = array_slice($entries, 0, $this->budget($left, self::PHASE2_FLOOR));
 
         // Backfill only spends what is genuinely spare once everything above is paid for.
         $left -= count($entries);

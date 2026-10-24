@@ -262,4 +262,19 @@ final class ApiArchiveRepositoryTest extends TestCase
         $this->assertSame([], $this->repo->endpointsForSeason(1, 107, 'sNew'));
         $this->assertCount(2, $this->repo->endpointsForSeason(1, 107, 'sOld'));
     }
+
+    public function testStampedRacesListsEachRaceOnceOldestFirstForThatUserAndEndpointOnly(): void
+    {
+        $this->repo->put(1, 'sA', 'RaceAnalysis', '', 'w2', 107, 13, ['a' => 1]);
+        $this->repo->put(1, 'sB', 'RaceAnalysis', '', 'w2', 107, 13, ['a' => 1]);
+        $this->repo->put(1, 'sA', 'RaceAnalysis', 'SR=106,4', 'w0', 106, 4, ['a' => 1]);
+        $this->repo->put(1, 'sA', 'RaceAnalysis', 'SR=1,1', '', null, null, ['errorMsg' => 'x', 'data' => []]);
+        $this->repo->put(1, 'sA', 'Standings', '', 'w2', 107, 14, ['a' => 1]);
+        $this->repo->put(2, 'sA', 'RaceAnalysis', '', 'w2', 107, 12, ['a' => 1]);
+
+        $this->assertSame(
+            [['season' => 106, 'race' => 4], ['season' => 107, 'race' => 13]],
+            $this->repo->stampedRaces(1, 'RaceAnalysis'),
+        );
+    }
 }

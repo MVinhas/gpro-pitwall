@@ -91,4 +91,49 @@ final class GproApiThrottleTest extends TestCase
         $b = new GproApiThrottle($this->stateFile, ratePerSecond: 4.0, burst: 2.0, maxBlockMs: 2000);
         $this->assertEqualsWithDelta(0.25, $b->reserve(1000.0), 1e-9);
     }
+
+    public function testAFreshBucketIsFullAndAvailableDoesNotTakeATokenFromIt(): void
+    {
+        $t = new GproApiThrottle($this->stateFile, ratePerSecond: 2.0, burst: 4.0, maxBlockMs: 2000);
+
+        $this->assertSame(4.0, $t->available(1000.0));
+        $this->assertSame(4.0, $t->available(1000.0));
+    }
+
+    public function testReservingLowersWhatIsAvailableAndTimeRefillsItToTheBurst(): void
+    {
+        $t = new GproApiThrottle($this->stateFile, ratePerSecond: 2.0, burst: 4.0, maxBlockMs: 2000);
+        $t->reserve(1000.0);
+        $t->reserve(1000.0);
+        $t->reserve(1000.0);
+
+        $this->assertEqualsWithDelta(1.0, $t->available(1000.0), 1e-9);
+        $this->assertEqualsWithDelta(2.0, $t->available(1000.5), 1e-9);
+        $this->assertEqualsWithDelta(4.0, $t->available(1100.0), 1e-9);
+    }
+
+    public function testADrainedOrOverdrawnBucketHasNothingAvailable(): void
+    {
+        $t = new GproApiThrottle($this->stateFile, ratePerSecond: 2.0, burst: 2.0, maxBlockMs: 2000);
+        $t->reserve(1000.0);
+        $t->reserve(1000.0);
+        $t->reserve(1000.0);
+
+        $this->assertLessThan(0.0, $t->available(1000.0));
+    }
+
+    public function testDisabledThrottlingAlwaysHasTheBurstAvailable(): void
+    {
+        $t = new GproApiThrottle($this->stateFile, ratePerSecond: 0.0, burst: 8.0, maxBlockMs: 2000);
+
+        $this->assertSame(8.0, $t->available(1000.0));
+        $this->assertFileDoesNotExist($this->stateFile);
+    }
+
+    public function testAnUnusableStateFileFailsOpenAsAFullBucket(): void
+    {
+        $t = new GproApiThrottle(sys_get_temp_dir(), ratePerSecond: 2.0, burst: 4.0, maxBlockMs: 2000);
+
+        $this->assertSame(4.0, $t->available(1000.0));
+    }
 }

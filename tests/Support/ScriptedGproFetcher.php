@@ -19,6 +19,12 @@ final class ScriptedGproFetcher implements GproFetcher
     /** @var list<string> every request path with its query, e.g. "RaceAnalysis?SR=107,5" */
     public array $requests = [];
 
+    /** @var list<string> like $requests, but a test never clears it */
+    public array $allRequests = [];
+
+    /** Runs before every request, e.g. to spend throttle tokens the way a real fetch would. */
+    public ?\Closure $onRequest = null;
+
     /** @var array<string, array<string, mixed>> payloads by request path with query, ahead of the defaults */
     public array $responses = [];
 
@@ -76,7 +82,10 @@ final class ScriptedGproFetcher implements GproFetcher
     {
         $name = self::nameOf($endpoint);
         $this->calls[] = $name;
-        $this->requests[] = self::pathOf($endpoint);
+        $this->requests[] = $this->allRequests[] = self::pathOf($endpoint);
+        if ($this->onRequest !== null) {
+            ($this->onRequest)();
+        }
         if (in_array($name, $this->failing, true)) {
             throw new RuntimeException('scripted failure');
         }
