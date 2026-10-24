@@ -12,7 +12,9 @@ use App\Telemetry\PayloadReader;
  * Projects the money movements one race's archive carries: the transactions of
  * that race's analysis, and the EconomyHistory rows fetched on entering it.
  * Every movement has a fingerprint, so a movement seen in several windows (the
- * economy table repeats recent history) is stored once.
+ * economy table repeats recent history) is stored once. An economy movement's
+ * fingerprint includes the balance after it: a race batch shares one timestamp,
+ * so two movements with the same description and amount differ only by balance.
  */
 final class LedgerProjector
 {
@@ -21,13 +23,13 @@ final class LedgerProjector
     public function __construct(
         private readonly ApiArchiveRepository $archive,
         private readonly EconomyLedgerRepository $repository,
-        private readonly ?AnalysisReader $analyses = null,
+        private readonly AnalysisReader $analyses,
     ) {
     }
 
     public function project(int $userId, int $season, int $race): void
     {
-        $analysis = ($this->analyses ?? new AnalysisReader($this->archive))->forRace($userId, $season, $race);
+        $analysis = $this->analyses->forRace($userId, $season, $race);
         foreach ($this->listOf($analysis['transactions'] ?? null) as $index => $transaction) {
             $amount = $this->int($transaction['amount'] ?? null);
             if ($amount === null) {
@@ -94,6 +96,7 @@ final class LedgerProjector
         }
         $description = $this->str($entry['desc'] ?? null) ?? '';
         $at = $this->str($entry['datetime'] ?? null);
+        $balanceAfter = $this->int($entry['balanceAfter'] ?? null);
         [$season, $race] = $header ?? $stamp;
 
         $row = [
@@ -104,8 +107,8 @@ final class LedgerProjector
             'occurred_at' => $at,
             'description' => $description,
             'amount' => $amount,
-            'balance_after' => $this->int($entry['balanceAfter'] ?? null),
-            'fingerprint' => sha1("economy|{$at}|{$description}|{$amount}"),
+            'balance_after' => $balanceAfter,
+            'fingerprint' => sha1("economy|{$at}|{$description}|{$amount}|{$balanceAfter}"),
         ];
         $header === null ? $this->repository->saveIfNew($row) : $this->repository->save($row);
     }

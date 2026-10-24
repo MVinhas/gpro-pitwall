@@ -70,7 +70,7 @@ final readonly class RaceHistoryService
 
             return !$known;
         } catch (Throwable $e) {
-            error_log('[RaceHistory] archive failed: ' . $e::class . ': ' . $e->getMessage());
+            error_log('[RaceHistory] archive failed: ' . $e::class);
             return false;
         }
     }

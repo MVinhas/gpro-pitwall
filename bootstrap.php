@@ -307,9 +307,9 @@ $container['service.race_history'] = new \App\Service\RaceHistoryService(
 );
 $container['repo.projection_state'] = new \App\Repository\ProjectionStateRepository($container['db']);
 $container['archive.snapshots'] = new \App\Archive\RaceSnapshotReader($container['repo.api_archive']);
+$container['archive.analyses'] = new \App\Archive\AnalysisReader($container['repo.api_archive']);
 $container['archive.projector'] = new \App\Archive\ArchiveProjector(
     $container['db'],
-    $container['repo.api_archive'],
     $container['repo.projection_state'],
     new \App\Archive\WeekendStateProjector(
         $container['repo.api_archive'],
@@ -324,9 +324,11 @@ $container['archive.projector'] = new \App\Archive\ArchiveProjector(
     new \App\Archive\LedgerProjector(
         $container['repo.api_archive'],
         new \App\Repository\EconomyLedgerRepository($container['db']),
+        $container['archive.analyses'],
     ),
     $container['service.race_history'],
     $container['archive.snapshots'],
+    $container['archive.analyses'],
 );
 $container['service.debrief'] = new \App\Service\DebriefService(
     $container['repo.race_history'],

@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Tests\Integration\Archive;
 
+use App\Archive\AnalysisReader;
 use App\Archive\ArchiveProjector;
 use App\Archive\ArchiveSanitizer;
 use App\Archive\LedgerProjector;
+use App\Archive\RaceSnapshotReader;
 use App\Archive\StandingsProjector;
 use App\Archive\WeekendStateProjector;
 use App\Database\DatabaseSeeder;
@@ -82,18 +84,26 @@ final class ArchiveProjectorTest extends TestCase
     private function makeProjector(
         ?StandingsRepository $standings = null,
     ): ArchiveProjector {
+        $snapshots = new RaceSnapshotReader($this->archive);
+        $analyses = new AnalysisReader($this->archive);
+
         return new ArchiveProjector(
             $this->db,
-            $this->archive,
             new ProjectionStateRepository($this->db),
-            new WeekendStateProjector($this->archive, new WeekendStateRepository($this->db)),
-            new StandingsProjector($this->archive, $standings ?? new StandingsRepository($this->db)),
-            new LedgerProjector($this->archive, new EconomyLedgerRepository($this->db)),
+            new WeekendStateProjector($this->archive, new WeekendStateRepository($this->db), $snapshots),
+            new StandingsProjector(
+                $this->archive,
+                $standings ?? new StandingsRepository($this->db),
+                $snapshots,
+            ),
+            new LedgerProjector($this->archive, new EconomyLedgerRepository($this->db), $analyses),
             new RaceHistoryService(
                 new RaceHistoryRepository($this->db),
                 new RaceHistoryMapper(),
                 new TrackRepository($this->db),
             ),
+            $snapshots,
+            $analyses,
         );
     }
 
@@ -429,7 +439,7 @@ final class ArchiveProjectorTest extends TestCase
         $this->assertSame('economy', $economy['source']);
         $this->assertSame(130, (int) $economy['balance_after']);
         $this->assertSame('2026-10-20 21:00:01', $economy['occurred_at']);
-        $this->assertSame(sha1('economy|2026-10-20 21:00:01|Facility fee|-20'), $economy['fingerprint']);
+        $this->assertSame(sha1('economy|2026-10-20 21:00:01|Facility fee|-20|130'), $economy['fingerprint']);
     }
 
     /** @return array<string, mixed> */
@@ -528,7 +538,7 @@ final class ArchiveProjectorTest extends TestCase
         $this->assertNotNull($row);
         $this->assertNull($row['occurred_at']);
         $this->assertSame(9, (int) $row['balance_after']);
-        $this->assertSame(sha1('economy||Bonus|7'), $row['fingerprint']);
+        $this->assertSame(sha1('economy||Bonus|7|9'), $row['fingerprint']);
     }
 
     public function testLedgerIgnoresMalformedEconomyRows(): void
@@ -574,7 +584,9 @@ final class ArchiveProjectorTest extends TestCase
         $this->assertSame($before['id'], $after['id']);
         $this->assertSame(1, $this->rows('user_race_history'));
         $this->assertNotSame($before['staff_json'], $after['staff_json']);
-        $this->assertStringContainsString('8', (string) $after['staff_json']);
+        $facilities = $this->json($after['staff_json'])['facilities'] ?? [];
+        $labs = array_values(array_filter($facilities, static fn (array $f): bool => $f['label'] === 'Lab'));
+        $this->assertSame(13, $labs[0]['value']);
     }
 
     public function testDriverProfileOnlyFeedsHistoryWhenTheCurrentDriverRanThatRace(): void
@@ -644,7 +656,7 @@ final class ArchiveProjectorTest extends TestCase
     {
         $this->seedSnapshot(5);
         $this->put('Standings', ['group' => 'G', 'managers' => []], 5);
-        $broken = $this->createMock(StandingsRepository::class);
+        $broken = $this->createStub(StandingsRepository::class);
         $broken->method('save')->willThrowException(new \RuntimeException('secret-payload-detail'));
         $log = tempnam(sys_get_temp_dir(), 'projlog');
         $this->assertNotFalse($log);
@@ -753,13 +765,75 @@ final class ArchiveProjectorTest extends TestCase
         $this->assertSame([['season' => 107, 'race' => 5]], $this->projector->pendingRaces(self::USER, 10));
     }
 
-    public function testPendingRacesQueryUsesIndexesInsteadOfScanningTheArchive(): void
+    public function testTwoMovementsSharingTimestampDescriptionAndAmountStayDistinct(): void
     {
-        $plan = (new ProjectionStateRepository($this->db))->explainPending(self::USER, ArchiveProjector::PROJECTOR_VERSION, 5);
+        $page = ['data' => [
+            ['type' => 'header', 'desc' => 'Season 107, Race 5 - Hockenheim (Germany)'],
+            ['type' => 'row', 'desc' => 'Bonus', 'datetime' => 't', 'amount' => 10, 'balanceAfter' => 110],
+            ['type' => 'row', 'desc' => 'Bonus', 'datetime' => 't', 'amount' => 10, 'balanceAfter' => 120],
+        ]];
+        $this->put('EconomyHistory', $page, 6, 'Page=1&show=table');
 
-        foreach ($plan as $detail) {
-            $this->assertDoesNotMatchRegularExpression('/^SCAN (a|user_api_archive)\b/', $detail);
+        $this->projector->projectRace(self::USER, self::SEASON, 6);
+        $this->projector->projectRace(self::USER, self::SEASON, 6);
+
+        $this->assertSame(2, $this->rows('user_economy_ledger'));
+    }
+
+    public function testOfficeArchivedOnlyAsTheSyncCopyStillFeedsTheWeekend(): void
+    {
+        $this->put('office', $this->office(5), 5, 'sync');
+
+        $this->projector->projectRace(self::USER, self::SEASON, 5);
+
+        $row = $this->row('SELECT * FROM user_weekend_state');
+        $this->assertNotNull($row);
+        $this->assertSame(12500000, (int) $row['cash']);
+        $this->assertSame('snapshot', $row['source']);
+    }
+
+    public function testMalformedBackfillParamsCreateNoCandidateRaces(): void
+    {
+        foreach (['SR=abc', 'SR=x,y', 'SR=107,', 'SR=,5', 'SR=107,5x'] as $i => $params) {
+            $this->put('RaceAnalysis', ['laps' => []], null, $params, self::USER, null, "w{$i}");
         }
-        $this->assertNotSame([], $plan);
+
+        $this->assertSame([], $this->projector->pendingRaces(self::USER, 10));
+    }
+
+    public function testHistoryForARaceIgnoresCompetingRowsStampedForTheNextRace(): void
+    {
+        $this->put('office', $this->office(5), 5);
+        $this->put('DriProfile', $this->driProfile(), 5, 'id=555');
+        $this->put('TDProfile', $this->tdProfile(), 5);
+        $this->put('StaffAndFacilities', $this->staff(1), 5);
+        $this->put('RaceAnalysis', $this->analysis(5), 5);
+        $this->put('office', $this->office(6), 6);
+        $this->put('DriProfile', ['age' => 99] + $this->driProfile(), 6, 'id=555');
+        $this->put('TDProfile', ['tdName' => 'Later Director'] + $this->tdProfile(), 6);
+        $this->put('StaffAndFacilities', $this->staff(8), 6);
+        $this->db->exec("UPDATE user_api_archive SET fetched_at = '2999-01-01 00:00:00' WHERE race = 6");
+
+        $this->projector->projectRace(self::USER, self::SEASON, 5);
+
+        $row = $this->row('SELECT driver_json, td_json, staff_json FROM user_race_history WHERE race = 5');
+        $this->assertNotNull($row);
+        $this->assertSame(27, $this->json($row['driver_json'])['age']);
+        $this->assertSame('Tom Director', $this->json($row['td_json'])['name']);
+        $facilities = $this->json($row['staff_json'])['facilities'];
+        $lab = array_values(array_filter($facilities, static fn (array $f): bool => $f['label'] === 'Lab'));
+        $this->assertSame(6, $lab[0]['value']);
+    }
+
+    public function testAnUnavailableMenuFallbackIsNotUsedToFindTheOwnPosition(): void
+    {
+        $this->put('Menu', ['errorMsg' => 'Supporters only', 'data' => [], 'IDM' => 1], 4);
+        $this->put('Standings', ['group' => 'G', 'managers' => [['IDM' => 1, 'pos' => '2', 'pts' => '3']]], 5);
+
+        $this->projector->projectRace(self::USER, self::SEASON, 5);
+
+        $row = $this->row('SELECT own_pos FROM user_standings');
+        $this->assertNotNull($row);
+        $this->assertNull($row['own_pos']);
     }
 }

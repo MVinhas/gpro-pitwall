@@ -74,13 +74,13 @@ final class WeekendStateProjector
     public function __construct(
         private readonly ApiArchiveRepository $archive,
         private readonly WeekendStateRepository $repository,
-        private readonly ?RaceSnapshotReader $snapshots = null,
+        private readonly RaceSnapshotReader $snapshots,
     ) {
     }
 
     public function project(int $userId, int $season, int $race): void
     {
-        $snapshot = ($this->snapshots ?? new RaceSnapshotReader($this->archive))->read($userId, $season, $race);
+        $snapshot = $this->snapshots->read($userId, $season, $race);
         $row = $snapshot->present
             ? $this->fromSnapshot($userId, $season, $race, $snapshot)
             : $this->fromHistory($userId, $season, $race);

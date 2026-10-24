@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Archive;
 
-use App\Repository\ApiArchiveRepository;
 use App\Repository\ProjectionStateRepository;
 use App\Service\GproSyncService;
 use App\Service\RaceHistoryService;
@@ -26,14 +25,13 @@ final class ArchiveProjector
 
     public function __construct(
         private readonly PDO $pdo,
-        private readonly ApiArchiveRepository $archive,
         private readonly ProjectionStateRepository $state,
         private readonly WeekendStateProjector $weekend,
         private readonly StandingsProjector $standings,
         private readonly LedgerProjector $ledger,
         private readonly RaceHistoryService $history,
-        private readonly ?RaceSnapshotReader $snapshots = null,
-        private readonly ?AnalysisReader $analyses = null,
+        private readonly RaceSnapshotReader $snapshots,
+        private readonly AnalysisReader $analyses,
     ) {
     }
 
@@ -79,12 +77,12 @@ final class ArchiveProjector
 
     private function projectHistory(int $userId, int $season, int $race): void
     {
-        $analysis = ($this->analyses ?? new AnalysisReader($this->archive))->forRace($userId, $season, $race);
+        $analysis = $this->analyses->forRace($userId, $season, $race);
         if ($analysis === []) {
             return;
         }
 
-        $snapshot = ($this->snapshots ?? new RaceSnapshotReader($this->archive))->read($userId, $season, $race);
+        $snapshot = $this->snapshots->read($userId, $season, $race);
         $driver = GproSyncService::raceWasRunByCurrentDriver($analysis, $snapshot->office) ? $snapshot->driver : [];
 
         $this->history->archive($userId, $analysis, $snapshot->td, $snapshot->staff, $driver);

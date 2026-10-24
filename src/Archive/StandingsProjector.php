@@ -26,21 +26,20 @@ final class StandingsProjector
     public function __construct(
         private readonly ApiArchiveRepository $archive,
         private readonly StandingsRepository $repository,
-        private readonly ?RaceSnapshotReader $snapshots = null,
+        private readonly RaceSnapshotReader $snapshots,
     ) {
     }
 
     public function project(int $userId, int $season, int $race): void
     {
-        $reader = $this->snapshots ?? new RaceSnapshotReader($this->archive);
-        $payload = $reader->usable($userId, 'Standings', $season, $race, '');
+        $payload = $this->snapshots->usable($userId, 'Standings', $season, $race, '');
         if ($payload === null || !is_array($payload['managers'] ?? null)) {
             $this->repository->delete($userId, $season, $race);
 
             return;
         }
 
-        $menu = $reader->usable($userId, 'Menu', $season, $race, '') ?? $this->archive->latest($userId, 'Menu') ?? [];
+        $menu = $this->snapshots->usable($userId, 'Menu', $season, $race, '') ?? $this->latestMenu($userId);
         $idm = $this->int($menu['IDM'] ?? null);
 
         $managers = [];
@@ -62,5 +61,17 @@ final class StandingsProjector
             'group_label' => $this->str($payload['group'] ?? null),
             'managers_json' => json_encode($managers, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
         ]);
+    }
+
+    /**
+     * IDM never changes, so a Menu from another race is as good as this race's.
+     *
+     * @return array<string, mixed>
+     */
+    private function latestMenu(int $userId): array
+    {
+        $menu = $this->archive->latest($userId, 'Menu');
+
+        return $menu === null || SupporterGate::isUnavailable('Menu', $menu) ? [] : $menu;
     }
 }

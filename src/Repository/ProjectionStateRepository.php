@@ -17,7 +17,8 @@ class ProjectionStateRepository
      * ones a backfilled analysis names in its `SR=S,R` params. A race is pending
      * when it was never projected, was projected by an older version, or any row
      * that feeds it (its own stamps, its analysis, the season's SF/CCP history)
-     * was fetched after the projection. Only indexed columns are compared: no
+     * was fetched at or after the projection (a row archived in the
+     * same second as the mark is re-projected once rather than lost). Only indexed columns are compared: no
      * payload is decoded.
      */
     private const string PENDING_SQL = "
@@ -30,6 +31,9 @@ class ProjectionStateRepository
               FROM user_api_archive
              WHERE user_id = :user_id AND endpoint = 'RaceAnalysis'
                AND params >= 'SR=' AND params < 'SR>' AND instr(params, ',') > 4
+               AND length(params) > instr(params, ',')
+               AND substr(params, 4, instr(params, ',') - 4) NOT GLOB '*[^0-9]*'
+               AND substr(params, instr(params, ',') + 1) NOT GLOB '*[^0-9]*'
         )
         SELECT c.season AS season, c.race AS race
           FROM candidates c
@@ -40,17 +44,17 @@ class ProjectionStateRepository
             OR EXISTS (
                 SELECT 1 FROM user_api_archive a
                  WHERE a.user_id = :user_id AND a.season = c.season AND a.race = c.race
-                   AND a.fetched_at > ps.projected_at)
+                   AND a.fetched_at >= ps.projected_at)
             OR EXISTS (
                 SELECT 1 FROM user_api_archive a
                  WHERE a.user_id = :user_id AND a.endpoint = 'RaceAnalysis'
                    AND a.params = 'SR=' || c.season || ',' || c.race
-                   AND a.fetched_at > ps.projected_at)
+                   AND a.fetched_at >= ps.projected_at)
             OR EXISTS (
                 SELECT 1 FROM user_api_archive a
                  WHERE a.user_id = :user_id AND a.endpoint IN ('SFHistory', 'CCPHistory')
                    AND a.params = 'season=' || c.season
-                   AND a.fetched_at > ps.projected_at)
+                   AND a.fetched_at >= ps.projected_at)
          ORDER BY c.season ASC, c.race ASC
          LIMIT :limit";
 
@@ -89,24 +93,5 @@ class ProjectionStateRepository
         }
 
         return $out;
-    }
-
-    /**
-     * SQLite's plan for the pending query, one line per step.
-     *
-     * @return list<string>
-     */
-    public function explainPending(int $userId, int $version, int $limit): array
-    {
-        $stmt = $this->pdo->prepare('EXPLAIN QUERY PLAN ' . self::PENDING_SQL);
-        $stmt->bindValue(':user_id', $userId, PDO::PARAM_INT);
-        $stmt->bindValue(':version', $version, PDO::PARAM_INT);
-        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
-        $stmt->execute();
-
-        return array_values(array_map(
-            static fn (array $row): string => (string) $row['detail'],
-            $stmt->fetchAll(PDO::FETCH_ASSOC)
-        ));
     }
 }
