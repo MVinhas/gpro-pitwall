@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Service;
 
+use App\Archive\SupporterGate;
 use App\Cache\CacheInterface;
 use App\Repository\ApiArchiveRepository;
 use App\Repository\UserRepository;
@@ -24,9 +25,6 @@ final class GproSyncService
      * releasing, in which case the next request can retry after it expires.
      */
     private const int LOCK_TTL_SECONDS = 60;
-
-    /** Races run 20:00-22:00 Paris, so a window's race is over two hours after it opens. */
-    private const int RACE_DURATION_SECONDS = 7200;
 
     /** Budget assumed when neither the fresh office nor the cache knows it. */
     private const int ASSUMED_REMAINING = 100;
@@ -150,7 +148,15 @@ final class GproSyncService
                 try {
                     $payload = $this->fetch($endpoint);
                     // Both getters swallow their own failure into [].
-                    if ($payload === [] && in_array($endpoint, [Endpoint::TD, Endpoint::ANALYSIS], true)) {
+                    if ($payload === [] && $endpoint === Endpoint::ANALYSIS) {
+                        // A thrown RaceAnalysis is still an answer to "has this race been asked
+                        // for": remember it, and do not hold the sync row back for it.
+                        $this->apiClient->markAnalysisAttempt();
+                        error_log('[GproSync] user ' . $userId . ': ' . $endpoint . ' failed: '
+                            . UnexpectedValueException::class);
+                        continue;
+                    }
+                    if ($payload === [] && $endpoint === Endpoint::TD) {
                         throw new UnexpectedValueException('empty payload');
                     }
                     $results[$endpoint] = $payload;
@@ -159,11 +165,6 @@ final class GproSyncService
                     error_log('[GproSync] user ' . $userId . ': ' . $endpoint . ' failed: ' . $e::class);
                     $complete = false;
                 }
-            }
-            // Only a fully paid-for plan moves the baseline the next sync
-            // diffs against; otherwise the next sync sees the same changes again.
-            if ($complete) {
-                $this->apiClient->archiveSyncOffice($office);
             }
             error_log(sprintf(
                 '[GproSync] user %d mode %s plan: %d calls (%s) in %d ms',
@@ -174,15 +175,24 @@ final class GproSyncService
                 intdiv((int) (hrtime(true) - $started), 1_000_000),
             ));
 
-            if (isset($results[Endpoint::ANALYSIS])) {
+            if (
+                isset($results[Endpoint::ANALYSIS])
+                && !SupporterGate::isUnavailable('RaceAnalysis', $results[Endpoint::ANALYSIS])
+            ) {
                 $this->recordRace($userId, $office, $results, $attempted);
+            }
+
+            // Only a fully paid-for plan, fully recorded, moves the baseline the
+            // next sync diffs against; otherwise the next sync sees the same changes again.
+            if ($complete) {
+                $this->apiClient->archiveSyncOffice($office);
             }
 
             $this->users->markSynced($userId);
 
             return $this->outcome('synced', $fetched, $calls, $started);
         } catch (Throwable $e) {
-            error_log('[GproSync] user ' . $userId . ' sync failed: ' . $e::class . ': ' . $e->getMessage());
+            error_log('[GproSync] user ' . $userId . ' sync failed: ' . $e::class);
             $this->users->updateSyncStatus($userId, 'failed');
 
             return $this->outcome('failed', $fetched, $calls, $started);
@@ -245,13 +255,14 @@ final class GproSyncService
      */
     private function analysisArchivedForPreviousRace(int $userId, int $season, int $race): bool
     {
+        if ($this->analysisAskedAfterPreviousRaceEnded($userId)) {
+            return true;
+        }
+
         $latest = $this->safely(fn (): ?array => $this->archive->latest($userId, 'RaceAnalysis'), null);
         $analysedSeason = self::intOrNull($latest['selSeasonNb'] ?? null);
         if ($analysedSeason === null) {
             return false;
-        }
-        if ($this->analysisFetchedAfterPreviousRaceEnded($userId)) {
-            return true;
         }
         if ($race > 1) {
             return $analysedSeason === $season && self::intOrNull($latest['selRaceNb'] ?? null) === $race - 1;
@@ -261,18 +272,23 @@ final class GproSyncService
     }
 
     /**
-     * A manager who skipped the last race has no analysis stamped with it, but
-     * one fetched once that race was over is already the latest GPRO has.
+     * Whatever GPRO answered once the race was over (an analysis, a NonSup or
+     * NA payload, or an error) is as good as it gets until the next race, so
+     * asking again would only spend a call: a manager who skipped the race, or
+     * a non-supporter, would otherwise pay one on every login.
      */
-    private function analysisFetchedAfterPreviousRaceEnded(int $userId): bool
+    private function analysisAskedAfterPreviousRaceEnded(int $userId): bool
     {
-        $start = $this->apiClient->archiveWindowStart();
-        $fetchedAt = $this->safely(fn (): ?string => $this->archive->latestFetchedAt($userId, 'RaceAnalysis'), null);
-        if ($start === null || $fetchedAt === null) {
+        $threshold = $this->apiClient->postRaceAt();
+        if ($threshold === null) {
             return false;
         }
+        if ($this->apiClient->hasAnalysisAttempt()) {
+            return true;
+        }
+        $fetchedAt = $this->safely(fn (): ?string => $this->archive->latestFetchedAt($userId, 'RaceAnalysis'), null);
 
-        return (int) strtotime($fetchedAt . ' UTC') >= $start->getTimestamp() + self::RACE_DURATION_SECONDS;
+        return $fetchedAt !== null && (int) strtotime($fetchedAt . ' UTC') >= $threshold->getTimestamp();
     }
 
     /**

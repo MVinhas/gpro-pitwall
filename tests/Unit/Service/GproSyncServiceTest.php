@@ -128,11 +128,16 @@ final class GproSyncServiceTest extends TestCase
      *
      * @return array{GproSyncService, ScriptedGproFetcher, \PDO}
      */
-    private function scripted(?UserRepository $users = null): array
+    private function scripted(?UserRepository $users = null, ?\DateTimeImmutable $now = null): array
     {
         $db = $this->sink();
         $fetcher = new ScriptedGproFetcher();
-        $client = new GproApiClient($fetcher, $this->cache, new ApiArchiveRepository($db, new ArchiveSanitizer()));
+        $client = new GproApiClient(
+            $fetcher,
+            $this->cache,
+            new ApiArchiveRepository($db, new ArchiveSanitizer()),
+            $now === null ? null : static fn (): \DateTimeImmutable => $now,
+        );
 
         return [$this->service($users ?? $this->createStub(UserRepository::class), $client, $db), $fetcher, $db];
     }
@@ -695,6 +700,11 @@ final class GproSyncServiceTest extends TestCase
         );
     }
 
+    private function atParis(string $time): \DateTimeImmutable
+    {
+        return new \DateTimeImmutable($time, new \DateTimeZone('Europe/Paris'));
+    }
+
     private function withRaceDays(callable $test): void
     {
         $prior = $_ENV['GPRO_RACE_DAYS'] ?? null;
@@ -706,45 +716,148 @@ final class GproSyncServiceTest extends TestCase
         }
     }
 
-    /** Syncs once with an older-race analysis, then ages its archive row to $offset after the window start. */
-    private function secondLoginAfterAnalysisFetchedAt(string $offset): ScriptedGproFetcher
+    /**
+     * Logs in at 21:30 Paris on $day with the analysis scripted by $configure,
+     * ages its RaceAnalysis archive row to $fetchedAtUtc, logs in again and
+     * returns what the second login spent.
+     *
+     * @param callable(ScriptedGproFetcher): void $configure
+     *
+     * @return list<string>
+     */
+    private function secondLoginSpend(string $day, string $fetchedAtUtc, callable $configure): array
     {
-        [$svc, $fetcher, $db] = $this->scripted();
-        $fetcher->analysis['selRaceNb'] = '11';
-        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+        $calls = [];
+        $this->withRaceDays(function () use ($day, $fetchedAtUtc, $configure, &$calls): void {
+            [$svc, $fetcher, $db] = $this->scripted(null, $this->atParis($day . ' 21:30'));
+            $configure($fetcher);
+            $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+            $db->exec("UPDATE user_api_archive SET fetched_at = '{$fetchedAtUtc}' WHERE endpoint = 'RaceAnalysis'");
+            $fetcher->calls = [];
+            $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+            $calls = $fetcher->calls;
+        });
 
-        $start = \App\Support\RaceWindow::raceStartAt(
-            new \DateTimeImmutable('now'),
-            \App\Support\RaceWindow::parseDays('2,5'),
-        );
-        $this->assertNotNull($start);
-        $db->exec(
-            "UPDATE user_api_archive SET fetched_at = '"
-            . $start->modify($offset)->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i:s')
-            . "' WHERE endpoint = 'RaceAnalysis'"
-        );
-        $fetcher->calls = [];
-        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
-
-        return $fetcher;
+        return $calls;
     }
 
-    public function testAnalysisFetchedAfterThePreviousRaceFinishedCountsAsPresent(): void
+    /** @return array<string, array{string, string, bool}> */
+    public static function postRaceInstants(): array
+    {
+        return [
+            'CEST 20:59 Paris' => ['2026-10-23', '2026-10-23 18:59:00', false],
+            'CEST 21:00 Paris' => ['2026-10-23', '2026-10-23 19:00:00', true],
+            'CET 20:59 Paris' => ['2026-10-27', '2026-10-27 19:59:00', false],
+            'CET 21:00 Paris' => ['2026-10-27', '2026-10-27 20:00:00', true],
+        ];
+    }
+
+    #[DataProvider('postRaceInstants')]
+    public function testAnalysisFetchedFromTwentyOneParisCountsAsAnswered(string $day, string $fetchedAt, bool $answered): void
+    {
+        $calls = $this->secondLoginSpend($day, $fetchedAt, static function (ScriptedGproFetcher $f): void {
+            $f->analysis['selRaceNb'] = '11';
+        });
+
+        $this->assertSame($answered ? ['office'] : ['office', 'RaceAnalysis'], $calls);
+    }
+
+    public function testNonSupporterAnswerAfterTheRaceIsNotAskedAgain(): void
+    {
+        $calls = $this->secondLoginSpend('2026-10-23', '2026-10-23 19:30:00', static function (ScriptedGproFetcher $f): void {
+            $f->analysis = ['errorMsg' => 'Supporters only', 'data' => []];
+        });
+
+        $this->assertSame(['office'], $calls);
+    }
+
+    public function testNonSupporterAnswerBeforeTheRaceEndedIsAskedAgain(): void
+    {
+        $calls = $this->secondLoginSpend('2026-10-23', '2026-10-23 18:30:00', static function (ScriptedGproFetcher $f): void {
+            $f->analysis = ['errorMsg' => 'Supporters only', 'data' => []];
+        });
+
+        $this->assertSame(['office', 'RaceAnalysis'], $calls);
+    }
+
+    public function testNonSupporterAnalysisIsNeitherAFailureNorRecorded(): void
     {
         $this->withRaceDays(function (): void {
-            $fetcher = $this->secondLoginAfterAnalysisFetchedAt('+3 hours');
+            [$svc, $fetcher, $db] = $this->scripted(null, $this->atParis('2026-10-23 21:30'));
+            $fetcher->analysis = ['errorMsg' => 'Supporters only', 'data' => []];
 
+            $outcome = $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+
+            $this->assertSame('synced', $outcome->status);
+            $this->assertNotNull($this->syncRowDoneRaceSetup($db), 'a NonSup answer does not block the sync row');
+            $this->assertSame(0, (int) $db->query('SELECT COUNT(*) FROM user_race_history')->fetchColumn());
+            $this->assertSame(0, (int) $db->query('SELECT COUNT(*) FROM race_telemetry')->fetchColumn());
+        });
+    }
+
+    public function testThrownAnalysisAfterTheRaceLeavesAMarkerAndStillWritesTheSyncRow(): void
+    {
+        $this->withRaceDays(function (): void {
+            [$svc, $fetcher, $db] = $this->scripted(null, $this->atParis('2026-10-23 21:30'));
+            $fetcher->failing = ['RaceAnalysis'];
+
+            $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+
+            $marker = 'u' . GproApiClient::scopeFor('tok') . ':analysis_attempt:w2026-10-23';
+            $this->assertTrue($this->cache->has($marker));
+            $this->assertNotNull($this->syncRowDoneRaceSetup($db));
+
+            $fetcher->calls = [];
+            $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
             $this->assertSame(['office'], $fetcher->calls);
         });
     }
 
-    public function testAnalysisFetchedWhileThePreviousRaceWasStillRunningIsPlannedAgain(): void
+    public function testThrownAnalysisBeforeTheRaceEndedLeavesNoMarker(): void
     {
         $this->withRaceDays(function (): void {
-            $fetcher = $this->secondLoginAfterAnalysisFetchedAt('+1 hour');
+            [$svc, $fetcher] = $this->scripted(null, $this->atParis('2026-10-23 20:30'));
+            $fetcher->failing = ['RaceAnalysis'];
 
+            $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+
+            $marker = 'u' . GproApiClient::scopeFor('tok') . ':analysis_attempt:w2026-10-23';
+            $this->assertFalse($this->cache->has($marker));
+
+            $fetcher->calls = [];
+            $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
             $this->assertSame(['office', 'RaceAnalysis'], $fetcher->calls);
         });
+    }
+
+    public function testRecordRaceFailureFailsTheSyncLeavesNoSyncRowAndLogsTheClassOnly(): void
+    {
+        [$svc, $fetcher, $db] = $this->scripted();
+        // A non-scalar driId makes the post-analysis step trip a PHP warning.
+        $fetcher->office['driId'] = ['not', 'scalar'];
+        $log = sys_get_temp_dir() . '/gpro_sync_log_' . bin2hex(random_bytes(4));
+        $priorLog = ini_set('error_log', $log);
+        set_error_handler(static function (int $no, string $msg): bool {
+            if (!str_contains($msg, 'Array to string')) {
+                return false;
+            }
+            throw new \ErrorException($msg, 0, $no);
+        });
+
+        try {
+            $outcome = $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+        } finally {
+            restore_error_handler();
+            ini_set('error_log', (string) $priorLog);
+        }
+        $lines = (string) file_get_contents($log);
+        @unlink($log);
+
+        $this->assertSame('failed', $outcome->status);
+        $this->assertStringContainsString('plan:', $lines, 'the failure came after the plan ran');
+        $this->assertStringContainsString('[GproSync] user 7 sync failed: ErrorException', $lines);
+        $this->assertStringNotContainsString('Array to string', $lines);
+        $this->assertNull($this->syncRowDoneRaceSetup($db), 'no sync row when recording the race threw');
     }
 
     private function syncRowDoneRaceSetup(\PDO $db): ?bool

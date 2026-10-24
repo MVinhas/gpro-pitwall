@@ -34,6 +34,7 @@ final class GproApiClient
         private readonly GproFetcher $fetcher,
         private readonly CacheInterface $cache,
         private readonly ?ApiArchiveRepository $archive = null,
+        private readonly ?\Closure $clock = null,
     ) {
     }
 
@@ -638,6 +639,11 @@ final class GproApiClient
         $this->cache->set($this->apiLimitKey(), $remaining, 3600);
     }
 
+    private function now(): DateTimeImmutable
+    {
+        return $this->clock === null ? new DateTimeImmutable('now') : ($this->clock)();
+    }
+
     private function ttlShort(): int
     {
         return Env::int('CACHE_TTL_SHORT', 259200);
@@ -651,21 +657,41 @@ final class GproApiClient
     public function archiveWindow(): string
     {
         return RaceWindow::raceStartIdFor(
-            new DateTimeImmutable('now'),
+            $this->now(),
             RaceWindow::parseDays(Env::get('GPRO_RACE_DAYS', '2,5')),
         );
     }
 
     /**
-     * The instant the current archive window opened (race start), or null when
-     * windowing is disabled.
+     * When the race of the current archive window is over (21:00 Paris), or
+     * null when windowing is disabled.
      */
-    public function archiveWindowStart(?DateTimeImmutable $now = null): ?DateTimeImmutable
+    public function postRaceAt(): ?DateTimeImmutable
     {
-        return RaceWindow::raceStartAt(
-            $now ?? new DateTimeImmutable('now'),
-            RaceWindow::parseDays(Env::get('GPRO_RACE_DAYS', '2,5')),
-        );
+        $window = $this->archiveWindow();
+
+        return $window === '' ? null : RaceWindow::postRaceAt($window);
+    }
+
+    /**
+     * Notes that this window's RaceAnalysis was asked for after the race
+     * ended, even though the answer was an error: the next login does not ask
+     * again. Per user, like every cache key here.
+     */
+    public function markAnalysisAttempt(): void
+    {
+        $window = $this->archiveWindow();
+        if ($window === '' || $this->now() < RaceWindow::postRaceAt($window)) {
+            return;
+        }
+        $this->cache->set($this->userKey('analysis_attempt:w' . $window), time(), 8 * 86400);
+    }
+
+    public function hasAnalysisAttempt(): bool
+    {
+        $window = $this->archiveWindow();
+
+        return $window !== '' && $this->cache->has($this->userKey('analysis_attempt:w' . $window));
     }
 
     /**
@@ -690,7 +716,7 @@ final class GproApiClient
     private function raceWindow(): string
     {
         return RaceWindow::idFor(
-            new DateTimeImmutable('now'),
+            $this->now(),
             RaceWindow::parseDays(Env::get('GPRO_RACE_DAYS', '2,5')),
             Env::int('GPRO_RACE_BOUNDARY_HOUR', 0),
             Env::get('GPRO_RACE_TZ', 'Europe/London'),

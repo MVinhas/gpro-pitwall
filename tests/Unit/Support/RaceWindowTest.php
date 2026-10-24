@@ -107,28 +107,14 @@ final class RaceWindowTest extends TestCase
         $this->assertSame('', RaceWindow::raceStartIdFor(new DateTimeImmutable('2026-06-09 20:01'), []));
     }
 
-    public function testRaceStartInstantIsTwentyHundredParisOfTheWindowDay(): void
+    public function testPostRaceThresholdIsTwentyOneParisWhateverTheOffset(): void
     {
-        $paris = new DateTimeZone('Europe/Paris');
+        $utc = new DateTimeZone('UTC');
 
-        $start = RaceWindow::raceStartAt(new DateTimeImmutable('2026-06-10 14:00', $paris), self::TUE_FRI);
+        $cest = RaceWindow::postRaceAt('2026-10-23');
+        $cet = RaceWindow::postRaceAt('2026-10-27');
 
-        $this->assertNotNull($start);
-        $this->assertSame('2026-06-09 20:00', $start->setTimezone($paris)->format('Y-m-d H:i'));
-        $this->assertSame('2026-06-09 18:00', $start->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i'));
-    }
-
-    public function testRaceStartInstantBeforeStartBelongsToThePreviousRace(): void
-    {
-        $paris = new DateTimeZone('Europe/Paris');
-
-        $start = RaceWindow::raceStartAt(new DateTimeImmutable('2026-06-09 19:59', $paris), self::TUE_FRI);
-
-        $this->assertSame('2026-06-05 20:00', $start?->setTimezone($paris)->format('Y-m-d H:i'));
-    }
-
-    public function testRaceStartInstantIsNullWithoutRaceDays(): void
-    {
-        $this->assertNull(RaceWindow::raceStartAt(new DateTimeImmutable('2026-06-09 20:01'), []));
+        $this->assertSame('2026-10-23 19:00', $cest->setTimezone($utc)->format('Y-m-d H:i'));
+        $this->assertSame('2026-10-27 20:00', $cet->setTimezone($utc)->format('Y-m-d H:i'));
     }
 }
