@@ -51,11 +51,12 @@ final class SyncPlanner
         $floor = $ctx->mode === self::MODE_MANUAL ? self::MANUAL_FLOOR : self::LOGIN_FLOOR;
         $allowed = $this->budget($ctx->remaining, $floor);
         $trimmed = count($phase1) > $allowed;
+        $dropped = array_slice($phase1, $allowed);
         $phase1 = array_slice($phase1, 0, $allowed);
 
         $phase2 = $this->phase2($ctx, $ctx->remaining - count($phase1));
 
-        return new SyncPlan(array_map(self::entry(...), $phase1), $phase2, $trimmed);
+        return new SyncPlan(array_map(self::entry(...), $phase1), $phase2, $trimmed, $dropped);
     }
 
     /**

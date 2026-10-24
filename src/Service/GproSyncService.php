@@ -132,14 +132,16 @@ final class GproSyncService
                 return $this->outcome('deferred_low_budget', $fetched, $calls, $started);
             }
 
-            $plan = $this->planner->plan($this->context($userId, $previousOffice, $office, $remaining, $mode));
+            $ctx = $this->context($userId, $previousOffice, $office, $remaining, $mode);
+            $plan = $this->planner->plan($ctx);
 
             /** @var array<string, array<string, mixed>> $results */
             $results = [];
             /** @var list<string> $attempted */
             $attempted = [];
             $names = [];
-            $complete = !$plan->trimmed;
+            /** @var list<string> $unpaid endpoints the plan wanted but could not get this sync */
+            $unpaid = $plan->dropped;
             foreach ($plan->phase1 as $entry) {
                 $endpoint = $entry['endpoint'];
                 $names[] = $endpoint;
@@ -163,7 +165,7 @@ final class GproSyncService
                     $fetched[] = $endpoint;
                 } catch (Throwable $e) {
                     error_log('[GproSync] user ' . $userId . ': ' . $endpoint . ' failed: ' . $e::class);
-                    $complete = false;
+                    $unpaid[] = $endpoint;
                 }
             }
             error_log(sprintf(
@@ -182,10 +184,19 @@ final class GproSyncService
                 $this->recordRace($userId, $office, $results, $attempted);
             }
 
-            // Only a fully paid-for plan, fully recorded, moves the baseline the
-            // next sync diffs against; otherwise the next sync sees the same changes again.
-            if ($complete) {
+            // The baseline the next sync diffs against advances unless an unpaid endpoint
+            // already has a row for this race: healing only sees endpoints with none, so
+            // a done-flag flip on one that has a row would otherwise be lost. GPRO mid
+            // race-update serves a half-moved office, which the next login must re-detect.
+            $held = array_intersect($unpaid, $ctx->archivedThisRace) !== [];
+            if (!$held && !filter_var($office['updateInProgress'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
                 $this->apiClient->archiveSyncOffice($office);
+            }
+
+            if ($plan->trimmed) {
+                $this->users->updateSyncStatus($userId, 'deferred_low_budget');
+
+                return $this->outcome('deferred_low_budget', $fetched, $calls, $started);
             }
 
             $this->users->markSynced($userId);

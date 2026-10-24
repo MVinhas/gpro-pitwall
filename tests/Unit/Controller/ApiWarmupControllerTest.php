@@ -203,4 +203,95 @@ final class ApiWarmupControllerTest extends TestCase
             @rmdir($dir);
         }
     }
+
+    public function testIdleSyncWhenNothingIsOwedSpendsNothingAndAnswersIdle(): void
+    {
+        $users = $this->createStub(UserRepository::class);
+        $users->method('findById')->willReturn(['id' => 7, 'api_token' => 'tok']);
+        $fetcher = new ScriptedGproFetcher();
+        $_SESSION = ['user_id' => 7];
+
+        $body = $this->idle($this->controller($users, $fetcher));
+
+        $this->assertSame('{"status":"idle","fetched":[]}', $body);
+        $this->assertSame([], $fetcher->calls);
+    }
+
+    /** @return array<string, array{string}> */
+    public static function foreignSessionFiles(): array
+    {
+        return [
+            'another user' => ['user_id|i:8;api_limit|i:100;api_limit_updated_at|i:1;'],
+            'logged out' => ['api_limit|i:100;api_limit_updated_at|i:1;'],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('foreignSessionFiles')]
+    public function testIdleSyncWritesNoBudgetWhenTheSessionNoLongerBelongsToTheSyncingUser(string $fileNow): void
+    {
+        $dir = $this->cacheDir . '_sessions';
+        mkdir($dir, 0700, true);
+        $prior = [
+            ini_set('session.save_path', $dir),
+            ini_set('session.use_cookies', '0'),
+            ini_set('session.cache_limiter', ''),
+        ];
+        try {
+            session_id('idlemismatchtest');
+            $this->assertTrue(session_start());
+            $_SESSION = [
+                'user_id' => 7,
+                AuthService::SYNC_PENDING => true,
+                'api_limit' => 100,
+                'api_limit_updated_at' => 1,
+            ];
+            $users = $this->createStub(UserRepository::class);
+            $users->method('findById')->willReturn(['id' => 7, 'api_token' => 'tok']);
+            $users->method('updateSyncStatus')->willReturnCallback(
+                static function () use ($dir, $fileNow): void {
+                    file_put_contents($dir . '/sess_idlemismatchtest', $fileNow);
+                },
+            );
+            $fetcher = new ScriptedGproFetcher();
+            $fetcher->remaining = 64;
+
+            $this->idle($this->controller($users, $fetcher));
+
+            $this->assertSame(PHP_SESSION_NONE, session_status(), 'the reopened session is aborted, not left open');
+            $this->assertSame($fileNow, file_get_contents($dir . '/sess_idlemismatchtest'), 'nothing was written');
+        } finally {
+            if (session_status() === PHP_SESSION_ACTIVE) {
+                session_abort();
+            }
+            ini_set('session.save_path', (string) $prior[0]);
+            ini_set('session.use_cookies', (string) $prior[1]);
+            ini_set('session.cache_limiter', (string) $prior[2]);
+            foreach (glob($dir . '/*') ?: [] as $f) {
+                @unlink($f);
+            }
+            @rmdir($dir);
+        }
+    }
+
+    public function testManualResyncClearsBothSyncFlags(): void
+    {
+        $users = $this->createStub(UserRepository::class);
+        $users->method('findById')->willReturn(['id' => 7, 'api_token' => 'tok']);
+        $fetcher = new ScriptedGproFetcher();
+        $_SESSION = [
+            'user_id' => 7,
+            AuthService::SYNC_PENDING => true,
+            AuthService::IDLE_SYNC_OFFERED => true,
+        ];
+
+        ob_start();
+        try {
+            @$this->controller($users, $fetcher)->warmup(new Request([], [], [], []));
+        } finally {
+            ob_end_clean();
+        }
+
+        $this->assertArrayNotHasKey(AuthService::SYNC_PENDING, $_SESSION);
+        $this->assertArrayNotHasKey(AuthService::IDLE_SYNC_OFFERED, $_SESSION);
+    }
 }

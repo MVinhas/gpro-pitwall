@@ -468,6 +468,18 @@ window.localizeTimes(document);
         else document.querySelector('main')?.before(wrap);
         setTimeout(() => wrap.append(note), 100);
     };
+    // The page was served saying "Syncing…". When the answer can not say the
+    // sync finished (still running elsewhere, or the request failed), look at the
+    // status once more shortly after, so the line never stays stuck. Status only:
+    // no content swap, no navigation.
+    let rechecked = false;
+    const recheckStatus = () => {
+        if (rechecked) return;
+        rechecked = true;
+        setTimeout(() => {
+            window.swapScreen(followUp, { content: false, redirect: false }).catch(() => {});
+        }, 3000);
+    };
     const run = async () => {
         try {
             const res = await fetch('/api/sync', {
@@ -479,9 +491,15 @@ window.localizeTimes(document);
                 window.location = '/login?expired=1';
                 return;
             }
-            if (!res.ok) return;
+            if (!res.ok) {
+                recheckStatus();
+                return;
+            }
             const data = await res.json();
-            if (data.status === 'in_progress') return;
+            if (data.status === 'in_progress') {
+                recheckStatus();
+                return;
+            }
             const fetched = Array.isArray(data.fetched) ? data.fetched : [];
             // The office is fetched on every sync: only the other endpoints
             // change what a screen shows. The status line follows either way.
@@ -496,6 +514,7 @@ window.localizeTimes(document);
             if (changed && result !== 'swapped') offerReload();
         } catch {
             // Best effort: the data on screen is still the warm data.
+            recheckStatus();
         }
     };
     if ('requestIdleCallback' in window) window.requestIdleCallback(run, { timeout: 2000 });

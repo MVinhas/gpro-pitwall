@@ -526,15 +526,41 @@ final class GproSyncServiceTest extends TestCase
         $this->assertFalse($this->cache->has('sync_lock_7'));
     }
 
-    public function testLoginFloorLimitsTheSpendToTheBudgetAboveFifty(): void
+    public function testLoginFloorLimitsTheSpendToTheBudgetAboveFiftyAndReportsItHonestly(): void
     {
-        [$svc, $fetcher] = $this->scripted();
+        $users = $this->createMock(UserRepository::class);
+        $statuses = [];
+        $users->method('updateSyncStatus')
+            ->willReturnCallback(function (int $id, string $status) use (&$statuses): void {
+                $statuses[] = $status;
+            });
+        $users->expects($this->never())->method('markSynced');
+        [$svc, $fetcher] = $this->scripted($users);
         $fetcher->remaining = 55;
 
         $outcome = $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
 
-        $this->assertSame('synced', $outcome->status);
+        $this->assertSame('deferred_low_budget', $outcome->status);
+        $this->assertSame('deferred_low_budget', end($statuses));
         $this->assertCount(1 + 5, $fetcher->calls, 'office + (55 - 50) planned calls');
+        $this->assertContains('OFFICE', $outcome->fetched);
+        $this->assertSame(6, $outcome->calls);
+    }
+
+    public function testTrimmedLoginLeavesLastSyncedUntouchedSoTheNextLoginIsNotSkipped(): void
+    {
+        $users = $this->createMock(UserRepository::class);
+        $users->expects($this->once())->method('markSynced');
+        [$svc, $fetcher] = $this->scripted($users);
+        $fetcher->remaining = 55;
+        $this->assertSame('deferred_low_budget', $svc->sync(self::USER, SyncPlanner::MODE_LOGIN)->status);
+
+        $fetcher->remaining = 90;
+        $fetcher->calls = [];
+        $outcome = $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+
+        $this->assertSame('synced', $outcome->status, 'the next login really syncs and stamps last_synced_at');
+        $this->assertNotSame(['office'], $fetcher->calls, 'the endpoints the trim cut are healed');
     }
 
     public function testManagerWithNoDriverStillSyncsAndNeverAsksForADriverProfile(): void
@@ -906,13 +932,90 @@ final class GproSyncServiceTest extends TestCase
         $this->assertTrue($this->syncRowDoneRaceSetup($db));
     }
 
-    public function testTrimmedPlanDoesNotRecordTheSyncOffice(): void
+    public function testNewRaceWithAFailingEndpointThatHasNoRowThisRaceAdvancesTheSyncRowAndHealsOnlyThatEndpoint(): void
+    {
+        [$svc, $fetcher, $db] = $this->scripted();
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+        $fetcher->office['raceNb'] = 15;
+        $fetcher->analysis['selRaceNb'] = '14';
+        $fetcher->failing = ['Testing'];
+
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+
+        $this->assertSame(15, $this->syncRowRace($db), 'the sync row moved to the new race');
+
+        $fetcher->failing = [];
+        $fetcher->calls = [];
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+
+        $this->assertSame(['office', 'Testing'], $fetcher->calls, 'only the endpoint with no row this race');
+    }
+
+    public function testDoneFlagFlipWhoseFetchFailsWhileTheEndpointAlreadyHasARowThisRaceHoldsTheSyncRow(): void
+    {
+        [$svc, $fetcher, $db] = $this->scripted();
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+        $fetcher->office['doneRaceSetup'] = true;
+        $fetcher->failing = ['RaceSetup'];
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+        $fetcher->failing = [];
+        $fetcher->calls = [];
+
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+
+        $this->assertSame(['office', 'RaceSetup'], $fetcher->calls);
+    }
+
+    public function testTrimmedEndpointWithNoRowThisRaceDoesNotHoldTheSyncRow(): void
     {
         [$svc, $fetcher, $db] = $this->scripted();
         $fetcher->remaining = 55;
 
         $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
 
-        $this->assertNull($this->syncRowDoneRaceSetup($db), 'no sync row after a first, trimmed plan');
+        $this->assertFalse($this->syncRowDoneRaceSetup($db), 'the sync row advanced; healing owns the cut endpoints');
+    }
+
+    public function testTrimmedEndpointThatAlreadyHasARowThisRaceHoldsTheSyncRow(): void
+    {
+        [$svc, $fetcher, $db] = $this->scripted();
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+        $fetcher->office['doneRaceSetup'] = true;
+        $fetcher->remaining = 50;
+
+        $outcome = $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+
+        $this->assertSame('deferred_low_budget', $outcome->status);
+        $this->assertFalse($this->syncRowDoneRaceSetup($db), 'RaceSetup has a row this race, healing cannot see the flip');
+        $fetcher->remaining = 90;
+        $fetcher->calls = [];
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+        $this->assertSame(['office', 'RaceSetup'], $fetcher->calls);
+    }
+
+    public function testOfficeMidRaceUpdateDoesNotWriteTheSyncRow(): void
+    {
+        [$svc, $fetcher, $db] = $this->scripted();
+        $fetcher->office['updateInProgress'] = true;
+
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+
+        $this->assertNull($this->syncRowDoneRaceSetup($db));
+        $fetcher->office['updateInProgress'] = false;
+        $fetcher->calls = [];
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+        $this->assertNotNull($this->syncRowDoneRaceSetup($db), 'written once GPRO has finished updating');
+    }
+
+    private function syncRowRace(\PDO $db): ?int
+    {
+        $stmt = $db->prepare(
+            "SELECT payload_gz FROM user_api_archive WHERE endpoint = 'office' AND params = 'sync' "
+            . 'ORDER BY fetched_at DESC, id DESC LIMIT 1'
+        );
+        $stmt->execute();
+        $blob = $stmt->fetchColumn();
+
+        return is_string($blob) ? (int) (json_decode((string) gzdecode($blob), true)['raceNb'] ?? 0) : null;
     }
 }
