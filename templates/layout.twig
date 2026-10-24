@@ -102,7 +102,7 @@
                 {% elseif sync_state == 'failed' %}
                     <span class="font-semibold text-red-800">Sync failed — data may be out of date</span>
                 {% elseif sync_state == 'deferred' %}
-                    <span class="font-medium text-amber-700" title="GPRO API budget low. It'll resume once your hourly allowance recovers.">Sync paused — API budget low</span>
+                    <span class="font-medium text-amber-700" title="GPRO API budget low. Pitwall keeps calls in reserve for you and syncs again as the budget refills each race.">Sync paused — API budget low</span>
                 {% elseif sync_state == 'synced' and sync_stale %}
                     <span class="font-semibold text-amber-800">Synced before this race weekend · {{ t.localtime(user.last_synced_at, 'datetime') }}</span>
                 {% elseif sync_state == 'synced' %}
