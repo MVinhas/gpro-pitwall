@@ -79,6 +79,9 @@ class ControlPanelController
         }
 
         $this->userRepo->updateApiToken((int)$user['id'], $token);
+        // The new token's account has nothing cached or archived yet; sync it
+        // on the next page instead of leaving the screens cold.
+        $_SESSION[AuthService::SYNC_PENDING] = true;
 
         $_SESSION['flash'] = "API Token saved successfully.";
         header('Location: /control_panel');

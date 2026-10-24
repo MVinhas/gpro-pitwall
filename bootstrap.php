@@ -240,9 +240,15 @@ $container['service.api_fetcher'] = new \App\Service\GproApiFetcher(
     $container['config']['api'],
     $container['service.api_throttle'],
 );
+$container['archive.sanitizer'] = new \App\Archive\ArchiveSanitizer();
+$container['repo.api_archive'] = new \App\Repository\ApiArchiveRepository(
+    $container['db'],
+    $container['archive.sanitizer'],
+);
 $container['service.api_client'] = new GproApiClient(
     $container['service.api_fetcher'],
-    $container['service.cache']
+    $container['service.cache'],
+    $container['repo.api_archive'],
 );
 
 // The header strip under the page title (Re-sync button; cash, division, next

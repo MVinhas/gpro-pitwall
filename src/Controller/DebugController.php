@@ -124,7 +124,10 @@ class DebugController
                 $_SESSION['training_results'],
                 $_SESSION['strategy_results']
             );
-            $_SESSION['flash'] = $msg . " Session Data flushed.";
+            // The per-user archive still serves this race window on the next
+            // read, so a flush alone no longer forces fresh GPRO data.
+            $_SESSION['flash'] = $msg . " Session Data flushed. Pages keep reading this race window's archived"
+                . " GPRO data; use a user's Re-sync to force a fresh fetch.";
         } catch (\Exception $exception) {
             $_SESSION['flash'] = "Error flushing cache: " . $exception->getMessage();
         }

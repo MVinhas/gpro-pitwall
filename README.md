@@ -155,7 +155,7 @@ Source of truth is GitHub; deployment is a manual file copy to any PHP 8.5 host.
 - **Twig 3** templates; **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile). Light and dark themes ship in one stylesheet: every design token is a CSS `light-dark()` pair switched by `color-scheme`, so System mode tracks the OS with zero JavaScript.
 - **SQLite** via PDO — emails and API tokens encrypted at rest (AES-256-GCM).
 - **PHPMailer 7** for SMTP; dev writes `.eml` files instead.
-- **PHPUnit 13** — 1026 tests, 2984 assertions — with **PHPStan level 8** and enforced type-declaration coverage (100% return/property/constant + `strict_types`; 99.5% param). Twig linted by a native `bin/twig_lint.php` built on Twig's own parser. CI measures statement coverage with `pcov` and enforces a floor (currently 59%, ratcheted up as coverage grows).
+- **PHPUnit 13** — 1066 tests, 3085 assertions — with **PHPStan level 8** and enforced type-declaration coverage (100% return/property/constant + `strict_types`; 99.5% param). Twig linted by a native `bin/twig_lint.php` built on Twig's own parser. CI measures statement coverage with `pcov` and enforces a floor (currently 59%, ratcheted up as coverage grows).
 - **Timestamps stored and served as UTC**, localised per visitor in the browser — no server-side timezone config.
 
 ## Architecture
@@ -188,6 +188,7 @@ Reviewed against the OWASP Top 10:2025.
 - Structured `[security]` event logging for failed logins, rate-limit hits and token-theft detection; admin mutations recorded in an append-only `audit_log`.
 - Prod never leaks exception detail: controller-level catches log server-side and show a generic message; anything that bubbles past them is caught by the front controller, logged under a short reference id, and rendered as a generic 500 page.
 - Outbound API calls carry connect + total timeouts so a hung upstream can't pin a PHP worker; the filesystem cache deserializes with `allowed_classes => false`, so a tampered cache file degrades to a miss, not an object-injection gadget.
+- Raw GPRO payloads are archived per user, API token and race window — email and account flags stripped; game data, including manager names, kept — gzipped, and read back only for their owner under the same token — a deploy no longer forces every manager to re-spend their API budget.
 - Prepared statements only; Twig autoescaping everywhere (no `|raw`); registration usernames whitelisted to `[A-Za-z0-9_]` server-side.
 - Interpreter patch level is watched: below a PHP security floor (`App\Support\PhpSecurityFloor`, overridable per server with `PHP_SECURITY_FLOOR`), `/healthz` reports degraded to admins and `/debug` shows a warning. Anonymous callers never see that verdict, so the endpoint can't advertise an unpatched host.
 - Maintenance switch: an empty `public/.maintenance` file makes Apache answer every request with a static 503 page before PHP loads, so the site can be taken out of reach of an interpreter bug while the host patches. The release build refuses to bundle the flag.

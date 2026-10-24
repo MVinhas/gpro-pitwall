@@ -136,7 +136,7 @@ class PageController
             }
         }
 
-        $this->apiClient->setToken($user['api_token']);
+        $this->apiClient->setToken($user['api_token'], (int) $user['id']);
 
         $divisions    = $this->config['app']['divisions'];
         $tracks       = $this->config['app']['tracks'];
@@ -587,7 +587,7 @@ class PageController
                 // so a trained attribute kept showing its pre-training value.
                 $imported = null;
                 try {
-                    $this->apiClient->setToken($user['api_token']);
+                    $this->apiClient->setToken($user['api_token'], (int) $user['id']);
                     $imported = $this->mapper->mapDriver(
                         $this->apiClient->getMyPilotDetails(),
                     );
@@ -622,7 +622,7 @@ class PageController
                     // First visit (or fresh session) — run the calc with the
                     // synced data + zero overrides so the user lands on a fully
                     // populated panel without having to click Calculate.
-                    $this->apiClient->setToken($user['api_token']);
+                    $this->apiClient->setToken($user['api_token'], (int) $user['id']);
                     $result = $this->strategyController->runCalc($request);
                     if (isset($result['error'])) {
                         $viewData['strategy_error'] = $result['error'];
@@ -636,7 +636,7 @@ class PageController
                 break;
 
             case 'Car Wear Planner':
-                $this->apiClient->setToken($user['api_token']);
+                $this->apiClient->setToken($user['api_token'], (int) $user['id']);
                 $result = $this->carWearController->runCalc($request);
                 if (isset($result['error'])) {
                     $viewData['car_wear_error'] = $result['error'];
@@ -648,7 +648,7 @@ class PageController
             case 'Testing':
                 // Read-only tab: build straight from the warmed cache on every
                 // open. No overrides, so no session round-trip like Strategy.
-                $this->apiClient->setToken($user['api_token']);
+                $this->apiClient->setToken($user['api_token'], (int) $user['id']);
                 $result = $this->testingController->runCalc($request);
                 if (isset($result['error'])) {
                     $viewData['testing_error'] = $result['error'];

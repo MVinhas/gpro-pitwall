@@ -16,7 +16,7 @@ class DatabaseSeeder
      * calls migrate() on every request; this version lets a warm database skip
      * the entire DDL + scan + legacy-encryption pass.
      */
-    private const int SCHEMA_VERSION = 14;
+    private const int SCHEMA_VERSION = 15;
 
     /**
      * @param array<string, string> $statsSchema
@@ -68,6 +68,7 @@ class DatabaseSeeder
         $this->createRaceTelemetryTable();
         $this->repairPhantomTdFlags();
         $this->createUserRaceHistoryTable();
+        $this->createUserApiArchiveTable();
         $this->dropDeprecatedTables();
 
 
@@ -652,6 +653,43 @@ class DatabaseSeeder
              ON user_race_history (user_id, track_id)"
         );
     }
+
+    /**
+     * Raw GPRO API payloads, gzipped, one row per user + token scope +
+     * endpoint + params + archive window (the race-start window the row was
+     * fetched in). token_scope is GproApiClient::scopeFor() of the token, so
+     * a swapped token never reads the previous account's rows. The column is
+     * race_window because WINDOW is an SQLite keyword.
+     */
+    private function createUserApiArchiveTable(): void
+    {
+        $this->db->exec(
+            "CREATE TABLE IF NOT EXISTS user_api_archive (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                token_scope TEXT NOT NULL DEFAULT '',
+                endpoint TEXT NOT NULL,
+                params TEXT NOT NULL DEFAULT '',
+                race_window TEXT NOT NULL DEFAULT '',
+                season INTEGER,
+                race INTEGER,
+                fetched_at TEXT NOT NULL,
+                payload_gz BLOB NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )"
+        );
+
+        $this->db->exec(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_user_api_archive_natural
+             ON user_api_archive (user_id, token_scope, endpoint, params, race_window)"
+        );
+
+        $this->db->exec(
+            "CREATE INDEX IF NOT EXISTS idx_user_api_archive_race
+             ON user_api_archive (user_id, season, race)"
+        );
+    }
+
     private function createVerificationTokensTable(): void
     {
         $sql = "

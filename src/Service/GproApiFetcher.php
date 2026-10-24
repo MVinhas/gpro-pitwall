@@ -12,7 +12,7 @@ use RuntimeException;
  * GetMarketFile.asp dump. Knows nothing about caching, per-endpoint keys, or
  * the higher-level naming surface — that's GproApiClient's job.
  */
-final class GproApiFetcher
+final class GproApiFetcher implements GproFetcher
 {
     private readonly string $baseUrl;
     private readonly string $userAgent;
