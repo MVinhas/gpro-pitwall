@@ -278,6 +278,24 @@ final class ApiArchiveRepository
     }
 
     /**
+     * Every user that has at least one archive row, ascending.
+     *
+     * @return list<int>
+     */
+    public function userIds(): array
+    {
+        $stmt = $this->pdo->prepare('SELECT DISTINCT user_id FROM user_api_archive ORDER BY user_id ASC');
+        $stmt->execute();
+
+        $ids = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $id) {
+            $ids[] = (int) $id;
+        }
+
+        return $ids;
+    }
+
+    /**
      * Races (oldest first) the endpoint has a row stamped with, whatever its
      * params and token scope. One indexed query, no payload decoded.
      *
