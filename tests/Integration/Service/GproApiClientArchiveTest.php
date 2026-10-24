@@ -406,4 +406,16 @@ final class GproApiClientArchiveTest extends TestCase
 
         return $this->logFile;
     }
+
+    public function testForcedPilotDetailsReadTheOfficeThroughTheCache(): void
+    {
+        $client = $this->client();
+        $client->getOfficeData(true);
+        $this->fetcher->calls = [];
+
+        $client->getMyPilotDetails(true);
+
+        $this->assertCount(1, $this->fetcher->calls, 'only the DriProfile is fetched, never the office');
+        $this->assertStringContainsString('DriProfile', $this->fetcher->calls[0]);
+    }
 }

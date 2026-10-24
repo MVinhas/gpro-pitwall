@@ -16,7 +16,7 @@ class DatabaseSeeder
      * calls migrate() on every request; this version lets a warm database skip
      * the entire DDL + scan + legacy-encryption pass.
      */
-    private const int SCHEMA_VERSION = 15;
+    private const int SCHEMA_VERSION = 16;
 
     /**
      * @param array<string, string> $statsSchema
@@ -687,6 +687,11 @@ class DatabaseSeeder
         $this->db->exec(
             "CREATE INDEX IF NOT EXISTS idx_user_api_archive_race
              ON user_api_archive (user_id, season, race)"
+        );
+
+        $this->db->exec(
+            "CREATE INDEX IF NOT EXISTS idx_user_api_archive_history
+             ON user_api_archive (user_id, endpoint, params, fetched_at)"
         );
     }
 

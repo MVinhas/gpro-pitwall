@@ -195,4 +195,33 @@ final class ApiArchiveRepositoryTest extends TestCase
         $stmt->execute();
         $this->assertNull($this->repo->getRow(1, 'sA', 'Calendar', '', 'w'), 'corrupt row reads as absent');
     }
+
+    public function testEndpointsForRaceListsDistinctEndpointsStampedWithThatRace(): void
+    {
+        $this->repo->put(1, 'sA', 'UpdateCar', '', 'w1', 107, 5, ['a' => 1]);
+        $this->repo->put(1, 'sA', 'DriProfile', 'id=1', 'w1', 107, 5, ['a' => 1]);
+        $this->repo->put(1, 'sA', 'DriProfile', 'id=2', 'w1', 107, 5, ['a' => 1]);
+        $this->repo->put(1, 'sB', 'UpdateCar', '', 'w1', 107, 5, ['a' => 1]);
+        $this->repo->put(1, 'sA', 'RaceSetup', '', 'w0', 107, 4, ['a' => 1]);
+        $this->repo->put(2, 'sA', 'Testing', '', 'w1', 107, 5, ['a' => 1]);
+
+        $found = $this->repo->endpointsForRace(1, 107, 5);
+        sort($found);
+
+        $this->assertSame(['DriProfile', 'UpdateCar'], $found);
+        $this->assertSame([], $this->repo->endpointsForRace(1, 107, 9));
+    }
+
+    public function testEndpointsForSeasonSpansRacesOfThatSeasonOnly(): void
+    {
+        $this->repo->put(1, 'sA', 'Calendar', '', 'w1', 107, 5, ['a' => 1]);
+        $this->repo->put(1, 'sA', 'Menu', '', 'w0', 107, 4, ['a' => 1]);
+        $this->repo->put(1, 'sA', 'TyreSuppliers', '', 'w9', 106, 12, ['a' => 1]);
+        $this->repo->put(2, 'sA', 'MoneyLevels', '', 'w1', 107, 5, ['a' => 1]);
+
+        $found = $this->repo->endpointsForSeason(1, 107);
+        sort($found);
+
+        $this->assertSame(['Calendar', 'Menu'], $found);
+    }
 }

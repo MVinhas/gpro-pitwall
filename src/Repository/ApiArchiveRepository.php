@@ -158,6 +158,39 @@ final class ApiArchiveRepository
     }
 
     /**
+     * Archive endpoint names that have a row stamped with exactly this race,
+     * whatever their params or token scope.
+     *
+     * @return list<string>
+     */
+    public function endpointsForRace(int $userId, int $season, int $race): array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT DISTINCT endpoint FROM user_api_archive
+             WHERE user_id = :user_id AND season = :season AND race = :race'
+        );
+        $stmt->execute([':user_id' => $userId, ':season' => $season, ':race' => $race]);
+
+        return array_values(array_map(strval(...), $stmt->fetchAll(PDO::FETCH_COLUMN)));
+    }
+
+    /**
+     * Archive endpoint names that have a row stamped with any race of this season.
+     *
+     * @return list<string>
+     */
+    public function endpointsForSeason(int $userId, int $season): array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT DISTINCT endpoint FROM user_api_archive
+             WHERE user_id = :user_id AND season = :season'
+        );
+        $stmt->execute([':user_id' => $userId, ':season' => $season]);
+
+        return array_values(array_map(strval(...), $stmt->fetchAll(PDO::FETCH_COLUMN)));
+    }
+
+    /**
      * @return array<string, mixed>|null
      */
     private function decode(mixed $blob): ?array

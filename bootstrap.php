@@ -327,6 +327,8 @@ $container['service.gpro_sync'] = new GproSyncService(
     $container['service.race_telemetry'],
     $container['service.race_history'],
     $container['service.baseline_autofill'],
+    $container['repo.api_archive'],
+    new \App\Sync\SyncPlanner(),
     Env::int('SYNC_SAFETY_MARGIN', 20),
 );
 $container['service.auth_service']  = new \App\Service\AuthService(

@@ -118,7 +118,9 @@ final class GproApiClient
     /** @return array<string, mixed> */
     public function getMyPilotDetails(bool $forceRefresh = false): array
     {
-        $office = $this->getOfficeData($forceRefresh);
+        // The office only names the driver: $forceRefresh applies to the
+        // profile, never to a second office call.
+        $office = $this->getOfficeData();
         $driId = trim((string) ($office['driId'] ?? ''));
         if ($driId === '' || $driId === '0') {
             throw new RuntimeException('No driver under contract');
@@ -229,6 +231,12 @@ final class GproApiClient
             // never let it break a sync.
             return [];
         }
+    }
+
+    /** Whether the shared tyre feed is cached, so reading it spends no fetch. */
+    public function hasCachedTyreSuppliers(): bool
+    {
+        return $this->cache->has('tyre_suppliers');
     }
 
     /** @return array<string, mixed> */

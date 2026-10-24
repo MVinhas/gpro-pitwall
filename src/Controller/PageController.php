@@ -194,7 +194,7 @@ class PageController
         $freshSync = false;
         if ($syncPending && !$deferred) {
             unset($_SESSION[AuthService::SYNC_PENDING]);
-            $this->syncService->trySyncForUser($user, true);
+            $this->syncService->trySyncForUser($user, false);
             // Re-read for the sync outcome and timestamp the status line shows.
             $user = $this->userRepo->findById((int) $user['id']) ?? $user;
             $freshSync = true;

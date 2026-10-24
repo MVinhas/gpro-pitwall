@@ -44,7 +44,7 @@ final class UserApiArchiveMigrationTest extends TestCase
             1,
             (int) $db->query('SELECT COUNT(*) FROM user_race_history')->fetchColumn(),
         );
-        $this->assertSame(15, (int) $db->query('PRAGMA user_version')->fetchColumn());
+        $this->assertSame(16, (int) $db->query('PRAGMA user_version')->fetchColumn());
 
         $insert = $db->prepare(
             'INSERT INTO user_api_archive (user_id, endpoint, params, race_window, fetched_at, payload_gz)
@@ -95,5 +95,33 @@ final class UserApiArchiveMigrationTest extends TestCase
         $this->assertSame(2, (int) $db->query('SELECT COUNT(*) FROM user_api_archive')->fetchColumn());
         $this->expectException(\PDOException::class);
         $insert->execute(['u' => $userId, 's' => 'scope-a']);
+    }
+
+    public function testMigratesV15DatabaseAddingHistoryIndexIdempotently(): void
+    {
+        $db = new PDO('sqlite::memory:');
+        $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $seeder = $this->makeSeeder($db);
+        $seeder->migrate();
+
+        $db->exec("INSERT INTO users (username, email_hash, email_encrypted) VALUES ('u', 'h', 'e')");
+        $userId = (int) $db->lastInsertId();
+        $db->exec(
+            "INSERT INTO user_api_archive (user_id, endpoint, fetched_at, payload_gz)
+             VALUES ($userId, 'office', '2026-10-23 10:00:00', x'00')"
+        );
+        $db->exec('DROP INDEX idx_user_api_archive_history');
+        $db->exec('PRAGMA user_version = 15');
+
+        $seeder->migrate();
+        $seeder->migrate();
+
+        $this->assertSame(16, (int) $db->query('PRAGMA user_version')->fetchColumn());
+        $columns = array_column(
+            $db->query('PRAGMA index_info(idx_user_api_archive_history)')->fetchAll(PDO::FETCH_ASSOC),
+            'name',
+        );
+        $this->assertSame(['user_id', 'endpoint', 'params', 'fetched_at'], $columns);
+        $this->assertSame(1, (int) $db->query('SELECT COUNT(*) FROM user_api_archive')->fetchColumn());
     }
 }
