@@ -426,6 +426,36 @@ window.localizeTimes(document);
 // never runs this leaves the flag set, and the next navigation syncs inline.
 (() => {
     const followUp = '{{ idle_follow_url|e('js') }}';
+    const inMain = (el) => el instanceof Element && !!el.closest('#main-content-tabs');
+    // A swap would drop whatever the manager typed or moved meanwhile, so any
+    // edit inside the screen, or a field still holding focus, vetoes it.
+    let touched = false;
+    const mark = (e) => { if (inMain(e.target)) touched = true; };
+    document.addEventListener('input', mark, true);
+    document.addEventListener('change', mark, true);
+    const editing = () => touched
+        || (inMain(document.activeElement) && document.activeElement.matches('input, select, textarea'));
+    const offerReload = () => {
+        if (document.getElementById('newDataNotice')) return;
+        const wrap = document.createElement('div');
+        wrap.id = 'newDataNotice';
+        wrap.className = 'mx-auto max-w-7xl px-4 pt-2';
+        wrap.setAttribute('role', 'status');
+        const note = document.createElement('div');
+        note.className = 'notice notice-info notice-slim';
+        const lead = document.createElement('span');
+        lead.className = 'font-bold';
+        lead.textContent = 'New data available';
+        const link = document.createElement('a');
+        link.href = window.location.href;
+        link.className = 'underline';
+        link.textContent = 'reload to update';
+        note.append(lead, ' \u2014 ', link);
+        wrap.append(note);
+        const anchor = document.getElementById('statusLine');
+        if (anchor) anchor.after(wrap);
+        else document.querySelector('main')?.before(wrap);
+    };
     const run = async () => {
         try {
             const res = await fetch('/api/sync', {
@@ -443,7 +473,11 @@ window.localizeTimes(document);
             const fetched = Array.isArray(data.fetched) ? data.fetched : [];
             // The office is fetched on every sync: only the other endpoints
             // change what a screen shows. The status line follows either way.
-            await window.swapScreen(followUp, { content: fetched.some((e) => e !== 'OFFICE') });
+            const changed = fetched.some((e) => e !== 'OFFICE');
+            // Read after the answer arrives: the manager may have started typing meanwhile.
+            const hold = changed && editing();
+            await window.swapScreen(followUp, { content: changed && !hold });
+            if (hold) offerReload();
         } catch {
             // Best effort: the data on screen is still the warm data.
         }
