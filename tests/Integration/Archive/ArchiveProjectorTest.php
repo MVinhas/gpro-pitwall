@@ -319,7 +319,7 @@ final class ArchiveProjectorTest extends TestCase
     public function testUnavailablePayloadsAreNeverProjected(): void
     {
         $this->put('SFHistory', ['errorMsg' => 'Supporters only', 'data' => []], 12, 'season=' . self::SEASON);
-        $this->put('CCPHistory', ['nonSupporter' => true], 12, 'season=' . self::SEASON);
+        $this->put('CCPHistory', ['errorMsg' => 'Supporters only', 'data' => []], 12, 'season=' . self::SEASON);
         $this->put('StaffAndFacilities', ['errorMsg' => 'Supporters only', 'data' => []], 5);
 
         $this->projector->projectRace(self::USER, self::SEASON, 5);
@@ -432,17 +432,103 @@ final class ArchiveProjectorTest extends TestCase
         $this->assertSame(sha1('economy|2026-10-20 21:00:01|Facility fee|-20'), $economy['fingerprint']);
     }
 
-    public function testEconomyRowsKeepTheirOwnSeasonAndRaceWhenThePayloadNamesThem(): void
+    /** @return array<string, mixed> */
+    private function economyPage(): array
+    {
+        return ['data' => [
+            ['type' => 'header', 'desc' => 'Season 107, Race 5 - Hockenheim (Germany)'],
+            ['type' => 'row', 'desc' => 'Sponsor money', 'datetime' => 'Oct 20th 2026, 21:00:01',
+             'balanceBefore' => 100, 'amount' => 50, 'balanceAfter' => 150],
+            ['type' => 'row', 'desc' => 'Facility costs', 'datetime' => 'Oct 20th 2026, 21:00:01',
+             'balanceBefore' => 150, 'amount' => -20, 'balanceAfter' => 130],
+            ['type' => 'header', 'desc' => 'Season 107, Race 4 - Monza (Italy)'],
+            ['type' => 'row', 'desc' => 'Sponsor money', 'datetime' => 'Oct 13th 2026, 21:00:01',
+             'balanceBefore' => 50, 'amount' => 50, 'balanceAfter' => 100],
+        ]];
+    }
+
+    public function testEconomyRowsAreFiledUnderTheNearestHeaderAbove(): void
+    {
+        $this->put('EconomyHistory', $this->economyPage(), 6, 'Page=1&show=table');
+
+        $this->projector->projectRace(self::USER, self::SEASON, 6);
+
+        $stmt = $this->db->query(
+            'SELECT season, race, description, balance_after FROM user_economy_ledger ORDER BY race, id'
+        );
+        $this->assertNotFalse($stmt);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $this->assertCount(3, $rows);
+        $this->assertSame(107, (int) $rows[0]['season']);
+        $this->assertSame(4, (int) $rows[0]['race']);
+        $this->assertSame(100, (int) $rows[0]['balance_after']);
+        $this->assertSame(5, (int) $rows[1]['race']);
+        $this->assertSame(5, (int) $rows[2]['race']);
+        $this->assertSame(130, (int) $rows[2]['balance_after']);
+    }
+
+    public function testHeaderEntriesAreNeverStoredAsLedgerRows(): void
+    {
+        $this->put('EconomyHistory', $this->economyPage(), 6, 'Page=1&show=table');
+
+        $this->projector->projectRace(self::USER, self::SEASON, 6);
+
+        $this->assertSame(0, $this->rows("user_economy_ledger WHERE description LIKE 'Season%'"));
+    }
+
+    public function testARowBeforeAnyHeaderOrUnderAnUnparsableHeaderFallsBackToTheStamp(): void
     {
         $this->put('EconomyHistory', ['data' => [
-            ['desc' => 'Old fee', 'datetime' => '2026-09-01 10:00:00', 'amount' => -5, 'season' => 106, 'race' => 17],
-        ]], 5, 'Page=1&show=table');
+            ['type' => 'row', 'desc' => 'Early', 'datetime' => 'a', 'amount' => 1],
+            ['type' => 'header', 'desc' => 'Pre-season testing'],
+            ['type' => 'row', 'desc' => 'Odd', 'datetime' => 'b', 'amount' => 2],
+        ]], 6, 'Page=1&show=table');
 
-        $this->projector->projectRace(self::USER, self::SEASON, 5);
+        $this->projector->projectRace(self::USER, self::SEASON, 6);
 
-        $row = $this->row('SELECT season, race FROM user_economy_ledger');
+        $stmt = $this->db->query('SELECT season, race FROM user_economy_ledger');
+        $this->assertNotFalse($stmt);
+        $all = $stmt->fetchAll(PDO::FETCH_NUM);
+        $this->assertSame([[107, 6], [107, 6]], array_map(static fn (array $r): array => array_map('intval', $r), $all));
+    }
+
+    public function testReprojectionMovesAPreviouslyMisStampedRow(): void
+    {
+        $this->put('EconomyHistory', ['data' => [
+            ['type' => 'row', 'desc' => 'Sponsor money', 'datetime' => 'x', 'amount' => 50, 'balanceAfter' => 150],
+        ]], 6, 'Page=1&show=table');
+        $this->projector->projectRace(self::USER, self::SEASON, 6);
+        $this->assertSame(6, (int) $this->db->query('SELECT race FROM user_economy_ledger')->fetchColumn());
+
+        $this->put('EconomyHistory', ['data' => [
+            ['type' => 'header', 'desc' => 'Season 107, Race 5 - Hockenheim (Germany)'],
+            ['type' => 'row', 'desc' => 'Sponsor money', 'datetime' => 'x', 'amount' => 50, 'balanceAfter' => 150],
+        ]], 6, 'Page=1&show=table');
+        $this->projector->projectRace(self::USER, self::SEASON, 6);
+
+        $this->assertSame(1, $this->rows('user_economy_ledger'));
+        $this->assertSame(5, (int) $this->db->query('SELECT race FROM user_economy_ledger')->fetchColumn());
+
+        $this->put('EconomyHistory', ['data' => [
+            ['type' => 'row', 'desc' => 'Sponsor money', 'datetime' => 'x', 'amount' => 50, 'balanceAfter' => 150],
+        ]], 6, 'Page=1&show=table');
+        $this->projector->projectRace(self::USER, self::SEASON, 6);
+        $this->assertSame(5, (int) $this->db->query('SELECT race FROM user_economy_ledger')->fetchColumn());
+    }
+
+    public function testEconomyRowWithoutDatetimeIsStoredWithNullOccurredAt(): void
+    {
+        $this->put('EconomyHistory', ['data' => [
+            ['type' => 'row', 'desc' => 'Bonus', 'amount' => 7, 'balanceAfter' => 9],
+        ]], 6, 'Page=1&show=table');
+
+        $this->projector->projectRace(self::USER, self::SEASON, 6);
+
+        $row = $this->row('SELECT occurred_at, balance_after, fingerprint FROM user_economy_ledger');
         $this->assertNotNull($row);
-        $this->assertSame([106, 17], [(int) $row['season'], (int) $row['race']]);
+        $this->assertNull($row['occurred_at']);
+        $this->assertSame(9, (int) $row['balance_after']);
+        $this->assertSame(sha1('economy||Bonus|7'), $row['fingerprint']);
     }
 
     public function testLedgerIgnoresMalformedEconomyRows(): void

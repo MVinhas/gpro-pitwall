@@ -17,9 +17,9 @@ class EconomyLedgerRepository
     }
 
     /**
-     * Insert the movement, or — for a race-sourced one, which only ever comes
-     * from its own race's analysis — refresh it. An economy-sourced movement
-     * can reappear in a later window's page, so the first sighting is kept.
+     * Insert the movement or, when its fingerprint is known, refresh it: a
+     * movement attributed by a race header (or by its own race's analysis) is
+     * authoritative, so a re-projection moves a row an earlier pass mis-filed.
      *
      * @param array{
      *     user_id: int, season: int, race: int, source: string, occurred_at: ?string,
@@ -28,19 +28,45 @@ class EconomyLedgerRepository
      */
     public function save(array $row): void
     {
+        $this->write($row, true);
+    }
+
+    /**
+     * Insert the movement unless its fingerprint is known. For a movement whose
+     * race is only a guess (the archive stamp), so it never overrides a row an
+     * authoritative pass already filed.
+     *
+     * @param array{
+     *     user_id: int, season: int, race: int, source: string, occurred_at: ?string,
+     *     description: string, amount: int, balance_after: ?int, fingerprint: string
+     * } $row
+     */
+    public function saveIfNew(array $row): void
+    {
+        $this->write($row, false);
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     */
+    private function write(array $row, bool $refresh): void
+    {
+        $conflict = $refresh
+            ? 'DO UPDATE SET
+                season = excluded.season,
+                race = excluded.race,
+                source = excluded.source,
+                occurred_at = excluded.occurred_at,
+                description = excluded.description,
+                amount = excluded.amount,
+                balance_after = excluded.balance_after'
+            : 'DO NOTHING';
         $stmt = $this->pdo->prepare(
             'INSERT INTO user_economy_ledger
                 (user_id, season, race, source, occurred_at, description, amount, balance_after, fingerprint)
              VALUES
                 (:user_id, :season, :race, :source, :occurred_at, :description, :amount, :balance_after, :fingerprint)
-             ON CONFLICT(user_id, fingerprint) DO UPDATE SET
-                season = excluded.season,
-                race = excluded.race,
-                occurred_at = excluded.occurred_at,
-                description = excluded.description,
-                amount = excluded.amount,
-                balance_after = excluded.balance_after
-             WHERE excluded.source = \'race\''
+             ON CONFLICT(user_id, fingerprint) ' . $conflict
         );
         $stmt->execute([
             ':user_id' => $row['user_id'],

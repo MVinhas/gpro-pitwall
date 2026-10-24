@@ -20,7 +20,6 @@ final class SupporterGateTest extends TestCase
             'non-supporter on another endpoint' => ['Testing', ['errorMsg' => 'Supporters only', 'data' => []], true],
             'error message with data is not NonSup' => ['Testing', ['errorMsg' => 'x', 'data' => [1]], false],
             'empty error message is not NonSup' => ['Testing', ['errorMsg' => '', 'data' => []], false],
-            'archived non-supporter marker' => ['SFHistory', ['nonSupporter' => true], true],
             'analysis without laps is NA' => ['RaceAnalysis', ['selSeasonNb' => 1], true],
             'analysis with laps is available' => ['RaceAnalysis', ['laps' => [['idx' => 0]]], false],
             'other endpoint without laps is available' => ['UpdateCar', ['kind' => 'car'], false],

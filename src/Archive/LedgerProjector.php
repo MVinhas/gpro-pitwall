@@ -51,16 +51,42 @@ final class LedgerProjector
             if (SupporterGate::isUnavailable('EconomyHistory', $payload)) {
                 continue;
             }
+            $header = null;
             foreach ($this->listOf($payload['data'] ?? null) as $entry) {
-                $this->saveEconomy($userId, $season, $race, $entry);
+                if (($entry['type'] ?? null) === 'header') {
+                    $header = $this->headerRace($entry);
+                    continue;
+                }
+                $this->saveEconomy($userId, $header, [$season, $race], $entry);
             }
         }
     }
 
     /**
+     * "Season 99, Race 10 - Indianapolis Oval (United States)" -> [99, 10].
+     *
+     * @param array<string, mixed> $header
+     *
+     * @return array{int, int}|null
+     */
+    private function headerRace(array $header): ?array
+    {
+        $desc = $this->str($header['desc'] ?? null) ?? '';
+
+        return preg_match('/Season\s+(\d+)\s*,\s*Race\s+(\d+)/i', $desc, $m) === 1
+            ? [(int) $m[1], (int) $m[2]]
+            : null;
+    }
+
+    /**
+     * A row belongs to the race of the header above it; the archive stamp is
+     * only a fallback, and a stamped guess never overrides a header-filed row.
+     *
+     * @param array{int, int}|null $header
+     * @param array{int, int} $stamp
      * @param array<string, mixed> $entry
      */
-    private function saveEconomy(int $userId, int $season, int $race, array $entry): void
+    private function saveEconomy(int $userId, ?array $header, array $stamp, array $entry): void
     {
         $amount = $this->int($entry['amount'] ?? null);
         if ($amount === null) {
@@ -68,17 +94,19 @@ final class LedgerProjector
         }
         $description = $this->str($entry['desc'] ?? null) ?? '';
         $at = $this->str($entry['datetime'] ?? null);
+        [$season, $race] = $header ?? $stamp;
 
-        $this->repository->save([
+        $row = [
             'user_id' => $userId,
-            'season' => $this->int($entry['season'] ?? null) ?? $season,
-            'race' => $this->int($entry['race'] ?? null) ?? $race,
+            'season' => $season,
+            'race' => $race,
             'source' => 'economy',
             'occurred_at' => $at,
             'description' => $description,
             'amount' => $amount,
             'balance_after' => $this->int($entry['balanceAfter'] ?? null),
             'fingerprint' => sha1("economy|{$at}|{$description}|{$amount}"),
-        ]);
+        ];
+        $header === null ? $this->repository->saveIfNew($row) : $this->repository->save($row);
     }
 }
