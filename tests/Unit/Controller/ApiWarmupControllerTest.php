@@ -67,7 +67,7 @@ final class ApiWarmupControllerTest extends TestCase
         bool $harvestDue = false,
     ): ApiWarmupController {
         $harvest = $this->createStub(HarvestService::class);
-        $harvest->method('isDue')->willReturn($harvestDue);
+        $harvest->method('isDueSafely')->willReturn($harvestDue);
 
         $db = new PDO('sqlite::memory:');
         $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);

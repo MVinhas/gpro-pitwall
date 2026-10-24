@@ -266,9 +266,10 @@ class PageController
         }
 
         // A page still owed its login sync starts the harvest only from the sync's
-        // answer; every other full page (not a skeleton, not a fragment) starts it itself.
-        if (!$deferred && !$idleSync && (string) $request->get('fragment', '') === '') {
-            $viewData['harvest_due'] = $this->harvest->isDue($user);
+        // answer; every other full page (not a skeleton, fragment or follow-up,
+        // whose script is discarded) starts it itself.
+        if (!$deferred && !$idleSync && !$wait && (string) $request->get('fragment', '') === '') {
+            $viewData['harvest_due'] = $this->harvest->isDueSafely($user);
         }
 
         if ($freshSync) {

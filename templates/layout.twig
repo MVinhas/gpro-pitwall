@@ -547,6 +547,9 @@ window.localizeTimes(document);
                 recheckStatus();
                 return;
             }
+            // The harvest waits for the sync's answer (never alongside the sync);
+            // started before the swap so a failed screen fetch does not lose it.
+            if (data.harvest_due === true) window.startHarvest?.();
             const fetched = Array.isArray(data.fetched) ? data.fetched : [];
             // The office is fetched on every sync: only the other endpoints
             // change what a screen shows. The status line follows either way.
@@ -559,8 +562,6 @@ window.localizeTimes(document);
                 redirect: false,
             });
             if (changed && result !== 'swapped') offerReload();
-            // The harvest waits for the sync's answer: never alongside the sync.
-            if (data.harvest_due === true) window.startHarvest?.();
         } catch {
             // Best effort: the data on screen is still the warm data.
             recheckStatus();

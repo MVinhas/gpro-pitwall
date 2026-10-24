@@ -325,7 +325,7 @@ final class HarvestServiceTest extends TestCase
         $this->assertSame([], $this->gpro->requests);
     }
 
-    public function testCallsAlreadyMadeAreKeptWhenTheBucketRunsDryMidSlice(): void
+    public function testABucketThatRunsDryMidSliceStopsCallingAndAsksToComeBack(): void
     {
         $this->userAtANewRace();
         $throttle = $this->throttle(burst: 1.0, rate: 0.0001);
@@ -333,7 +333,7 @@ final class HarvestServiceTest extends TestCase
 
         $result = $this->harvest($throttle)->runSlice(self::USER);
 
-        $this->assertSame('busy', $result->status);
+        $this->assertSame('more', $result->status);
         $this->assertSame(1, $result->calls);
         $this->assertSame(['RaceAnalysis'], $this->gpro->requests);
         $this->assertSame(1, $this->rows('race_telemetry'));
@@ -545,6 +545,18 @@ final class HarvestServiceTest extends TestCase
 
         $this->assertTrue($harvest->isDue(self::USER));
         $this->assertSame([], $this->gpro->requests, 'isDue never calls the API');
+    }
+
+    public function testIsDueSafelyReadsAStorageErrorAsNothingDue(): void
+    {
+        $this->userAtANewRace();
+        $harvest = $this->harvest();
+        $this->assertTrue($harvest->isDueSafely(self::USER));
+        $this->db->exec('DROP TABLE user_api_archive');
+
+        $this->assertFalse($harvest->isDueSafely(self::USER));
+        $this->assertStringContainsString('[Harvest] isDue failed: PDOException', (string) file_get_contents($this->quietLog));
+        $this->assertStringNotContainsString('SQLSTATE', (string) file_get_contents($this->quietLog));
     }
 
     public function testIsDueIsFalseWithoutABudgetOrAnOfficeToSpendItOn(): void

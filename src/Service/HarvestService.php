@@ -67,6 +67,23 @@ class HarvestService
     }
 
     /**
+     * isDue() for callers that must never fail because of it: a storage error
+     * reads as "nothing due". Logs the class name only.
+     *
+     * @param array<string, mixed> $user
+     */
+    public function isDueSafely(array $user): bool
+    {
+        try {
+            return $this->isDue($user);
+        } catch (Throwable $e) {
+            error_log('[Harvest] isDue failed: ' . $e::class);
+
+            return false;
+        }
+    }
+
+    /**
      * Never throws. Idle (nothing to do, or nothing this user can spend) is
      * 'done'; 'more' asks to be run again; 'busy' means the shared outbound
      * budget is spent for now; 'locked' means a sync or another slice is running.
@@ -97,7 +114,9 @@ class HarvestService
             $ingested = false;
             foreach (array_slice($entries, 0, self::MAX_CALLS) as $entry) {
                 if ($this->throttle->available(microtime(true)) < 1.0) {
-                    $busy = true;
+                    // Busy means "nothing fit": a bucket that ran dry after a
+                    // call is the normal pace, and the loop should come back.
+                    $busy = $attempted === 0;
                     break;
                 }
                 $attempted++;

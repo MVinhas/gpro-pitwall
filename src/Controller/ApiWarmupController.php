@@ -72,7 +72,11 @@ final readonly class ApiWarmupController
         header('Content-Type: application/json');
 
         if (empty($_SESSION[AuthService::SYNC_PENDING])) {
-            echo json_encode(['status' => 'idle', 'fetched' => [], 'harvest_due' => $this->harvest->isDue($user)]);
+            echo json_encode([
+                'status' => 'idle',
+                'fetched' => [],
+                'harvest_due' => $this->harvest->isDueSafely($user),
+            ]);
             return;
         }
 
@@ -88,7 +92,7 @@ final readonly class ApiWarmupController
         echo json_encode([
             'status' => $outcome->status,
             'fetched' => $outcome->fetched,
-            'harvest_due' => $this->harvest->isDue($user),
+            'harvest_due' => $this->harvest->isDueSafely($user),
         ]);
     }
 }
