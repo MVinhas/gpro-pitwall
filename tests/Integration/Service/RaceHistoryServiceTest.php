@@ -126,6 +126,17 @@ final class RaceHistoryServiceTest extends TestCase
         $this->assertFalse($this->service->archive(1, $this->payload()));
     }
 
+    public function testAReSyncRefreshesTheStoredRaceButStillReportsItAsKnown(): void
+    {
+        $this->assertTrue($this->service->archive(1, $this->payload()));
+
+        $this->assertFalse($this->service->archive(1, $this->payload(), [], ['lvlLab' => 9]));
+
+        $stmt = $this->db->query('SELECT staff_json FROM user_race_history');
+        $this->assertStringContainsString('"value":9', (string) ($stmt === false ? '' : $stmt->fetchColumn()));
+        $this->assertSame(1, (int) $this->db->query('SELECT COUNT(*) FROM user_race_history')->fetchColumn());
+    }
+
     public function testAnUnusablePayloadIsSwallowedRatherThanThrown(): void
     {
         // Archiving is observational: it must never break the sync that carries it.

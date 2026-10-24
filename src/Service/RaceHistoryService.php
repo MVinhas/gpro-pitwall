@@ -34,7 +34,8 @@ final readonly class RaceHistoryService
      * @param array<string, mixed> $td       TDProfile payload ([] when none)
      * @param array<string, mixed> $staff    StaffAndFacilities payload ([] when none)
      * @param array<string, mixed> $driverProfile DriProfile payload ([] when none)
-     * @return bool true when a previously unarchived race was stored
+     * @return bool true when a previously unarchived race was stored (a known
+     *              race is refreshed in place and reports false)
      */
     public function archive(
         int $userId,
@@ -61,11 +62,22 @@ final readonly class RaceHistoryService
                 return false;
             }
 
-            return $this->repository->insertIfNew($row);
+            $userId = $this->intOf($row['user_id'] ?? null);
+            $season = $this->intOf($row['season'] ?? null);
+            $race = $this->intOf($row['race'] ?? null);
+            $known = $this->repository->exists($userId, $season, $race);
+            $this->repository->upsert($row);
+
+            return !$known;
         } catch (Throwable $e) {
             error_log('[RaceHistory] archive failed: ' . $e::class . ': ' . $e->getMessage());
             return false;
         }
+    }
+
+    private function intOf(mixed $value): int
+    {
+        return is_numeric($value) ? (int) $value : 0;
     }
 
     /**

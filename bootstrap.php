@@ -305,6 +305,29 @@ $container['service.race_history'] = new \App\Service\RaceHistoryService(
     new \App\Telemetry\RaceHistoryMapper(),
     $container['repo.track'],
 );
+$container['repo.projection_state'] = new \App\Repository\ProjectionStateRepository($container['db']);
+$container['archive.snapshots'] = new \App\Archive\RaceSnapshotReader($container['repo.api_archive']);
+$container['archive.projector'] = new \App\Archive\ArchiveProjector(
+    $container['db'],
+    $container['repo.api_archive'],
+    $container['repo.projection_state'],
+    new \App\Archive\WeekendStateProjector(
+        $container['repo.api_archive'],
+        new \App\Repository\WeekendStateRepository($container['db']),
+        $container['archive.snapshots'],
+    ),
+    new \App\Archive\StandingsProjector(
+        $container['repo.api_archive'],
+        new \App\Repository\StandingsRepository($container['db']),
+        $container['archive.snapshots'],
+    ),
+    new \App\Archive\LedgerProjector(
+        $container['repo.api_archive'],
+        new \App\Repository\EconomyLedgerRepository($container['db']),
+    ),
+    $container['service.race_history'],
+    $container['archive.snapshots'],
+);
 $container['service.debrief'] = new \App\Service\DebriefService(
     $container['repo.race_history'],
     $container['repo.race_telemetry'],

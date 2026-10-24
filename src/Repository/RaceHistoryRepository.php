@@ -15,7 +15,7 @@ use PDO;
  */
 class RaceHistoryRepository
 {
-    /** Columns written by insertIfNew(), in a fixed order. */
+    /** Columns written by insertIfNew() and upsert(), in a fixed order. */
     private const array COLUMNS = [
         'user_id', 'season', 'race', 'track_id', 'track_name', 'group_label', 'level',
         'laps_total', 'laps_completed', 'grid_pos', 'final_pos', 'points',
@@ -110,6 +110,48 @@ class RaceHistoryRepository
         $stmt->execute($params);
 
         return $stmt->rowCount() > 0;
+    }
+
+    /**
+     * Insert one race, or replace every mapped column of the one already stored
+     * for it (its id is kept), so a re-projection corrects an earlier row.
+     *
+     * @param array<string, mixed> $row
+     */
+    public function upsert(array $row): void
+    {
+        $columns = implode(', ', self::COLUMNS);
+        $placeholders = implode(', ', array_map(
+            static fn (string $c): string => ':' . $c,
+            self::COLUMNS
+        ));
+        $updates = implode(', ', array_map(
+            static fn (string $c): string => "{$c} = excluded.{$c}",
+            array_values(array_diff(self::COLUMNS, ['user_id', 'season', 'race']))
+        ));
+
+        $stmt = $this->pdo->prepare(
+            "INSERT INTO user_race_history ({$columns}) VALUES ({$placeholders})
+             ON CONFLICT(user_id, season, race) DO UPDATE SET {$updates}"
+        );
+
+        $params = [];
+        foreach (self::COLUMNS as $column) {
+            $params[$column] = $row[$column] ?? null;
+        }
+
+        $stmt->execute($params);
+    }
+
+    /** Whether this manager already has the race stored. */
+    public function exists(int $userId, int $season, int $race): bool
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT 1 FROM user_race_history WHERE user_id = :u AND season = :s AND race = :r'
+        );
+        $stmt->execute(['u' => $userId, 's' => $season, 'r' => $race]);
+
+        return $stmt->fetchColumn() !== false;
     }
 
     /** How many races this manager has archived. */

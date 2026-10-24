@@ -159,7 +159,7 @@ final class ProjectionSchemaMigrationTest extends TestCase
             "INSERT INTO user_economy_ledger (user_id, season, race, source, description, amount, fingerprint)
              VALUES ($userId, 1, 1, 'economy', 'Fee', -5, 'fp')"
         );
-        $db->exec("INSERT INTO user_projection_state (user_id, version) VALUES ($userId, 1)");
+        $db->exec("INSERT INTO user_projection_state (user_id, season, race, version, projected_at) VALUES ($userId, 1, 1, 1, '2026-10-24 10:00:00')");
 
         $db->exec("DELETE FROM users WHERE id = $userId");
 

@@ -700,7 +700,8 @@ class DatabaseSeeder
      * Rows projected out of the raw archive (see user_api_archive): one weekend
      * state, one standings row and a de-duplicated money ledger per user. They
      * are derived data, so they can always be rebuilt from the archive;
-     * user_projection_state records which projector version last wrote them.
+     * user_projection_state records, per race, which projector version last wrote
+     * them and when.
      */
     private function createProjectionTables(): void
     {
@@ -771,9 +772,12 @@ class DatabaseSeeder
 
         $this->db->exec(
             "CREATE TABLE IF NOT EXISTS user_projection_state (
-                user_id INTEGER PRIMARY KEY,
-                version INTEGER NOT NULL DEFAULT 0,
-                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                user_id INTEGER NOT NULL,
+                season INTEGER NOT NULL,
+                race INTEGER NOT NULL,
+                version INTEGER NOT NULL,
+                projected_at TEXT NOT NULL,
+                PRIMARY KEY (user_id, season, race),
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             )"
         );

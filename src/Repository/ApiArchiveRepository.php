@@ -151,6 +151,66 @@ final class ApiArchiveRepository
         return is_string($value) ? $value : null;
     }
 
+    /**
+     * Newest decodable payload among the rows stamped with exactly this race.
+     * A null $params matches any params; the default '' only the unparameterised
+     * row. Spans token scopes, like the other history readers.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function latestStamped(
+        int $userId,
+        string $endpoint,
+        int $season,
+        int $race,
+        ?string $params = '',
+    ): ?array {
+        $stmt = $this->pdo->prepare(
+            'SELECT payload_gz FROM user_api_archive
+             WHERE user_id = :user_id AND season = :season AND race = :race AND endpoint = :endpoint'
+            . ($params === null ? '' : ' AND params = :params') . '
+             ORDER BY fetched_at DESC, id DESC'
+        );
+        $bind = [':user_id' => $userId, ':season' => $season, ':race' => $race, ':endpoint' => $endpoint];
+        if ($params !== null) {
+            $bind[':params'] = $params;
+        }
+        $stmt->execute($bind);
+        while (($blob = $stmt->fetchColumn()) !== false) {
+            $payload = $this->decode($blob);
+            if ($payload !== null) {
+                return $payload;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Every decodable payload of the endpoint stamped with exactly this race,
+     * whatever its params, oldest first.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function allStamped(int $userId, string $endpoint, int $season, int $race): array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT payload_gz FROM user_api_archive
+             WHERE user_id = :user_id AND season = :season AND race = :race AND endpoint = :endpoint
+             ORDER BY fetched_at ASC, id ASC'
+        );
+        $stmt->execute([':user_id' => $userId, ':season' => $season, ':race' => $race, ':endpoint' => $endpoint]);
+        $out = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $blob) {
+            $payload = $this->decode($blob);
+            if ($payload !== null) {
+                $out[] = $payload;
+            }
+        }
+
+        return $out;
+    }
+
     public function has(int $userId, string $tokenScope, string $endpoint, string $params, string $window): bool
     {
         $stmt = $this->pdo->prepare(
