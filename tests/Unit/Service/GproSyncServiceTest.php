@@ -647,4 +647,103 @@ final class GproSyncServiceTest extends TestCase
 
         $this->assertSame(['office'], $fetcher->calls);
     }
+
+    private function pageOfficeRow(\PDO $db, array $office): void
+    {
+        $repo = new ApiArchiveRepository($db, new ArchiveSanitizer());
+        $repo->put(7, GproApiClient::scopeFor('tok'), 'office', '', '', 107, 14, $office);
+    }
+
+    public function testPageLevelOfficeFetchBetweenSyncsDoesNotSwallowADoneFlagFlip(): void
+    {
+        [$svc, $fetcher, $db] = $this->scripted();
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+
+        // A page render re-fetched the office after the flip and archived it.
+        $fetcher->office['doneRaceSetup'] = true;
+        $this->pageOfficeRow($db, $fetcher->office);
+        $fetcher->calls = [];
+
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+
+        $this->assertSame(['office', 'RaceSetup'], $fetcher->calls);
+    }
+
+    public function testFirstSyncAfterDeployFallsBackToThePlainOfficeRow(): void
+    {
+        [$svc, $fetcher, $db] = $this->scripted();
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+        $db->exec("DELETE FROM user_api_archive WHERE endpoint = 'office' AND params = 'sync'");
+        $fetcher->office['doneRaceSetup'] = true;
+        $fetcher->calls = [];
+
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+
+        $this->assertSame(['office', 'RaceSetup'], $fetcher->calls);
+    }
+
+    public function testDeferredSyncDoesNotRecordAnOfficeItNeverPlannedAgainst(): void
+    {
+        [$svc, $fetcher, $db] = $this->scripted();
+        $fetcher->remaining = 15;
+
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+
+        $this->assertSame(
+            0,
+            (int) $db->query("SELECT COUNT(*) FROM user_api_archive WHERE params = 'sync'")->fetchColumn(),
+        );
+    }
+
+    private function withRaceDays(callable $test): void
+    {
+        $prior = $_ENV['GPRO_RACE_DAYS'] ?? null;
+        $_ENV['GPRO_RACE_DAYS'] = '2,5';
+        try {
+            $test();
+        } finally {
+            $_ENV['GPRO_RACE_DAYS'] = $prior ?? '';
+        }
+    }
+
+    /** Syncs once with an older-race analysis, then ages its archive row to $offset after the window start. */
+    private function secondLoginAfterAnalysisFetchedAt(string $offset): ScriptedGproFetcher
+    {
+        [$svc, $fetcher, $db] = $this->scripted();
+        $fetcher->analysis['selRaceNb'] = '11';
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+
+        $start = \App\Support\RaceWindow::raceStartAt(
+            new \DateTimeImmutable('now'),
+            \App\Support\RaceWindow::parseDays('2,5'),
+        );
+        $this->assertNotNull($start);
+        $db->exec(
+            "UPDATE user_api_archive SET fetched_at = '"
+            . $start->modify($offset)->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i:s')
+            . "' WHERE endpoint = 'RaceAnalysis'"
+        );
+        $fetcher->calls = [];
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+
+        return $fetcher;
+    }
+
+    public function testAnalysisFetchedAfterThePreviousRaceFinishedCountsAsPresent(): void
+    {
+        $this->withRaceDays(function (): void {
+            $fetcher = $this->secondLoginAfterAnalysisFetchedAt('+3 hours');
+
+            $this->assertSame(['office'], $fetcher->calls);
+        });
+    }
+
+    public function testAnalysisFetchedWhileThePreviousRaceWasStillRunningIsPlannedAgain(): void
+    {
+        $this->withRaceDays(function (): void {
+            $fetcher = $this->secondLoginAfterAnalysisFetchedAt('+1 hour');
+
+            $this->assertSame(['office', 'RaceAnalysis'], $fetcher->calls);
+        });
+    }
 }

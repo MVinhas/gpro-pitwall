@@ -657,6 +657,31 @@ final class GproApiClient
     }
 
     /**
+     * The instant the current archive window opened (race start), or null when
+     * windowing is disabled.
+     */
+    public function archiveWindowStart(?DateTimeImmutable $now = null): ?DateTimeImmutable
+    {
+        return RaceWindow::raceStartAt(
+            $now ?? new DateTimeImmutable('now'),
+            RaceWindow::parseDays(Env::get('GPRO_RACE_DAYS', '2,5')),
+        );
+    }
+
+    /**
+     * Files the office a sync is about to plan against under params 'sync', so
+     * the next sync detects changes against it and not against a page-level
+     * office fetch (which archives under ''). Read-through only ever asks for
+     * '', so this row is never served as a page's office.
+     *
+     * @param array<string, mixed> $office
+     */
+    public function archiveSyncOffice(array $office): void
+    {
+        $this->archivePut('office', 'sync', $this->archiveWindow(), $office);
+    }
+
+    /**
      * Current race-window id used to namespace race-critical cache keys. Pure
      * clock arithmetic against GPRO's fixed weekly schedule — no API call.
      * Configurable via env (days, boundary hour, timezone); an empty

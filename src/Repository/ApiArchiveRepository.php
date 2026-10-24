@@ -125,6 +125,22 @@ final class ApiArchiveRepository
         return $this->decode($stmt->fetchColumn());
     }
 
+    /**
+     * UTC fetched_at of the row latest() would return, or null when there is none.
+     */
+    public function latestFetchedAt(int $userId, string $endpoint, string $params = ''): ?string
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT fetched_at FROM user_api_archive
+             WHERE user_id = :user_id AND endpoint = :endpoint AND params = :params
+             ORDER BY fetched_at DESC, id DESC LIMIT 1'
+        );
+        $stmt->execute([':user_id' => $userId, ':endpoint' => $endpoint, ':params' => $params]);
+        $value = $stmt->fetchColumn();
+
+        return is_string($value) ? $value : null;
+    }
+
     public function has(int $userId, string $tokenScope, string $endpoint, string $params, string $window): bool
     {
         $stmt = $this->pdo->prepare(

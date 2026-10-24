@@ -418,4 +418,20 @@ final class GproApiClientArchiveTest extends TestCase
         $this->assertCount(1, $this->fetcher->calls, 'only the DriProfile is fetched, never the office');
         $this->assertStringContainsString('DriProfile', $this->fetcher->calls[0]);
     }
+
+    public function testSyncOfficeRowIsNeverServedAsThePagesOffice(): void
+    {
+        $_ENV['GPRO_RACE_DAYS'] = '2,5';
+        $client = $this->client();
+        $window = $client->archiveWindow();
+        $client->archiveSyncOffice(['name' => 'Synced', 'seasonNb' => 99, 'raceNb' => 4]);
+
+        $row = $this->archive->getRow(1, self::scope(), 'office', 'sync', $window);
+        $this->assertNotNull($row);
+        $this->assertSame(99, $row['season']);
+        $this->assertSame(4, $row['race']);
+        $this->assertNull($this->archive->get(1, self::scope(), 'office', '', $window));
+
+        $this->assertSame('Alice', $client->getOfficeData()['name'], 'a cold read fetches instead of serving the sync row');
+    }
 }

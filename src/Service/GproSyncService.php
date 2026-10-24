@@ -25,6 +25,9 @@ final class GproSyncService
      */
     private const int LOCK_TTL_SECONDS = 60;
 
+    /** Races run 20:00-22:00 Paris, so a window's race is over two hours after it opens. */
+    private const int RACE_DURATION_SECONDS = 7200;
+
     /** Budget assumed when neither the fresh office nor the cache knows it. */
     private const int ASSUMED_REMAINING = 100;
 
@@ -100,7 +103,15 @@ final class GproSyncService
         $calls = 0;
         try {
             // Read before the fresh fetch: that fetch archives a new office row.
-            $previousOffice = $this->safely(fn (): ?array => $this->archive->latest($userId, 'office'), null);
+            // Compared against the office the last SYNC planned against: page
+            // renders archive offices too and would swallow done-flag flips.
+            // The plain row is only the fallback for the first sync after the
+            // 'sync' rows were introduced.
+            $previousOffice = $this->safely(
+                fn (): ?array => $this->archive->latest($userId, 'office', 'sync')
+                    ?? $this->archive->latest($userId, 'office'),
+                null,
+            );
 
             $calls++;
             try {
@@ -122,6 +133,8 @@ final class GproSyncService
 
                 return $this->outcome('deferred_low_budget', $fetched, $calls, $started);
             }
+
+            $this->apiClient->archiveSyncOffice($office);
 
             $plan = $this->planner->plan($this->context($userId, $previousOffice, $office, $remaining, $mode));
 
@@ -232,11 +245,29 @@ final class GproSyncService
         if ($analysedSeason === null) {
             return false;
         }
+        if ($this->analysisFetchedAfterPreviousRaceEnded($userId)) {
+            return true;
+        }
         if ($race > 1) {
             return $analysedSeason === $season && self::intOrNull($latest['selRaceNb'] ?? null) === $race - 1;
         }
 
         return $analysedSeason === $season - 1;
+    }
+
+    /**
+     * A manager who skipped the last race has no analysis stamped with it, but
+     * one fetched once that race was over is already the latest GPRO has.
+     */
+    private function analysisFetchedAfterPreviousRaceEnded(int $userId): bool
+    {
+        $start = $this->apiClient->archiveWindowStart();
+        $fetchedAt = $this->safely(fn (): ?string => $this->archive->latestFetchedAt($userId, 'RaceAnalysis'), null);
+        if ($start === null || $fetchedAt === null) {
+            return false;
+        }
+
+        return (int) strtotime($fetchedAt . ' UTC') >= $start->getTimestamp() + self::RACE_DURATION_SECONDS;
     }
 
     /**

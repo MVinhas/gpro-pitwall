@@ -72,6 +72,24 @@ final class RaceWindow
     }
 
     /**
+     * The instant the race-start window containing $now opened (race start,
+     * 20:00 Paris on the window's day), or null when windowing is disabled.
+     * The race itself runs about two hours from here.
+     *
+     * @param list<int> $raceDays ISO-8601 weekday numbers (1=Mon … 7=Sun)
+     */
+    public static function raceStartAt(DateTimeImmutable $now, array $raceDays): ?DateTimeImmutable
+    {
+        $id = self::raceStartIdFor($now, $raceDays);
+        if ($id === '') {
+            return null;
+        }
+        $start = new DateTimeImmutable($id, new DateTimeZone(self::RACE_TZ));
+
+        return $start->setTime(self::RACE_START_HOUR, 0, 0);
+    }
+
+    /**
      * Race days from the GPRO_RACE_DAYS list ("2,5"); anything outside 1–7 is
      * dropped, so an empty or garbage value disables windowing.
      *

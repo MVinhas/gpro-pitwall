@@ -224,4 +224,17 @@ final class ApiArchiveRepositoryTest extends TestCase
 
         $this->assertSame(['Calendar', 'Menu'], $found);
     }
+
+    public function testLatestFetchedAtFollowsTheSameRowAsLatest(): void
+    {
+        $this->repo->put(1, 'sA', 'RaceAnalysis', '', 'w1', 107, 5, ['v' => 1]);
+        $this->repo->put(1, 'sA', 'RaceAnalysis', 'SR=1', 'w1', 107, 1, ['v' => 2]);
+        $this->db->exec("UPDATE user_api_archive SET fetched_at = '2026-01-02 10:00:00' WHERE params = ''");
+        $this->db->exec("UPDATE user_api_archive SET fetched_at = '2026-09-09 10:00:00' WHERE params = 'SR=1'");
+
+        $this->assertSame('2026-01-02 10:00:00', $this->repo->latestFetchedAt(1, 'RaceAnalysis'));
+        $this->assertSame('2026-09-09 10:00:00', $this->repo->latestFetchedAt(1, 'RaceAnalysis', 'SR=1'));
+        $this->assertNull($this->repo->latestFetchedAt(1, 'Calendar'));
+        $this->assertNull($this->repo->latestFetchedAt(2, 'RaceAnalysis'));
+    }
 }
