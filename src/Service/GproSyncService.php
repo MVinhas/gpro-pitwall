@@ -105,9 +105,10 @@ final class GproSyncService
             // renders archive offices too and would swallow done-flag flips.
             // The plain row is only the fallback for the first sync after the
             // 'sync' rows were introduced.
+            $scope = $this->apiClient->tokenScope();
             $previousOffice = $this->safely(
-                fn (): ?array => $this->archive->latest($userId, 'office', 'sync')
-                    ?? $this->archive->latest($userId, 'office'),
+                fn (): ?array => $this->archive->latest($userId, 'office', 'sync', $scope)
+                    ?? $this->archive->latest($userId, 'office', '', $scope),
                 null,
             );
 
@@ -132,7 +133,7 @@ final class GproSyncService
                 return $this->outcome('deferred_low_budget', $fetched, $calls, $started);
             }
 
-            $ctx = $this->context($userId, $previousOffice, $office, $remaining, $mode);
+            $ctx = $this->context($userId, $scope, $previousOffice, $office, $remaining, $mode);
             $plan = $this->planner->plan($ctx);
 
             /** @var array<string, array<string, mixed>> $results */
@@ -226,6 +227,7 @@ final class GproSyncService
      */
     private function context(
         int $userId,
+        string $scope,
         ?array $previousOffice,
         array $office,
         int $remaining,
@@ -238,21 +240,20 @@ final class GproSyncService
         $thisSeason = [];
         if ($season !== null) {
             $thisSeason = ArchiveEndpoints::toPlanner(
-                $this->safely(fn (): array => $this->archive->endpointsForSeason($userId, $season), []),
+                $this->safely(fn (): array => $this->archive->endpointsForSeason($userId, $season, $scope), []),
             );
-        }
-        // Shared across users, so it is never archived: the warm cache is its record.
-        if ($this->apiClient->hasCachedTyreSuppliers()) {
-            $thisSeason[] = Endpoint::TYRES;
         }
         if ($season !== null && $race !== null) {
             $thisRace = array_values(array_diff(
                 ArchiveEndpoints::toPlanner(
-                    $this->safely(fn (): array => $this->archive->endpointsForRace($userId, $season, $race), []),
+                    $this->safely(
+                        fn (): array => $this->archive->endpointsForRace($userId, $season, $race, $scope),
+                        [],
+                    ),
                 ),
                 [Endpoint::ANALYSIS],
             ));
-            if ($this->analysisArchivedForPreviousRace($userId, $season, $race)) {
+            if ($this->analysisArchivedForPreviousRace($userId, $scope, $season, $race)) {
                 $thisRace[] = Endpoint::ANALYSIS;
             }
         }
@@ -264,13 +265,16 @@ final class GproSyncService
      * RaceAnalysis is stamped with the race it analyses, which is the one just
      * run: the race before the office's (the office names the NEXT race).
      */
-    private function analysisArchivedForPreviousRace(int $userId, int $season, int $race): bool
+    private function analysisArchivedForPreviousRace(int $userId, string $scope, int $season, int $race): bool
     {
-        if ($this->analysisAskedAfterPreviousRaceEnded($userId)) {
+        if ($this->analysisAskedAfterPreviousRaceEnded($userId, $scope)) {
             return true;
         }
 
-        $latest = $this->safely(fn (): ?array => $this->archive->latest($userId, 'RaceAnalysis'), null);
+        $latest = $this->safely(
+            fn (): ?array => $this->archive->latest($userId, 'RaceAnalysis', '', $scope),
+            null,
+        );
         $analysedSeason = self::intOrNull($latest['selSeasonNb'] ?? null);
         if ($analysedSeason === null) {
             return false;
@@ -288,7 +292,7 @@ final class GproSyncService
      * asking again would only spend a call: a manager who skipped the race, or
      * a non-supporter, would otherwise pay one on every login.
      */
-    private function analysisAskedAfterPreviousRaceEnded(int $userId): bool
+    private function analysisAskedAfterPreviousRaceEnded(int $userId, string $scope): bool
     {
         $threshold = $this->apiClient->postRaceAt();
         if ($threshold === null) {
@@ -297,7 +301,10 @@ final class GproSyncService
         if ($this->apiClient->hasAnalysisAttempt()) {
             return true;
         }
-        $fetchedAt = $this->safely(fn (): ?string => $this->archive->latestFetchedAt($userId, 'RaceAnalysis'), null);
+        $fetchedAt = $this->safely(
+            fn (): ?string => $this->archive->latestFetchedAt($userId, 'RaceAnalysis', '', $scope),
+            null,
+        );
 
         return $fetchedAt !== null && (int) strtotime($fetchedAt . ' UTC') >= $threshold->getTimestamp();
     }
@@ -320,7 +327,7 @@ final class GproSyncService
             Endpoint::ANALYSIS => $this->apiClient->getRaceAnalysis(true),
             Endpoint::CALENDAR => $this->apiClient->getCalendar(true),
             Endpoint::MENU => $this->apiClient->getMenu(true),
-            Endpoint::TYRES => $this->apiClient->getTyreSuppliers(),
+            Endpoint::TYRES => $this->apiClient->getTyreSuppliers(true),
             default => throw new LogicException('Not a phase 1 endpoint: ' . $endpoint),
         };
     }

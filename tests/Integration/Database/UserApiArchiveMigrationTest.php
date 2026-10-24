@@ -44,7 +44,7 @@ final class UserApiArchiveMigrationTest extends TestCase
             1,
             (int) $db->query('SELECT COUNT(*) FROM user_race_history')->fetchColumn(),
         );
-        $this->assertSame(16, (int) $db->query('PRAGMA user_version')->fetchColumn());
+        $this->assertSame(17, (int) $db->query('PRAGMA user_version')->fetchColumn());
 
         $insert = $db->prepare(
             'INSERT INTO user_api_archive (user_id, endpoint, params, race_window, fetched_at, payload_gz)
@@ -116,7 +116,7 @@ final class UserApiArchiveMigrationTest extends TestCase
         $seeder->migrate();
         $seeder->migrate();
 
-        $this->assertSame(16, (int) $db->query('PRAGMA user_version')->fetchColumn());
+        $this->assertSame(17, (int) $db->query('PRAGMA user_version')->fetchColumn());
         $columns = array_column(
             $db->query('PRAGMA index_info(idx_user_api_archive_history)')->fetchAll(PDO::FETCH_ASSOC),
             'name',

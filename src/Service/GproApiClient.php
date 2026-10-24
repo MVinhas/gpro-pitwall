@@ -71,6 +71,12 @@ final class GproApiClient
         return $copy;
     }
 
+    /** The cache/archive namespace of the token this client is set to. */
+    public function tokenScope(): string
+    {
+        return $this->scope;
+    }
+
     /** Stable per-user cache namespace for a token (no raw token exposed). */
     public static function scopeFor(string $token): string
     {
@@ -234,13 +240,13 @@ final class GproApiClient
         }
     }
 
-    /** Whether the shared tyre feed is cached, so reading it spends no fetch. */
-    public function hasCachedTyreSuppliers(): bool
-    {
-        return $this->cache->has('tyre_suppliers');
-    }
-
-    /** @return array<string, mixed> */
+    /**
+     * Reads share one cache entry across users, but every real fetch is also
+     * archived under the caller: the payload names the manager's own supplier,
+     * which is what a per-season record of it needs.
+     *
+     * @return array<string, mixed>
+     */
     public function getTyreSuppliers(bool $forceRefresh = false): array
     {
         return $this->getCached(
@@ -249,6 +255,7 @@ final class GproApiClient
             120000,
             $forceRefresh,
             shared: true,
+            archiveShared: true,
         );
     }
 
@@ -296,6 +303,82 @@ final class GproApiClient
     public function getGroupStaff(bool $forceRefresh = false): array
     {
         return $this->getCached('group_staff', '/gb/backend/api/v2/ViewStaff', $this->ttlShort(), $forceRefresh);
+    }
+
+    /**
+     * Season standings of the token account's own group (no Group parameter:
+     * GPRO defaults to it). A per-race snapshot, so it rolls with the window.
+     *
+     * @return array<string, mixed>
+     */
+    public function getStandings(bool $forceRefresh = false): array
+    {
+        return $this->getCached(
+            'standings',
+            '/gb/backend/api/v2/Standings',
+            $this->ttlShort(),
+            $forceRefresh,
+            epoch: $this->raceWindow(),
+        );
+    }
+
+    /**
+     * One page of the economy history table, newest first.
+     *
+     * @return array<string, mixed>
+     */
+    public function getEconomyHistory(int $page = 1, bool $forceRefresh = false): array
+    {
+        return $this->getCached(
+            'economy_history_' . $page,
+            "/gb/backend/api/v2/EconomyHistory?Page={$page}&show=table",
+            $this->ttlShort(),
+            $forceRefresh,
+            epoch: $this->raceWindow(),
+        );
+    }
+
+    /**
+     * Staff and facilities of a finished season. Immutable once fetched.
+     *
+     * @return array<string, mixed>
+     */
+    public function getSfHistory(int $season, bool $forceRefresh = false): array
+    {
+        return $this->getImmutable(
+            'sf_history_' . $season,
+            "/gb/backend/api/v2/SFHistory?season={$season}",
+            $forceRefresh,
+        );
+    }
+
+    /**
+     * Car character points of a finished season. Immutable once fetched.
+     *
+     * @return array<string, mixed>
+     */
+    public function getCcpHistory(int $season, bool $forceRefresh = false): array
+    {
+        return $this->getImmutable(
+            'ccp_history_' . $season,
+            "/gb/backend/api/v2/CCPHistory?season={$season}",
+            $forceRefresh,
+        );
+    }
+
+    /**
+     * The analysis of one named, finished race. Unlike getRaceAnalysis() it
+     * lets a failure through: the caller decides whether a missing race matters.
+     *
+     * @return array<string, mixed>
+     */
+    public function getRaceAnalysisFor(int $season, int $race, bool $forceRefresh = false): array
+    {
+        return $this->getImmutable(
+            "race_analysis_{$season}_{$race}",
+            "/gb/backend/api/v2/RaceAnalysis?SR={$season},{$race}",
+            $forceRefresh,
+        );
     }
 
     /** @return array<string, mixed> */
@@ -483,6 +566,9 @@ final class GproApiClient
      *   user — market dump, static track list, season-wide supplier data).
      *   Default false: the key is namespaced to the current user so per-user
      *   payloads never leak across accounts.
+     * @param bool $archiveShared A shared payload is not archived unless this
+     *   is set, in which case a real fetch is filed under the calling user
+     *   (reads still come from the shared cache only).
      * @return array<string, mixed>
      */
     private function getCached(
@@ -492,6 +578,7 @@ final class GproApiClient
         bool $force,
         bool $shared = false,
         string $epoch = '',
+        bool $archiveShared = false,
     ): array {
         $key = $shared ? $key : $this->userKey($key);
         // Race-critical endpoints pass a non-empty epoch so the key rolls when
@@ -533,9 +620,42 @@ final class GproApiClient
         $data = $this->fetcher->fetchJson($endpoint);
         $this->cache->set($key, $data, $ttl);
         $this->rememberApiLimit($data);
-        if (!$shared) {
+        if (!$shared || $archiveShared) {
             $this->archivePut(...self::splitEndpoint($endpoint), window: $this->archiveWindow(), data: $data);
         }
+
+        return $data;
+    }
+
+    /**
+     * A payload that never changes once GPRO has produced it (a named finished
+     * race, a finished season), so it is filed under the empty window and an
+     * existing row is served whatever its age or the current window. A forced
+     * call still fetches and refreshes the row.
+     *
+     * @return array<string, mixed>
+     */
+    private function getImmutable(string $key, string $endpoint, bool $force): array
+    {
+        $key = $this->userKey($key);
+        if (!$force) {
+            $cached = $this->cache->get($key);
+            if ($cached !== null) {
+                /** @var array<string, mixed> $cached */
+                return $cached;
+            }
+            $row = $this->readArchive(...self::splitEndpoint($endpoint), window: '');
+            if ($row !== null) {
+                $this->cache->set($key, $row['payload'], $this->ttlShort());
+
+                return $row['payload'];
+            }
+        }
+
+        $data = $this->fetcher->fetchJson($endpoint);
+        $this->cache->set($key, $data, $this->ttlShort());
+        $this->rememberApiLimit($data);
+        $this->archivePut(...self::splitEndpoint($endpoint), window: '', data: $data);
 
         return $data;
     }
@@ -555,15 +675,23 @@ final class GproApiClient
     }
 
     /**
-     * Archive failures must never break a page or a sync: log the class only
-     * (a message could carry payload data) and carry on as if there were none.
-     *
      * @return array{payload: array<string, mixed>, fetched_at: string, season: ?int, race: ?int}|null
      */
     private function archivedRow(string $endpoint, string $params, string $window): ?array
     {
         // No window (windowing disabled) means a row can never be "current".
-        if ($this->archive === null || $this->archiveUserId === null || $window === '') {
+        return $window === '' ? null : $this->readArchive($endpoint, $params, $window);
+    }
+
+    /**
+     * Archive failures must never break a page or a sync: log the class only
+     * (a message could carry payload data) and carry on as if there were none.
+     *
+     * @return array{payload: array<string, mixed>, fetched_at: string, season: ?int, race: ?int}|null
+     */
+    private function readArchive(string $endpoint, string $params, string $window): ?array
+    {
+        if ($this->archive === null || $this->archiveUserId === null) {
             return null;
         }
         try {

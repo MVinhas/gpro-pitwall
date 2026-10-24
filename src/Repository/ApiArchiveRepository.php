@@ -11,10 +11,11 @@ use PDO;
  * Per-user archive of raw GPRO API responses, gzip-compressed JSON.
  *
  * Reads are always scoped to the supplied user_id. The read-through lookups
- * (getRow/get/has) also match the token scope, so a swapped token never reads
- * the previous account's rows; the history readers (latest/paramsFor) span
- * scopes. A row whose blob cannot be decoded reads as absent so a corrupt
- * archive entry never breaks a page.
+ * (getRow/get/has) always match the token scope, so a swapped token never reads
+ * the previous account's rows; the history readers (latest/paramsFor/endpoints*)
+ * span scopes unless a scope is passed, which the sync planner does. A row whose
+ * blob cannot be decoded reads as absent so a corrupt archive entry never breaks
+ * a page.
  */
 final class ApiArchiveRepository
 {
@@ -110,17 +111,20 @@ final class ApiArchiveRepository
     /**
      * Newest row for the endpoint with exactly these params; the default ''
      * matches only unparameterised rows, never parameterised (e.g. backfilled) ones.
+     * A null token scope spans every scope.
      *
      * @return array<string, mixed>|null
      */
-    public function latest(int $userId, string $endpoint, string $params = ''): ?array
+    public function latest(int $userId, string $endpoint, string $params = '', ?string $tokenScope = null): ?array
     {
         $stmt = $this->pdo->prepare(
             'SELECT payload_gz FROM user_api_archive
-             WHERE user_id = :user_id AND endpoint = :endpoint AND params = :params
+             WHERE user_id = :user_id AND endpoint = :endpoint AND params = :params'
+            . self::scopeClause($tokenScope) . '
              ORDER BY fetched_at DESC, id DESC LIMIT 1'
         );
-        $stmt->execute([':user_id' => $userId, ':endpoint' => $endpoint, ':params' => $params]);
+        $stmt->execute([':user_id' => $userId, ':endpoint' => $endpoint, ':params' => $params]
+            + self::scopeBinding($tokenScope));
 
         return $this->decode($stmt->fetchColumn());
     }
@@ -128,14 +132,20 @@ final class ApiArchiveRepository
     /**
      * UTC fetched_at of the row latest() would return, or null when there is none.
      */
-    public function latestFetchedAt(int $userId, string $endpoint, string $params = ''): ?string
-    {
+    public function latestFetchedAt(
+        int $userId,
+        string $endpoint,
+        string $params = '',
+        ?string $tokenScope = null,
+    ): ?string {
         $stmt = $this->pdo->prepare(
             'SELECT fetched_at FROM user_api_archive
-             WHERE user_id = :user_id AND endpoint = :endpoint AND params = :params
+             WHERE user_id = :user_id AND endpoint = :endpoint AND params = :params'
+            . self::scopeClause($tokenScope) . '
              ORDER BY fetched_at DESC, id DESC LIMIT 1'
         );
-        $stmt->execute([':user_id' => $userId, ':endpoint' => $endpoint, ':params' => $params]);
+        $stmt->execute([':user_id' => $userId, ':endpoint' => $endpoint, ':params' => $params]
+            + self::scopeBinding($tokenScope));
         $value = $stmt->fetchColumn();
 
         return is_string($value) ? $value : null;
@@ -162,30 +172,31 @@ final class ApiArchiveRepository
     /**
      * @return list<string>
      */
-    public function paramsFor(int $userId, string $endpoint): array
+    public function paramsFor(int $userId, string $endpoint, ?string $tokenScope = null): array
     {
         $stmt = $this->pdo->prepare(
             'SELECT DISTINCT params FROM user_api_archive
-             WHERE user_id = :user_id AND endpoint = :endpoint'
+             WHERE user_id = :user_id AND endpoint = :endpoint' . self::scopeClause($tokenScope)
         );
-        $stmt->execute([':user_id' => $userId, ':endpoint' => $endpoint]);
+        $stmt->execute([':user_id' => $userId, ':endpoint' => $endpoint] + self::scopeBinding($tokenScope));
 
         return array_values(array_map(strval(...), $stmt->fetchAll(PDO::FETCH_COLUMN)));
     }
 
     /**
      * Archive endpoint names that have a row stamped with exactly this race,
-     * whatever their params or token scope.
+     * whatever their params (and token scope, when none is passed).
      *
      * @return list<string>
      */
-    public function endpointsForRace(int $userId, int $season, int $race): array
+    public function endpointsForRace(int $userId, int $season, int $race, ?string $tokenScope = null): array
     {
         $stmt = $this->pdo->prepare(
             'SELECT DISTINCT endpoint FROM user_api_archive
-             WHERE user_id = :user_id AND season = :season AND race = :race'
+             WHERE user_id = :user_id AND season = :season AND race = :race' . self::scopeClause($tokenScope)
         );
-        $stmt->execute([':user_id' => $userId, ':season' => $season, ':race' => $race]);
+        $stmt->execute([':user_id' => $userId, ':season' => $season, ':race' => $race]
+            + self::scopeBinding($tokenScope));
 
         return array_values(array_map(strval(...), $stmt->fetchAll(PDO::FETCH_COLUMN)));
     }
@@ -195,15 +206,28 @@ final class ApiArchiveRepository
      *
      * @return list<string>
      */
-    public function endpointsForSeason(int $userId, int $season): array
+    public function endpointsForSeason(int $userId, int $season, ?string $tokenScope = null): array
     {
         $stmt = $this->pdo->prepare(
             'SELECT DISTINCT endpoint FROM user_api_archive
-             WHERE user_id = :user_id AND season = :season'
+             WHERE user_id = :user_id AND season = :season' . self::scopeClause($tokenScope)
         );
-        $stmt->execute([':user_id' => $userId, ':season' => $season]);
+        $stmt->execute([':user_id' => $userId, ':season' => $season] + self::scopeBinding($tokenScope));
 
         return array_values(array_map(strval(...), $stmt->fetchAll(PDO::FETCH_COLUMN)));
+    }
+
+    private static function scopeClause(?string $tokenScope): string
+    {
+        return $tokenScope === null ? '' : ' AND token_scope = :scope';
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private static function scopeBinding(?string $tokenScope): array
+    {
+        return $tokenScope === null ? [] : [':scope' => $tokenScope];
     }
 
     /**

@@ -415,6 +415,42 @@ final class GproSyncServiceTest extends TestCase
         $this->assertSame(1, $outcome->calls);
     }
 
+    public function testWarmSharedTyreFeedDoesNotStopANewUserFetchingAndArchivingItOnce(): void
+    {
+        [$svc, $fetcher, $db] = $this->scripted();
+        $this->cache->set('tyre_suppliers', ['suppliers' => []], 3600);
+
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+
+        $this->assertContains('TyreSuppliers', $fetcher->calls, 'a warm shared feed is not this user\'s record');
+        $row = $db->query("SELECT user_id, season FROM user_api_archive WHERE endpoint = 'TyreSuppliers'")
+            ->fetch(\PDO::FETCH_ASSOC);
+        $this->assertSame(['user_id' => 7, 'season' => 107], $row);
+
+        $fetcher->calls = [];
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+        $this->assertSame(['office'], $fetcher->calls, 'asked once per season, then archived');
+    }
+
+    public function testRowsArchivedUnderAnotherTokenAreNotTreatedAsCurrent(): void
+    {
+        [$svc, $fetcher] = $this->scripted();
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+        $fetcher->calls = [];
+
+        $swapped = $svc->sync(['id' => 7, 'api_token' => 'another-account'], SyncPlanner::MODE_LOGIN);
+
+        $this->assertSame('synced', $swapped->status);
+        $this->assertSame(
+            self::sorted([
+                'office', 'DriProfile', 'UpdateCar', 'TrackProfile', 'RaceSetup', 'Testing', 'StaffAndFacilities',
+                'TDProfile', 'NegOverview', 'MoneyLevels', 'RaceAnalysis', 'Calendar', 'TyreSuppliers', 'Menu',
+            ]),
+            self::sorted($fetcher->calls),
+            'the previous account\'s rows must not suppress the new account\'s first snapshot',
+        );
+    }
+
     public function testDoneRaceSetupFlipFetchesOnlyTheSetup(): void
     {
         [$svc, $fetcher] = $this->scripted();

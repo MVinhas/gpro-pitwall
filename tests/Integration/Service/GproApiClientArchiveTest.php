@@ -17,6 +17,7 @@ use App\Support\RaceWindow;
 use DateTimeImmutable;
 use PDO;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(GproApiClient::class)]
@@ -188,7 +189,7 @@ final class GproApiClientArchiveTest extends TestCase
         $this->assertSame(0, (int) $this->db->query('SELECT COUNT(*) FROM user_api_archive')->fetchColumn());
     }
 
-    public function testSharedKeysNotArchived(): void
+    public function testSharedKeysAreNotArchivedExceptTheTyreFeedWhichIsFiledUnderTheCaller(): void
     {
         $client = $this->client();
         $client->getTyreSuppliers();
@@ -197,7 +198,219 @@ final class GproApiClientArchiveTest extends TestCase
         $client->getTyreSuppliers();
 
         $this->assertCount(3, $this->fetcher->calls, 'shared keys refetch after a flush');
+        $this->assertSame(
+            [['endpoint' => 'TyreSuppliers', 'user_id' => 1]],
+            $this->db->query('SELECT endpoint, user_id FROM user_api_archive')->fetchAll(PDO::FETCH_ASSOC),
+            'the track list is shared and never archived',
+        );
+    }
+
+    public function testTyreSuppliersAreArchivedForEachUserWhoFetchesThemEvenWhenTheSharedCacheIsWarm(): void
+    {
+        $this->client(1)->getOfficeData();
+        $this->client(1)->getTyreSuppliers();
+        $second = $this->client(2);
+        $second->getTyreSuppliers();
+        $this->assertCount(2, $this->fetcher->calls, 'user 2 read the shared cache');
+        $this->assertNull($this->archive->latest(2, 'TyreSuppliers'), 'a cache read archives nothing');
+
+        $second->getTyreSuppliers(true);
+
+        $this->assertNotNull($this->archive->get(2, self::scope(), 'TyreSuppliers', '', $second->archiveWindow()));
+        $this->assertSame(
+            ['season' => 99, 'race' => 4],
+            $this->db->query("SELECT season, race FROM user_api_archive WHERE endpoint = 'TyreSuppliers' AND user_id = 1")
+                ->fetch(PDO::FETCH_ASSOC),
+            'stamped with the office\'s season',
+        );
+    }
+
+    public function testStandingsUseTheGrouplessPathAndFollowTheWindow(): void
+    {
+        $client = $this->client();
+        $client->getOfficeData();
+
+        $client->getStandings();
+        $client->getStandings();
+
+        $this->assertSame('/gb/backend/api/v2/Standings', $this->fetcher->calls[1]);
+        $this->assertCount(2, $this->fetcher->calls, 'the second read is a cache hit');
+        $this->assertNotNull($this->archive->get(1, self::scope(), 'Standings', '', $client->archiveWindow()));
+        $this->flushCache();
+        $client->getStandings();
+        $this->assertCount(2, $this->fetcher->calls, 'a cold cache is served from the window\'s archive row');
+        $client->getStandings(true);
+        $this->assertCount(3, $this->fetcher->calls);
+    }
+
+    public function testEconomyHistoryAsksForTheTablePageAndArchivesPerPage(): void
+    {
+        $client = $this->client();
+        $client->getOfficeData();
+
+        $client->getEconomyHistory();
+        $client->getEconomyHistory(2);
+
+        $this->assertSame('/gb/backend/api/v2/EconomyHistory?Page=1&show=table', $this->fetcher->calls[1]);
+        $this->assertSame('/gb/backend/api/v2/EconomyHistory?Page=2&show=table', $this->fetcher->calls[2]);
+        $window = $client->archiveWindow();
+        $this->assertNotNull($this->archive->get(1, self::scope(), 'EconomyHistory', 'Page=1&show=table', $window));
+        $this->assertNotNull($this->archive->get(1, self::scope(), 'EconomyHistory', 'Page=2&show=table', $window));
+        $client->getEconomyHistory(2);
+        $this->assertCount(3, $this->fetcher->calls, 'each page has its own cache entry');
+    }
+
+    /**
+     * @return array<string, array{string, string, \Closure(GproApiClient): array<string, mixed>}>
+     */
+    public static function immutableHistory(): array
+    {
+        return [
+            'SFHistory' => [
+                'SFHistory', 'season=106',
+                static fn (GproApiClient $c): array => $c->getSfHistory(106),
+            ],
+            'CCPHistory' => [
+                'CCPHistory', 'season=106',
+                static fn (GproApiClient $c): array => $c->getCcpHistory(106),
+            ],
+            'RaceAnalysis' => [
+                'RaceAnalysis', 'SR=106,12',
+                static fn (GproApiClient $c): array => $c->getRaceAnalysisFor(106, 12),
+            ],
+        ];
+    }
+
+    /** @param \Closure(GproApiClient): array<string, mixed> $call */
+    #[DataProvider('immutableHistory')]
+    public function testImmutableHistoryHitsItsPathAndIsFiledUnderTheEmptyWindow(
+        string $endpoint,
+        string $params,
+        \Closure $call,
+    ): void {
+        $_ENV['GPRO_RACE_DAYS'] = '2,5';
+        $client = $this->client();
+
+        $call($client);
+
+        $this->assertSame('/gb/backend/api/v2/' . $endpoint . '?' . $params, $this->fetcher->calls[0]);
+        $this->assertNotSame('', $client->archiveWindow());
+        $this->assertNotNull($this->archive->get(1, self::scope(), $endpoint, $params, ''));
+        $this->assertSame(
+            1,
+            (int) $this->db->query('SELECT COUNT(*) FROM user_api_archive')->fetchColumn(),
+            'filed under the empty window only',
+        );
+    }
+
+    /** @param \Closure(GproApiClient): array<string, mixed> $call */
+    #[DataProvider('immutableHistory')]
+    public function testImmutableHistoryIsServedFromTheArchiveOfAnyAgeAndAnyWindow(
+        string $endpoint,
+        string $params,
+        \Closure $call,
+    ): void {
+        $_ENV['GPRO_RACE_DAYS'] = '2,5';
+        $client = $this->client();
+        $call($client);
+        $this->flushCache();
+        $this->ageArchive(400 * 86400);
+        $_ENV['GPRO_RACE_DAYS'] = '1,3';
+
+        $call($client);
+        $call($client);
+
+        $this->assertCount(1, $this->fetcher->calls, 'never refetched once archived');
+    }
+
+    /** @param \Closure(GproApiClient): array<string, mixed> $call */
+    #[DataProvider('immutableHistory')]
+    public function testImmutableHistoryReadsTheArchiveEvenWithRaceWindowingDisabled(
+        string $endpoint,
+        string $params,
+        \Closure $call,
+    ): void {
+        $_ENV['GPRO_RACE_DAYS'] = '';
+        $client = $this->client();
+        $call($client);
+        $this->flushCache();
+
+        $call($client);
+
+        $this->assertCount(1, $this->fetcher->calls);
+    }
+
+    /** @param \Closure(GproApiClient): array<string, mixed> $call */
+    #[DataProvider('immutableHistory')]
+    public function testImmutableHistoryIsPerUserAndPerTokenScopeAndForceRefetches(
+        string $endpoint,
+        string $params,
+        \Closure $call,
+    ): void {
+        $client = $this->client();
+        $call($client);
+        $this->flushCache();
+
+        $call($this->client(2));
+        $this->assertCount(2, $this->fetcher->calls, 'user 2 cannot read user 1\'s row');
+
+        $this->flushCache();
+        $client->setToken('token-b', 1);
+        $call($client);
+        $this->assertCount(3, $this->fetcher->calls, 'another token scope misses');
+
+        $call($client);
+        $this->assertCount(3, $this->fetcher->calls);
+        $this->flushCache();
+        $client->setToken(self::TOKEN, 1);
+        $call($client);
+        $this->assertCount(3, $this->fetcher->calls, 'the original scope\'s row is still there');
+    }
+
+    public function testForcedImmutableCallsGoToTheNetworkAndRefreshTheRow(): void
+    {
+        $client = $this->client();
+        $client->getSfHistory(106);
+        $client->getSfHistory(106, true);
+
+        $this->assertCount(2, $this->fetcher->calls);
+    }
+
+    public function testImmutableHistoryWithoutAnArchiveOwnerStillCachesButNeverArchives(): void
+    {
+        $client = $this->client(null);
+        $client->getCcpHistory(106);
+        $client->getCcpHistory(106);
+
+        $this->assertCount(1, $this->fetcher->calls);
         $this->assertSame(0, (int) $this->db->query('SELECT COUNT(*) FROM user_api_archive')->fetchColumn());
+    }
+
+    public function testSeasonHistoryIsStampedWithTheCurrentSeasonNotTheOneItDescribes(): void
+    {
+        $client = $this->client();
+        $client->getOfficeData();
+        $client->getSfHistory(98);
+
+        $row = $this->db->query("SELECT season, race FROM user_api_archive WHERE endpoint = 'SFHistory'")
+            ->fetch(PDO::FETCH_ASSOC);
+        $this->assertSame(['season' => 99, 'race' => 4], $row);
+    }
+
+    public function testHistoricalRaceAnalysisIsStampedWithTheRaceItAnalyses(): void
+    {
+        $client = $this->client();
+        $client->getOfficeData();
+        $client->getRaceAnalysisFor(98, 3);
+
+        $row = $this->db->query("SELECT season, race FROM user_api_archive WHERE endpoint = 'RaceAnalysis'")
+            ->fetch(PDO::FETCH_ASSOC);
+        $this->assertSame(['season' => 98, 'race' => 3], $row);
+    }
+
+    public function testTokenScopeAccessorMatchesTheScopeTheArchiveIsKeyedBy(): void
+    {
+        $this->assertSame(self::scope(), $this->client()->tokenScope());
     }
 
     public function testArchiveIsPerUser(): void

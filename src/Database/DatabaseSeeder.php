@@ -16,7 +16,7 @@ class DatabaseSeeder
      * calls migrate() on every request; this version lets a warm database skip
      * the entire DDL + scan + legacy-encryption pass.
      */
-    private const int SCHEMA_VERSION = 16;
+    private const int SCHEMA_VERSION = 17;
 
     /**
      * @param array<string, string> $statsSchema
@@ -69,6 +69,7 @@ class DatabaseSeeder
         $this->repairPhantomTdFlags();
         $this->createUserRaceHistoryTable();
         $this->createUserApiArchiveTable();
+        $this->createProjectionTables();
         $this->dropDeprecatedTables();
 
 
@@ -692,6 +693,89 @@ class DatabaseSeeder
         $this->db->exec(
             "CREATE INDEX IF NOT EXISTS idx_user_api_archive_history
              ON user_api_archive (user_id, endpoint, params, fetched_at)"
+        );
+    }
+
+    /**
+     * Rows projected out of the raw archive (see user_api_archive): one weekend
+     * state, one standings row and a de-duplicated money ledger per user. They
+     * are derived data, so they can always be rebuilt from the archive;
+     * user_projection_state records which projector version last wrote them.
+     */
+    private function createProjectionTables(): void
+    {
+        $this->db->exec(
+            "CREATE TABLE IF NOT EXISTS user_weekend_state (
+                user_id INTEGER NOT NULL,
+                season INTEGER NOT NULL,
+                race INTEGER NOT NULL,
+                driver_json TEXT,
+                td_json TEXT,
+                staff_json TEXT,
+                facilities_json TEXT,
+                car_json TEXT,
+                cash INTEGER,
+                pts INTEGER,
+                pos INTEGER,
+                source TEXT NOT NULL CHECK (source IN ('snapshot', 'history')),
+                projected_at TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )"
+        );
+        $this->db->exec(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_user_weekend_state_natural
+             ON user_weekend_state (user_id, season, race)"
+        );
+
+        $this->db->exec(
+            "CREATE TABLE IF NOT EXISTS user_standings (
+                user_id INTEGER NOT NULL,
+                season INTEGER NOT NULL,
+                race INTEGER NOT NULL,
+                own_pos INTEGER,
+                own_pts INTEGER,
+                group_label TEXT,
+                managers_json TEXT,
+                projected_at TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )"
+        );
+        $this->db->exec(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_user_standings_natural
+             ON user_standings (user_id, season, race)"
+        );
+
+        $this->db->exec(
+            "CREATE TABLE IF NOT EXISTS user_economy_ledger (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                season INTEGER NOT NULL,
+                race INTEGER NOT NULL,
+                source TEXT NOT NULL CHECK (source IN ('race', 'economy')),
+                occurred_at TEXT,
+                description TEXT NOT NULL DEFAULT '',
+                amount INTEGER NOT NULL,
+                balance_after INTEGER,
+                fingerprint TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )"
+        );
+        $this->db->exec(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_user_economy_ledger_fingerprint
+             ON user_economy_ledger (user_id, fingerprint)"
+        );
+        $this->db->exec(
+            "CREATE INDEX IF NOT EXISTS idx_user_economy_ledger_race
+             ON user_economy_ledger (user_id, season, race)"
+        );
+
+        $this->db->exec(
+            "CREATE TABLE IF NOT EXISTS user_projection_state (
+                user_id INTEGER PRIMARY KEY,
+                version INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )"
         );
     }
 

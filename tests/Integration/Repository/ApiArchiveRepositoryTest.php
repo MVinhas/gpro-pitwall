@@ -237,4 +237,29 @@ final class ApiArchiveRepositoryTest extends TestCase
         $this->assertNull($this->repo->latestFetchedAt(1, 'Calendar'));
         $this->assertNull($this->repo->latestFetchedAt(2, 'RaceAnalysis'));
     }
+
+    public function testPlannerQueriesIgnoreAnotherTokenScopeWhenOneIsPassed(): void
+    {
+        $this->repo->put(1, 'sOld', 'RaceAnalysis', '', 'w1', 107, 5, ['who' => 'old']);
+        $this->repo->put(1, 'sOld', 'DriProfile', 'id=9', 'w1', 107, 5, ['who' => 'old']);
+        $this->db->exec("UPDATE user_api_archive SET fetched_at = '2026-09-09 10:00:00'");
+
+        $this->assertSame(['who' => 'old'], $this->repo->latest(1, 'RaceAnalysis'));
+        $this->assertNull($this->repo->latest(1, 'RaceAnalysis', '', 'sNew'));
+        $this->assertSame(['who' => 'old'], $this->repo->latest(1, 'RaceAnalysis', '', 'sOld'));
+
+        $this->assertSame('2026-09-09 10:00:00', $this->repo->latestFetchedAt(1, 'RaceAnalysis'));
+        $this->assertNull($this->repo->latestFetchedAt(1, 'RaceAnalysis', '', 'sNew'));
+
+        $this->assertSame(['id=9'], $this->repo->paramsFor(1, 'DriProfile'));
+        $this->assertSame([], $this->repo->paramsFor(1, 'DriProfile', 'sNew'));
+
+        $this->assertNotSame([], $this->repo->endpointsForRace(1, 107, 5));
+        $this->assertSame([], $this->repo->endpointsForRace(1, 107, 5, 'sNew'));
+        $this->assertCount(2, $this->repo->endpointsForRace(1, 107, 5, 'sOld'));
+
+        $this->assertNotSame([], $this->repo->endpointsForSeason(1, 107));
+        $this->assertSame([], $this->repo->endpointsForSeason(1, 107, 'sNew'));
+        $this->assertCount(2, $this->repo->endpointsForSeason(1, 107, 'sOld'));
+    }
 }
