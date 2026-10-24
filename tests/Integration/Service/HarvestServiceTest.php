@@ -35,6 +35,7 @@ use App\Sync\HarvestResult;
 use App\Sync\SyncContextFactory;
 use App\Sync\SyncPlanner;
 use App\Tests\Support\ArrayCache;
+use App\Tests\Support\TtlRecordingCache;
 use App\Tests\Support\ScriptedGproFetcher;
 use App\Telemetry\RaceHistoryMapper;
 use App\Telemetry\RaceTelemetryMapper;
@@ -52,7 +53,8 @@ final class HarvestServiceTest extends TestCase
     private string $dbPath;
     private string $throttleFile;
     private PDO $db;
-    private ArrayCache $cache;
+    private ArrayCache $store;
+    private TtlRecordingCache $cache;
     private ScriptedGproFetcher $gpro;
     private ApiArchiveRepository $archive;
     private GproApiClient $client;
@@ -88,7 +90,8 @@ final class HarvestServiceTest extends TestCase
         ))->migrate();
         $this->db->exec("INSERT INTO users (id, username, email_encrypted, email_hash) VALUES (1, 'u1', 'e1', 'h1')");
 
-        $this->cache = new ArrayCache();
+        $this->store = new ArrayCache();
+        $this->cache = new TtlRecordingCache($this->store);
         $this->gpro = new ScriptedGproFetcher();
         $this->archive = new ApiArchiveRepository($this->db, new ArchiveSanitizer());
         $this->now = new \DateTimeImmutable('2026-10-23 12:00:00', new \DateTimeZone('Europe/Paris'));
@@ -473,7 +476,7 @@ final class HarvestServiceTest extends TestCase
         $this->assertSame(5, $this->rows('race_telemetry'));
     }
 
-    public function testBackfillBudgetIsPerUserAndPerWindow(): void
+    public function testBackfillBudgetOfOneWindowIsSpentForThatUser(): void
     {
         $this->userWithOnlyBackfillLeft();
         $this->client->setToken('tok', 1);
@@ -555,5 +558,104 @@ final class HarvestServiceTest extends TestCase
         $this->cache->delete($this->scopeKey('api_requests_remaining'));
 
         $this->assertFalse($harvest->isDue(self::USER));
+    }
+
+    public function testFetchesThatFailAreRememberedForAnHourSoLaterEntriesAreNotStarved(): void
+    {
+        $this->userAtANewRace();
+        $this->gpro->failing = ['RaceAnalysis', 'Standings', 'EconomyHistory'];
+        $harvest = $this->harvest();
+
+        $first = $harvest->runSlice(self::USER);
+
+        $this->assertSame(3, $first->calls);
+        $this->assertSame('more', $first->status);
+        $this->settle();
+        $this->gpro->requests = [];
+
+        $second = $harvest->runSlice(self::USER);
+
+        $this->assertSame(['SFHistory?season=106', 'CCPHistory?season=106'], $this->gpro->requests);
+        $this->assertSame(2, $second->calls);
+        $this->settle();
+        $this->gpro->requests = [];
+
+        $third = $harvest->runSlice(self::USER);
+
+        $this->assertSame('done', $third->status);
+        $this->assertSame(0, $third->calls);
+        $this->assertFalse($harvest->isDue(self::USER));
+        $failedKeys = array_filter(array_keys($this->store->store), static fn (string $k): bool => str_contains($k, 'harvest_failed'));
+        $this->assertCount(3, $failedKeys);
+        foreach ($failedKeys as $key) {
+            $this->assertSame(3600, $this->cache->ttls[$key]);
+        }
+
+        // An hour on, the cache has forgotten them: they are planned again.
+        foreach ($failedKeys as $key) {
+            $this->cache->delete($key);
+        }
+        $this->assertTrue($harvest->isDue(self::USER));
+        $this->gpro->failing = [];
+
+        $fourth = $harvest->runSlice(self::USER);
+
+        // The analysis of a race that is over counts as asked once it was, so only the other two return.
+        $this->assertSame(2, $fourth->calls);
+        $this->assertSame(['Standings', 'EconomyHistory?Page=1&show=table'], $this->gpro->requests);
+    }
+
+    public function testAFailedBackfillIsNotRetriedStraightAway(): void
+    {
+        $this->userWithOnlyBackfillLeft();
+        $this->gpro->failing = ['RaceAnalysis'];
+        $harvest = $this->harvest();
+
+        $first = $harvest->runSlice(self::USER);
+        $this->gpro->requests = [];
+        $second = $harvest->runSlice(self::USER);
+
+        $this->assertSame(3, $first->calls);
+        $this->assertSame(2, $second->calls);
+        $this->assertNotContains('RaceAnalysis?SR=107,1', $this->gpro->requests);
+        $this->assertSame(['RaceAnalysis?SR=107,5', 'RaceAnalysis?SR=107,6'], $this->gpro->requests);
+    }
+
+    public function testACachedOfficeForAnotherRaceThanTheSyncOfficeMeansProjectionOnly(): void
+    {
+        $this->userAtANewRace();
+        $key = $this->scopeKey('office_data');
+        $office = $this->store->get($key);
+        $this->assertIsArray($office);
+        $office['raceNb'] = 15;
+        $this->store->set($key, $office);
+        $harvest = $this->harvest();
+
+        $result = $harvest->runSlice(self::USER);
+
+        $this->assertSame(0, $result->calls);
+        $this->assertSame([], $this->gpro->requests);
+        $this->assertGreaterThanOrEqual(1, $result->projected);
+        $this->settle();
+        $this->assertFalse($harvest->isDue(self::USER));
+    }
+
+    public function testTheBackfillAllowanceStartsAgainInTheNextRaceWindow(): void
+    {
+        $this->userWithOnlyBackfillLeft();
+        for ($i = 0; $i < 5; $i++) {
+            $this->client->addBackfill();
+        }
+        $harvest = $this->harvest();
+        $this->assertSame(0, $harvest->runSlice(self::USER)->calls);
+
+        $this->now = new \DateTimeImmutable('2026-10-27 12:00:00', new \DateTimeZone('Europe/Paris'));
+        $this->settle();
+
+        $this->assertSame(0, $this->client->backfillCount());
+        $result = $harvest->runSlice(self::USER);
+
+        $this->assertSame(3, $result->calls);
+        $this->assertSame('RaceAnalysis?SR=107,1', $this->gpro->requests[0]);
     }
 }

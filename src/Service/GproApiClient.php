@@ -846,6 +846,25 @@ final class GproApiClient
     }
 
     /**
+     * Remembers that a harvest fetch failed, so the next slices plan other work
+     * instead of retrying it at once; it is tried again after $ttl seconds.
+     */
+    public function markHarvestFailed(string $endpoint, string $params, int $ttl = 3600): void
+    {
+        $this->cache->set($this->harvestFailedKey($endpoint, $params), time(), $ttl);
+    }
+
+    public function hasHarvestFailed(string $endpoint, string $params): bool
+    {
+        return $this->cache->has($this->harvestFailedKey($endpoint, $params));
+    }
+
+    private function harvestFailedKey(string $endpoint, string $params): string
+    {
+        return $this->userKey('harvest_failed:w' . $this->archiveWindow() . ':' . $endpoint . ':' . $params);
+    }
+
+    /**
      * Files the office a sync is about to plan against under params 'sync', so
      * the next sync detects changes against it and not against a page-level
      * office fetch (which archives under ''). Read-through only ever asks for

@@ -31,6 +31,9 @@ final class HarvestService
     /** Deadman ceiling, like the sync lock: only matters if a process dies mid-slice. */
     private const int LOCK_TTL_SECONDS = 60;
 
+    /** How long a failed fetch is left alone before it is planned again. */
+    private const int FAILED_RETRY_SECONDS = 3600;
+
     public function __construct(
         private readonly GproApiClient $apiClient,
         private readonly CacheInterface $cache,
@@ -143,14 +146,21 @@ final class HarvestService
      */
     private function plannedWork(int $userId): array
     {
+        // The remaining budget is the last one observed (up to an hour old) and
+        // the backfill counter lives in a cache that can be flushed mid-window,
+        // so a slice can overshoot the planner's floors by at most its own
+        // MAX_CALLS calls; the >= 60 / 50 floors and the `SR=` exclusion bound it.
         $remaining = $this->apiClient->lastKnownRemaining();
-        if ($remaining === null || $this->apiClient->getCachedOfficeData() === []) {
+        $cachedOffice = $this->apiClient->getCachedOfficeData();
+        if ($remaining === null || $cachedOffice === []) {
             return [];
         }
 
         $scope = $this->apiClient->tokenScope();
         $office = $this->contexts->previousOffice($userId, $scope);
-        if ($office === null || $office === []) {
+        if ($office === null || $office === [] || !self::sameRace($office, $cachedOffice)) {
+            // New rows are stamped from the cached office: if it is not the race
+            // the archived sync office describes, they would land on the wrong one.
             return [];
         }
 
@@ -165,7 +175,27 @@ final class HarvestService
             $this->apiClient->backfillCount(),
         );
 
-        return $this->planner->plan($ctx)->phase2;
+        return array_values(array_filter(
+            $this->planner->plan($ctx)->phase2,
+            fn (array $entry): bool => !$this->apiClient->hasHarvestFailed($entry['endpoint'], $entry['params']),
+        ));
+    }
+
+    /**
+     * @param array<string, mixed> $a
+     * @param array<string, mixed> $b
+     */
+    private static function sameRace(array $a, array $b): bool
+    {
+        foreach (['seasonNb', 'raceNb'] as $key) {
+            $x = $a[$key] ?? null;
+            $y = $b[$key] ?? null;
+            if (!is_scalar($x) || !is_scalar($y) || (string) $x !== (string) $y) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -205,7 +235,7 @@ final class HarvestService
                     continue;
                 }
                 $key = (int) $season . ',' . (int) $race;
-                if (!isset($known[$key])) {
+                if (!isset($known[$key]) && !$this->apiClient->hasHarvestFailed(Endpoint::ANALYSIS, 'SR=' . $key)) {
                     $pending[$key] = [(int) $season, (int) $race];
                 }
             }
@@ -229,6 +259,7 @@ final class HarvestService
             $payload = $this->fetcher->fetch($endpoint, $params);
         } catch (Throwable $e) {
             error_log('[Harvest] user ' . $userId . ': ' . $endpoint . ' failed: ' . $e::class);
+            $this->apiClient->markHarvestFailed($endpoint, $params, self::FAILED_RETRY_SECONDS);
 
             return false;
         } finally {
@@ -247,6 +278,7 @@ final class HarvestService
                 $this->apiClient->markAnalysisAttempt();
             }
             error_log('[Harvest] user ' . $userId . ': ' . $endpoint . ' failed: ' . UnexpectedValueException::class);
+            $this->apiClient->markHarvestFailed($endpoint, $params, self::FAILED_RETRY_SECONDS);
 
             return false;
         }
