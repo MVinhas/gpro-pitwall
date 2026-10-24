@@ -602,6 +602,88 @@ final class ArchiveProjectorTest extends TestCase
         $this->assertNull($this->json($row['driver_json'])['age']);
     }
 
+    /** The row the pre-harvest sync wrote for a race, with real TD, staff and driver age. */
+    private function syncWrittenHistory(int $race, string $tdName = 'Tom Director', int $age = 27): void
+    {
+        (new RaceHistoryService(
+            new RaceHistoryRepository($this->db),
+            new RaceHistoryMapper(),
+            new TrackRepository($this->db),
+        ))->archive(
+            self::USER,
+            $this->analysis($race),
+            ['tdName' => $tdName] + $this->tdProfile(),
+            $this->staff(1),
+            ['age' => $age],
+        );
+    }
+
+    public function testABackfilledAnalysisWithoutASnapshotKeepsTheStoredTdStaffAndDriverAge(): void
+    {
+        $this->syncWrittenHistory(3);
+        $before = $this->row('SELECT td_json, staff_json, driver_json FROM user_race_history');
+        $this->assertNotNull($before);
+        $this->put('RaceAnalysis', $this->analysis(3), 3, 'SR=107,3');
+
+        $this->projector->projectRace(self::USER, self::SEASON, 3);
+
+        $after = $this->row('SELECT td_json, staff_json, driver_json FROM user_race_history');
+        $this->assertNotNull($after);
+        $this->assertSame(1, $this->rows('user_race_history'));
+        $this->assertSame($before['td_json'], $after['td_json']);
+        $this->assertSame('Tom Director', $this->json($after['td_json'])['name']);
+        $this->assertSame($before['staff_json'], $after['staff_json']);
+        $this->assertSame(27, $this->json($after['driver_json'])['age']);
+    }
+
+    public function testThatRacesOwnSnapshotStillOverwritesTheStoredHistory(): void
+    {
+        $this->syncWrittenHistory(3, 'Old Director', 31);
+        $this->seedSnapshot(3);
+        $this->put('RaceAnalysis', $this->analysis(3), 3);
+
+        $this->projector->projectRace(self::USER, self::SEASON, 3);
+
+        $row = $this->row('SELECT td_json, staff_json, driver_json FROM user_race_history');
+        $this->assertNotNull($row);
+        $this->assertSame('Tom Director', $this->json($row['td_json'])['name']);
+        $this->assertSame(27, $this->json($row['driver_json'])['age']);
+        $facilities = $this->json($row['staff_json'])['facilities'];
+        $lab = array_values(array_filter($facilities, static fn (array $f): bool => $f['label'] === 'Lab'));
+        $this->assertSame(9, $lab[0]['value']);
+    }
+
+    public function testAnOfficeSayingNoTdOrDriverClearsThoseBlocksAndKeepsTheStaff(): void
+    {
+        $this->syncWrittenHistory(3);
+        $before = $this->row('SELECT staff_json FROM user_race_history');
+        $this->assertNotNull($before);
+        $this->put('office', $this->office(3, ['tdId' => '', 'driId' => '0']), 3);
+        $this->put('RaceAnalysis', $this->analysis(3), 3);
+
+        $this->projector->projectRace(self::USER, self::SEASON, 3);
+
+        $row = $this->row('SELECT td_json, staff_json, driver_json FROM user_race_history');
+        $this->assertNotNull($row);
+        $this->assertSame('[]', $row['td_json']);
+        $this->assertNull($this->json($row['driver_json'])['age']);
+        $this->assertSame($before['staff_json'], $row['staff_json']);
+    }
+
+    public function testAProfileOfAnotherDriverKeepsTheStoredDriverAge(): void
+    {
+        $this->syncWrittenHistory(3);
+        $this->put('office', $this->office(3, ['driId' => '999']), 3);
+        $this->put('DriProfile', ['age' => 40] + $this->driProfile(), 3, 'id=999');
+        $this->put('RaceAnalysis', $this->analysis(3), 3);
+
+        $this->projector->projectRace(self::USER, self::SEASON, 3);
+
+        $row = $this->row('SELECT driver_json FROM user_race_history');
+        $this->assertNotNull($row);
+        $this->assertSame(27, $this->json($row['driver_json'])['age']);
+    }
+
     public function testBackfilledAnalysisProjectsItsOwnRaceWhenNoLatestRowExists(): void
     {
         $this->put('RaceAnalysis', $this->analysis(3), 3, 'SR=107,3');

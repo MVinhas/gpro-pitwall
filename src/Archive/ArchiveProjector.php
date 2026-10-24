@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Archive;
 
 use App\Repository\ProjectionStateRepository;
-use App\Service\GproSyncService;
 use App\Service\RaceHistoryService;
 use PDO;
 use Throwable;
@@ -83,9 +82,14 @@ final class ArchiveProjector
         }
 
         $snapshot = $this->snapshots->read($userId, $season, $race);
-        $driver = GproSyncService::raceWasRunByCurrentDriver($analysis, $snapshot->office) ? $snapshot->driver : [];
 
-        $this->history->archive($userId, $analysis, $snapshot->td, $snapshot->staff, $driver);
+        $this->history->archive(
+            $userId,
+            $analysis,
+            $snapshot->tdThatRaced(),
+            $snapshot->staffThatRaced(),
+            $snapshot->driverThatRaced($analysis),
+        );
     }
 
     /**

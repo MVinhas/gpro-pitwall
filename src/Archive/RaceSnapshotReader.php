@@ -38,18 +38,37 @@ final class RaceSnapshotReader
         $hasDriver = $this->hasDriver($office, $driverRaw);
         $driver = $hasDriver ? $driverRaw : [];
         $td = $this->hasTd($office, $tdRaw) ? $tdRaw : [];
+        $hasFacilities = $this->hasFacilities($staff);
 
         return new RaceSnapshot(
             $office,
             $driver,
             $td,
-            $this->hasFacilities($staff) ? $staff : [],
+            $hasFacilities ? $staff : [],
             $car,
             $menu,
             $standings,
             $hasOffice || $driverRaw !== [] || $tdRaw !== [] || $staff !== [] || $car !== [],
             $hasDriver,
+            $this->source($office, 'tdId', $td !== []),
+            $hasFacilities ? BlockSource::Present : BlockSource::Absent,
+            $this->source($office, 'driId', $driver !== []),
         );
+    }
+
+    /**
+     * None only when the office stamped for the race says so: a placeholder
+     * profile on its own, or no profile at all, proves nothing.
+     *
+     * @param array<string, mixed> $office
+     */
+    private function source(array $office, string $idKey, bool $usable): BlockSource
+    {
+        if ($office !== [] && $this->idOf($office[$idKey] ?? null) === null) {
+            return BlockSource::None;
+        }
+
+        return $usable ? BlockSource::Present : BlockSource::Absent;
     }
 
     /**

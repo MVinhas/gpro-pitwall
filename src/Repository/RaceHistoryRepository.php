@@ -113,12 +113,15 @@ class RaceHistoryRepository
     }
 
     /**
-     * Insert one race, or replace every mapped column of the one already stored
+     * Insert one race, or replace the mapped columns of the one already stored
      * for it (its id is kept), so a re-projection corrects an earlier row.
+     * Preserved columns keep the stored value of an existing row; a new row
+     * still takes them from $row.
      *
      * @param array<string, mixed> $row
+     * @param list<string> $preserveColumns
      */
-    public function upsert(array $row): void
+    public function upsert(array $row, array $preserveColumns = []): void
     {
         $columns = implode(', ', self::COLUMNS);
         $placeholders = implode(', ', array_map(
@@ -127,7 +130,7 @@ class RaceHistoryRepository
         ));
         $updates = implode(', ', array_map(
             static fn (string $c): string => "{$c} = excluded.{$c}",
-            array_values(array_diff(self::COLUMNS, ['user_id', 'season', 'race']))
+            array_values(array_diff(self::COLUMNS, ['user_id', 'season', 'race'], $preserveColumns))
         ));
 
         $stmt = $this->pdo->prepare(
