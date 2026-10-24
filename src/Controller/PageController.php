@@ -22,6 +22,7 @@ use App\Service\TrainingService;
 use App\Service\AuthService;
 use App\Service\GproApiClient;
 use App\Service\GproSyncService;
+use App\Service\HarvestService;
 use App\Service\GproDataMapper;
 use App\Service\PhaMatchService;
 use App\Service\RaceWeatherService;
@@ -77,6 +78,7 @@ class PageController
         private readonly GproDataMapper $mapper,
         private readonly RecruitmentService $recruitmentService,
         private readonly GproSyncService $syncService,
+        private readonly HarvestService $harvest,
         private readonly Environment $twig,
         private array $config
     ) {
@@ -261,6 +263,13 @@ class PageController
             }
             $viewData['idle_sync'] = true;
             $viewData['idle_follow_url'] = DeferredRender::followUpUrl($request->getPath(), $request->query());
+        }
+
+        // A page still owed its login sync starts the harvest only from the sync's
+        // answer; every other full page (not a skeleton, fragment or follow-up,
+        // whose script is discarded) starts it itself.
+        if (!$deferred && !$idleSync && !$wait && (string) $request->get('fragment', '') === '') {
+            $viewData['harvest_due'] = $this->harvest->isDueSafely($user);
         }
 
         if ($freshSync) {

@@ -47,8 +47,9 @@ final readonly class RaceTelemetryService
             return $this->repository->insertIfNew($row);
         } catch (Throwable $e) {
             // Telemetry is observational. A malformed payload must never
-            // surface to the manager whose sync happened to carry it.
-            error_log('[RaceTelemetry] ingest failed: ' . $e::class . ': ' . $e->getMessage());
+            // surface to the manager whose sync happened to carry it, and an
+            // exception message can quote it: log the class only.
+            error_log('[RaceTelemetry] ingest failed: ' . $e::class);
             return false;
         }
     }

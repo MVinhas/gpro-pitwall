@@ -72,6 +72,34 @@ final class RaceHistoryRepositoryTest extends TestCase
         ], $overrides);
     }
 
+    public function testUpsertInsertsThenReplacesEveryMappedColumnKeepingTheId(): void
+    {
+        $this->repo->upsert($this->row());
+        $first = $this->repo->find(1, 107, 13);
+        $this->assertNotNull($first);
+
+        $this->repo->upsert($this->row(['staff_json' => '{"facilities":[{"label":"Lab","value":9}]}', 'final_pos' => 1]));
+        $second = $this->repo->find(1, 107, 13);
+
+        $this->assertNotNull($second);
+        $this->assertSame(1, $this->repo->countFor(1));
+        $this->assertSame($first['id'], $second['id']);
+        $this->assertSame(1, (int) $second['final_pos']);
+        $this->assertSame('Lab', $second['staff']['facilities'][0]['label']);
+    }
+
+    public function testUpsertOverwritesARowWrittenByInsertIfNew(): void
+    {
+        $this->repo->insertIfNew($this->row(['staff_json' => '[]']));
+
+        $this->repo->upsert($this->row(['staff_json' => '{"facilities":[1]}']));
+
+        $found = $this->repo->find(1, 107, 13);
+        $this->assertNotNull($found);
+        $this->assertSame(['facilities' => [1]], $found['staff']);
+        $this->assertSame(1, $this->repo->countFor(1));
+    }
+
     public function testStoresOneRaceAndIgnoresARepeatOfTheSameOne(): void
     {
         $this->assertTrue($this->repo->insertIfNew($this->row()));

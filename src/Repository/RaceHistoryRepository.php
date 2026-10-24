@@ -15,7 +15,7 @@ use PDO;
  */
 class RaceHistoryRepository
 {
-    /** Columns written by insertIfNew(), in a fixed order. */
+    /** Columns written by insertIfNew() and upsert(), in a fixed order. */
     private const array COLUMNS = [
         'user_id', 'season', 'race', 'track_id', 'track_name', 'group_label', 'level',
         'laps_total', 'laps_completed', 'grid_pos', 'final_pos', 'points',
@@ -110,6 +110,69 @@ class RaceHistoryRepository
         $stmt->execute($params);
 
         return $stmt->rowCount() > 0;
+    }
+
+    /**
+     * Insert one race, or replace the mapped columns of the one already stored
+     * for it (its id is kept), so a re-projection corrects an earlier row.
+     * Preserved columns keep the stored value of an existing row; a new row
+     * still takes them from $row.
+     *
+     * @param array<string, mixed> $row
+     * @param list<string> $preserveColumns
+     */
+    public function upsert(array $row, array $preserveColumns = []): void
+    {
+        $columns = implode(', ', self::COLUMNS);
+        $placeholders = implode(', ', array_map(
+            static fn (string $c): string => ':' . $c,
+            self::COLUMNS
+        ));
+        $updates = implode(', ', array_map(
+            static fn (string $c): string => "{$c} = excluded.{$c}",
+            array_values(array_diff(self::COLUMNS, ['user_id', 'season', 'race'], $preserveColumns))
+        ));
+
+        $stmt = $this->pdo->prepare(
+            "INSERT INTO user_race_history ({$columns}) VALUES ({$placeholders})
+             ON CONFLICT(user_id, season, race) DO UPDATE SET {$updates}"
+        );
+
+        $params = [];
+        foreach (self::COLUMNS as $column) {
+            $params[$column] = $row[$column] ?? null;
+        }
+
+        $stmt->execute($params);
+    }
+
+    /** Whether this manager already has the race stored. */
+    public function exists(int $userId, int $season, int $race): bool
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT 1 FROM user_race_history WHERE user_id = :u AND season = :s AND race = :r'
+        );
+        $stmt->execute(['u' => $userId, 's' => $season, 'r' => $race]);
+
+        return $stmt->fetchColumn() !== false;
+    }
+
+    /**
+     * Every race this manager has stored, unordered.
+     *
+     * @return list<array{season: int, race: int}>
+     */
+    public function storedRaces(int $userId): array
+    {
+        $stmt = $this->pdo->prepare('SELECT season, race FROM user_race_history WHERE user_id = :u');
+        $stmt->execute(['u' => $userId]);
+
+        $races = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $races[] = ['season' => (int) $row['season'], 'race' => (int) $row['race']];
+        }
+
+        return $races;
     }
 
     /** How many races this manager has archived. */

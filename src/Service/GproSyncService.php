@@ -4,16 +4,13 @@ declare(strict_types=1);
 
 namespace App\Service;
 
-use App\Archive\SupporterGate;
 use App\Cache\CacheInterface;
-use App\Repository\ApiArchiveRepository;
 use App\Repository\UserRepository;
-use App\Sync\ArchiveEndpoints;
 use App\Sync\Endpoint;
-use App\Sync\SyncContext;
+use App\Sync\EndpointFetcher;
+use App\Sync\SyncContextFactory;
 use App\Sync\SyncOutcome;
 use App\Sync\SyncPlanner;
-use LogicException;
 use Throwable;
 use UnexpectedValueException;
 
@@ -33,10 +30,8 @@ final class GproSyncService
         private readonly GproApiClient $apiClient,
         private readonly UserRepository $users,
         private readonly CacheInterface $cache,
-        private readonly RaceTelemetryService $telemetry,
-        private readonly RaceHistoryService $history,
-        private readonly BaselineAutoFillService $baselineAutoFill,
-        private readonly ApiArchiveRepository $archive,
+        private readonly SyncContextFactory $contexts,
+        private readonly EndpointFetcher $fetcher,
         private readonly SyncPlanner $planner,
         private readonly int $safetyMargin = 20,
     ) {
@@ -101,15 +96,8 @@ final class GproSyncService
         $calls = 0;
         try {
             // Read before the fresh fetch: that fetch archives a new office row.
-            // Compared against the office the last SYNC planned against: page
-            // renders archive offices too and would swallow done-flag flips.
-            // The plain row is only the fallback for the first sync after the
-            // 'sync' rows were introduced.
-            $previousOffice = $this->safely(
-                fn (): ?array => $this->archive->latest($userId, 'office', 'sync')
-                    ?? $this->archive->latest($userId, 'office'),
-                null,
-            );
+            $scope = $this->apiClient->tokenScope();
+            $previousOffice = $this->contexts->previousOffice($userId, $scope);
 
             $calls++;
             try {
@@ -132,36 +120,22 @@ final class GproSyncService
                 return $this->outcome('deferred_low_budget', $fetched, $calls, $started);
             }
 
-            $ctx = $this->context($userId, $previousOffice, $office, $remaining, $mode);
+            $ctx = $this->contexts->build($userId, $scope, $previousOffice, $office, $remaining, $mode);
             $plan = $this->planner->plan($ctx);
 
-            /** @var array<string, array<string, mixed>> $results */
-            $results = [];
-            /** @var list<string> $attempted */
-            $attempted = [];
             $names = [];
             /** @var list<string> $unpaid endpoints the plan wanted but could not get this sync */
             $unpaid = $plan->dropped;
             foreach ($plan->phase1 as $entry) {
                 $endpoint = $entry['endpoint'];
                 $names[] = $endpoint;
-                $attempted[] = $endpoint;
                 $calls++;
                 try {
-                    $payload = $this->fetch($endpoint);
-                    // Both getters swallow their own failure into [].
-                    if ($payload === [] && $endpoint === Endpoint::ANALYSIS) {
-                        // A thrown RaceAnalysis is still an answer to "has this race been asked
-                        // for": remember it, and do not hold the sync row back for it.
-                        $this->apiClient->markAnalysisAttempt();
-                        error_log('[GproSync] user ' . $userId . ': ' . $endpoint . ' failed: '
-                            . UnexpectedValueException::class);
-                        continue;
-                    }
+                    $payload = $this->fetcher->fetch($endpoint);
+                    // The TD getter swallows its own failure into [].
                     if ($payload === [] && $endpoint === Endpoint::TD) {
                         throw new UnexpectedValueException('empty payload');
                     }
-                    $results[$endpoint] = $payload;
                     $fetched[] = $endpoint;
                 } catch (Throwable $e) {
                     error_log('[GproSync] user ' . $userId . ': ' . $endpoint . ' failed: ' . $e::class);
@@ -176,13 +150,6 @@ final class GproSyncService
                 implode(', ', $names),
                 intdiv((int) (hrtime(true) - $started), 1_000_000),
             ));
-
-            if (
-                isset($results[Endpoint::ANALYSIS])
-                && !SupporterGate::isUnavailable('RaceAnalysis', $results[Endpoint::ANALYSIS])
-            ) {
-                $this->recordRace($userId, $office, $results, $attempted);
-            }
 
             // The baseline the next sync diffs against advances unless an unpaid endpoint
             // already has a row for this race: healing only sees endpoints with none, so
@@ -218,233 +185,5 @@ final class GproSyncService
     private function outcome(string $status, array $fetched, int $calls, int $started): SyncOutcome
     {
         return new SyncOutcome($status, $fetched, $calls, intdiv((int) (hrtime(true) - $started), 1_000_000));
-    }
-
-    /**
-     * @param array<string, mixed>|null $previousOffice
-     * @param array<string, mixed> $office
-     */
-    private function context(
-        int $userId,
-        ?array $previousOffice,
-        array $office,
-        int $remaining,
-        string $mode,
-    ): SyncContext {
-        $season = self::intOrNull($office['seasonNb'] ?? null);
-        $race = self::intOrNull($office['raceNb'] ?? null);
-
-        $thisRace = [];
-        $thisSeason = [];
-        if ($season !== null) {
-            $thisSeason = ArchiveEndpoints::toPlanner(
-                $this->safely(fn (): array => $this->archive->endpointsForSeason($userId, $season), []),
-            );
-        }
-        // Shared across users, so it is never archived: the warm cache is its record.
-        if ($this->apiClient->hasCachedTyreSuppliers()) {
-            $thisSeason[] = Endpoint::TYRES;
-        }
-        if ($season !== null && $race !== null) {
-            $thisRace = array_values(array_diff(
-                ArchiveEndpoints::toPlanner(
-                    $this->safely(fn (): array => $this->archive->endpointsForRace($userId, $season, $race), []),
-                ),
-                [Endpoint::ANALYSIS],
-            ));
-            if ($this->analysisArchivedForPreviousRace($userId, $season, $race)) {
-                $thisRace[] = Endpoint::ANALYSIS;
-            }
-        }
-
-        return new SyncContext($previousOffice, $office, $remaining, $mode, $thisRace, $thisSeason, [], 0);
-    }
-
-    /**
-     * RaceAnalysis is stamped with the race it analyses, which is the one just
-     * run: the race before the office's (the office names the NEXT race).
-     */
-    private function analysisArchivedForPreviousRace(int $userId, int $season, int $race): bool
-    {
-        if ($this->analysisAskedAfterPreviousRaceEnded($userId)) {
-            return true;
-        }
-
-        $latest = $this->safely(fn (): ?array => $this->archive->latest($userId, 'RaceAnalysis'), null);
-        $analysedSeason = self::intOrNull($latest['selSeasonNb'] ?? null);
-        if ($analysedSeason === null) {
-            return false;
-        }
-        if ($race > 1) {
-            return $analysedSeason === $season && self::intOrNull($latest['selRaceNb'] ?? null) === $race - 1;
-        }
-
-        return $analysedSeason === $season - 1;
-    }
-
-    /**
-     * Whatever GPRO answered once the race was over (an analysis, a NonSup or
-     * NA payload, or an error) is as good as it gets until the next race, so
-     * asking again would only spend a call: a manager who skipped the race, or
-     * a non-supporter, would otherwise pay one on every login.
-     */
-    private function analysisAskedAfterPreviousRaceEnded(int $userId): bool
-    {
-        $threshold = $this->apiClient->postRaceAt();
-        if ($threshold === null) {
-            return false;
-        }
-        if ($this->apiClient->hasAnalysisAttempt()) {
-            return true;
-        }
-        $fetchedAt = $this->safely(fn (): ?string => $this->archive->latestFetchedAt($userId, 'RaceAnalysis'), null);
-
-        return $fetchedAt !== null && (int) strtotime($fetchedAt . ' UTC') >= $threshold->getTimestamp();
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function fetch(string $endpoint): array
-    {
-        return match ($endpoint) {
-            Endpoint::DRIVER => $this->apiClient->getMyPilotDetails(true),
-            Endpoint::CAR => $this->apiClient->getCarData(true),
-            Endpoint::TRACK => $this->apiClient->getNextRaceProfile(true),
-            Endpoint::SETUP => $this->apiClient->getRaceSetup(true),
-            Endpoint::TESTING => $this->apiClient->getTesting(true),
-            Endpoint::STAFF => $this->apiClient->getStaffAndFacilities(true),
-            Endpoint::TD => $this->apiClient->getTechnicalDirector(true),
-            Endpoint::SPONSORS => $this->apiClient->getSponsorNegotiations(true),
-            Endpoint::MONEY => $this->apiClient->getMoneyLevels(true),
-            Endpoint::ANALYSIS => $this->apiClient->getRaceAnalysis(true),
-            Endpoint::CALENDAR => $this->apiClient->getCalendar(true),
-            Endpoint::MENU => $this->apiClient->getMenu(true),
-            Endpoint::TYRES => $this->apiClient->getTyreSuppliers(),
-            default => throw new LogicException('Not a phase 1 endpoint: ' . $endpoint),
-        };
-    }
-
-    /**
-     * @param array<string, mixed> $office
-     * @param array<string, array<string, mixed>> $results
-     * @param list<string> $attempted
-     */
-    private function recordRace(int $userId, array $office, array $results, array $attempted): void
-    {
-        $analysis = $results[Endpoint::ANALYSIS];
-
-        // Technical Directors exist only from Pro up, and only the office
-        // says whether this manager has one: GPRO answers TDProfile with a
-        // placeholder ("Unknown technical director") that must not be stored
-        // as if it were a person.
-        $td = self::hasId($office['tdId'] ?? null)
-            ? $this->payload(
-                Endpoint::TD,
-                $results,
-                $attempted,
-                fn (): array => $this->apiClient->getTechnicalDirector(),
-            )
-            : [];
-
-        // RaceAnalysis carries no driver age; the DriProfile does, but it
-        // describes the driver under contract now, so it only fills the
-        // gap when that driver is the one who ran the analysed race.
-        $driverProfile = self::raceWasRunByCurrentDriver($analysis, $office)
-            ? $this->payload(
-                Endpoint::DRIVER,
-                $results,
-                $attempted,
-                fn (): array => $this->apiClient->getMyPilotDetails(),
-            )
-            : [];
-
-        $staff = $this->payload(
-            Endpoint::STAFF,
-            $results,
-            $attempted,
-            fn (): array => $this->apiClient->getStaffAndFacilities(),
-        );
-
-        // Anonymous telemetry: contributes race data to the shared corpus
-        // without a per-user identifier ever being involved.
-        $this->telemetry->ingest($analysis, $td, $driverProfile);
-
-        // The manager's own detailed archive — same payload, opposite
-        // privacy contract, kept in a separate table that is only ever
-        // read back by the user it belongs to.
-        $this->history->archive($userId, $analysis, $td, $staff, $driverProfile);
-
-        // Grow the Division Baseline from whatever the corpus has learned.
-        // Pure SQL over data already stored — no API call, and idempotent,
-        // so running it every sync converges rather than duplicating.
-        $this->baselineAutoFill->run();
-    }
-
-    /**
-     * This sync's payload for the endpoint; a planned call that failed is not
-     * retried, and an endpoint the plan skipped is read from cache/archive.
-     * Nice-to-have data: never fails the sync.
-     *
-     * @param array<string, array<string, mixed>> $results
-     * @param list<string> $attempted
-     * @param callable(): array<string, mixed> $read
-     *
-     * @return array<string, mixed>
-     */
-    private function payload(string $endpoint, array $results, array $attempted, callable $read): array
-    {
-        if (isset($results[$endpoint])) {
-            return $results[$endpoint];
-        }
-        if (in_array($endpoint, $attempted, true)) {
-            return [];
-        }
-
-        return $this->safely($read, []);
-    }
-
-    /**
-     * @template T
-     *
-     * @param callable(): T $read
-     * @param T $default
-     *
-     * @return T
-     */
-    private function safely(callable $read, mixed $default): mixed
-    {
-        try {
-            return $read();
-        } catch (Throwable $e) {
-            error_log('[GproSync] read failed: ' . $e::class);
-
-            return $default;
-        }
-    }
-
-    private static function intOrNull(mixed $value): ?int
-    {
-        return is_numeric($value) ? (int) $value : null;
-    }
-
-    /**
-     * @param array<string, mixed> $analysis RaceAnalysis payload
-     * @param array<string, mixed> $office   Office payload
-     */
-    public static function raceWasRunByCurrentDriver(array $analysis, array $office): bool
-    {
-        $driver = $analysis['driver'] ?? null;
-        $raced = is_array($driver) && is_scalar($driver['id'] ?? null) ? (string) $driver['id'] : '';
-        $current = trim((string) ($office['driId'] ?? ''));
-
-        return self::hasId($current) && $raced === $current;
-    }
-
-    private static function hasId(mixed $id): bool
-    {
-        $id = trim(is_scalar($id) ? (string) $id : '');
-
-        return $id !== '' && $id !== '0';
     }
 }

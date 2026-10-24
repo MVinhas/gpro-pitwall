@@ -10,10 +10,10 @@ use App\Telemetry\RaceHistoryMapper;
 use Throwable;
 
 /**
- * Archives one manager's own race in full, from the payloads the sync has
- * already fetched.
+ * Archives one manager's own race in full, from payloads already archived
+ * (the ArchiveProjector rebuilds it from the raw archive).
  *
- * Runs alongside RaceTelemetryService on every sync: that one contributes an
+ * The counterpart of RaceTelemetryService, which the harvest feeds: that one contributes an
  * anonymous row to the shared corpus, this one keeps the detailed record under
  * the manager's own id. Neither can see the other's table.
  *
@@ -30,42 +30,67 @@ final readonly class RaceHistoryService
     }
 
     /**
-     * @param array<string, mixed> $analysis RaceAnalysis payload
-     * @param array<string, mixed> $td       TDProfile payload ([] when none)
-     * @param array<string, mixed> $staff    StaffAndFacilities payload ([] when none)
-     * @param array<string, mixed> $driverProfile DriProfile payload ([] when none)
-     * @return bool true when a previously unarchived race was stored
+     * A null block means "unknown for this race": a race already stored keeps
+     * what it has for it (td_json, staff_json, the driver's age), so a
+     * re-projection never blanks data it has no source for.
+     *
+     * @param array<string, mixed>      $analysis      RaceAnalysis payload
+     * @param array<string, mixed>|null $td            TDProfile payload ([] when none, null when unknown)
+     * @param array<string, mixed>|null $staff         StaffAndFacilities payload ([] when none, null when unknown)
+     * @param array<string, mixed>|null $driverProfile DriProfile payload ([] when none, null when unknown)
+     * @return bool true when a previously unarchived race was stored (a known
+     *              race is refreshed in place and reports false)
      */
     public function archive(
         int $userId,
         array $analysis,
-        array $td = [],
-        array $staff = [],
-        array $driverProfile = [],
+        ?array $td = [],
+        ?array $staff = [],
+        ?array $driverProfile = [],
     ): bool {
         if ($analysis === []) {
             return false;
         }
 
         try {
+            $season = $this->intOf($analysis['selSeasonNb'] ?? null);
+            $race = $this->intOf($analysis['selRaceNb'] ?? null);
+            $stored = $driverProfile === null ? $this->repository->find($userId, $season, $race) : null;
+            $storedDriver = is_array($stored) && is_array($stored['driver'] ?? null) ? $stored['driver'] : [];
+            $storedAge = $storedDriver['age'] ?? null;
+
             $row = $this->mapper->map(
                 $userId,
                 $analysis,
-                $td,
-                $staff,
+                $td ?? [],
+                $staff ?? [],
                 $this->lapLengthFor($analysis),
-                $driverProfile,
+                $driverProfile ?? (is_int($storedAge) ? ['age' => $storedAge] : []),
             );
 
             if ($row === null) {
                 return false;
             }
 
-            return $this->repository->insertIfNew($row);
+            $userId = $this->intOf($row['user_id'] ?? null);
+            $season = $this->intOf($row['season'] ?? null);
+            $race = $this->intOf($row['race'] ?? null);
+            $known = $this->repository->exists($userId, $season, $race);
+            $this->repository->upsert($row, array_keys(array_filter([
+                'td_json' => $td === null,
+                'staff_json' => $staff === null,
+            ])));
+
+            return !$known;
         } catch (Throwable $e) {
-            error_log('[RaceHistory] archive failed: ' . $e::class . ': ' . $e->getMessage());
+            error_log('[RaceHistory] archive failed: ' . $e::class);
             return false;
         }
+    }
+
+    private function intOf(mixed $value): int
+    {
+        return is_numeric($value) ? (int) $value : 0;
     }
 
     /**

@@ -305,6 +305,31 @@ $container['service.race_history'] = new \App\Service\RaceHistoryService(
     new \App\Telemetry\RaceHistoryMapper(),
     $container['repo.track'],
 );
+$container['repo.projection_state'] = new \App\Repository\ProjectionStateRepository($container['db']);
+$container['archive.snapshots'] = new \App\Archive\RaceSnapshotReader($container['repo.api_archive']);
+$container['archive.analyses'] = new \App\Archive\AnalysisReader($container['repo.api_archive']);
+$container['archive.projector'] = new \App\Archive\ArchiveProjector(
+    $container['db'],
+    $container['repo.projection_state'],
+    new \App\Archive\WeekendStateProjector(
+        $container['repo.api_archive'],
+        new \App\Repository\WeekendStateRepository($container['db']),
+        $container['archive.snapshots'],
+    ),
+    new \App\Archive\StandingsProjector(
+        $container['repo.api_archive'],
+        new \App\Repository\StandingsRepository($container['db']),
+        $container['archive.snapshots'],
+    ),
+    new \App\Archive\LedgerProjector(
+        $container['repo.api_archive'],
+        new \App\Repository\EconomyLedgerRepository($container['db']),
+        $container['archive.analyses'],
+    ),
+    $container['service.race_history'],
+    $container['archive.snapshots'],
+    $container['archive.analyses'],
+);
 $container['service.debrief'] = new \App\Service\DebriefService(
     $container['repo.race_history'],
     $container['repo.race_telemetry'],
@@ -320,16 +345,36 @@ $container['service.baseline_autofill'] = new \App\Service\BaselineAutoFillServi
     $container['repo.pilot'],
     $container['service.calculator'],
 );
+$container['sync.contexts'] = new \App\Sync\SyncContextFactory(
+    $container['service.api_client'],
+    $container['repo.api_archive'],
+);
+$container['sync.fetcher'] = new \App\Sync\EndpointFetcher($container['service.api_client']);
+// RaceAnalysis is phase-2 work for every user: the idle harvest fetches it, the
+// page-critical sync no longer does. One planner so both agree on that.
+$container['sync.planner'] = new \App\Sync\SyncPlanner();
 $container['service.gpro_sync'] = new GproSyncService(
     $container['service.api_client'],
     $container['service.user_repo'],
     $container['service.cache'],
-    $container['service.race_telemetry'],
-    $container['service.race_history'],
-    $container['service.baseline_autofill'],
-    $container['repo.api_archive'],
-    new \App\Sync\SyncPlanner(),
+    $container['sync.contexts'],
+    $container['sync.fetcher'],
+    $container['sync.planner'],
     Env::int('SYNC_SAFETY_MARGIN', 20),
+);
+$container['service.harvest'] = new \App\Service\HarvestService(
+    $container['service.api_client'],
+    $container['service.cache'],
+    $container['repo.api_archive'],
+    $container['sync.contexts'],
+    $container['sync.fetcher'],
+    $container['sync.planner'],
+    $container['service.api_throttle'],
+    $container['archive.projector'],
+    $container['archive.snapshots'],
+    $container['service.race_telemetry'],
+    $container['service.baseline_autofill'],
+    $container['repo.race_history'],
 );
 $container['service.auth_service']  = new \App\Service\AuthService(
     $container['service.user_repo'],
@@ -480,6 +525,7 @@ $container['controller.page'] = new PageController(
     $container['service.data_mapper'],
     $container['service.recruitment'],
     $container['service.gpro_sync'],
+    $container['service.harvest'],
     $container['twig'],
     $container['config']
 );
@@ -541,6 +587,12 @@ use App\Controller\ApiWarmupController;
 
 $container['controller.api_warmup'] = new ApiWarmupController(
     $container['service.gpro_sync'],
+    $container['service.authorize'],
+    $container['service.harvest'],
+);
+
+$container['controller.api_harvest'] = new \App\Controller\ApiHarvestController(
+    $container['service.harvest'],
     $container['service.authorize'],
 );
 

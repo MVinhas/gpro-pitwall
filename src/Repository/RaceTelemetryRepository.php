@@ -707,7 +707,7 @@ class RaceTelemetryRepository
      *
      * This is the one query here that reads outside race_telemetry. The
      * anti-join against pilots is what makes the auto-fill idempotent — it runs
-     * on every sync and must never promote the same race twice. It joins on the
+     * on every harvest and must never promote the same race twice. It joins on the
      * provenance column only, never on anything user-identifying.
      *
      * Rows collected before driver_age existed are skipped: pilots.age is NOT

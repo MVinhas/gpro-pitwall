@@ -105,7 +105,7 @@ Optional tuning (sensible defaults):
 |---|---|
 | `CACHE_DRIVER` | `filesystem` (default; zero infra), `apcu`, `redis`, or `none` |
 | `MAIL_FROM` / `MAIL_FROM_NAME` | Sender identity (defaults provided) |
-| `SYNC_SAFETY_MARGIN` | No sync at all when the user's remaining API budget is at or below this (default 20). Above it, the planner caps spending with fixed floors: automatic login work never below 50 remaining, manual Re-sync never below 20 |
+| `SYNC_SAFETY_MARGIN` | No sync at all when the user's remaining API budget is at or below this (default 20). Above it, the planner caps spending with fixed floors: automatic login work and background harvesting never below 50 remaining, past-race backfill only from 60 and at most 5 calls per race window, manual Re-sync never below 20 |
 | `GPRO_API_RATE` / `GPRO_API_BURST` / `GPRO_API_MAX_BLOCK_MS` | Host-wide outbound throttle: steady calls/sec, burst size, max wait in ms (defaults 2 / 4 / 4000; rate `0` disables) |
 | `GPRO_API_CONNECT_TIMEOUT` / `GPRO_API_TIMEOUT` / `GPRO_API_MARKET_TIMEOUT` | Per-call curl timeouts in seconds (defaults 10 / 30 / 60) |
 
@@ -155,7 +155,7 @@ Source of truth is GitHub; deployment is a manual file copy to any PHP 8.5 host.
 - **Twig 3** templates; **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile). Light and dark themes ship in one stylesheet: every design token is a CSS `light-dark()` pair switched by `color-scheme`, so System mode tracks the OS with zero JavaScript.
 - **SQLite** via PDO — emails and API tokens encrypted at rest (AES-256-GCM).
 - **PHPMailer 7** for SMTP; dev writes `.eml` files instead.
-- **PHPUnit 13** — 1203 tests, 3387 assertions — with **PHPStan level 8** and enforced type-declaration coverage (100% return/property/constant + `strict_types`; 99.5% param). Twig linted by a native `bin/twig_lint.php` built on Twig's own parser. CI measures statement coverage with `pcov` and enforces a floor (currently 59%, ratcheted up as coverage grows).
+- **PHPUnit 13** — 1355 tests, 3960 assertions — with **PHPStan level 8** and enforced type-declaration coverage (100% return/property/constant + `strict_types`; 99.5% param). Twig linted by a native `bin/twig_lint.php` built on Twig's own parser. CI measures statement coverage with `pcov` and enforces a floor (currently 59%, ratcheted up as coverage grows).
 - **Timestamps stored and served as UTC**, localised per visitor in the browser — no server-side timezone config.
 
 ## Architecture
@@ -168,7 +168,7 @@ Request → public/index.php → Http\Router → Controller → Service → Repo
 - **Every screen has its own path** (`/cockpit`, `/strategy`, `/divisions/baseline`…). `Http\Sections` is the single map between a screen's canonical name and its URL; legacy `/?main_tab=…` links are 301'd to the matching path, carrying their selections. Within a screen, selections (division, track, page, sort) stay query parameters.
 - `bootstrap.php` wires every dependency into a flat container — adding a service is one line.
 - Cache adapters (`filesystem` default, APCu, Redis, none) behind one interface, resolved by `CacheFactory`. Every key is namespaced by app version, so a deploy can never serve a previous release's payload shape out of a cache segment it cannot wipe.
-- **Host-wide outbound throttle** — all GPRO API calls leave from one IP, so a token bucket shared across PHP workers (a `flock`'d state file) paces real fetches under burst load; cache hits never touch it. It never throws — worst case is "slightly slower", not a failed page. Complements the per-token budget guard (`SYNC_SAFETY_MARGIN`: no sync at or below it; the planner's floors of 50 for login and 20 for Re-sync cap the spend above it).
+- **Host-wide outbound throttle** — all GPRO API calls leave from one IP, so a token bucket shared across PHP workers (a `flock`'d state file) paces real fetches under burst load; cache hits never touch it. It never throws — worst case is "slightly slower", not a failed page. Complements the per-token budget guard (`SYNC_SAFETY_MARGIN`: no sync at or below it; the planner's floors of 50 for login and background harvest work and 20 for Re-sync cap the spend above it). Background harvest slices only start a call while the shared bucket has room, so they give way to managers loading pages.
 - **Race-window cache keys** — race-critical data is namespaced by the current race window (computed from the clock against GPRO's Tue/Fri schedule, no API call), so caches roll over exactly once per race weekend instead of serving last week's data until TTL. Configurable via `GPRO_RACE_DAYS` / `GPRO_RACE_BOUNDARY_HOUR` / `GPRO_RACE_TZ`.
 
 ## Security posture
@@ -188,7 +188,8 @@ Reviewed against the OWASP Top 10:2025.
 - Structured `[security]` event logging for failed logins, rate-limit hits and token-theft detection; admin mutations recorded in an append-only `audit_log`.
 - Prod never leaks exception detail: controller-level catches log server-side and show a generic message; anything that bubbles past them is caught by the front controller, logged under a short reference id, and rendered as a generic 500 page.
 - Outbound API calls carry connect + total timeouts so a hung upstream can't pin a PHP worker; the filesystem cache deserializes with `allowed_classes => false`, so a tampered cache file degrades to a miss, not an object-injection gadget.
-- Raw GPRO payloads are archived per user, API token and race window — email and account flags stripped; game data, including manager names, kept — gzipped, and read back only for their owner under the same token — a deploy no longer forces every manager to re-spend their API budget.
+- Raw GPRO payloads are archived per user, API token and race window — email and account flags stripped; game data, including manager names, kept — gzipped. Pages are served from it only for their owner under the same token, so a deploy no longer forces every manager to re-spend their API budget; history rebuilt from it spans the owner's own tokens and never another user's.
+- Derived per-user tables (weekend state, group standings, money ledger, race history) are rebuilt from that archive in small background slices (`POST /api/harvest`, at most 3 API calls each, session released first). They hold the same game data as the archive, including the other managers' public names and cash in a group's standings; a rebuild never overwrites stored history it has no source for.
 - Prepared statements only; Twig autoescaping everywhere (no `|raw`); registration usernames whitelisted to `[A-Za-z0-9_]` server-side.
 - Interpreter patch level is watched: below a PHP security floor (`App\Support\PhpSecurityFloor`, overridable per server with `PHP_SECURITY_FLOOR`), `/healthz` reports degraded to admins and `/debug` shows a warning. Anonymous callers never see that verdict, so the endpoint can't advertise an unpatched host.
 - Maintenance switch: an empty `public/.maintenance` file makes Apache answer every request with a static 503 page before PHP loads, so the site can be taken out of reach of an interpreter bug while the host patches. The release build refuses to bundle the flag.

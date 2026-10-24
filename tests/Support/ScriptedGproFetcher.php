@@ -16,6 +16,18 @@ final class ScriptedGproFetcher implements GproFetcher
     /** @var list<string> */
     public array $calls = [];
 
+    /** @var list<string> every request path with its query, e.g. "RaceAnalysis?SR=107,5" */
+    public array $requests = [];
+
+    /** @var list<string> like $requests, but a test never clears it */
+    public array $allRequests = [];
+
+    /** Runs before every request, e.g. to spend throttle tokens the way a real fetch would. */
+    public ?\Closure $onRequest = null;
+
+    /** @var array<string, array<string, mixed>> payloads by request path with query, ahead of the defaults */
+    public array $responses = [];
+
     /** @var list<string> endpoint names that throw */
     public array $failing = [];
 
@@ -70,11 +82,15 @@ final class ScriptedGproFetcher implements GproFetcher
     {
         $name = self::nameOf($endpoint);
         $this->calls[] = $name;
+        $this->requests[] = $this->allRequests[] = self::pathOf($endpoint);
+        if ($this->onRequest !== null) {
+            ($this->onRequest)();
+        }
         if (in_array($name, $this->failing, true)) {
             throw new RuntimeException('scripted failure');
         }
 
-        $payload = match ($name) {
+        $payload = $this->responses[self::pathOf($endpoint)] ?? match ($name) {
             'office' => $this->office,
             'RaceAnalysis' => $this->analysis,
             'DriProfile' => $this->driverProfile,
@@ -93,9 +109,13 @@ final class ScriptedGproFetcher implements GproFetcher
 
     private static function nameOf(string $endpoint): string
     {
-        $versioned = strpos($endpoint, '/v2/');
-        $rest = $versioned === false ? ltrim($endpoint, '/') : substr($endpoint, $versioned + 4);
+        return explode('?', self::pathOf($endpoint), 2)[0];
+    }
 
-        return explode('?', $rest, 2)[0];
+    private static function pathOf(string $endpoint): string
+    {
+        $versioned = strpos($endpoint, '/v2/');
+
+        return $versioned === false ? ltrim($endpoint, '/') : substr($endpoint, $versioned + 4);
     }
 }

@@ -22,12 +22,14 @@ final class SyncPlanner
 
     private const int PHASE2_FLOOR = 50;
 
+    /** Phase-1 snapshot endpoints, in spending order. RaceAnalysis is always phase 2. */
     private const array PRIORITY = [
         Endpoint::DRIVER, Endpoint::CAR, Endpoint::TRACK, Endpoint::SETUP, Endpoint::TESTING,
-        Endpoint::STAFF, Endpoint::TD, Endpoint::SPONSORS, Endpoint::MONEY, Endpoint::ANALYSIS,
+        Endpoint::STAFF, Endpoint::TD, Endpoint::SPONSORS, Endpoint::MONEY,
     ];
 
     private const array SEASON_PHASE1 = [Endpoint::CALENDAR, Endpoint::TYRES, Endpoint::MENU];
+    /** Fetched for the last completed season, which never changes. */
     private const array SEASON_PHASE2 = [Endpoint::SF_HISTORY, Endpoint::CCP_HISTORY];
 
     /** @var array<string, list<string>> done-flag => endpoints it unlocks when it flips to true */
@@ -40,10 +42,6 @@ final class SyncPlanner
         'doneStaffTrain' => [Endpoint::STAFF],
         'doneFacilitiesUpdate' => [Endpoint::STAFF],
     ];
-
-    public function __construct(private bool $analysisInPhase2 = false)
-    {
-    }
 
     public function plan(SyncContext $ctx): SyncPlan
     {
@@ -75,9 +73,7 @@ final class SyncPlanner
 
         $ordered = array_values(array_filter(
             self::PRIORITY,
-            fn (string $e): bool => in_array($e, $planned, true)
-                && in_array($e, $eligible, true)
-                && ($e !== Endpoint::ANALYSIS || !$this->analysisInPhase2),
+            static fn (string $e): bool => in_array($e, $planned, true) && in_array($e, $eligible, true),
         ));
 
         return [...$ordered, ...$this->missing(self::SEASON_PHASE1, $ctx->archivedThisSeason)];
@@ -90,21 +86,21 @@ final class SyncPlanner
     {
         $planned = [];
         $newRace = $this->isNewRace($ctx);
-        if ($this->analysisInPhase2 && ($newRace || !in_array(Endpoint::ANALYSIS, $ctx->archivedThisRace, true))) {
-            $planned[] = Endpoint::ANALYSIS;
-        }
-        foreach ([Endpoint::STANDINGS, Endpoint::ECONOMY] as $endpoint) {
+        foreach ([Endpoint::ANALYSIS, Endpoint::STANDINGS, Endpoint::ECONOMY] as $endpoint) {
             if ($newRace || !in_array($endpoint, $ctx->archivedThisRace, true)) {
                 $planned[] = $endpoint;
             }
         }
-        $planned = [...$planned, ...$this->missing(self::SEASON_PHASE2, $ctx->archivedThisSeason)];
+        $entries = array_map(self::entry(...), $planned);
 
-        $entries = array_slice(
-            array_map(self::entry(...), $planned),
-            0,
-            $this->budget($left, self::PHASE2_FLOOR),
-        );
+        $completed = is_numeric($ctx->office['seasonNb'] ?? null) ? (int) $ctx->office['seasonNb'] - 1 : 0;
+        if ($completed >= 1) {
+            foreach ($this->missing(self::SEASON_PHASE2, $ctx->archivedThisSeason) as $endpoint) {
+                $entries[] = ['endpoint' => $endpoint, 'params' => 'season=' . $completed];
+            }
+        }
+
+        $entries = array_slice($entries, 0, $this->budget($left, self::PHASE2_FLOOR));
 
         // Backfill only spends what is genuinely spare once everything above is paid for.
         $left -= count($entries);
