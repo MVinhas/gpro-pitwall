@@ -6,6 +6,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.13] - 2026-10-24
+
+### Added
+- Pitwall now keeps your race history building in the background: after a page loads,
+  it fetches your group standings, money movements, last season's staff, facilities and
+  car history, and any past races it hasn't analysed yet, a few calls at a time while
+  the browser is idle. It never takes your API budget below 50 calls, backfills past
+  races only with 60 or more left (at most 5 per race), and steps aside when other
+  managers are loading pages.
+- From this saved data Pitwall rebuilds, per race, your weekend state (driver, staff,
+  facilities, car, cash), your group standings, a money ledger with each movement filed
+  under its race, and your race history with the staff and technical director that
+  actually raced it. These feed the coming Debrief and race-engineer work.
+- Your tyre supplier is now recorded each season.
+
+### Changed
+- Race analysis moved out of the login sync into the background work, so a race-day
+  login spends one call less before the page appears.
+
 ## [1.21.12] - 2026-10-24
 
 ### Changed
