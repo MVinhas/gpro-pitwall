@@ -49,12 +49,17 @@ final class ArchiveProjector
      * All four projections for one race in one transaction. A projection that
      * throws is skipped (class name logged) and the race is still marked
      * projected, so one malformed payload never stalls the queue.
+     *
+     * The transaction takes the write lock up front (BEGIN IMMEDIATE): under
+     * WAL a deferred one reads a snapshot, and if another process commits
+     * before its first write that write fails at once with a stale snapshot;
+     * busy_timeout only makes the wait for an immediate lock retry.
      */
     public function projectRace(int $userId, int $season, int $race): void
     {
         $owns = !$this->pdo->inTransaction();
         if ($owns) {
-            $this->pdo->beginTransaction();
+            $this->pdo->exec('BEGIN IMMEDIATE');
         }
 
         try {
@@ -64,11 +69,11 @@ final class ArchiveProjector
             $this->guarded('history', fn () => $this->projectHistory($userId, $season, $race));
             $this->state->mark($userId, $season, $race, self::PROJECTOR_VERSION);
             if ($owns) {
-                $this->pdo->commit();
+                $this->pdo->exec('COMMIT');
             }
         } catch (Throwable $e) {
             if ($owns && $this->pdo->inTransaction()) {
-                $this->pdo->rollBack();
+                $this->pdo->exec('ROLLBACK');
             }
             throw $e;
         }

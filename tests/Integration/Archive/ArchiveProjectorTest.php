@@ -41,6 +41,7 @@ final class ArchiveProjectorTest extends TestCase
     private PDO $db;
     private ApiArchiveRepository $archive;
     private ArchiveProjector $projector;
+    private ?\Closure $tearDownLog = null;
 
     protected function setUp(): void
     {
@@ -73,6 +74,9 @@ final class ArchiveProjectorTest extends TestCase
 
     protected function tearDown(): void
     {
+        if ($this->tearDownLog !== null) {
+            ($this->tearDownLog)();
+        }
         unset($this->db);
         foreach (['', '-wal', '-shm'] as $suffix) {
             if (is_file($this->dbPath . $suffix)) {
@@ -83,6 +87,7 @@ final class ArchiveProjectorTest extends TestCase
 
     private function makeProjector(
         ?StandingsRepository $standings = null,
+        ?WeekendStateRepository $weekend = null,
     ): ArchiveProjector {
         $snapshots = new RaceSnapshotReader($this->archive);
         $analyses = new AnalysisReader($this->archive);
@@ -90,7 +95,11 @@ final class ArchiveProjectorTest extends TestCase
         return new ArchiveProjector(
             $this->db,
             new ProjectionStateRepository($this->db),
-            new WeekendStateProjector($this->archive, new WeekendStateRepository($this->db), $snapshots),
+            new WeekendStateProjector(
+                $this->archive,
+                $weekend ?? new WeekendStateRepository($this->db),
+                $snapshots,
+            ),
             new StandingsProjector(
                 $this->archive,
                 $standings ?? new StandingsRepository($this->db),
@@ -757,6 +766,55 @@ final class ArchiveProjectorTest extends TestCase
         $this->assertStringContainsString('[Projector]', $logged);
         $this->assertStringContainsString(\RuntimeException::class, $logged);
         $this->assertStringNotContainsString('secret-payload-detail', $logged);
+    }
+
+    public function testAnotherWriterWaitsForTheProjectionFromItsFirstRead(): void
+    {
+        $this->db->exec('PRAGMA journal_mode = WAL');
+        $this->seedSnapshot(5);
+        $other = new PDO('sqlite:' . $this->dbPath);
+        $other->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $other->exec('PRAGMA busy_timeout = 0');
+        $refused = null;
+        // Runs after the projection has read the archive and before its first write.
+        $interloper = static function () use ($other, &$refused): void {
+            try {
+                $other->exec("UPDATE users SET username = 'moved' WHERE id = 2");
+                $refused = false;
+            } catch (\PDOException) {
+                $refused = true;
+            }
+        };
+        $weekend = new class ($this->db, $interloper) extends WeekendStateRepository {
+            public function __construct(PDO $pdo, private readonly \Closure $before)
+            {
+                parent::__construct($pdo);
+            }
+
+            public function save(array $row): void
+            {
+                ($this->before)();
+                parent::save($row);
+            }
+        };
+        $this->silence();
+
+        $this->makeProjector(weekend: $weekend)->projectRace(self::USER, self::SEASON, 5);
+
+        $this->assertTrue($refused, 'a deferred transaction would let the other writer in, then fail on its own write');
+        $this->assertSame(1, $this->rows('user_projection_state'));
+        $this->assertSame(1, $this->rows('user_weekend_state'));
+        $this->assertFalse($this->db->inTransaction());
+    }
+
+    private function silence(): void
+    {
+        $log = $this->dbPath . '.log';
+        $prior = ini_set('error_log', $log);
+        $this->tearDownLog = static function () use ($log, $prior): void {
+            ini_set('error_log', (string) $prior);
+            @unlink($log);
+        };
     }
 
     public function testDeletingTheUserCascadesProjectionState(): void
