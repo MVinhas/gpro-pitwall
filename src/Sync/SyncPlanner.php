@@ -51,11 +51,7 @@ final class SyncPlanner
         $floor = $ctx->mode === self::MODE_MANUAL ? self::MANUAL_FLOOR : self::LOGIN_FLOOR;
         $phase1 = array_slice($phase1, 0, $this->budget($ctx->remaining, $floor));
 
-        $phase2 = array_slice(
-            $this->phase2($ctx),
-            0,
-            $this->budget($ctx->remaining - count($phase1), self::PHASE2_FLOOR),
-        );
+        $phase2 = $this->phase2($ctx, $ctx->remaining - count($phase1));
 
         return new SyncPlan(array_map(self::entry(...), $phase1), $phase2);
     }
@@ -87,27 +83,35 @@ final class SyncPlanner
     /**
      * @return list<array{endpoint: string, params: string}>
      */
-    private function phase2(SyncContext $ctx): array
+    private function phase2(SyncContext $ctx, int $left): array
     {
         $planned = [];
         $newRace = $this->isNewRace($ctx);
-        $analysisMissing = !in_array(Endpoint::ANALYSIS, $ctx->archivedThisRace, true);
-        if ($this->analysisInPhase2 && ($newRace || $analysisMissing)) {
+        if ($this->analysisInPhase2 && ($newRace || !in_array(Endpoint::ANALYSIS, $ctx->archivedThisRace, true))) {
             $planned[] = Endpoint::ANALYSIS;
         }
-        if ($newRace) {
-            $planned[] = Endpoint::STANDINGS;
-            $planned[] = Endpoint::ECONOMY;
+        foreach ([Endpoint::STANDINGS, Endpoint::ECONOMY] as $endpoint) {
+            if ($newRace || !in_array($endpoint, $ctx->archivedThisRace, true)) {
+                $planned[] = $endpoint;
+            }
         }
         $planned = [...$planned, ...$this->missing(self::SEASON_PHASE2, $ctx->archivedThisSeason)];
 
-        $entries = array_map(self::entry(...), $planned);
+        $entries = array_slice(
+            array_map(self::entry(...), $planned),
+            0,
+            $this->budget($left, self::PHASE2_FLOOR),
+        );
 
-        if ($ctx->remaining >= self::BACKFILL_MIN) {
+        // Backfill only spends what is genuinely spare once everything above is paid for.
+        $left -= count($entries);
+        if ($left >= self::BACKFILL_MIN) {
             $allowance = max(0, self::BACKFILL_MAX_PER_WINDOW - $ctx->backfillDoneThisWindow);
-            foreach (array_slice($ctx->backfillPending, 0, $allowance) as $seasonRace) {
-                $entries[] = ['endpoint' => Endpoint::ANALYSIS, 'params' => 'SR=' . $seasonRace];
-            }
+            $backfill = array_map(
+                static fn (string $sr): array => ['endpoint' => Endpoint::ANALYSIS, 'params' => 'SR=' . $sr],
+                array_slice($ctx->backfillPending, 0, $allowance),
+            );
+            $entries = [...$entries, ...array_slice($backfill, 0, max(0, $left - self::PHASE2_FLOOR))];
         }
 
         return $entries;

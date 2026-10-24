@@ -20,6 +20,7 @@ final class SyncPlannerTest extends TestCase
     private const array SNAPSHOT = [
         Endpoint::DRIVER, Endpoint::CAR, Endpoint::TRACK, Endpoint::SETUP, Endpoint::TESTING,
         Endpoint::STAFF, Endpoint::TD, Endpoint::SPONSORS, Endpoint::MONEY, Endpoint::ANALYSIS,
+        Endpoint::STANDINGS, Endpoint::ECONOMY,
     ];
 
     private const array SEASONAL = [Endpoint::CALENDAR, Endpoint::TYRES, Endpoint::MENU, Endpoint::SF_HISTORY, Endpoint::CCP_HISTORY];
@@ -122,6 +123,18 @@ final class SyncPlannerTest extends TestCase
                 ['DRIVER', 'CAR', 'TRACK', 'SETUP', 'TESTING', 'STAFF', 'TD', 'SPONSORS', 'MONEY', 'ANALYSIS'], ['STANDINGS', 'ECONOMY']],
             'phase 2 trimmed to the floor' => [['race' => [], 'remaining' => 61, 'pending' => ['10,1']], [], null, false,
                 ['DRIVER', 'CAR', 'TRACK', 'SETUP', 'TESTING', 'STAFF', 'TD', 'SPONSORS', 'MONEY', 'ANALYSIS'], ['STANDINGS']],
+            'heal STANDINGS only' => [['race' => array_diff(self::SNAPSHOT, ['STANDINGS'])], [], $same, false, [], ['STANDINGS']],
+            'heal ECONOMY only' => [['race' => array_diff(self::SNAPSHOT, ['ECONOMY'])], [], $same, false, [], ['ECONOMY']],
+            'heal both on an unchanged office' => [['race' => array_diff(self::SNAPSHOT, ['STANDINGS', 'ECONOMY'])], [], $same, false, [], ['STANDINGS', 'ECONOMY']],
+            'heal trimmed by the phase 2 floor' => [['race' => array_diff(self::SNAPSHOT, ['STANDINGS', 'ECONOMY']), 'remaining' => 51], [], $same, false, [], ['STANDINGS']],
+            'harvest heals STANDINGS and ECONOMY' => [['mode' => SyncPlanner::MODE_HARVEST, 'race' => array_diff(self::SNAPSHOT, ['STANDINGS', 'ECONOMY'])], [], $same, false, [], ['STANDINGS', 'ECONOMY']],
+            'backfill gated after phase 1 (65 - 6 = 59)' => [['race' => array_diff(self::SNAPSHOT, ['DRIVER', 'CAR', 'TRACK', 'SETUP', 'TESTING', 'STAFF']), 'remaining' => 65, 'pending' => ['10,1']], [], $same, false,
+                ['DRIVER', 'CAR', 'TRACK', 'SETUP', 'TESTING', 'STAFF'], []],
+            'backfill after phase 1 (70 - 2 = 68)' => [['race' => array_diff(self::SNAPSHOT, ['DRIVER', 'CAR']), 'remaining' => 70, 'done' => 2, 'pending' => ['10,1', '10,2', '10,3', '10,4']], [], $same, false,
+                ['DRIVER', 'CAR'], ['ANALYSIS[SR=10,1]', 'ANALYSIS[SR=10,2]', 'ANALYSIS[SR=10,3]']],
+            'backfill gated after earlier phase 2 entries (61 - 2 = 59)' => [['race' => array_diff(self::SNAPSHOT, ['STANDINGS', 'ECONOMY']), 'remaining' => 61, 'pending' => ['10,1']], [], $same, false, [], ['STANDINGS', 'ECONOMY']],
+            'backfill full allowance at 68 left' => [['remaining' => 68, 'pending' => ['10,1', '10,2', '10,3', '10,4', '10,5']], [], $same, false, [],
+                ['ANALYSIS[SR=10,1]', 'ANALYSIS[SR=10,2]', 'ANALYSIS[SR=10,3]', 'ANALYSIS[SR=10,4]', 'ANALYSIS[SR=10,5]']],
             'harvest new race has no phase 1' => [['mode' => SyncPlanner::MODE_HARVEST, 'race' => []], [], null, false, [], ['STANDINGS', 'ECONOMY']],
             'harvest ignores season-scoped phase 1' => [['mode' => SyncPlanner::MODE_HARVEST, 'season' => []], [], $same, false, [], ['SF_HISTORY', 'CCP_HISTORY']],
             'harvest backfill' => [['mode' => SyncPlanner::MODE_HARVEST, 'remaining' => 80, 'pending' => ['9,3']], [], $same, false, [], ['ANALYSIS[SR=9,3]']],
