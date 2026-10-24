@@ -65,24 +65,31 @@ final class DeferredRenderTest extends TestCase
     }
 
     /**
-     * @return iterable<string, array{0: bool, 1: bool, 2: bool, 3: bool, 4: bool}>
+     * @return iterable<string, array{0: bool, 1: bool, 2: bool, 3: bool, 4: bool, 5: bool}>
      */
     public static function idleCases(): iterable
     {
-        // wait, syncPending, deferred, isWarm => idle sync
-        yield 'warm pending page revalidates when idle' => [false, true, false, true, true];
-        yield 'nothing owed, nothing to revalidate'     => [false, false, false, true, false];
-        yield 'a cold page syncs inline instead'        => [false, true, false, false, false];
-        yield 'a skeleton does no GPRO work'            => [false, true, true, true, false];
-        yield 'the follow-up request syncs inline'      => [true, true, false, true, false];
+        // wait, syncPending, deferred, offered, isWarm => idle sync
+        yield 'warm pending page revalidates when idle' => [false, true, false, false, true, true];
+        yield 'nothing owed, nothing to revalidate'     => [false, false, false, false, true, false];
+        yield 'a cold page syncs inline instead'        => [false, true, false, false, false, false];
+        yield 'a skeleton does no GPRO work'            => [false, true, true, false, true, false];
+        yield 'the follow-up request syncs inline'      => [true, true, false, false, true, false];
+        yield 'an offer nobody took syncs inline'       => [false, true, false, true, true, false];
     }
 
     #[DataProvider('idleCases')]
-    public function testIdleSync(bool $wait, bool $syncPending, bool $deferred, bool $isWarm, bool $expected): void
-    {
+    public function testIdleSync(
+        bool $wait,
+        bool $syncPending,
+        bool $deferred,
+        bool $offered,
+        bool $isWarm,
+        bool $expected,
+    ): void {
         $this->assertSame(
             $expected,
-            DeferredRender::idleSync($wait, $syncPending, $deferred, static fn (): bool => $isWarm),
+            DeferredRender::idleSync($wait, $syncPending, $deferred, $offered, static fn (): bool => $isWarm),
         );
     }
 
@@ -92,9 +99,28 @@ final class DeferredRenderTest extends TestCase
             $this->fail('isWarm must not be called');
         };
 
-        $this->assertFalse(DeferredRender::idleSync(false, false, false, $probe));
-        $this->assertFalse(DeferredRender::idleSync(true, true, false, $probe));
-        $this->assertFalse(DeferredRender::idleSync(false, true, true, $probe));
+        $this->assertFalse(DeferredRender::idleSync(false, false, false, false, $probe));
+        $this->assertFalse(DeferredRender::idleSync(true, true, false, false, $probe));
+        $this->assertFalse(DeferredRender::idleSync(false, true, true, false, $probe));
+        $this->assertFalse(DeferredRender::idleSync(false, true, false, true, $probe));
+    }
+
+    /**
+     * @return iterable<string, array{0: bool, 1: bool, 2: bool, 3: bool}>
+     */
+    public static function inlineCases(): iterable
+    {
+        // syncPending, deferred, idleSync => the page syncs before rendering
+        yield 'owed on a cold page'                 => [true, false, false, true];
+        yield 'owed but handed to the idle time'    => [true, false, true, false];
+        yield 'owed but the skeleton goes first'    => [true, true, false, false];
+        yield 'nothing owed'                        => [false, false, false, false];
+    }
+
+    #[DataProvider('inlineCases')]
+    public function testSyncsInline(bool $syncPending, bool $deferred, bool $idleSync, bool $expected): void
+    {
+        $this->assertSame($expected, DeferredRender::syncsInline($syncPending, $deferred, $idleSync));
     }
 
     public function testTheFollowUpUrlKeepsTheQueryAndAddsTheWaitFlag(): void

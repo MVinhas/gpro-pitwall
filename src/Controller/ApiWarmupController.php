@@ -68,15 +68,33 @@ final readonly class ApiWarmupController
 
         header('Content-Type: application/json');
 
-        unset($_SESSION[AuthService::SYNC_PENDING]);
+        unset($_SESSION[AuthService::SYNC_PENDING], $_SESSION[AuthService::IDLE_SYNC_OFFERED]);
         // PHP holds the session file lock until the request ends; releasing it
         // keeps the manager's next navigation from queueing behind the sync.
-        if (session_status() === PHP_SESSION_ACTIVE) {
-            session_write_close();
-        }
+        $released = session_status() === PHP_SESSION_ACTIVE && session_write_close();
+        $stamp = $_SESSION['api_limit_updated_at'] ?? null;
 
         $outcome = $this->syncService->sync($user, SyncPlanner::MODE_LOGIN);
 
+        if ($released && ($_SESSION['api_limit_updated_at'] ?? null) !== $stamp) {
+            $this->storeBudget($_SESSION['api_limit'] ?? null, $_SESSION['api_limit_updated_at'] ?? null);
+        }
+
         echo json_encode(['status' => $outcome->status, 'fetched' => $outcome->fetched]);
+    }
+
+    /**
+     * The sync wrote the remaining-calls figure while the session was released,
+     * so it only reached memory. Reopen the session just long enough to save it,
+     * so the status line and the next page show the figure after the sync.
+     */
+    private function storeBudget(mixed $limit, mixed $updatedAt): void
+    {
+        if (!session_start()) {
+            return;
+        }
+        $_SESSION['api_limit'] = $limit;
+        $_SESSION['api_limit_updated_at'] = $updatedAt;
+        session_write_close();
     }
 }

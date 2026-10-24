@@ -170,19 +170,28 @@
     <script>
     // Fetch a screen from the server and swap it, and the status line (a sync
     // may have just changed both), into this page. Shared by the skeleton fill
-    // and the idle revalidation. Resolves true once swapped; a response that is
-    // not a screen (auth lapsed, token lost) is followed instead.
-    window.swapScreen = async (url, { content = true } = {}) => {
+    // and the idle revalidation. Resolves 'swapped', or:
+    //  - 'held' when allow() vetoed replacing the content (checked right before
+    //    the swap, after the fetch; the status line is still updated);
+    //  - 'invalid' when the response is not a screen (auth lapsed, token lost)
+    //    and redirect is false; with the default redirect it is followed and
+    //    'redirected' comes back.
+    window.swapScreen = async (url, { content = true, allow = null, redirect = true } = {}) => {
         const res = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
         const next = doc.getElementById('main-content-tabs');
         if (!next || next.hasAttribute('data-deferred')) {
+            if (!redirect) return 'invalid';
             window.location.assign(res.redirected ? res.url : window.location.href);
-            return false;
+            return 'redirected';
         }
         const status = doc.getElementById('statusLine');
         if (status) document.getElementById('statusLine')?.replaceWith(status);
+        if (content && allow && !allow()) {
+            window.localizeTimes?.(document);
+            return 'held';
+        }
         if (content) {
             [...next.children].forEach((el, i) => {
                 el.classList.add('reveal');
@@ -199,7 +208,7 @@
             window.applyAccState?.(next);
         }
         window.localizeTimes?.(document);
-        return true;
+        return 'swapped';
     };
     </script>
     {% endif %}
@@ -422,8 +431,9 @@ window.localizeTimes(document);
 <script>
 // The login sync is owed but the page already rendered from warm data: run it
 // once the browser is idle. The sync is cheap (it only spends what changed);
-// when it did fetch something, fetch the screen again to show it. A page that
-// never runs this leaves the flag set, and the next navigation syncs inline.
+// when it did fetch something, fetch the screen again to show it. The server
+// marked the offer in the session: if this never runs (no JavaScript) the next
+// page request sees the sync still owed and runs it inline instead.
 (() => {
     const followUp = '{{ idle_follow_url|e('js') }}';
     const inMain = (el) => el instanceof Element && !!el.closest('#main-content-tabs');
@@ -440,6 +450,8 @@ window.localizeTimes(document);
         const wrap = document.createElement('div');
         wrap.id = 'newDataNotice';
         wrap.className = 'mx-auto max-w-7xl px-4 pt-2';
+        // The live region goes in empty and is filled afterwards, so assistive
+        // technology announces the text as a change rather than skipping it.
         wrap.setAttribute('role', 'status');
         const note = document.createElement('div');
         note.className = 'notice notice-info notice-slim';
@@ -451,10 +463,10 @@ window.localizeTimes(document);
         link.className = 'underline';
         link.textContent = 'reload to update';
         note.append(lead, ' \u2014 ', link);
-        wrap.append(note);
         const anchor = document.getElementById('statusLine');
         if (anchor) anchor.after(wrap);
         else document.querySelector('main')?.before(wrap);
+        setTimeout(() => wrap.append(note), 100);
     };
     const run = async () => {
         try {
@@ -474,10 +486,14 @@ window.localizeTimes(document);
             // The office is fetched on every sync: only the other endpoints
             // change what a screen shows. The status line follows either way.
             const changed = fetched.some((e) => e !== 'OFFICE');
-            // Read after the answer arrives: the manager may have started typing meanwhile.
-            const hold = changed && editing();
-            await window.swapScreen(followUp, { content: changed && !hold });
-            if (hold) offerReload();
+            // editing() is asked again right before the content is replaced, after
+            // the screen has been fetched: typing during that fetch counts too.
+            const result = await window.swapScreen(followUp, {
+                content: changed,
+                allow: () => !editing(),
+                redirect: false,
+            });
+            if (changed && result !== 'swapped') offerReload();
         } catch {
             // Best effort: the data on screen is still the warm data.
         }

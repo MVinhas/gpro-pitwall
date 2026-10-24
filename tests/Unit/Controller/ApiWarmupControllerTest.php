@@ -155,4 +155,52 @@ final class ApiWarmupControllerTest extends TestCase
         $this->assertSame('{"status":"in_progress","fetched":[]}', $body);
         $this->assertSame([], $fetcher->calls);
     }
+
+    public function testIdleSyncSavesTheBudgetFigureItProducedAfterReleasingTheSession(): void
+    {
+        $dir = $this->cacheDir . '_sessions';
+        mkdir($dir, 0700, true);
+        $prior = [
+            ini_set('session.save_path', $dir),
+            ini_set('session.use_cookies', '0'),
+            ini_set('session.cache_limiter', ''),
+        ];
+        try {
+            session_id('idlebudgettest');
+            $this->assertTrue(session_start());
+            $_SESSION = [
+                'user_id' => 7,
+                AuthService::SYNC_PENDING => true,
+                AuthService::IDLE_SYNC_OFFERED => true,
+                'api_limit' => 100,
+                'api_limit_updated_at' => 1,
+            ];
+            $users = $this->createStub(UserRepository::class);
+            $users->method('findById')->willReturn(['id' => 7, 'api_token' => 'tok']);
+            $fetcher = new ScriptedGproFetcher();
+            $fetcher->remaining = 64;
+
+            $this->idle($this->controller($users, $fetcher));
+
+            $this->assertSame(PHP_SESSION_NONE, session_status(), 'the session is released again');
+            session_id('idlebudgettest');
+            $this->assertTrue(session_start());
+            $this->assertSame(64, $_SESSION['api_limit']);
+            $this->assertGreaterThan(1, $_SESSION['api_limit_updated_at']);
+            $this->assertArrayNotHasKey(AuthService::SYNC_PENDING, $_SESSION);
+            $this->assertArrayNotHasKey(AuthService::IDLE_SYNC_OFFERED, $_SESSION);
+            $this->assertSame(7, $_SESSION['user_id']);
+        } finally {
+            if (session_status() === PHP_SESSION_ACTIVE) {
+                session_write_close();
+            }
+            ini_set('session.save_path', (string) $prior[0]);
+            ini_set('session.use_cookies', (string) $prior[1]);
+            ini_set('session.cache_limiter', (string) $prior[2]);
+            foreach (glob($dir . '/*') ?: [] as $f) {
+                @unlink($f);
+            }
+            @rmdir($dir);
+        }
+    }
 }

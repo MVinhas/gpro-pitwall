@@ -193,11 +193,17 @@ class PageController
         };
         $deferred = (string) $request->get('fragment', '') === ''
             && DeferredRender::shouldDefer($wait, $syncPending, $activeMainTab, $isWarm);
-        $idleSync = DeferredRender::idleSync($wait, $syncPending, $deferred, $isWarm);
+        $idleSync = DeferredRender::idleSync(
+            $wait,
+            $syncPending,
+            $deferred,
+            !empty($_SESSION[AuthService::IDLE_SYNC_OFFERED]),
+            $isWarm,
+        );
 
         $freshSync = false;
-        if ($syncPending && !$deferred && !$idleSync) {
-            unset($_SESSION[AuthService::SYNC_PENDING]);
+        if (DeferredRender::syncsInline($syncPending, $deferred, $idleSync)) {
+            unset($_SESSION[AuthService::SYNC_PENDING], $_SESSION[AuthService::IDLE_SYNC_OFFERED]);
             $this->syncService->trySyncForUser($user, false);
             // Re-read for the sync outcome and timestamp the status line shows.
             $user = $this->userRepo->findById((int) $user['id']) ?? $user;
@@ -249,6 +255,10 @@ class PageController
         ];
 
         if ($idleSync) {
+            // Only a full page carries the script that answers the offer.
+            if ((string) $request->get('fragment', '') === '') {
+                $_SESSION[AuthService::IDLE_SYNC_OFFERED] = true;
+            }
             $viewData['idle_sync'] = true;
             $viewData['idle_follow_url'] = DeferredRender::followUpUrl($request->getPath(), $request->query());
         }

@@ -245,7 +245,7 @@ final class GproApiClientArchiveTest extends TestCase
         $this->assertFalse($client->isWarm(), 'an expired row would be fetched again, so the page is not warm');
     }
 
-    public function testAWarmPendingPageRequestSpendsNoCalls(): void
+    public function testDecidingAWarmPendingPageRendersNowAndFetchesNothing(): void
     {
         $client = $this->client();
         $client->getOfficeData();
@@ -261,7 +261,7 @@ final class GproApiClientArchiveTest extends TestCase
         $deferred = DeferredRender::shouldDefer(false, true, 'Cockpit', $isWarm);
 
         $this->assertFalse($deferred, 'a warm login renders now');
-        $this->assertTrue(DeferredRender::idleSync(false, true, $deferred, $isWarm));
+        $this->assertTrue(DeferredRender::idleSync(false, true, $deferred, false, $isWarm));
         $this->assertSame($spent, count($this->fetcher->calls), 'deciding costs no GPRO call');
     }
 

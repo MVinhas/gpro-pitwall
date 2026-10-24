@@ -57,12 +57,26 @@ final class DeferredRender
      * Whether a page that rendered from warm data should ask the browser to
      * run the owed login sync once idle, instead of syncing inline. The
      * follow-up request (`wait`) always syncs inline: it exists to do the work.
+     * So does any page after one that already offered the idle sync ($offered):
+     * a browser that never ran it (no JavaScript) must not stay unsynced for
+     * as long as the cache stays warm.
      *
-     * @param Closure(): bool $isWarm probed only when a sync is owed
+     * @param Closure(): bool $isWarm probed only when the answer depends on it
      */
-    public static function idleSync(bool $wait, bool $syncPending, bool $deferred, Closure $isWarm): bool
+    public static function idleSync(
+        bool $wait,
+        bool $syncPending,
+        bool $deferred,
+        bool $offered,
+        Closure $isWarm,
+    ): bool {
+        return $syncPending && !$wait && !$deferred && !$offered && $isWarm();
+    }
+
+    /** Whether the page itself runs the owed login sync before rendering. */
+    public static function syncsInline(bool $syncPending, bool $deferred, bool $idleSync): bool
     {
-        return $syncPending && !$wait && !$deferred && $isWarm();
+        return $syncPending && !$deferred && !$idleSync;
     }
 
     /**
