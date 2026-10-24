@@ -17,6 +17,7 @@ use App\Service\AuthService;
 use App\Service\BaselineAutoFillService;
 use App\Service\GproApiClient;
 use App\Service\GproSyncService;
+use App\Service\HarvestService;
 use App\Service\PilotCalculatorService;
 use App\Service\RaceHistoryService;
 use App\Service\RaceTelemetryService;
@@ -60,8 +61,14 @@ final class ApiWarmupControllerTest extends TestCase
         @rmdir($this->cacheDir);
     }
 
-    private function controller(UserRepository $users, ScriptedGproFetcher $fetcher): ApiWarmupController
-    {
+    private function controller(
+        UserRepository $users,
+        ScriptedGproFetcher $fetcher,
+        bool $harvestDue = false,
+    ): ApiWarmupController {
+        $harvest = $this->createStub(HarvestService::class);
+        $harvest->method('isDue')->willReturn($harvestDue);
+
         $db = new PDO('sqlite::memory:');
         $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         (new DatabaseSeeder(
@@ -97,7 +104,7 @@ final class ApiWarmupControllerTest extends TestCase
             new SyncPlanner(),
         );
 
-        return new ApiWarmupController($sync, new Authorize($users));
+        return new ApiWarmupController($sync, new Authorize($users), $harvest);
     }
 
     private function idle(ApiWarmupController $controller): string
@@ -124,11 +131,37 @@ final class ApiWarmupControllerTest extends TestCase
         $this->assertArrayNotHasKey(AuthService::SYNC_PENDING, $_SESSION);
         $json = json_decode($body, true);
         $this->assertIsArray($json);
-        $this->assertSame(['status', 'fetched'], array_keys($json));
+        $this->assertSame(['status', 'fetched', 'harvest_due'], array_keys($json));
         $this->assertSame('synced', $json['status']);
         $this->assertContains(Endpoint::OFFICE, $json['fetched']);
         $this->assertStringNotContainsString('secret-token', $body);
         $this->assertNotSame([], $fetcher->calls, 'the sync really ran');
+    }
+
+    public function testIdleSyncSaysWhetherTheHarvestIsDueOnceTheSyncIsDone(): void
+    {
+        $users = $this->createStub(UserRepository::class);
+        $users->method('findById')->willReturn(['id' => 7, 'api_token' => 'tok']);
+        $_SESSION = ['user_id' => 7, AuthService::SYNC_PENDING => true];
+
+        $body = $this->idle($this->controller($users, new ScriptedGproFetcher(), true));
+
+        $json = json_decode($body, true);
+        $this->assertIsArray($json);
+        $this->assertTrue($json['harvest_due']);
+    }
+
+    public function testIdleSyncWhenNothingIsOwedStillSaysWhetherTheHarvestIsDue(): void
+    {
+        $users = $this->createStub(UserRepository::class);
+        $users->method('findById')->willReturn(['id' => 7, 'api_token' => 'tok']);
+        $fetcher = new ScriptedGproFetcher();
+        $_SESSION = ['user_id' => 7];
+
+        $body = $this->idle($this->controller($users, $fetcher, true));
+
+        $this->assertSame('{"status":"idle","fetched":[],"harvest_due":true}', $body);
+        $this->assertSame([], $fetcher->calls);
     }
 
     public function testIdleSyncWithoutATokenSpendsNothing(): void
@@ -140,7 +173,7 @@ final class ApiWarmupControllerTest extends TestCase
 
         $body = $this->idle($this->controller($users, $fetcher));
 
-        $this->assertSame('{"status":"needs_token","fetched":[]}', $body);
+        $this->assertSame('{"status":"needs_token","fetched":[],"harvest_due":false}', $body);
         $this->assertSame([], $fetcher->calls);
     }
 
@@ -154,7 +187,7 @@ final class ApiWarmupControllerTest extends TestCase
 
         $body = $this->idle($this->controller($users, $fetcher));
 
-        $this->assertSame('{"status":"in_progress","fetched":[]}', $body);
+        $this->assertSame('{"status":"in_progress","fetched":[],"harvest_due":false}', $body);
         $this->assertSame([], $fetcher->calls);
     }
 
@@ -215,7 +248,7 @@ final class ApiWarmupControllerTest extends TestCase
 
         $body = $this->idle($this->controller($users, $fetcher));
 
-        $this->assertSame('{"status":"idle","fetched":[]}', $body);
+        $this->assertSame('{"status":"idle","fetched":[],"harvest_due":false}', $body);
         $this->assertSame([], $fetcher->calls);
     }
 

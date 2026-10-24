@@ -8,6 +8,7 @@ use App\Http\Request;
 use App\Security\Authorize;
 use App\Service\AuthService;
 use App\Service\GproSyncService;
+use App\Service\HarvestService;
 use App\Support\SessionBudget;
 use App\Sync\SyncPlanner;
 
@@ -16,6 +17,7 @@ final readonly class ApiWarmupController
     public function __construct(
         private GproSyncService $syncService,
         private Authorize $authorize,
+        private HarvestService $harvest,
     ) {
     }
 
@@ -70,7 +72,7 @@ final readonly class ApiWarmupController
         header('Content-Type: application/json');
 
         if (empty($_SESSION[AuthService::SYNC_PENDING])) {
-            echo json_encode(['status' => 'idle', 'fetched' => []]);
+            echo json_encode(['status' => 'idle', 'fetched' => [], 'harvest_due' => $this->harvest->isDue($user)]);
             return;
         }
 
@@ -81,6 +83,12 @@ final readonly class ApiWarmupController
 
         $budget->persist();
 
-        echo json_encode(['status' => $outcome->status, 'fetched' => $outcome->fetched]);
+        // Asked after the sync: the page starts the harvest loop only on this
+        // answer, so a slice never runs alongside the sync.
+        echo json_encode([
+            'status' => $outcome->status,
+            'fetched' => $outcome->fetched,
+            'harvest_due' => $this->harvest->isDue($user),
+        ]);
     }
 }

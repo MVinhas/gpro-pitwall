@@ -350,6 +350,9 @@ $container['sync.contexts'] = new \App\Sync\SyncContextFactory(
     $container['repo.api_archive'],
 );
 $container['sync.fetcher'] = new \App\Sync\EndpointFetcher($container['service.api_client']);
+// RaceAnalysis is phase-2 work for every user: the idle harvest fetches it, the
+// page-critical sync no longer does. One planner so both agree on that.
+$container['sync.planner'] = new \App\Sync\SyncPlanner(analysisInPhase2: true);
 $container['service.gpro_sync'] = new GproSyncService(
     $container['service.api_client'],
     $container['service.user_repo'],
@@ -359,7 +362,7 @@ $container['service.gpro_sync'] = new GproSyncService(
     $container['service.baseline_autofill'],
     $container['sync.contexts'],
     $container['sync.fetcher'],
-    new \App\Sync\SyncPlanner(),
+    $container['sync.planner'],
     Env::int('SYNC_SAFETY_MARGIN', 20),
 );
 $container['service.harvest'] = new \App\Service\HarvestService(
@@ -368,7 +371,7 @@ $container['service.harvest'] = new \App\Service\HarvestService(
     $container['repo.api_archive'],
     $container['sync.contexts'],
     $container['sync.fetcher'],
-    new \App\Sync\SyncPlanner(),
+    $container['sync.planner'],
     $container['service.api_throttle'],
     $container['archive.projector'],
     $container['archive.snapshots'],
@@ -524,6 +527,7 @@ $container['controller.page'] = new PageController(
     $container['service.data_mapper'],
     $container['service.recruitment'],
     $container['service.gpro_sync'],
+    $container['service.harvest'],
     $container['twig'],
     $container['config']
 );
@@ -585,6 +589,12 @@ use App\Controller\ApiWarmupController;
 
 $container['controller.api_warmup'] = new ApiWarmupController(
     $container['service.gpro_sync'],
+    $container['service.authorize'],
+    $container['service.harvest'],
+);
+
+$container['controller.api_harvest'] = new \App\Controller\ApiHarvestController(
+    $container['service.harvest'],
     $container['service.authorize'],
 );
 

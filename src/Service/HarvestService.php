@@ -23,7 +23,7 @@ use UnexpectedValueException;
  * endpoint (the page-critical sync owns that) and plans against the office the
  * last sync archived, so every row it files is stamped with that sync's race.
  */
-final class HarvestService
+class HarvestService
 {
     public const int MAX_CALLS = 3;
     public const int MAX_PROJECTIONS = 5;

@@ -427,6 +427,53 @@ window.localizeTimes(document);
 })();
 </script>
 
+{% if (idle_sync is defined and idle_sync) or (harvest_due is defined and harvest_due) %}
+<script>
+// Background GPRO work (phase 2 of the sync plan), a few calls per slice, only
+// while the browser is idle. The server caps what a slice may spend; this loop
+// is the client-side backstop: few slices per page load, spaced out, and it
+// stops at the first sign the work is done, blocked or failing. It never
+// navigates and never shows anything, so an expired session ends it silently.
+(() => {
+    const MAX_SLICES = 20;
+    const GAP_MS = 1000;
+    let started = false;
+    window.startHarvest = () => {
+        if (started) return;
+        started = true;
+        let slices = 0;
+        const schedule = () => {
+            if (slices >= MAX_SLICES) return;
+            setTimeout(() => {
+                if ('requestIdleCallback' in window) window.requestIdleCallback(slice, { timeout: 5000 });
+                else slice();
+            }, GAP_MS);
+        };
+        const slice = async () => {
+            slices++;
+            try {
+                const res = await fetch('/api/harvest', {
+                    method: 'POST',
+                    keepalive: true,
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'},
+                    body: new URLSearchParams({ csrf_token: '{{ csrf_token }}' })
+                });
+                if (!res.ok) return;
+                const data = await res.json();
+                if (data.status === 'more') schedule();
+            } catch {
+                // Best effort: nothing on screen depends on it.
+            }
+        };
+        schedule();
+    };
+{% if harvest_due is defined and harvest_due %}
+    window.startHarvest();
+{% endif %}
+})();
+</script>
+{% endif %}
+
 {% if idle_sync is defined and idle_sync %}
 <script>
 // The login sync is owed but the page already rendered from warm data: run it
@@ -512,6 +559,8 @@ window.localizeTimes(document);
                 redirect: false,
             });
             if (changed && result !== 'swapped') offerReload();
+            // The harvest waits for the sync's answer: never alongside the sync.
+            if (data.harvest_due === true) window.startHarvest?.();
         } catch {
             // Best effort: the data on screen is still the warm data.
             recheckStatus();
