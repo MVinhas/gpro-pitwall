@@ -181,7 +181,7 @@ final class HarvestServiceTest extends TestCase
             $this->archive,
             new SyncContextFactory($this->client, $this->archive),
             new EndpointFetcher($this->client),
-            new SyncPlanner(true),
+            new SyncPlanner(),
             $throttle ?? $this->throttle(),
             $this->projector(),
             new RaceSnapshotReader($this->archive),
@@ -198,12 +198,9 @@ final class HarvestServiceTest extends TestCase
             $this->client,
             $this->createStub(UserRepository::class),
             $this->cache,
-            $this->telemetry(),
-            $this->history(),
-            $this->autofill(),
             new SyncContextFactory($this->client, $this->archive),
             new EndpointFetcher($this->client),
-            new SyncPlanner(true),
+            new SyncPlanner(),
         );
         $this->assertSame('synced', $sync->sync(self::USER, SyncPlanner::MODE_LOGIN)->status);
     }
@@ -672,6 +669,54 @@ final class HarvestServiceTest extends TestCase
         // The analysis of a race that is over counts as asked once it was, so only the other two return.
         $this->assertSame(2, $fourth->calls);
         $this->assertSame(['Standings', 'EconomyHistory?Page=1&show=table'], $this->gpro->requests);
+    }
+
+    /** A thrown analysis at $parisTime, then the hour-long failure memo expires: is the analysis asked again? */
+    private function analysisAskedAgainAfterAThrow(string $parisTime): bool
+    {
+        $this->userAtANewRace();
+        $this->now = new \DateTimeImmutable($parisTime, new \DateTimeZone('Europe/Paris'));
+        $this->gpro->failing = ['RaceAnalysis'];
+        $harvest = $this->harvest();
+        $harvest->runSlice(self::USER);
+        $this->assertContains('RaceAnalysis', $this->gpro->requests);
+
+        foreach (array_keys($this->store->store) as $key) {
+            if (str_contains($key, 'harvest_failed')) {
+                $this->cache->delete($key);
+            }
+        }
+        $this->gpro->failing = [];
+        $this->gpro->requests = [];
+        $this->settle();
+        $harvest->runSlice(self::USER);
+
+        return in_array('RaceAnalysis', $this->gpro->requests, true);
+    }
+
+    public function testAThrownAnalysisAfterTheRaceLeavesAMarkerAndIsNotAskedAgain(): void
+    {
+        $this->assertFalse($this->analysisAskedAgainAfterAThrow('2026-10-23 21:30'));
+        $this->assertTrue($this->cache->has($this->scopeKey('analysis_attempt:w2026-10-23')));
+    }
+
+    public function testAThrownAnalysisBeforeTheRaceEndedLeavesNoMarkerAndIsAskedAgain(): void
+    {
+        $this->assertTrue($this->analysisAskedAgainAfterAThrow('2026-10-23 20:30'));
+        $this->assertFalse($this->cache->has($this->scopeKey('analysis_attempt:w2026-10-23')));
+    }
+
+    public function testANonSupporterAnalysisIsNeitherAFailureNorRecorded(): void
+    {
+        $this->gpro->responses['RaceAnalysis'] = ['errorMsg' => 'Supporters only', 'data' => []];
+        $this->userAtANewRace();
+
+        $result = $this->harvest()->runSlice(self::USER);
+
+        $this->assertContains('RaceAnalysis', $this->gpro->requests);
+        $this->assertNotSame('busy', $result->status);
+        $this->assertSame(0, $this->rows('race_telemetry'));
+        $this->assertSame(0, $this->rows('user_race_history'));
     }
 
     public function testAFailedBackfillIsNotRetriedStraightAway(): void

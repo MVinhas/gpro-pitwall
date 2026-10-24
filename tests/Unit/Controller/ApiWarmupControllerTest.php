@@ -14,13 +14,9 @@ use App\Repository\UserRepository;
 use App\Security\ApiTokenCrypto;
 use App\Security\Authorize;
 use App\Service\AuthService;
-use App\Service\BaselineAutoFillService;
 use App\Service\GproApiClient;
 use App\Service\GproSyncService;
 use App\Service\HarvestService;
-use App\Service\PilotCalculatorService;
-use App\Service\RaceHistoryService;
-use App\Service\RaceTelemetryService;
 use App\Sync\Endpoint;
 use App\Sync\SyncPlanner;
 use App\Tests\Support\ScriptedGproFetcher;
@@ -85,20 +81,6 @@ final class ApiWarmupControllerTest extends TestCase
             $client,
             $users,
             $this->cache,
-            new RaceTelemetryService(
-                new \App\Repository\RaceTelemetryRepository($db),
-                new \App\Telemetry\RaceTelemetryMapper(),
-            ),
-            new RaceHistoryService(
-                new \App\Repository\RaceHistoryRepository($db),
-                new \App\Telemetry\RaceHistoryMapper(),
-                new \App\Repository\TrackRepository($db),
-            ),
-            new BaselineAutoFillService(
-                new \App\Repository\RaceTelemetryRepository($db),
-                new \App\Repository\PilotRepository($db),
-                new PilotCalculatorService([], []),
-            ),
             new \App\Sync\SyncContextFactory($client, $archive),
             new \App\Sync\EndpointFetcher($client),
             new SyncPlanner(),

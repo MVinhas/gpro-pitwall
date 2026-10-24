@@ -352,14 +352,11 @@ $container['sync.contexts'] = new \App\Sync\SyncContextFactory(
 $container['sync.fetcher'] = new \App\Sync\EndpointFetcher($container['service.api_client']);
 // RaceAnalysis is phase-2 work for every user: the idle harvest fetches it, the
 // page-critical sync no longer does. One planner so both agree on that.
-$container['sync.planner'] = new \App\Sync\SyncPlanner(analysisInPhase2: true);
+$container['sync.planner'] = new \App\Sync\SyncPlanner();
 $container['service.gpro_sync'] = new GproSyncService(
     $container['service.api_client'],
     $container['service.user_repo'],
     $container['service.cache'],
-    $container['service.race_telemetry'],
-    $container['service.race_history'],
-    $container['service.baseline_autofill'],
     $container['sync.contexts'],
     $container['sync.fetcher'],
     $container['sync.planner'],

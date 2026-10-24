@@ -10,10 +10,10 @@ use App\Telemetry\RaceHistoryMapper;
 use Throwable;
 
 /**
- * Archives one manager's own race in full, from the payloads the sync has
- * already fetched.
+ * Archives one manager's own race in full, from payloads already archived
+ * (the ArchiveProjector rebuilds it from the raw archive).
  *
- * Runs alongside RaceTelemetryService on every sync: that one contributes an
+ * The counterpart of RaceTelemetryService, which the harvest feeds: that one contributes an
  * anonymous row to the shared corpus, this one keeps the detailed record under
  * the manager's own id. Neither can see the other's table.
  *

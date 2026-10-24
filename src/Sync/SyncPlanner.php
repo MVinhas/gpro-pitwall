@@ -22,9 +22,10 @@ final class SyncPlanner
 
     private const int PHASE2_FLOOR = 50;
 
+    /** Phase-1 snapshot endpoints, in spending order. RaceAnalysis is always phase 2. */
     private const array PRIORITY = [
         Endpoint::DRIVER, Endpoint::CAR, Endpoint::TRACK, Endpoint::SETUP, Endpoint::TESTING,
-        Endpoint::STAFF, Endpoint::TD, Endpoint::SPONSORS, Endpoint::MONEY, Endpoint::ANALYSIS,
+        Endpoint::STAFF, Endpoint::TD, Endpoint::SPONSORS, Endpoint::MONEY,
     ];
 
     private const array SEASON_PHASE1 = [Endpoint::CALENDAR, Endpoint::TYRES, Endpoint::MENU];
@@ -41,10 +42,6 @@ final class SyncPlanner
         'doneStaffTrain' => [Endpoint::STAFF],
         'doneFacilitiesUpdate' => [Endpoint::STAFF],
     ];
-
-    public function __construct(private bool $analysisInPhase2 = false)
-    {
-    }
 
     public function plan(SyncContext $ctx): SyncPlan
     {
@@ -76,9 +73,7 @@ final class SyncPlanner
 
         $ordered = array_values(array_filter(
             self::PRIORITY,
-            fn (string $e): bool => in_array($e, $planned, true)
-                && in_array($e, $eligible, true)
-                && ($e !== Endpoint::ANALYSIS || !$this->analysisInPhase2),
+            static fn (string $e): bool => in_array($e, $planned, true) && in_array($e, $eligible, true),
         ));
 
         return [...$ordered, ...$this->missing(self::SEASON_PHASE1, $ctx->archivedThisSeason)];
@@ -91,10 +86,7 @@ final class SyncPlanner
     {
         $planned = [];
         $newRace = $this->isNewRace($ctx);
-        if ($this->analysisInPhase2 && ($newRace || !in_array(Endpoint::ANALYSIS, $ctx->archivedThisRace, true))) {
-            $planned[] = Endpoint::ANALYSIS;
-        }
-        foreach ([Endpoint::STANDINGS, Endpoint::ECONOMY] as $endpoint) {
+        foreach ([Endpoint::ANALYSIS, Endpoint::STANDINGS, Endpoint::ECONOMY] as $endpoint) {
             if ($newRace || !in_array($endpoint, $ctx->archivedThisRace, true)) {
                 $planned[] = $endpoint;
             }

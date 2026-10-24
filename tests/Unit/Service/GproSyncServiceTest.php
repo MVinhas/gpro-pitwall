@@ -10,7 +10,7 @@ use App\Repository\ApiArchiveRepository;
 use App\Repository\UserRepository;
 use App\Service\GproApiClient;
 use App\Service\GproSyncService;
-use App\Service\RaceTelemetryService;
+use App\Sync\Endpoint;
 use App\Sync\EndpointFetcher;
 use App\Sync\SyncContextFactory;
 use App\Sync\SyncOutcome;
@@ -26,10 +26,19 @@ final class GproSyncServiceTest extends TestCase
     private string $cacheDir;
     private FilesystemCache $cache;
     private mixed $priorRaceDays = null;
+    private string|false $priorErrorLog = false;
+    private string $quietLog = '';
 
     protected function setUp(): void
     {
         $this->cacheDir = sys_get_temp_dir() . '/gpro_sync_' . bin2hex(random_bytes(6));
+        // The service logs through error_log(); tests that read the log redirect it themselves.
+        $logDir = dirname(__DIR__, 3) . '/var/test';
+        if (!is_dir($logDir)) {
+            mkdir($logDir, 0750, true);
+        }
+        $this->quietLog = $logDir . '/sync-quiet-' . bin2hex(random_bytes(6)) . '.log';
+        $this->priorErrorLog = ini_set('error_log', $this->quietLog);
         $this->cache = new FilesystemCache($this->cacheDir);
         $this->priorRaceDays = $_ENV['GPRO_RACE_DAYS'] ?? null;
         $_ENV['GPRO_RACE_DAYS'] = '';
@@ -37,6 +46,8 @@ final class GproSyncServiceTest extends TestCase
 
     protected function tearDown(): void
     {
+        ini_set('error_log', (string) $this->priorErrorLog);
+        @unlink($this->quietLog);
         if ($this->priorRaceDays === null) {
             unset($_ENV['GPRO_RACE_DAYS']);
         } else {
@@ -77,36 +88,6 @@ final class GproSyncServiceTest extends TestCase
         return $db;
     }
 
-    private function telemetry(?\PDO $db = null): RaceTelemetryService
-    {
-        return new RaceTelemetryService(
-            new \App\Repository\RaceTelemetryRepository($db ?? $this->sink()),
-            new \App\Telemetry\RaceTelemetryMapper(),
-        );
-    }
-
-    private function autofill(?\PDO $db = null): \App\Service\BaselineAutoFillService
-    {
-        $db ??= $this->sink();
-
-        return new \App\Service\BaselineAutoFillService(
-            new \App\Repository\RaceTelemetryRepository($db),
-            new \App\Repository\PilotRepository($db),
-            new \App\Service\PilotCalculatorService([], []),
-        );
-    }
-
-    private function history(?\PDO $db = null): \App\Service\RaceHistoryService
-    {
-        $db ??= $this->sink();
-
-        return new \App\Service\RaceHistoryService(
-            new \App\Repository\RaceHistoryRepository($db),
-            new \App\Telemetry\RaceHistoryMapper(),
-            new \App\Repository\TrackRepository($db),
-        );
-    }
-
     private function service(UserRepository $users, ?GproApiClient $client = null, ?\PDO $db = null, int $margin = 20): GproSyncService
     {
         $db ??= $this->sink();
@@ -116,9 +97,6 @@ final class GproSyncServiceTest extends TestCase
             $client,
             $users,
             $this->cache,
-            $this->telemetry($db),
-            $this->history($db),
-            $this->autofill($db),
             new SyncContextFactory($client, new ApiArchiveRepository($db, new ArchiveSanitizer())),
             new EndpointFetcher($client),
             new SyncPlanner(),
@@ -130,7 +108,7 @@ final class GproSyncServiceTest extends TestCase
      * A service wired to a scripted GPRO over a real archive, so tests can
      * count exactly which endpoints a sync spent calls on.
      *
-     * @return array{GproSyncService, ScriptedGproFetcher, \PDO}
+     * @return array{GproSyncService, ScriptedGproFetcher, \PDO, GproApiClient}
      */
     private function scripted(?UserRepository $users = null, ?\DateTimeImmutable $now = null): array
     {
@@ -143,7 +121,23 @@ final class GproSyncServiceTest extends TestCase
             $now === null ? null : static fn (): \DateTimeImmutable => $now,
         );
 
-        return [$this->service($users ?? $this->createStub(UserRepository::class), $client, $db), $fetcher, $db];
+        return [$this->service($users ?? $this->createStub(UserRepository::class), $client, $db), $fetcher, $db, $client];
+    }
+
+    /** What the idle harvest does with RaceAnalysis: fetch it through the same fetcher, which archives the answer. */
+    private function harvestAnswersTheAnalysis(GproApiClient $client): void
+    {
+        (new EndpointFetcher($client))->fetch(Endpoint::ANALYSIS);
+    }
+
+    /** Whether the harvest that follows this sync would still ask for the race analysis. */
+    private function harvestPlansAnalysis(GproApiClient $client, \PDO $db, ScriptedGproFetcher $fetcher): bool
+    {
+        $office = $fetcher->office;
+        $ctx = (new SyncContextFactory($client, new ApiArchiveRepository($db, new ArchiveSanitizer())))
+            ->build(7, $client->tokenScope(), $office, $office, 90, SyncPlanner::MODE_HARVEST);
+
+        return in_array(Endpoint::ANALYSIS, array_column((new SyncPlanner())->plan($ctx)->phase2, 'endpoint'), true);
     }
 
     /** @return list<string> */
@@ -266,124 +260,19 @@ final class GproSyncServiceTest extends TestCase
         $this->assertContains('failed', $statuses, 'unreachable API must end in failed');
     }
 
-    /** @return array<string, mixed> */
-    private function analysisPayload(int $driverId): array
-    {
-        $laps = [['idx' => 0, 'pos' => 8, 'tyres' => 'Hard', 'weather' => 'Sunny', 'temp' => 44, 'hum' => 35]];
-        for ($i = 1; $i <= 5; $i++) {
-            $laps[] = ['idx' => $i, 'pos' => 5, 'tyres' => 'Hard', 'weather' => 'Sunny', 'temp' => 44, 'hum' => 35, 'lapTime' => '1:14.100'];
-        }
+    private const array USER = ['id' => 7, 'api_token' => 'tok'];
 
-        return [
-            'selSeasonNb' => '107',
-            'selRaceNb' => '13',
-            'group' => 'Amateur - 4',
-            'trackName' => 'Hockenheim (Germany)',
-            'driver' => ['name' => 'Test Driver', 'id' => $driverId, 'OA' => '140'],
-            'laps' => $laps,
-        ];
-    }
-
-    /**
-     * @param array<string, mixed> $office
-     * @param array<string, mixed> $analysis
-     * @param array<string, mixed> $driverProfile
-     * @param array<string, mixed> $td
-     * @return array{history: array<string, mixed>, telemetry: array<string, mixed>}
-     */
-    private function runFullSync(array $office, array $analysis, array $driverProfile, array $td): array
+    public function testTheSyncNeverFetchesTheAnalysisNorWritesHistoryOrTelemetry(): void
     {
         [$svc, $fetcher, $db] = $this->scripted();
-        $fetcher->office = $office + $fetcher->office;
-        $fetcher->analysis = $analysis;
-        $fetcher->driverProfile = $driverProfile;
-        $fetcher->td = $td;
 
-        $this->assertSame('synced', $svc->trySyncForUser(['id' => 7, 'api_token' => 'tok'], false));
+        $outcome = $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
 
-        $history = $db->query('SELECT driver_json, td_json FROM user_race_history')->fetch(\PDO::FETCH_ASSOC);
-        $telemetry = $db->query('SELECT has_td, td_overall, driver_age FROM race_telemetry')->fetch(\PDO::FETCH_ASSOC);
-        $this->assertIsArray($history);
-        $this->assertIsArray($telemetry);
-
-        return ['history' => $history, 'telemetry' => $telemetry];
+        $this->assertSame('synced', $outcome->status);
+        $this->assertNotContains('RaceAnalysis', $fetcher->calls, 'RaceAnalysis is the idle harvest\'s');
+        $this->assertSame(0, (int) $db->query('SELECT COUNT(*) FROM user_race_history')->fetchColumn());
+        $this->assertSame(0, (int) $db->query('SELECT COUNT(*) FROM race_telemetry')->fetchColumn());
     }
-
-    /** @return array<string, array{string}> */
-    public static function noTdIds(): array
-    {
-        return ['empty' => [''], 'zero' => ['0']];
-    }
-
-    #[DataProvider('noTdIds')]
-    public function testManagerWithoutTdArchivesNoTdBlockNotThePlaceholder(string $tdId): void
-    {
-        $rows = $this->runFullSync(
-            ['driId' => '1234', 'tdId' => $tdId],
-            $this->analysisPayload(1234),
-            ['age' => 27],
-            ['tdName' => 'Unknown technical director', 'ownTD' => 0, 'overall' => 0],
-        );
-
-        $this->assertSame('[]', $rows['history']['td_json']);
-        $this->assertSame(0, (int) $rows['telemetry']['has_td']);
-        $this->assertNull($rows['telemetry']['td_overall']);
-    }
-
-    public function testManagerWithTdArchivesTheTd(): void
-    {
-        $rows = $this->runFullSync(
-            ['driId' => '1234', 'tdId' => '55'],
-            $this->analysisPayload(1234),
-            ['age' => 27],
-            ['tdName' => 'Ada Byron', 'overall' => 50],
-        );
-
-        $this->assertSame('Ada Byron', json_decode((string) $rows['history']['td_json'], true)['name']);
-        $this->assertSame(1, (int) $rows['telemetry']['has_td']);
-        $this->assertSame(50, (int) $rows['telemetry']['td_overall']);
-    }
-
-    public function testDriverAgeComesFromTheProfileWhenItIsTheRacingDriver(): void
-    {
-        $rows = $this->runFullSync(
-            ['driId' => '1234', 'tdId' => ''],
-            $this->analysisPayload(1234),
-            ['age' => 27],
-            [],
-        );
-
-        $this->assertSame(27, json_decode((string) $rows['history']['driver_json'], true)['age']);
-        $this->assertSame(27, (int) $rows['telemetry']['driver_age']);
-    }
-
-    public function testDriverAgeIsNotTakenFromADifferentCurrentDriver(): void
-    {
-        $rows = $this->runFullSync(
-            ['driId' => '9999', 'tdId' => ''],
-            $this->analysisPayload(1234),
-            ['age' => 40],
-            [],
-        );
-
-        $this->assertNull(json_decode((string) $rows['history']['driver_json'], true)['age']);
-        $this->assertNull($rows['telemetry']['driver_age']);
-    }
-
-    public function testNoDriverUnderContractNeverMatchesTheRacingDriver(): void
-    {
-        $analysis = $this->analysisPayload(1234);
-
-        $this->assertTrue(GproSyncService::raceWasRunByCurrentDriver($analysis, ['driId' => ' 1234 ']));
-        $this->assertFalse(GproSyncService::raceWasRunByCurrentDriver($analysis, ['driId' => '9999']));
-        $this->assertFalse(GproSyncService::raceWasRunByCurrentDriver($analysis, ['driId' => '']));
-        $this->assertFalse(GproSyncService::raceWasRunByCurrentDriver($analysis, ['driId' => '0']));
-        $this->assertFalse(GproSyncService::raceWasRunByCurrentDriver($analysis, []));
-        $this->assertFalse(GproSyncService::raceWasRunByCurrentDriver([], ['driId' => '']));
-        $this->assertFalse(GproSyncService::raceWasRunByCurrentDriver(['driver' => ['id' => 0]], ['driId' => '0']));
-    }
-
-    private const array USER = ['id' => 7, 'api_token' => 'tok'];
 
     public function testFirstLoginSpendsTheFullSnapshotAndRecordsTheOutcome(): void
     {
@@ -396,13 +285,13 @@ final class GproSyncServiceTest extends TestCase
         $this->assertSame(
             self::sorted([
                 'office', 'DriProfile', 'UpdateCar', 'TrackProfile', 'RaceSetup', 'Testing', 'StaffAndFacilities',
-                'TDProfile', 'NegOverview', 'MoneyLevels', 'RaceAnalysis', 'Calendar', 'TyreSuppliers', 'Menu',
+                'TDProfile', 'NegOverview', 'MoneyLevels', 'Calendar', 'TyreSuppliers', 'Menu',
             ]),
             self::sorted($fetcher->calls),
         );
         $this->assertSame(count($fetcher->calls), $outcome->calls);
         $this->assertContains('OFFICE', $outcome->fetched);
-        $this->assertContains('ANALYSIS', $outcome->fetched);
+        $this->assertNotContains('ANALYSIS', $outcome->fetched);
     }
 
     public function testUnchangedReloginCostsExactlyTheOfficeCall(): void
@@ -448,7 +337,7 @@ final class GproSyncServiceTest extends TestCase
         $this->assertSame(
             self::sorted([
                 'office', 'DriProfile', 'UpdateCar', 'TrackProfile', 'RaceSetup', 'Testing', 'StaffAndFacilities',
-                'TDProfile', 'NegOverview', 'MoneyLevels', 'RaceAnalysis', 'Calendar', 'TyreSuppliers', 'Menu',
+                'TDProfile', 'NegOverview', 'MoneyLevels', 'Calendar', 'TyreSuppliers', 'Menu',
             ]),
             self::sorted($fetcher->calls),
             'the previous account\'s rows must not suppress the new account\'s first snapshot',
@@ -502,7 +391,6 @@ final class GproSyncServiceTest extends TestCase
         $this->assertSame('synced', $outcome->status);
         $this->assertNotContains('TESTING', $outcome->fetched);
         $this->assertContains('SETUP', $outcome->fetched);
-        $this->assertContains('ANALYSIS', $outcome->fetched);
     }
 
     public function testFailedEndpointLogsClassOnlyAndNeverTheMessage(): void
@@ -613,7 +501,6 @@ final class GproSyncServiceTest extends TestCase
         $this->assertSame('synced', $outcome->status);
         $this->assertNotContains('DriProfile', $fetcher->calls);
         $this->assertContains('CAR', $outcome->fetched);
-        $this->assertContains('ANALYSIS', $outcome->fetched);
     }
 
     public function testTdIsDecidedByTheOfficeTdIdNotByDivision(): void
@@ -627,9 +514,9 @@ final class GproSyncServiceTest extends TestCase
         $this->assertNotContains('TDProfile', $fetcher->calls);
     }
 
-    public function testFailedDriverProfileFallsBackToNoAgeAndStillArchivesTheRace(): void
+    public function testFailedDriverProfileIsNotRetriedAndDoesNotFailTheSync(): void
     {
-        [$svc, $fetcher, $db] = $this->scripted();
+        [$svc, $fetcher] = $this->scripted();
         $fetcher->failing = ['DriProfile'];
 
         $outcome = $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
@@ -637,26 +524,6 @@ final class GproSyncServiceTest extends TestCase
         $this->assertSame('synced', $outcome->status);
         $this->assertNotContains('DRIVER', $outcome->fetched);
         $this->assertSame(1, count(array_keys($fetcher->calls, 'DriProfile', true)), 'a failed planned call is not retried');
-        $history = $db->query('SELECT driver_json FROM user_race_history')->fetch(\PDO::FETCH_ASSOC);
-        $this->assertIsArray($history);
-        $this->assertNull(json_decode((string) $history['driver_json'], true)['age']);
-        $telemetry = $db->query('SELECT driver_age FROM race_telemetry')->fetch(\PDO::FETCH_ASSOC);
-        $this->assertIsArray($telemetry);
-        $this->assertNull($telemetry['driver_age']);
-    }
-
-    public function testHistoryAndTelemetryAreWrittenOnlyWhenTheAnalysisWasFetched(): void
-    {
-        [$svc, $fetcher, $db] = $this->scripted();
-        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
-        $this->assertSame(1, (int) $db->query('SELECT COUNT(*) FROM user_race_history')->fetchColumn());
-        $db->exec('DELETE FROM user_race_history');
-        $db->exec('DELETE FROM race_telemetry');
-
-        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
-
-        $this->assertSame(0, (int) $db->query('SELECT COUNT(*) FROM user_race_history')->fetchColumn());
-        $this->assertSame(0, (int) $db->query('SELECT COUNT(*) FROM race_telemetry')->fetchColumn());
     }
 
     public function testEndOfSeasonSkipsTheTrackProfileSilently(): void
@@ -693,30 +560,34 @@ final class GproSyncServiceTest extends TestCase
         $this->assertSame([], $fetcher->calls);
     }
 
-    public function testAnalysisOfAnOlderRaceIsFetchedAgainOnRelogin(): void
+    public function testAnalysisOfAnOlderRaceIsPlannedAgainAfterRelogin(): void
     {
-        [$svc, $fetcher] = $this->scripted();
+        [$svc, $fetcher, $db, $client] = $this->scripted();
         $fetcher->analysis['selRaceNb'] = '11';
         $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
-        $fetcher->calls = [];
-
-        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
-
-        $this->assertSame(['office', 'RaceAnalysis'], $fetcher->calls);
-    }
-
-    public function testFirstRaceOfASeasonTreatsAnyPreviousSeasonRaceAsTheAnalysisJustRun(): void
-    {
-        [$svc, $fetcher] = $this->scripted();
-        $fetcher->office['raceNb'] = 1;
-        $fetcher->analysis['selSeasonNb'] = '106';
-        $fetcher->analysis['selRaceNb'] = '16';
-        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+        $this->harvestAnswersTheAnalysis($client);
         $fetcher->calls = [];
 
         $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
 
         $this->assertSame(['office'], $fetcher->calls);
+        $this->assertTrue($this->harvestPlansAnalysis($client, $db, $fetcher));
+    }
+
+    public function testFirstRaceOfASeasonTreatsAnyPreviousSeasonRaceAsTheAnalysisJustRun(): void
+    {
+        [$svc, $fetcher, $db, $client] = $this->scripted();
+        $fetcher->office['raceNb'] = 1;
+        $fetcher->analysis['selSeasonNb'] = '106';
+        $fetcher->analysis['selRaceNb'] = '16';
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+        $this->harvestAnswersTheAnalysis($client);
+        $fetcher->calls = [];
+
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+
+        $this->assertSame(['office'], $fetcher->calls);
+        $this->assertFalse($this->harvestPlansAnalysis($client, $db, $fetcher));
     }
 
     private function pageOfficeRow(\PDO $db, array $office): void
@@ -783,28 +654,29 @@ final class GproSyncServiceTest extends TestCase
     }
 
     /**
-     * Logs in at 21:30 Paris on $day with the analysis scripted by $configure,
-     * ages its RaceAnalysis archive row to $fetchedAtUtc, logs in again and
-     * returns what the second login spent.
+     * Logs in at 21:30 Paris on $day, lets the harvest answer the analysis
+     * scripted by $configure, ages its RaceAnalysis archive row to
+     * $fetchedAtUtc, logs in again and returns whether the next harvest would
+     * still ask for the analysis. The second login itself spends only the office.
      *
      * @param callable(ScriptedGproFetcher): void $configure
-     *
-     * @return list<string>
      */
-    private function secondLoginSpend(string $day, string $fetchedAtUtc, callable $configure): array
+    private function analysisAskedAgain(string $day, string $fetchedAtUtc, callable $configure): bool
     {
-        $calls = [];
-        $this->withRaceDays(function () use ($day, $fetchedAtUtc, $configure, &$calls): void {
-            [$svc, $fetcher, $db] = $this->scripted(null, $this->atParis($day . ' 21:30'));
+        $asked = false;
+        $this->withRaceDays(function () use ($day, $fetchedAtUtc, $configure, &$asked): void {
+            [$svc, $fetcher, $db, $client] = $this->scripted(null, $this->atParis($day . ' 21:30'));
             $configure($fetcher);
             $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+            $this->harvestAnswersTheAnalysis($client);
             $db->exec("UPDATE user_api_archive SET fetched_at = '{$fetchedAtUtc}' WHERE endpoint = 'RaceAnalysis'");
             $fetcher->calls = [];
             $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
-            $calls = $fetcher->calls;
+            $this->assertSame(['office'], $fetcher->calls);
+            $asked = $this->harvestPlansAnalysis($client, $db, $fetcher);
         });
 
-        return $calls;
+        return $asked;
     }
 
     /** @return array<string, array{string, string, bool}> */
@@ -821,99 +693,42 @@ final class GproSyncServiceTest extends TestCase
     #[DataProvider('postRaceInstants')]
     public function testAnalysisFetchedFromTwentyOneParisCountsAsAnswered(string $day, string $fetchedAt, bool $answered): void
     {
-        $calls = $this->secondLoginSpend($day, $fetchedAt, static function (ScriptedGproFetcher $f): void {
+        $asked = $this->analysisAskedAgain($day, $fetchedAt, static function (ScriptedGproFetcher $f): void {
             $f->analysis['selRaceNb'] = '11';
         });
 
-        $this->assertSame($answered ? ['office'] : ['office', 'RaceAnalysis'], $calls);
+        $this->assertSame(!$answered, $asked);
     }
 
     public function testNonSupporterAnswerAfterTheRaceIsNotAskedAgain(): void
     {
-        $calls = $this->secondLoginSpend('2026-10-23', '2026-10-23 19:30:00', static function (ScriptedGproFetcher $f): void {
+        $asked = $this->analysisAskedAgain('2026-10-23', '2026-10-23 19:30:00', static function (ScriptedGproFetcher $f): void {
             $f->analysis = ['errorMsg' => 'Supporters only', 'data' => []];
         });
 
-        $this->assertSame(['office'], $calls);
+        $this->assertFalse($asked);
     }
 
     public function testNonSupporterAnswerBeforeTheRaceEndedIsAskedAgain(): void
     {
-        $calls = $this->secondLoginSpend('2026-10-23', '2026-10-23 18:30:00', static function (ScriptedGproFetcher $f): void {
+        $asked = $this->analysisAskedAgain('2026-10-23', '2026-10-23 18:30:00', static function (ScriptedGproFetcher $f): void {
             $f->analysis = ['errorMsg' => 'Supporters only', 'data' => []];
         });
 
-        $this->assertSame(['office', 'RaceAnalysis'], $calls);
+        $this->assertTrue($asked);
     }
 
-    public function testNonSupporterAnalysisIsNeitherAFailureNorRecorded(): void
+    public function testAFailureAfterThePlanFailsTheSyncAndLogsTheClassOnly(): void
     {
-        $this->withRaceDays(function (): void {
-            [$svc, $fetcher, $db] = $this->scripted(null, $this->atParis('2026-10-23 21:30'));
-            $fetcher->analysis = ['errorMsg' => 'Supporters only', 'data' => []];
-
-            $outcome = $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
-
-            $this->assertSame('synced', $outcome->status);
-            $this->assertNotNull($this->syncRowDoneRaceSetup($db), 'a NonSup answer does not block the sync row');
-            $this->assertSame(0, (int) $db->query('SELECT COUNT(*) FROM user_race_history')->fetchColumn());
-            $this->assertSame(0, (int) $db->query('SELECT COUNT(*) FROM race_telemetry')->fetchColumn());
-        });
-    }
-
-    public function testThrownAnalysisAfterTheRaceLeavesAMarkerAndStillWritesTheSyncRow(): void
-    {
-        $this->withRaceDays(function (): void {
-            [$svc, $fetcher, $db] = $this->scripted(null, $this->atParis('2026-10-23 21:30'));
-            $fetcher->failing = ['RaceAnalysis'];
-
-            $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
-
-            $marker = 'u' . GproApiClient::scopeFor('tok') . ':analysis_attempt:w2026-10-23';
-            $this->assertTrue($this->cache->has($marker));
-            $this->assertNotNull($this->syncRowDoneRaceSetup($db));
-
-            $fetcher->calls = [];
-            $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
-            $this->assertSame(['office'], $fetcher->calls);
-        });
-    }
-
-    public function testThrownAnalysisBeforeTheRaceEndedLeavesNoMarker(): void
-    {
-        $this->withRaceDays(function (): void {
-            [$svc, $fetcher] = $this->scripted(null, $this->atParis('2026-10-23 20:30'));
-            $fetcher->failing = ['RaceAnalysis'];
-
-            $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
-
-            $marker = 'u' . GproApiClient::scopeFor('tok') . ':analysis_attempt:w2026-10-23';
-            $this->assertFalse($this->cache->has($marker));
-
-            $fetcher->calls = [];
-            $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
-            $this->assertSame(['office', 'RaceAnalysis'], $fetcher->calls);
-        });
-    }
-
-    public function testRecordRaceFailureFailsTheSyncLeavesNoSyncRowAndLogsTheClassOnly(): void
-    {
-        [$svc, $fetcher, $db] = $this->scripted();
-        // A non-scalar driId makes the post-analysis step trip a PHP warning.
-        $fetcher->office['driId'] = ['not', 'scalar'];
+        $users = $this->createStub(UserRepository::class);
+        $users->method('markSynced')->willThrowException(new \RuntimeException('secret-detail'));
+        [$svc] = $this->scripted($users);
         $log = sys_get_temp_dir() . '/gpro_sync_log_' . bin2hex(random_bytes(4));
         $priorLog = ini_set('error_log', $log);
-        set_error_handler(static function (int $no, string $msg): bool {
-            if (!str_contains($msg, 'Array to string')) {
-                return false;
-            }
-            throw new \ErrorException($msg, 0, $no);
-        });
 
         try {
             $outcome = $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
         } finally {
-            restore_error_handler();
             ini_set('error_log', (string) $priorLog);
         }
         $lines = (string) file_get_contents($log);
@@ -921,9 +736,8 @@ final class GproSyncServiceTest extends TestCase
 
         $this->assertSame('failed', $outcome->status);
         $this->assertStringContainsString('plan:', $lines, 'the failure came after the plan ran');
-        $this->assertStringContainsString('[GproSync] user 7 sync failed: ErrorException', $lines);
-        $this->assertStringNotContainsString('Array to string', $lines);
-        $this->assertNull($this->syncRowDoneRaceSetup($db), 'no sync row when recording the race threw');
+        $this->assertStringContainsString('[GproSync] user 7 sync failed: RuntimeException', $lines);
+        $this->assertStringNotContainsString('secret-detail', $lines);
     }
 
     private function syncRowDoneRaceSetup(\PDO $db): ?bool

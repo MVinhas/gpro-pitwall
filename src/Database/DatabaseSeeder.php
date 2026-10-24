@@ -990,7 +990,7 @@ class DatabaseSeeder
         // promoted from. NULL for the hand-entered rows, which is why the
         // uniqueness below is a partial index — many manual pilots may share a
         // NULL source, but one telemetry row can only ever become one pilot.
-        // That is what makes the auto-fill safe to re-run on every sync.
+        // That is what makes the auto-fill safe to re-run on every harvest.
         $stmt = $this->db->query('PRAGMA table_info(pilots)');
         $cols = $stmt === false ? [] : $stmt->fetchAll(PDO::FETCH_ASSOC);
         if ($stmt !== false) {
