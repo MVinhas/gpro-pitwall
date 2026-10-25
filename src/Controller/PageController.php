@@ -149,7 +149,7 @@ class PageController
                 $mainSections,
                 fn (string $section): bool => !in_array(
                     $section,
-                    ['Debrief', 'Division Baseline', 'Division Differences'],
+                    ['Debrief', 'Season', 'Division Baseline', 'Division Differences'],
                     true,
                 ),
             );

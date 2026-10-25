@@ -1,0 +1,294 @@
+{% extends "layout.twig" %}
+{% import "debrief/_shell.twig" as t %}
+
+{% block title %}Season — GPRO Pitwall{% endblock %}
+{% block robots %}<meta name="robots" content="noindex,nofollow">{% endblock %}
+{% block canonical_path %}/season{% endblock %}
+
+{# A sparkline is decoration: the table beside it carries every figure, so the
+   svg is hidden from assistive tech. #}
+{% macro spark(points, label) %}
+    {% if points %}
+        <svg viewBox="-2 -2 244 44" class="h-10 w-full max-w-xs text-slate-500" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+            <polyline fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"
+                      vector-effect="non-scaling-stroke" points="{{ points }}"/>
+        </svg>
+        <p class="t-caption mt-1">{{ label }}</p>
+    {% endif %}
+{% endmacro %}
+
+{% block content %}
+    {% include 'partials/_nav.twig' %}
+
+<div class="space-y-5">
+
+    <div class="flex flex-wrap items-end justify-between gap-3">
+        <div>
+            <h1 class="t-display">Season</h1>
+            <p class="t-caption mt-1">How a season went: results, money, team changes and how well the models predicted it.</p>
+        </div>
+
+        {% if seasons|length > 0 %}
+            <form method="get" action="/season" class="flex items-end gap-2">
+                <label class="block">
+                    <span class="t-label">Season</span>
+                    <select name="season" class="form-select mt-1 text-sm" onchange="this.form.submit()">
+                        {% for s in seasons %}
+                            <option value="{{ s }}" {{ s == season ? 'selected' : '' }}>Season {{ s }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <noscript><button type="submit" class="btn btn-sm btn-secondary">Show</button></noscript>
+            </form>
+        {% endif %}
+    </div>
+
+    {% if not has_races %}
+        {% include 'partials/_empty.twig' with {
+            title: season ? 'No races recorded for Season ' ~ season ~ ' yet' : 'No races recorded yet',
+            body: 'Races appear here one at a time as you sync after each race weekend.'
+        } only %}
+    {% else %}
+
+    {# ---- Results ---- #}
+    <section class="card" aria-labelledby="season-results">
+        <div class="card-hd">
+            <h2 id="season-results" class="t-heading">Results</h2>
+        </div>
+        <div class="card-bd space-y-4">
+            {{ _self.spark(results_line, 'Championship position after each race. Higher on the line is better.') }}
+
+            <div class="dt-scroll">
+                <table class="dt">
+                    <thead class="bg-slate-50">
+                        <tr>
+                            <th class="dt-th">Race</th>
+                            <th class="dt-th hidden sm:table-cell">Track</th>
+                            <th class="dt-th text-right">Finish</th>
+                            <th class="dt-th text-right hidden sm:table-cell">Points</th>
+                            <th class="dt-th text-right">Championship</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        {% for r in results %}
+                            <tr>
+                                <td class="dt-td">{{ r.race }}</td>
+                                <td class="dt-td hidden sm:table-cell whitespace-normal">{{ r.track_name }}</td>
+                                <td class="dt-td text-right">{{ t.pos(r.final_pos, r.dnf) }}</td>
+                                <td class="dt-td text-right hidden sm:table-cell">{{ r.points is null ? '—' : r.points }}</td>
+                                <td class="dt-td text-right">
+                                    {% if r.champ_pos is null %}—{% else %}P{{ r.champ_pos }}{% if r.champ_pts is not null %} <span class="text-slate-500">· {{ r.champ_pts }} pts</span>{% endif %}{% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    {# ---- Money ---- #}
+    <section class="card" aria-labelledby="season-money">
+        <div class="card-hd">
+            <h2 id="season-money" class="t-heading">Money</h2>
+        </div>
+        <div class="card-bd">
+            {% if money.cash is empty and money.categories is empty %}
+                <p class="t-caption">No money movements recorded for this season.</p>
+            {% else %}
+                <div class="space-y-4">
+                    {{ _self.spark(money.cash_line, 'Cash after each race.') }}
+
+                    <div class="grid gap-6 lg:grid-cols-2">
+                        {% if money.cash is not empty %}
+                            <div class="dt-scroll">
+                                <table class="dt">
+                                    <thead class="bg-slate-50">
+                                        <tr>
+                                            <th class="dt-th">Race</th>
+                                            <th class="dt-th text-right">Cash after</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100">
+                                        {% for c in money.cash %}
+                                            <tr>
+                                                <td class="dt-td">{{ c.race }}</td>
+                                                <td class="dt-td text-right">{{ t.money(c.cash) }}</td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% endif %}
+
+                        {% if money.categories is not empty %}
+                            <div class="dt-scroll">
+                                <table class="dt">
+                                    <thead class="bg-slate-50">
+                                        <tr>
+                                            <th class="dt-th">Where it went</th>
+                                            <th class="dt-th text-right">Income</th>
+                                            <th class="dt-th text-right">Costs</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100">
+                                        {% for c in money.categories %}
+                                            <tr>
+                                                <td class="dt-td whitespace-normal">{{ c.category }}</td>
+                                                <td class="dt-td text-right">{{ c.income ? t.money(c.income) : '—' }}</td>
+                                                <td class="dt-td text-right">{{ c.costs ? t.money(c.costs) : '—' }}</td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                    <tfoot class="bg-slate-50">
+                                        <tr>
+                                            <td class="dt-td t-label">Total</td>
+                                            <td class="dt-td text-right font-semibold">{{ t.money(money.income) }}</td>
+                                            <td class="dt-td text-right font-semibold">{{ t.money(money.costs) }}</td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </section>
+
+    {# ---- Team changes ---- #}
+    <section class="card" aria-labelledby="season-changes">
+        <div class="card-hd">
+            <h2 id="season-changes" class="t-heading">Team changes</h2>
+        </div>
+        <div class="card-bd">
+            {% if changes is empty %}
+                <p class="t-caption">No team changes recorded for this season.</p>
+            {% else %}
+                {% set groups = {
+                    'driver': 'Driver', 'td': 'Technical director', 'staff': 'Staff',
+                    'facilities': 'Facilities', 'car': 'Car'
+                } %}
+                <div class="dt-scroll">
+                    <table class="dt">
+                        <thead class="bg-slate-50">
+                            <tr>
+                                <th class="dt-th">Race</th>
+                                <th class="dt-th">Change</th>
+                                <th class="dt-th text-right">From → to</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            {% for entry in changes %}
+                                {% for item in entry.items %}
+                                    <tr>
+                                        <td class="dt-td">{% if loop.first %}{{ entry.race }}{% endif %}</td>
+                                        <td class="dt-td whitespace-normal">
+                                            {{ item.label }}
+                                            {% if item.key != 'id' %}<span class="t-caption block">{{ groups[item.group]|default(item.group) }}</span>{% endif %}
+                                        </td>
+                                        <td class="dt-td text-right whitespace-normal">{{ item.from is null ? '—' : item.from }} → {{ item.to is null ? '—' : item.to }}</td>
+                                    </tr>
+                                {% endfor %}
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endif %}
+        </div>
+    </section>
+
+    {# ---- Model calibration ---- #}
+    {% set wear = calibration.wear %}
+    {% set fuel = calibration.fuel %}
+    {% set corpus = calibration.corpus %}
+    {% set wear_min = constant('App\\Calibration\\WearCalibration::MIN_SAMPLE') %}
+    {% set wear_flag = constant('App\\Calibration\\WearCalibration::FLAG_POINTS') %}
+    {% set fuel_flag = constant('App\\Calibration\\FuelCalibration::FLAG_PERCENT') %}
+    <section class="card" aria-labelledby="season-calibration">
+        <div class="card-hd">
+            <h2 id="season-calibration" class="t-heading">Model calibration</h2>
+        </div>
+        <div class="card-bd">
+            <div class="space-y-6">
+                {% if wear.parts is empty and fuel.n == 0 and fuel.skipped == 0 and wear.skipped == 0 %}
+                    <p class="t-caption">No dry races to compare against the models yet. Wet races are left out.</p>
+                {% else %}
+                    <p class="t-caption">
+                        Actual minus predicted, averaged over this season's dry races. A positive gap means the race used more than the model said.
+                        A figure needs at least {{ wear_min }} races.
+                    </p>
+
+                    <div>
+                        <h3 class="t-section mb-2">Wear added per part</h3>
+                        {% if wear.parts is empty %}
+                            <p class="t-caption">No race had the data to predict wear.</p>
+                        {% else %}
+                            <div class="dt-scroll">
+                                <table class="dt">
+                                    <thead class="bg-slate-50">
+                                        <tr>
+                                            <th class="dt-th">Part</th>
+                                            <th class="dt-th text-right">Average gap</th>
+                                            <th class="dt-th text-right">Races</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100">
+                                        {% for p in wear.parts %}
+                                            {% set flagged = p.mean_gap is not null and p.mean_gap|abs >= wear_flag %}
+                                            <tr>
+                                                <td class="dt-td whitespace-normal">{{ p.label }}</td>
+                                                <td class="dt-td text-right {{ flagged ? 'font-medium text-amber-700' : '' }}">
+                                                    {% if p.mean_gap is null %}<span class="text-slate-500">too few races</span>
+                                                    {% else %}{{ p.mean_gap > 0 ? '+' : '' }}{{ p.mean_gap|number_format(1) }} pts{{ flagged ? ' off' : '' }}{% endif %}
+                                                </td>
+                                                <td class="dt-td text-right">{{ p.n }}</td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% endif %}
+                        {% if wear.skipped > 0 %}
+                            <p class="t-caption mt-2">{{ wear.skipped }} {{ wear.skipped == 1 ? 'race' : 'races' }} skipped: not enough stored data.</p>
+                        {% endif %}
+                    </div>
+
+                    <div>
+                        <h3 class="t-section mb-2">Fuel per km</h3>
+                        {% if fuel.n == 0 and fuel.skipped == 0 %}
+                            <p class="t-caption">No race had the data to predict fuel.</p>
+                        {% else %}
+                            {% set fuel_flagged = fuel.mean_gap_pct is not null and fuel.mean_gap_pct|abs > fuel_flag %}
+                            <p class="text-sm text-slate-900">
+                                {% if fuel.mean_gap_pct is null %}
+                                    <span class="text-slate-500">Too few races</span>
+                                {% else %}
+                                    <span class="font-semibold tabular-nums {{ fuel_flagged ? 'text-amber-700' : '' }}">
+                                        {{ fuel.mean_gap_pct > 0 ? '+' : '' }}{{ fuel.mean_gap_pct|number_format(1) }} %{{ fuel_flagged ? ' off' : '' }}
+                                    </span>
+                                {% endif %}
+                                <span class="t-caption">· {{ fuel.n }} {{ fuel.n == 1 ? 'race' : 'races' }}{% if fuel.skipped > 0 %}, {{ fuel.skipped }} skipped for missing data{% endif %}</span>
+                            </p>
+                        {% endif %}
+                    </div>
+                {% endif %}
+
+                <div>
+                    <h3 class="t-section mb-2">Everyone's races (approximate)</h3>
+                    {% if corpus.mean_gap is null %}
+                        <p class="t-caption">No shared races to compare yet.</p>
+                    {% else %}
+                        <p class="text-sm text-slate-900">
+                            <span class="font-semibold tabular-nums">{{ corpus.mean_gap > 0 ? '+' : '' }}{{ corpus.mean_gap|number_format(1) }} pts</span>
+                            <span class="t-caption">· total wear per race over {{ corpus.n }} {{ corpus.n == 1 ? 'race' : 'races' }}, using each car's average part level</span>
+                        </p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </section>
+
+    {% endif %}
+</div>
+{% endblock %}

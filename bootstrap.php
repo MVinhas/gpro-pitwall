@@ -639,6 +639,24 @@ $container['controller.debrief'] = new \App\Controller\DebriefController(
     $container['config'],
 );
 
+$container['service.season'] = new \App\Service\SeasonService(
+    $container['repo.race_history'],
+    new \App\Repository\WeekendStateRepository($container['db']),
+    new \App\Repository\StandingsRepository($container['db']),
+    new \App\Repository\EconomyLedgerRepository($container['db']),
+    new \App\Repository\RaceTelemetryRepository($container['db']),
+    $container['repo.track'],
+    new \App\Calibration\WearCalibration($container['service.car_wear']),
+    new \App\Calibration\FuelCalibration($container['service.fuel_model']),
+);
+
+$container['controller.season'] = new \App\Controller\SeasonController(
+    $container['service.season'],
+    $container['service.authorize'],
+    $container['twig'],
+    $container['config'],
+);
+
 $container['controller.admin_telemetry'] = new \App\Controller\AdminTelemetryController(
     $container['service.race_intelligence'],
     $container['service.authorize'],

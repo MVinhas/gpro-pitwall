@@ -14,6 +14,7 @@ return [
         'Car Wear Planner',
         'Recruitment Analyzer',
         'Debrief',
+        'Season',
         'Division Baseline',
         'Division Differences',
     ],
