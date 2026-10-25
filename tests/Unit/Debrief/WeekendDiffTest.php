@@ -82,6 +82,56 @@ final class WeekendDiffTest extends TestCase
         );
     }
 
+    public function testFirstTechnicalDirectorHireIsReportedWhenBothRowsAreSnapshots(): void
+    {
+        $td = (string) json_encode(['id' => 4, 'name' => 'T. Director', 'profile' => ['pitCoord' => 10]]);
+        $previous = $this->row();
+        $current = $this->row(['td_json' => $td]);
+
+        $changes = WeekendDiff::changes($previous, $current);
+
+        $this->assertSame(
+            [['group' => 'td', 'key' => 'id', 'label' => 'Technical director', 'from' => null, 'to' => 4]],
+            $changes,
+        );
+        $this->assertSame(
+            [['group' => 'td', 'key' => 'id', 'label' => 'Technical director', 'from' => null, 'to' => 'T. Director']],
+            WeekendDiff::withNames($changes, $previous, $current),
+        );
+    }
+
+    public function testTechnicalDirectorReleaseIsReportedWhenBothRowsAreSnapshots(): void
+    {
+        $td = (string) json_encode(['id' => 4, 'name' => 'T. Director', 'profile' => ['pitCoord' => 10]]);
+        $previous = $this->row(['td_json' => $td]);
+        $current = $this->row();
+
+        $changes = WeekendDiff::changes($previous, $current);
+
+        $this->assertSame(
+            [['group' => 'td', 'key' => 'id', 'label' => 'Technical director', 'from' => 4, 'to' => null]],
+            $changes,
+        );
+        $this->assertSame(
+            [['group' => 'td', 'key' => 'id', 'label' => 'Technical director', 'from' => 'T. Director', 'to' => null]],
+            WeekendDiff::withNames($changes, $previous, $current),
+        );
+    }
+
+    public function testNoTechnicalDirectorOnEitherSideReportsNothing(): void
+    {
+        $this->assertSame([], WeekendDiff::changes($this->row(), $this->row()));
+    }
+
+    public function testHistorySourcedRowNeverReportsATechnicalDirectorChange(): void
+    {
+        $td = (string) json_encode(['id' => 4, 'name' => 'T. Director', 'profile' => ['pitCoord' => 10]]);
+        $history = $this->row(['source' => 'history']);
+
+        $this->assertSame([], WeekendDiff::changes($history, $this->row(['td_json' => $td])));
+        $this->assertSame([], WeekendDiff::changes($this->row(['td_json' => $td]), $history));
+    }
+
     public function testSameDriverStillReportsAttributeChanges(): void
     {
         $current = $this->row(['driver_json' => json_encode([

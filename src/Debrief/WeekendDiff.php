@@ -69,6 +69,16 @@ final readonly class WeekendDiff
         }
         if (($pair = $both('td_json')) !== null) {
             self::compareWithId($changes, 'td', 'Technical director', self::TD, $pair);
+        } elseif (($previous['source'] ?? null) === 'snapshot' && ($current['source'] ?? null) === 'snapshot') {
+            // A snapshot stores no td_json when the manager has no director; history rows carry no TD data at all.
+            $from = StoredRace::decode($previous['td_json'] ?? null)['id'] ?? null;
+            $to = StoredRace::decode($current['td_json'] ?? null)['id'] ?? null;
+            if (is_int($from) xor is_int($to)) {
+                $changes[] = [
+                    'group' => 'td', 'key' => 'id', 'label' => 'Technical director',
+                    'from' => is_int($from) ? $from : null, 'to' => is_int($to) ? $to : null,
+                ];
+            }
         }
         if (($pair = $both('staff_json')) !== null) {
             self::compareMap($changes, 'staff', self::STAFF, $pair[0], $pair[1]);
