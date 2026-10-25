@@ -614,7 +614,7 @@
                 <span class="t-caption">Net {{ t.money(eco.net, true) }}</span>
             {% endblock %}
             {% block body %}{% import "debrief/_shell.twig" as t %}
-                <div class="grid grid-cols-3 gap-2 mb-4">
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4">
                     <div class="brief-stat">
                         <div class="brief-stat-v">{{ t.money(eco.income) }}</div>
                         <div class="brief-stat-l">Income</div>
@@ -753,7 +753,7 @@
 
                 {% if fuel %}
                     <h5 class="t-section mt-4 mb-2">Fuel per km</h5>
-                    <div class="grid grid-cols-3 gap-2">
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
                         <div class="brief-stat">
                             <div class="brief-stat-v">{{ fuel.predicted|number_format(3) }}</div>
                             <div class="brief-stat-l">Predicted</div>

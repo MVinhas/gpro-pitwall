@@ -65,4 +65,25 @@ final class RaceDetailWeekendTest extends TestCase
     {
         $this->assertMatchesRegularExpression('/Driver A\. Driver B\. Newcomer/', $this->text());
     }
+
+    public function testEconomyAndFuelTilesStackTwoAcrossOnAPhone(): void
+    {
+        $twig = new Environment(new FilesystemLoader(dirname(__DIR__, 3) . '/templates'));
+        $html = $twig->render('debrief/_race_detail.twig', [
+            'sort' => 'recent',
+            'race_options' => [],
+            'detail' => [
+                'season' => 107, 'race' => 13, 'track_name' => 'Testring',
+                'economy' => ['lines' => [], 'income' => 15000000, 'costs' => 2250000, 'net' => 12750000],
+                'calibration' => [
+                    'wear' => null,
+                    'fuel' => ['wet' => false, 'predicted' => 2.0, 'actual' => 2.126, 'gap_pct' => 6.3, 'flagged' => true],
+                ],
+            ],
+        ]);
+
+        $this->assertStringContainsString('$15,000,000', $html);
+        $this->assertSame(2, preg_match_all('/class="grid grid-cols-2 sm:grid-cols-3 gap-2/', $html));
+        $this->assertStringNotContainsString('grid grid-cols-3 gap-2 mb-4', $html);
+    }
 }
