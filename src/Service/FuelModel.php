@@ -65,6 +65,6 @@ final readonly class FuelModel
             return 0.0;
         }
 
-        return ceil($boostLaps * $this->lapLength($trackRow) * $coeff);
+        return $boostLaps * $this->lapLength($trackRow) * $coeff;
     }
 }

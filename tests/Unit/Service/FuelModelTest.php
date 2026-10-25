@@ -76,7 +76,7 @@ final class FuelModelTest extends TestCase
         $this->assertSame(4.5, $model->lapLength(['distance' => 300, 'laps' => 0]));
     }
 
-    public function testBoostExtraIsCeiledLapsTimesLapLengthTimesCoefficient(): void
+    public function testBoostExtraIsLapsTimesLapLengthTimesCoefficient(): void
     {
         $extra = $this->model()->boostExtra(
             ['distance' => 300, 'laps' => 60, 'boost_dry' => 0.3, 'boost_wet' => 0.5],
@@ -84,17 +84,17 @@ final class FuelModelTest extends TestCase
             false,
         );
 
-        $this->assertSame(14.0, $extra);
+        $this->assertEqualsWithDelta(13.5, $extra, 1e-9);
     }
 
     public function testWetBoostUsesTheWetCoefficient(): void
     {
         $track = ['distance' => 300, 'laps' => 60, 'boost_dry' => 0.3, 'boost_wet' => 0.5];
 
-        $this->assertSame(23.0, $this->model()->boostExtra($track, 9, true));
+        $this->assertEqualsWithDelta(22.5, $this->model()->boostExtra($track, 9, true), 1e-9);
 
         $dryOnly = ['distance' => 300, 'laps' => 60, 'boost_dry' => 0.3, 'boost_wet' => null];
-        $this->assertSame(14.0, $this->model()->boostExtra($dryOnly, 9, true));
+        $this->assertEqualsWithDelta(13.5, $this->model()->boostExtra($dryOnly, 9, true), 1e-9);
     }
 
     public function testNoBoostLapsCostsNothing(): void
