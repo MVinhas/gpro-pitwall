@@ -45,7 +45,10 @@ final readonly class FuelModel
             + $ff['constant'];
 
         $dry = (float) $trackRow['fuel_per_lap'];
-        $wet = (float) ($trackRow['fuel_per_lap_wet'] ?? $dry);
+        $wet = (float) ($trackRow['fuel_per_lap_wet'] ?? 0.0);
+        if ($wet <= 0.0) {
+            $wet = $dry;
+        }
 
         return [
             'dry' => max(self::MIN_RATE, $dry + $adjustment),

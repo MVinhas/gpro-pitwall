@@ -56,6 +56,18 @@ final class FuelModelTest extends TestCase
         $this->assertSame($rates['dry'], $rates['wet']);
     }
 
+    public function testUnknownWetRateOfZeroFallsBackToDry(): void
+    {
+        $rates = $this->model()->perKm(
+            ['fuel_per_lap' => 2.0, 'fuel_per_lap_wet' => 0.0],
+            self::DRIVER,
+            self::CAR,
+        );
+
+        $this->assertEqualsWithDelta(5.38, $rates['wet'], 1e-9);
+        $this->assertSame($rates['dry'], $rates['wet']);
+    }
+
     public function testRatesNeverDropBelowPointOne(): void
     {
         $rates = $this->model([...self::FACTORS, 'constant' => -10.0])->perKm(
