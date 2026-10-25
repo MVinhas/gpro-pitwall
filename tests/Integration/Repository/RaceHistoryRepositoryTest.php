@@ -88,6 +88,18 @@ final class RaceHistoryRepositoryTest extends TestCase
         $this->assertSame('Lab', $second['staff']['facilities'][0]['label']);
     }
 
+    public function testFindRawKeepsTheJsonBlocksAsStoredAndScopesByUser(): void
+    {
+        $this->repo->upsert($this->row(['parts_json' => '[{"key":"engine"}]']));
+
+        $raw = $this->repo->findRaw(1, 107, 13);
+
+        $this->assertNotNull($raw);
+        $this->assertSame('[{"key":"engine"}]', $raw['parts_json']);
+        $this->assertNull($this->repo->findRaw(2, 107, 13));
+        $this->assertNull($this->repo->findRaw(1, 107, 14));
+    }
+
     public function testUpsertOverwritesARowWrittenByInsertIfNew(): void
     {
         $this->repo->insertIfNew($this->row(['staff_json' => '[]']));

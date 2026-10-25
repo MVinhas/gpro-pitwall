@@ -7,6 +7,7 @@ namespace App\Controller;
 use App\Http\Request;
 use App\Security\Authorize;
 use App\Service\DebriefService;
+use App\Service\RaceWeekendService;
 use Twig\Environment;
 
 /**
@@ -38,6 +39,7 @@ final readonly class DebriefController
     /** @param array<string, mixed> $config */
     public function __construct(
         private DebriefService $dashboard,
+        private RaceWeekendService $weekend,
         private Authorize $authorize,
         private Environment $twig,
         private array $config,
@@ -61,8 +63,17 @@ final readonly class DebriefController
         $season = $this->intOrNull($request->get('season_detail'));
         $race = $this->intOrNull($request->get('race_detail'));
 
+        $detail = $this->dashboard->raceDetail($userId, $season, $race);
+        if ($detail !== null) {
+            $detail = array_merge($detail, $this->weekend->forRace(
+                $userId,
+                (int) $detail['season'],
+                (int) $detail['race'],
+            ));
+        }
+
         $this->render('debrief/birdseye.twig', $user, array_merge($view, [
-            'detail' => $this->dashboard->raceDetail($userId, $season, $race),
+            'detail' => $detail,
             'sorts'  => self::SORTS,
             'active_tab' => 'birdseye',
         ]));

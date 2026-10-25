@@ -621,8 +621,19 @@ $container['controller.admin_users'] = new \App\Controller\AdminUserController(
     $container['twig'],
 );
 
+$container['service.race_weekend'] = new \App\Service\RaceWeekendService(
+    $container['repo.race_history'],
+    new \App\Repository\WeekendStateRepository($container['db']),
+    new \App\Repository\StandingsRepository($container['db']),
+    new \App\Repository\EconomyLedgerRepository($container['db']),
+    $container['repo.track'],
+    new \App\Calibration\WearCalibration($container['service.car_wear']),
+    new \App\Calibration\FuelCalibration($container['service.fuel_model']),
+);
+
 $container['controller.debrief'] = new \App\Controller\DebriefController(
     $container['service.debrief'],
+    $container['service.race_weekend'],
     $container['service.authorize'],
     $container['twig'],
     $container['config'],

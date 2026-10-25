@@ -302,6 +302,23 @@ class RaceHistoryRepository
     }
 
     /**
+     * One archived race exactly as stored: the JSON blocks stay raw strings.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function findRaw(int $userId, int $season, int $race): ?array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT * FROM user_race_history WHERE user_id = :u AND season = :s AND race = :r'
+        );
+        $stmt->execute(['u' => $userId, 's' => $season, 'r' => $race]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        /** @var array<string, mixed>|false $row */
+        return $row === false ? null : $row;
+    }
+
+    /**
      * The most recently archived race, for the default selection.
      *
      * @return array{season: int, race: int}|null

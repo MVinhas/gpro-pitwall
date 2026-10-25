@@ -512,6 +512,275 @@
         {% endembed %}
     {% endif %}
 
+    {# ---- Weekend: who and what the manager entered this race with. ---- #}
+    {% if detail.weekend %}
+        {% set wk = detail.weekend %}
+        {% embed 'partials/_acc.twig' with {
+            id: 'weekend', title: 'Weekend', caption: 'Driver, staff, facilities and car going into the race',
+            wk: wk
+        } %}
+            {% block verdict %}
+                <span class="t-caption">
+                    {% if wk.changes|length %}
+                        {{ wk.changes|length }} change{{ wk.changes|length == 1 ? '' : 's' }} since the previous race
+                    {% else %}
+                        No changes
+                    {% endif %}
+                </span>
+            {% endblock %}
+            {% block body %}{% import "debrief/_shell.twig" as t %}
+                {% if wk.changes|length %}
+                    <div class="dt-scroll mb-4">
+                        <table class="dt">
+                            <thead class="bg-slate-50">
+                                <tr>
+                                    <th class="dt-th">Change</th>
+                                    <th class="dt-th text-right">Before</th>
+                                    <th class="dt-th text-right">After</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                {% for c in wk.changes %}
+                                    <tr>
+                                        <td class="dt-td whitespace-normal">{{ c.label }}</td>
+                                        <td class="dt-td text-right">{{ c.from ?? '—' }}</td>
+                                        <td class="dt-td text-right font-semibold text-slate-900">{{ c.to ?? '—' }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% endif %}
+
+                {% set groups = [
+                    {'id': 'driver', 'title': 'Driver', 'data': wk.driver.profile ?? null, 'labels': {
+                        'overall': 'Overall', 'concentration': 'Concentration', 'talent': 'Talent',
+                        'aggressiveness': 'Aggressiveness', 'experience': 'Experience',
+                        'techInsight': 'Tech insight', 'stamina': 'Stamina', 'charisma': 'Charisma',
+                        'motivation': 'Motivation'}},
+                    {'id': 'td', 'title': 'Technical director', 'data': wk.td.profile ?? null, 'labels': {
+                        'overall': 'Overall', 'leadership': 'Leadership', 'mechanics': 'Mechanics',
+                        'electronics': 'Electronics', 'experience': 'Experience',
+                        'aerodynamics': 'Aerodynamics', 'pitCoord': 'Pit coord', 'motivation': 'Motivation'}},
+                    {'id': 'staff', 'title': 'Staff', 'data': wk.staff, 'labels': {
+                        'overall': 'Overall', 'concentration': 'Concentration', 'experience': 'Experience',
+                        'technical': 'Technical', 'stressHandling': 'Stress handling',
+                        'motivation': 'Motivation', 'efficiency': 'Efficiency'}},
+                    {'id': 'facilities', 'title': 'Facilities', 'data': wk.facilities, 'labels': {
+                        'windtunnel': 'Wind tunnel', 'pitstop': 'Pit stop', 'rdWorkshop': 'R&D workshop',
+                        'rdDesign': 'R&D design', 'engineering': 'Engineering', 'lab': 'Lab',
+                        'commercial': 'Commercial'}},
+                    {'id': 'car', 'title': 'Car', 'data': wk.car, 'labels': {
+                        'power': 'Power', 'handling': 'Handling', 'accel': 'Acceleration'}}
+                ] %}
+                <div class="space-y-4">
+                    {% for g in groups|filter(g => g.data is not null) %}
+                        <div>
+                            <h5 class="t-section mb-2">
+                                {{ g.title }}
+                                {%- if g.id == 'driver' and wk.driver.name is defined and wk.driver.name %} · {{ wk.driver.name }}{% endif %}
+                                {%- if g.id == 'td' and wk.td.name is defined and wk.td.name %} · {{ wk.td.name }}{% endif %}
+                            </h5>
+                            <div class="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2">
+                                {% for key, label in g.labels %}
+                                    {% set mark = wk.changed[g.id ~ '.' ~ key] is defined %}
+                                    <div class="brief-stat">
+                                        <div class="brief-stat-v">{{ g.data[key] ?? '—' }}</div>
+                                        <div class="brief-stat-l">{{ label }}{{ mark ? ' · changed' : '' }}</div>
+                                    </div>
+                                {% endfor %}
+                                {% if g.id == 'car' and wk.car.parts is defined %}
+                                    {% for key, part in wk.car.parts %}
+                                        {% set mark = wk.changed['car.' ~ key] is defined %}
+                                        <div class="brief-stat">
+                                            <div class="brief-stat-v">{{ part.level ?? '—' }}</div>
+                                            <div class="brief-stat-l">{{ key }} level{{ mark ? ' · changed' : '' }}</div>
+                                        </div>
+                                    {% endfor %}
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                    <p class="t-caption">
+                        Cash entering the race: {{ t.money(wk.cash) }}
+                        {%- if wk.driver is null %} · Driver and technical director were not archived for this race.{% endif %}
+                    </p>
+                </div>
+            {% endblock %}
+        {% endembed %}
+    {% endif %}
+
+    {# ---- Economy: every money movement filed against this race. ---- #}
+    {% if detail.economy %}
+        {% set eco = detail.economy %}
+        {% embed 'partials/_acc.twig' with {
+            id: 'economy', title: 'Economy', caption: 'What came in and what went out',
+            eco: eco
+        } %}
+            {% block verdict %}{% import "debrief/_shell.twig" as t %}
+                <span class="t-caption">Net {{ t.money(eco.net, true) }}</span>
+            {% endblock %}
+            {% block body %}{% import "debrief/_shell.twig" as t %}
+                <div class="grid grid-cols-3 gap-2 mb-4">
+                    <div class="brief-stat">
+                        <div class="brief-stat-v">{{ t.money(eco.income) }}</div>
+                        <div class="brief-stat-l">Income</div>
+                    </div>
+                    <div class="brief-stat">
+                        <div class="brief-stat-v">{{ t.money(eco.costs) }}</div>
+                        <div class="brief-stat-l">Costs</div>
+                    </div>
+                    <div class="brief-stat">
+                        <div class="brief-stat-v">{{ t.money(eco.net, true) }}</div>
+                        <div class="brief-stat-l">Net</div>
+                    </div>
+                </div>
+                <div class="dt-scroll">
+                    <table class="dt">
+                        <thead class="bg-slate-50">
+                            <tr>
+                                <th class="dt-th">Item</th>
+                                <th class="dt-th hidden sm:table-cell">Category</th>
+                                <th class="dt-th text-right">Amount</th>
+                                <th class="dt-th text-right hidden sm:table-cell">Balance</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            {% for line in eco.lines %}
+                                <tr>
+                                    <td class="dt-td whitespace-normal">{{ line.description }}</td>
+                                    <td class="dt-td hidden sm:table-cell">{{ line.category }}</td>
+                                    <td class="dt-td text-right">{{ t.money(line.amount, true) }}</td>
+                                    <td class="dt-td text-right hidden sm:table-cell">{{ t.money(line.balance_after) }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endblock %}
+        {% endembed %}
+    {% endif %}
+
+    {# ---- Standings after this race (stored as the row entering the next one). ---- #}
+    {% if detail.standings %}
+        {% set st = detail.standings %}
+        {% embed 'partials/_acc.twig' with {
+            id: 'standings', title: 'Standings', caption: 'The group table after this race',
+            st: st
+        } %}
+            {% block verdict %}
+                <span class="t-caption">P{{ st.own_pos ?? '—' }} · {{ st.own_pts ?? '—' }} pts</span>
+            {% endblock %}
+            {% block body %}
+                {% if st.group_label %}<p class="t-caption mb-2">{{ st.group_label }}</p>{% endif %}
+                <div class="dt-scroll">
+                    <table class="dt">
+                        <thead class="bg-slate-50">
+                            <tr>
+                                <th class="dt-th">Pos</th>
+                                <th class="dt-th">Manager</th>
+                                <th class="dt-th text-right">Pts</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            {% for m in st.managers %}
+                                <tr class="{{ m.own ? 'bg-slate-50 font-semibold' : '' }}">
+                                    <td class="dt-td">P{{ m.pos }}</td>
+                                    <td class="dt-td whitespace-normal">{{ m.name }}{{ m.own ? ' (you)' : '' }}</td>
+                                    <td class="dt-td text-right">{{ m.pts ?? '—' }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endblock %}
+        {% endembed %}
+    {% endif %}
+
+    {# ---- Calibration: how far the wear and fuel models were off for this race. ---- #}
+    {% if detail.calibration %}
+        {% set cal = detail.calibration %}
+        {% set wear = cal.wear %}
+        {% set fuel = cal.fuel %}
+        {% set wet = (wear and wear.wet) or (fuel and fuel.wet) %}
+        {% set wear_flagged = wear and wear.within < wear.total %}
+        {% embed 'partials/_acc.twig' with {
+            id: 'calibration', title: 'Model error', caption: 'Predicted against what the race actually used',
+            cal: cal, wear: wear, fuel: fuel, wet: wet,
+            open_default: wear_flagged or (fuel and fuel.flagged)
+        } %}
+            {% block verdict %}
+                {% set wear_pts = constant('App\\Calibration\\WearCalibration::FLAG_POINTS')|round %}
+                {% set fuel_pct = constant('App\\Calibration\\FuelCalibration::FLAG_PERCENT')|round %}
+                <span class="t-caption">
+                    {%- if wear %}Wear within {{ wear_pts }} pts on {{ wear.within }} of {{ wear.total }} parts{% endif -%}
+                    {%- if wear and fuel %} · {% endif -%}
+                    {%- if fuel %}
+                        {%- if fuel.flagged %}fuel off by {{ fuel.gap_pct|abs|number_format(1) }} %
+                        {%- else %}fuel within {{ fuel_pct }} %{% endif -%}
+                    {%- endif -%}
+                </span>
+            {% endblock %}
+            {% block body %}
+                {% if wet %}
+                    <div class="notice notice-info notice-slim mb-3">
+                        <p><strong>Wet race</strong> — not counted in the season bias.</p>
+                    </div>
+                {% endif %}
+
+                {% if wear %}
+                    <h5 class="t-section mb-2">Wear added per part</h5>
+                    <div class="dt-scroll">
+                        <table class="dt">
+                            <thead class="bg-slate-50">
+                                <tr>
+                                    <th class="dt-th">Part</th>
+                                    <th class="dt-th text-right hidden sm:table-cell">Level</th>
+                                    <th class="dt-th text-right">Predicted</th>
+                                    <th class="dt-th text-right">Actual</th>
+                                    <th class="dt-th text-right">Gap</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                {% for p in wear.parts %}
+                                    <tr>
+                                        <td class="dt-td whitespace-normal">{{ p.label }}</td>
+                                        <td class="dt-td text-right hidden sm:table-cell">{{ p.level }}</td>
+                                        <td class="dt-td text-right">{{ p.predicted|number_format(1) }}%</td>
+                                        <td class="dt-td text-right">{{ p.actual }}%</td>
+                                        <td class="dt-td text-right {{ p.flagged ? 'font-medium text-amber-700' : '' }}">
+                                            {{ p.gap > 0 ? '+' : '' }}{{ p.gap|number_format(1) }}{{ p.flagged ? ' off' : '' }}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% endif %}
+
+                {% if fuel %}
+                    <h5 class="t-section mt-4 mb-2">Fuel per km</h5>
+                    <div class="grid grid-cols-3 gap-2">
+                        <div class="brief-stat">
+                            <div class="brief-stat-v">{{ fuel.predicted|number_format(3) }}</div>
+                            <div class="brief-stat-l">Predicted</div>
+                        </div>
+                        <div class="brief-stat">
+                            <div class="brief-stat-v">{{ fuel.actual|number_format(3) }}</div>
+                            <div class="brief-stat-l">Actual</div>
+                        </div>
+                        <div class="brief-stat">
+                            <div class="brief-stat-v {{ fuel.flagged ? 'text-amber-700' : '' }}">
+                                {{ fuel.gap_pct > 0 ? '+' : '' }}{{ fuel.gap_pct|number_format(1) }}%{{ fuel.flagged ? ' off' : '' }}
+                            </div>
+                            <div class="brief-stat-l">Gap</div>
+                        </div>
+                    </div>
+                {% endif %}
+            {% endblock %}
+        {% endembed %}
+    {% endif %}
+
 </div>
 
 <script>
