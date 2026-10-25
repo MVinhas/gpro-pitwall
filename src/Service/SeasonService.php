@@ -19,8 +19,9 @@ use App\Support\Sparkline;
 /**
  * One season at a glance: how the races went, where the money went, what the
  * manager changed in the team, and how far the wear and fuel models drifted.
- * Every source is read for the season in one query, so the page costs a fixed
- * handful of queries however many races the season has.
+ * Every source is read for the season in one query, and each distinct track
+ * name is looked up once, so the page costs a handful of queries plus one per
+ * track rather than one per race.
  *
  * @phpstan-import-type Change from WeekendDiff
  * @phpstan-type Result array{
@@ -165,7 +166,7 @@ class SeasonService
             }
         }
 
-        // Spaced by race number so a race with no ledger leaves a gap in the line.
+        // x follows race number; a race with no balance is dropped from the polyline, which joins across it.
         $series = [];
         if ($balance !== []) {
             for ($race = min(array_keys($balance)); $race <= max(array_keys($balance)); $race++) {
@@ -228,11 +229,13 @@ class SeasonService
         $corpusRows = $this->corpus->calibrationRows();
 
         $trackRows = [];
+        $looked = [];
         foreach ([...$rows, ...$corpusRows] as $row) {
             $name = (string) ($row['track_name'] ?? '');
-            if ($name === '' || array_key_exists($name, $trackRows)) {
+            if ($name === '' || isset($looked[$name])) {
                 continue;
             }
+            $looked[$name] = true;
             $track = $this->tracks->findByName($name);
             if ($track !== null) {
                 $trackRows[$name] = $track;
