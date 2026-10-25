@@ -456,4 +456,37 @@ class RaceHistoryRepository
 
         return ['WHERE ' . implode(' AND ', $clauses), $params];
     }
+
+    /**
+     * Every archived race of one season, full rows (JSON blocks left raw).
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function forSeason(int $userId, int $season): array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT * FROM user_race_history WHERE user_id = :u AND season = :s ORDER BY race'
+        );
+        $stmt->execute(['u' => $userId, 's' => $season]);
+
+        /** @var list<array<string, mixed>> $rows */
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        return $rows;
+    }
+
+    /**
+     * Seasons the manager has archived races for, newest first.
+     *
+     * @return list<int>
+     */
+    public function seasons(int $userId): array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT DISTINCT season FROM user_race_history WHERE user_id = :u ORDER BY season DESC'
+        );
+        $stmt->execute(['u' => $userId]);
+
+        return array_values(array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN)));
+    }
 }

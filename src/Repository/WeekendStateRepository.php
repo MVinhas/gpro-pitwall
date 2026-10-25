@@ -69,4 +69,55 @@ class WeekendStateRepository
         );
         $stmt->execute([':u' => $userId, ':s' => $season, ':r' => $race]);
     }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function find(int $userId, int $season, int $race): ?array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT * FROM user_weekend_state WHERE user_id = :u AND season = :s AND race = :r'
+        );
+        $stmt->execute([':u' => $userId, ':s' => $season, ':r' => $race]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        /** @var array<string, mixed>|false $row */
+        return $row === false ? null : $row;
+    }
+
+    /**
+     * The latest stored weekend strictly before (season, race), across seasons.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function previous(int $userId, int $season, int $race): ?array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT * FROM user_weekend_state
+             WHERE user_id = :u AND (season < :s OR (season = :s AND race < :r))
+             ORDER BY season DESC, race DESC
+             LIMIT 1'
+        );
+        $stmt->execute([':u' => $userId, ':s' => $season, ':r' => $race]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        /** @var array<string, mixed>|false $row */
+        return $row === false ? null : $row;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function forSeason(int $userId, int $season): array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT * FROM user_weekend_state WHERE user_id = :u AND season = :s ORDER BY race'
+        );
+        $stmt->execute([':u' => $userId, ':s' => $season]);
+
+        /** @var list<array<string, mixed>> $rows */
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        return $rows;
+    }
 }

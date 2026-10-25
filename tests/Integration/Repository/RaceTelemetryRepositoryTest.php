@@ -235,4 +235,28 @@ final class RaceTelemetryRepositoryTest extends TestCase
         $this->assertSame(180.0, (float) $byBand['podium']['driver_tal']);
         $this->assertSame(90.0, (float) $byBand['rest']['driver_tal']);
     }
+
+    public function testCalibrationRowsExposeOnlyTheCalibrationColumns(): void
+    {
+        $this->repo->insertIfNew($this->row(['was_wet' => 1]));
+        $this->repo->insertIfNew($this->row(['race' => 9, 'q1_time_ms' => 118000]));
+
+        $rows = $this->repo->calibrationRows();
+
+        $this->assertCount(2, $rows);
+        $this->assertSame(
+            [
+                'track_name', 'driver_con', 'driver_tal', 'driver_exp',
+                'clear_dry_risk', 'avg_part_level', 'total_wear_gain', 'was_wet',
+            ],
+            array_keys($rows[0])
+        );
+        $this->assertSame('Baku', $rows[0]['track_name']);
+        $this->assertSame(96, (int) $rows[0]['driver_con']);
+    }
+
+    public function testCalibrationRowsAreEmptyOnAnEmptyCorpus(): void
+    {
+        $this->assertSame([], $this->repo->calibrationRows());
+    }
 }

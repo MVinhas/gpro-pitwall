@@ -80,4 +80,40 @@ class EconomyLedgerRepository
             ':fingerprint' => $row['fingerprint'],
         ]);
     }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function forRace(int $userId, int $season, int $race): array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT * FROM user_economy_ledger
+             WHERE user_id = :u AND season = :s AND race = :r
+             ORDER BY race, occurred_at, id'
+        );
+        $stmt->execute([':u' => $userId, ':s' => $season, ':r' => $race]);
+
+        /** @var list<array<string, mixed>> $rows */
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        return $rows;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function forSeason(int $userId, int $season): array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT * FROM user_economy_ledger
+             WHERE user_id = :u AND season = :s
+             ORDER BY race, occurred_at, id'
+        );
+        $stmt->execute([':u' => $userId, ':s' => $season]);
+
+        /** @var list<array<string, mixed>> $rows */
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        return $rows;
+    }
 }

@@ -256,4 +256,30 @@ final class RaceHistoryRepositoryTest extends TestCase
         $this->assertCount(1, $rows);
         $this->assertSame(1, (int) $rows[0]['race']);
     }
+
+    public function testForSeasonReturnsFullRowsOrderedByRaceForThatUserOnly(): void
+    {
+        $this->repo->insertIfNew($this->row(['race' => 9]));
+        $this->repo->insertIfNew($this->row(['race' => 2]));
+        $this->repo->insertIfNew($this->row(['race' => 5, 'season' => 106]));
+        $this->repo->insertIfNew($this->row(['race' => 3, 'user_id' => 2]));
+
+        $rows = $this->repo->forSeason(1, 107);
+
+        $this->assertSame([2, 9], array_map(static fn (array $r): int => (int) $r['race'], $rows));
+        $this->assertArrayHasKey('driver_json', $rows[0]);
+        $this->assertSame([], $this->repo->forSeason(1, 99));
+    }
+
+    public function testSeasonsAreDistinctNewestFirstAndScopedToTheUser(): void
+    {
+        $this->repo->insertIfNew($this->row(['season' => 106, 'race' => 1]));
+        $this->repo->insertIfNew($this->row(['season' => 108, 'race' => 1]));
+        $this->repo->insertIfNew($this->row(['season' => 108, 'race' => 2]));
+        $this->repo->insertIfNew($this->row(['season' => 107, 'race' => 1]));
+        $this->repo->insertIfNew($this->row(['season' => 110, 'race' => 1, 'user_id' => 2]));
+
+        $this->assertSame([108, 107, 106], $this->repo->seasons(1));
+        $this->assertSame([], $this->repo->seasons(3));
+    }
 }
