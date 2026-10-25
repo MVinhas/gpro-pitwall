@@ -256,12 +256,14 @@ final class SeasonServiceTest extends TestCase
 
     public function testARaceWithoutBalanceIsLeftOutOfTheCashSeries(): void
     {
+        $this->race(1);
+        $this->race(2);
         $this->line('Sponsor payment', 10, '2026-10-01 10:00:00', null, race: 1);
         $this->line('Sponsor payment', 10, '2026-10-08 10:00:00', 5_000, race: 2);
 
         $money = $this->service->build(1, null)['money'];
 
-        $this->assertSame([], $money['cash']);
+        $this->assertSame([['race' => 2, 'cash' => 5_000]], $money['cash']);
     }
 
     public function testCategoriesSumIncomeAndCosts(): void
@@ -405,7 +407,8 @@ final class SeasonServiceTest extends TestCase
 
     public function testOtherUsersRowsNeverLeakIn(): void
     {
-        $this->race(1, user: 2);
+        $this->race(1);
+        $this->race(1, ['final_pos' => 1, 'points' => 25], user: 2);
         $this->weekend(1, user: 2);
         $this->weekend(2, ['facilities_json' => json_encode(['windtunnel' => 9])], user: 2);
         $this->standingsRow(2, 1, 99, user: 2);
@@ -413,10 +416,59 @@ final class SeasonServiceTest extends TestCase
 
         $view = $this->service->build(1, 107);
 
-        $this->assertNull($view['season']);
-        $this->assertSame([], $view['seasons']);
-        $this->assertSame([], $view['results']);
+        $this->assertSame(107, $view['season']);
+        $this->assertCount(1, $view['results']);
+        $this->assertSame(5, $view['results'][0]['final_pos']);
+        $this->assertSame(12, $view['results'][0]['points']);
+        $this->assertNull($view['results'][0]['champ_pos']);
+        $this->assertNull($view['results'][0]['champ_pts']);
         $this->assertSame([], $view['money']['cash']);
+        $this->assertSame([], $view['money']['categories']);
+        $this->assertSame(0, $view['money']['income']);
         $this->assertSame([], $view['changes']);
+    }
+
+    public function testAnUnknownTrackNameIsLookedUpOnce(): void
+    {
+        $tracks = new class ($this->db) extends TrackRepository {
+            /** @var list<string> */
+            public array $lookups = [];
+
+            public function findByName(string $name): ?array
+            {
+                $this->lookups[] = $name;
+
+                return parent::findByName($name);
+            }
+        };
+        $service = new SeasonService(
+            $this->history,
+            $this->weekends,
+            $this->standings,
+            $this->ledger,
+            new RaceTelemetryRepository($this->db),
+            $tracks,
+            new WearCalibration(new CarWearService($this->db, [
+                'driver_wear_factors' => ['concentration' => 1.0, 'talent' => 1.0, 'experience' => 1.0],
+                'part_level_factors' => array_fill_keys(range(1, 11), 1.0),
+            ])),
+            new FuelCalibration(new FuelModel(['fuel_factors' => [
+                'conc' => 0.0, 'agg' => 0.0, 'exp' => 0.0, 'te' => 0.0,
+                'eng_lvl' => 0.0, 'ele_lvl' => 0.0, 'constant' => 0.0,
+            ]])),
+        );
+        foreach ([1, 2, 3] as $race) {
+            $this->race($race, ['track_name' => 'Nowhere Ring']);
+            $this->db->exec(
+                "INSERT INTO race_telemetry (season, race, level, track_name, driver_con, driver_tal, driver_exp,
+                    clear_dry_risk, avg_part_level, total_wear_gain, was_wet)
+                 VALUES (107, {$race}, 'Amateur', 'Nowhere Ring', 100, 90, 80, 20, 5, 36, 0)"
+            );
+        }
+        $this->race(4);
+
+        $service->build(1, 107);
+
+        $this->assertSame(['Nowhere Ring', 'Testring'], $tracks->lookups);
     }
 }
