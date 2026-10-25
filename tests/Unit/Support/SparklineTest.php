@@ -26,6 +26,12 @@ final class SparklineTest extends TestCase
         $this->assertSame('0,20 100,0', Sparkline::points([1, null, 3], 100, 20));
     }
 
+    public function testMissingValuesKeepEachPointAtItsOwnX(): void
+    {
+        $this->assertSame('0,20 25,15 100,0', Sparkline::points([1, 2, null, null, 5], 100, 20));
+        $this->assertSame('50,20 100,0', Sparkline::points([null, 1, 2], 100, 20));
+    }
+
     public function testFewerThanTwoValuesGiveNothing(): void
     {
         $this->assertSame('', Sparkline::points([5], 100, 20));
