@@ -107,7 +107,11 @@ final readonly class WeekendDiff
         array $labels,
         array $pair,
     ): void {
+        $before = count($changes);
         self::compare($changes, $group, 'id', $idLabel, $pair[0]['id'] ?? null, $pair[1]['id'] ?? null);
+        if (count($changes) > $before) {
+            return;
+        }
         self::compareMap(
             $changes,
             $group,

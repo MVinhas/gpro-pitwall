@@ -60,11 +60,37 @@ final class WeekendDiffTest extends TestCase
         $changes = WeekendDiff::changes($this->row(), $current);
 
         $this->assertSame(
-            [
-                ['group' => 'driver', 'key' => 'id', 'label' => 'Driver', 'from' => 7, 'to' => 9],
-                ['group' => 'driver', 'key' => 'concentration', 'label' => 'Concentration', 'from' => 100, 'to' => 110],
-            ],
+            [['group' => 'driver', 'key' => 'id', 'label' => 'Driver', 'from' => 7, 'to' => 9]],
             $changes,
+        );
+    }
+
+    public function testNewTechnicalDirectorIsReportedByIdNotEveryAttribute(): void
+    {
+        $td = static fn (int $id, int $pit): string => (string) json_encode([
+            'id' => $id, 'profile' => ['pitCoord' => $pit, 'leadership' => 5],
+        ]);
+
+        $changes = WeekendDiff::changes(
+            $this->row(['td_json' => $td(1, 10)]),
+            $this->row(['td_json' => $td(2, 12)]),
+        );
+
+        $this->assertSame(
+            [['group' => 'td', 'key' => 'id', 'label' => 'Technical director', 'from' => 1, 'to' => 2]],
+            $changes,
+        );
+    }
+
+    public function testSameDriverStillReportsAttributeChanges(): void
+    {
+        $current = $this->row(['driver_json' => json_encode([
+            'id' => 7, 'name' => 'A', 'profile' => ['concentration' => 110] + self::PROFILE,
+        ])]);
+
+        $this->assertSame(
+            [['group' => 'driver', 'key' => 'concentration', 'label' => 'Concentration', 'from' => 100, 'to' => 110]],
+            WeekendDiff::changes($this->row(), $current),
         );
     }
 
@@ -135,12 +161,11 @@ final class WeekendDiffTest extends TestCase
 
         $changes = WeekendDiff::changes(
             $this->row(['td_json' => $td(1, 10), 'staff_json' => $staff(8)]),
-            $this->row(['td_json' => $td(2, 12), 'staff_json' => $staff(9)]),
+            $this->row(['td_json' => $td(1, 12), 'staff_json' => $staff(9)]),
         );
 
         $this->assertSame(
             [
-                ['group' => 'td', 'key' => 'id', 'label' => 'Technical director', 'from' => 1, 'to' => 2],
                 ['group' => 'td', 'key' => 'pitCoord', 'label' => 'Pit coordination', 'from' => 10, 'to' => 12],
                 ['group' => 'staff', 'key' => 'stressHandling', 'label' => 'Stress handling', 'from' => 8, 'to' => 9],
             ],
