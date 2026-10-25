@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Repository;
 
+use App\Support\TrackName;
 use PDO;
 
 class TrackRepository
@@ -62,7 +63,7 @@ class TrackRepository
     public function findByName(string $name): ?array
     {
         $stmt = $this->db->prepare('SELECT * FROM tracks WHERE name = :name LIMIT 1');
-        $stmt->execute([':name' => $name]);
+        $stmt->execute([':name' => TrackName::base($name)]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
         /** @var array<string, mixed>|false $row */

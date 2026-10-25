@@ -6,6 +6,7 @@ namespace App\Service;
 
 use App\Repository\RaceHistoryRepository;
 use App\Repository\TrackRepository;
+use App\Support\TrackName;
 use App\Telemetry\RaceHistoryMapper;
 use Throwable;
 
@@ -113,13 +114,8 @@ final readonly class RaceHistoryService
         return $this->tracks->findLapLength(self::normaliseTrackName($name));
     }
 
-    /**
-     * RaceAnalysis returns "Brno (Czech Republic)" where the tracks table holds
-     * "Brno". Without stripping the country suffix every lookup misses, and the
-     * per-km fuel and tyre rates silently come back null for every race.
-     */
     public static function normaliseTrackName(string $name): string
     {
-        return trim((string) preg_replace('/\s*\([^)]*\)\s*$/', '', trim($name)));
+        return TrackName::base($name);
     }
 }

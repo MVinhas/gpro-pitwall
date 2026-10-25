@@ -349,6 +349,39 @@ final class SeasonServiceTest extends TestCase
         $this->assertSame(['mean_gap' => null, 'n' => 0], $calibration['corpus']);
     }
 
+    public function testCalibrationFindsTracksWhoseRaceNameCarriesTheCountry(): void
+    {
+        foreach ([1, 2, 3] as $race) {
+            $this->race($race, ['track_name' => 'Testring (Spain)']);
+        }
+
+        $calibration = $this->service->build(1, 107)['calibration'];
+
+        $this->assertTrue($calibration['wear']['enough']);
+        $this->assertSame(0, $calibration['wear']['skipped']);
+        $this->assertSame(3, $calibration['fuel']['n']);
+    }
+
+    public function testCorpusCheckFindsTelemetryWhoseTrackNameCarriesTheCountry(): void
+    {
+        $this->db->exec(
+            "INSERT INTO tracks (name, laps, distance, fuel_per_lap, fuel_per_lap_wet, boost_dry, boost_wet,
+                wear_chassis, wear_engine, wear_fwing, wear_rwing, wear_underbody, wear_sidepod, wear_cooling,
+                wear_gearbox, wear_brakes, wear_suspension, wear_electronics)
+             VALUES ('Fullring', 60, 300.0, 2.0, 3.0, 0.3, 0.4, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10)"
+        );
+        $this->race(1);
+        $this->db->exec(
+            "INSERT INTO race_telemetry (season, race, level, track_name, driver_con, driver_tal, driver_exp, clear_dry_risk,
+                avg_part_level, total_wear_gain, was_wet)
+             VALUES (107, 1, 'Amateur', 'Fullring (Spain)', 100, 90, 80, 20, 5, 36, 0)"
+        );
+
+        $corpus = $this->service->build(1, 107)['calibration']['corpus'];
+
+        $this->assertSame(1, $corpus['n']);
+    }
+
     public function testCorpusCheckReadsTheTelemetryRows(): void
     {
         $this->db->exec(

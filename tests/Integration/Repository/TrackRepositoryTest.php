@@ -111,4 +111,15 @@ final class TrackRepositoryTest extends TestCase
         $this->assertNull($this->repo->findByName('Unknown'));
         $this->assertNull($this->repo->findByName('Mon'));
     }
+
+    public function testFindByNameResolvesACountrySuffixedRaceName(): void
+    {
+        $this->seedTrack('Valencia', 4.005, 0.2, 0.16);
+
+        $row = $this->repo->findByName('Valencia (Spain)');
+
+        $this->assertNotNull($row);
+        $this->assertSame('Valencia', $row['name']);
+        $this->assertSame('Valencia', $this->repo->findByName('Valencia')['name'] ?? null);
+    }
 }

@@ -289,6 +289,17 @@ final class RaceWeekendServiceTest extends TestCase
         $this->assertFalse($calibration['fuel']['flagged']);
     }
 
+    public function testCalibrationFindsATrackWhoseRaceNameCarriesTheCountry(): void
+    {
+        $this->race(['track_name' => 'Testring (Spain)']);
+
+        $calibration = $this->service->forRace(1, 107, 13)['calibration'];
+
+        $this->assertNotNull($calibration);
+        $this->assertNotNull($calibration['wear']);
+        $this->assertNotNull($calibration['fuel']);
+    }
+
     public function testBackfilledRaceWithoutWeekendRowHidesWeekend(): void
     {
         $this->race();
