@@ -96,6 +96,37 @@ final readonly class WeekendDiff
     }
 
     /**
+     * A hire is reported by id; a manager reads names, so the id rows carry the
+     * previous and current person's name, falling back to the id.
+     *
+     * @param list<Change> $changes
+     * @param array<array-key, mixed>|null $previous
+     * @param array<array-key, mixed> $current
+     *
+     * @return list<Change>
+     */
+    public static function withNames(array $changes, ?array $previous, array $current): array
+    {
+        foreach ($changes as $i => $change) {
+            if ($change['key'] !== 'id' || !in_array($change['group'], ['driver', 'td'], true)) {
+                continue;
+            }
+            $column = $change['group'] . '_json';
+            $changes[$i]['from'] = self::nameIn($previous[$column] ?? null) ?? $change['from'];
+            $changes[$i]['to'] = self::nameIn($current[$column] ?? null) ?? $change['to'];
+        }
+
+        return $changes;
+    }
+
+    private static function nameIn(mixed $json): ?string
+    {
+        $name = StoredRace::decode($json)['name'] ?? null;
+
+        return is_string($name) && $name !== '' ? $name : null;
+    }
+
+    /**
      * @param list<Change> $changes
      * @param array<string, string> $labels
      * @param array{array<array-key, mixed>, array<array-key, mixed>} $pair

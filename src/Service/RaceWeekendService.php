@@ -65,7 +65,7 @@ final readonly class RaceWeekendService
         }
 
         $previous = $this->weekends->previous($userId, $season, $race);
-        $changes = $this->withNames(WeekendDiff::changes($previous, $row), $previous, $row);
+        $changes = WeekendDiff::withNames(WeekendDiff::changes($previous, $row), $previous, $row);
         $changed = [];
         foreach ($changes as $change) {
             $changed[$change['group'] . '.' . $change['key']] = true;
@@ -81,37 +81,6 @@ final readonly class RaceWeekendService
             'changes' => $changes,
             'changed' => $changed,
         ];
-    }
-
-    /**
-     * A hire is reported by id; a manager reads names, so the id rows carry the
-     * previous and current person's name, falling back to the id.
-     *
-     * @param list<Change> $changes
-     * @param array<string, mixed>|null $previous
-     * @param array<string, mixed> $current
-     *
-     * @return list<Change>
-     */
-    private function withNames(array $changes, ?array $previous, array $current): array
-    {
-        foreach ($changes as $i => $change) {
-            if ($change['key'] !== 'id' || !in_array($change['group'], ['driver', 'td'], true)) {
-                continue;
-            }
-            $column = $change['group'] . '_json';
-            $changes[$i]['from'] = $this->nameIn($previous[$column] ?? null) ?? $change['from'];
-            $changes[$i]['to'] = $this->nameIn($current[$column] ?? null) ?? $change['to'];
-        }
-
-        return $changes;
-    }
-
-    private function nameIn(mixed $json): ?string
-    {
-        $name = $this->decode($json)['name'] ?? null;
-
-        return is_string($name) && $name !== '' ? $name : null;
     }
 
     /**

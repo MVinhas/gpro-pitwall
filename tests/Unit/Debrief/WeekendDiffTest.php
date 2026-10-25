@@ -177,4 +177,20 @@ final class WeekendDiffTest extends TestCase
     {
         $this->assertSame([], WeekendDiff::changes($this->row(), $this->row()));
     }
+
+    public function testWithNamesSwapsHireIdsForNamesAndKeepsTheIdWhenNoneIsStored(): void
+    {
+        $previous = $this->row();
+        $current = $this->row(['driver_json' => json_encode(['id' => 9, 'name' => 'B', 'profile' => self::PROFILE])]);
+        $changes = WeekendDiff::withNames(WeekendDiff::changes($previous, $current), $previous, $current);
+
+        $this->assertSame('A', $changes[0]['from']);
+        $this->assertSame('B', $changes[0]['to']);
+
+        $nameless = $this->row(['driver_json' => json_encode(['id' => 9, 'profile' => self::PROFILE])]);
+        $changes = WeekendDiff::withNames(WeekendDiff::changes($previous, $nameless), $previous, $nameless);
+
+        $this->assertSame('A', $changes[0]['from']);
+        $this->assertSame(9, $changes[0]['to']);
+    }
 }
