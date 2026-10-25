@@ -18,8 +18,11 @@ class StrategyService
     /**
      * @param array<string, mixed> $secrets
      */
-    public function __construct(private readonly PDO $db, private array $secrets)
-    {
+    public function __construct(
+        private readonly PDO $db,
+        private array $secrets,
+        private readonly FuelModel $fuel
+    ) {
     }
 
     /**
@@ -72,9 +75,7 @@ class StrategyService
         $boostCoeffWet = (float) ($trackDb['boost_wet'] ?? $boostCoeffDry);
 
 
-        $trackTotalDist = (float)$trackDb['distance'];
-        $trackTotalLaps = (int)$trackDb['laps'];
-        $lapLen = ($trackTotalLaps > 0) ? ($trackTotalDist / $trackTotalLaps) : 4.5;
+        $lapLen = $this->fuel->lapLength($trackDb);
 
 
         $fplBaseDry = (float)$trackDb['fuel_per_lap'];
@@ -101,16 +102,13 @@ class StrategyService
         $cEng  = (int)($carData['lvlEngine']);
         $cEle  = (int)($carData['lvlElectronics']);
 
-        $fuelAdj = ($dConc * ($ff['conc'])) +
-                   ($dAgg  * ($ff['agg'])) +
-                   ($dExp  * ($ff['exp'])) +
-                   ($dTe   * ($ff['te'])) +
-                   ($cEng  * ($ff['eng_lvl'])) +
-                   ($cEle  * ($ff['ele_lvl'])) +
-                   ($ff['constant']);
-
-        $lkmDry = max(0.1, $fplBaseDry + $fuelAdj);
-        $lkmWet = max(0.1, $fplBaseWet + $fuelAdj);
+        $rates = $this->fuel->perKm(
+            ['fuel_per_lap' => $fplBaseDry, 'fuel_per_lap_wet' => $fplBaseWet],
+            $driver,
+            $carData
+        );
+        $lkmDry = $rates['dry'];
+        $lkmWet = $rates['wet'];
 
         $simulatedDistance = $laps * $lapLen;
 

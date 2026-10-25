@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Unit\Service;
 
+use App\Service\FuelModel;
 use App\Service\StrategyService;
 use PDO;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -96,7 +97,7 @@ final class StrategyServiceTest extends TestCase
 
     private function service(?PDO $db = null): StrategyService
     {
-        return new StrategyService($db ?? $this->db(), self::SECRETS);
+        return new StrategyService($db ?? $this->db(), self::SECRETS, new FuelModel(self::SECRETS));
     }
 
     /** @return array<string, mixed> */
@@ -262,7 +263,7 @@ final class StrategyServiceTest extends TestCase
         $secrets = self::SECRETS;
         $secrets['pit_stop']['factor_staff_conc_no_td'] = -100.0;
 
-        $svc = new StrategyService($this->db(), $secrets);
+        $svc = new StrategyService($this->db(), $secrets, new FuelModel($secrets));
 
         $result = $svc->calculateStrategy(
             ['id' => 1, 'name' => 'Imola'],
@@ -292,7 +293,7 @@ final class StrategyServiceTest extends TestCase
         // Secrets snapshot deliberately disagrees with the API value used in
         // the override tests, so we can tell which one the service applied.
         $secrets['tyre_suppliers_durabilities'] = ['Pipirelli' => 1];
-        return new StrategyService($this->db(), $secrets);
+        return new StrategyService($this->db(), $secrets, new FuelModel($secrets));
     }
 
     private function runStops(StrategyService $svc, ?int $durability): int
@@ -435,7 +436,7 @@ final class StrategyServiceTest extends TestCase
         $secrets = self::SECRETS;
         $secrets['pit_stop']['base_time'] = 1.0;
 
-        return (new StrategyService($this->pitWorthItDb(), $secrets))->calculateStrategy(
+        return (new StrategyService($this->pitWorthItDb(), $secrets, new FuelModel($secrets)))->calculateStrategy(
             ['id' => 1, 'name' => 'PitWorth'],
             ['lvlEngine' => 1, 'lvlElectronics' => 1, 'lvlSusp' => 1],
             ['concentration' => 50, 'aggressiveness' => 50, 'experience' => 50,
@@ -589,7 +590,7 @@ final class StrategyServiceTest extends TestCase
         $inputs = $this->inputs();
         $inputs['laps'] = 10;
 
-        $row = (new StrategyService($this->db(), $secrets))->calculateStrategy(
+        $row = (new StrategyService($this->db(), $secrets, new FuelModel($secrets)))->calculateStrategy(
             ['id' => 1, 'name' => 'Imola'],
             ['lvlEngine' => 1, 'lvlElectronics' => 1, 'lvlSusp' => 1],
             ['concentration' => 50, 'aggressiveness' => 50, 'experience' => 50,
@@ -635,7 +636,7 @@ final class StrategyServiceTest extends TestCase
         $inputs = $this->inputs();
         $inputs['laps'] = 45;
 
-        $run = fn (string $mode): array => (new StrategyService($this->db(), $secrets))->calculateStrategy(
+        $run = fn (string $mode): array => (new StrategyService($this->db(), $secrets, new FuelModel($secrets)))->calculateStrategy(
             ['id' => 1, 'name' => 'Imola'],
             ['lvlEngine' => 1, 'lvlElectronics' => 1, 'lvlSusp' => 1],
             ['concentration' => 50, 'aggressiveness' => 50, 'experience' => 50,
@@ -659,7 +660,7 @@ final class StrategyServiceTest extends TestCase
         $inputs['laps'] = 10;
 
         foreach (['even', 'early', 'late'] as $mode) {
-            $row = (new StrategyService($this->db(), $secrets))->calculateStrategy(
+            $row = (new StrategyService($this->db(), $secrets, new FuelModel($secrets)))->calculateStrategy(
                 ['id' => 1, 'name' => 'Imola'],
                 ['lvlEngine' => 1, 'lvlElectronics' => 1, 'lvlSusp' => 1],
                 ['concentration' => 50, 'aggressiveness' => 50, 'experience' => 50,
@@ -743,7 +744,7 @@ final class StrategyServiceTest extends TestCase
         $inputs = $this->inputs();
         $inputs['risk'] = 30;
 
-        $result = (new StrategyService($this->db(), $secrets))->calculateStrategy(
+        $result = (new StrategyService($this->db(), $secrets, new FuelModel($secrets)))->calculateStrategy(
             ['id' => 1, 'name' => 'Imola'],
             ['lvlEngine' => 1, 'lvlElectronics' => 1, 'lvlSusp' => 1],
             ['concentration' => 50, 'aggressiveness' => 50, 'experience' => 50,
@@ -785,7 +786,7 @@ final class StrategyServiceTest extends TestCase
         $inputs = $this->inputs();
         $inputs['risk'] = $risk;
 
-        return (new StrategyService($this->dbAtSpeed($avgSpeed), self::SECRETS))->calculateStrategy(
+        return (new StrategyService($this->dbAtSpeed($avgSpeed), self::SECRETS, new FuelModel(self::SECRETS)))->calculateStrategy(
             ['id' => 1, 'name' => 'Imola'],
             ['lvlEngine' => 1, 'lvlElectronics' => 1, 'lvlSusp' => 1],
             ['concentration' => 50, 'aggressiveness' => 50, 'experience' => 50,

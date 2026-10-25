@@ -103,6 +103,7 @@ use App\Service\IdealPilotService;
 use App\Service\InsightService;
 use App\Service\RecruitmentService;
 use App\Service\CarWearService;
+use App\Service\FuelModel;
 use App\Service\StrategyService;
 use App\Service\GproApiClient;
 use App\Service\GproDataMapper;
@@ -413,9 +414,12 @@ $container['service.car_wear'] = new CarWearService(
     $container['config']['secrets']
 );
 
+$container['service.fuel_model'] = new FuelModel($container['config']['secrets']);
+
 $container['service.strategy'] = new StrategyService(
     $container['db'],
-    $container['config']['secrets']
+    $container['config']['secrets'],
+    $container['service.fuel_model']
 );
 $container['service.setup_calculator'] = new SetupCalculatorService($container['db'], $container['config']['secrets']);
 $container['service.training'] = new TrainingService($container['db']);
