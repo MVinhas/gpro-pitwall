@@ -49,6 +49,10 @@ final readonly class WearCalibration
             return null;
         }
 
+        if ($this->retired($historyRow)) {
+            return null;
+        }
+
         $factor = $this->driverFactor($driver);
         if ($factor === null) {
             return null;
@@ -91,6 +95,10 @@ final readonly class WearCalibration
                 'gap' => $gap,
                 'flagged' => $flagged,
             ];
+        }
+
+        if ($rows === []) {
+            return null;
         }
 
         return [
@@ -153,7 +161,7 @@ final readonly class WearCalibration
         $n = 0;
 
         foreach ($telemetryRows as $row) {
-            if ((int) ($row['was_wet'] ?? 0) === 1) {
+            if ((int) ($row['was_wet'] ?? 0) === 1 || (int) ($row['dnf'] ?? 0) === 1) {
                 continue;
             }
             $trackRow = $trackRowsByName[(string) ($row['track_name'] ?? '')] ?? null;
@@ -188,6 +196,23 @@ final readonly class WearCalibration
         }
 
         return ['mean_gap' => $n > 0 ? round($sum / $n, 2) : null, 'n' => $n];
+    }
+
+    /**
+     * raceWear predicts a full distance, so a car that stopped early has
+     * partial wear that would read as a model error.
+     *
+     * @param array<string, mixed> $historyRow
+     */
+    private function retired(array $historyRow): bool
+    {
+        if ((int) ($historyRow['dnf'] ?? 0) === 1) {
+            return true;
+        }
+        $total = $historyRow['laps_total'] ?? null;
+        $completed = $historyRow['laps_completed'] ?? null;
+
+        return is_numeric($total) && is_numeric($completed) && (int) $completed < (int) $total;
     }
 
     /**

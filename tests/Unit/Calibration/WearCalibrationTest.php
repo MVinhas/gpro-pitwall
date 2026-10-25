@@ -141,6 +141,42 @@ final class WearCalibrationTest extends TestCase
         $this->assertSame(1, $result['total']);
     }
 
+    public function testRetiredRaceIsLeftOutBecauseItsWearIsPartial(): void
+    {
+        $dnf = [...$this->row(), 'dnf' => 1, 'laps_total' => 50, 'laps_completed' => 20];
+        $short = [...$this->row(), 'dnf' => 0, 'laps_total' => 50, 'laps_completed' => 49];
+        $finished = [...$this->row(), 'dnf' => 0, 'laps_total' => 50, 'laps_completed' => 50];
+
+        $this->assertNull($this->calibration()->forRace($dnf, $this->track()));
+        $this->assertNull($this->calibration()->forRace($short, $this->track()));
+        $this->assertNotNull($this->calibration()->forRace($finished, $this->track()));
+    }
+
+    public function testRetiredRacesAreCountedAsSkippedInBias(): void
+    {
+        $dnf = [...$this->row(5), 'dnf' => 1, 'laps_total' => 50, 'laps_completed' => 10];
+
+        $bias = $this->calibration()->bias(
+            [$this->row(22), $this->row(22), $this->row(22), $dnf],
+            ['Monza' => $this->track()]
+        );
+
+        $this->assertSame(1, $bias['skipped']);
+        $this->assertSame(3, $bias['parts']['engine']['n']);
+        $this->assertSame(2.0, $bias['parts']['engine']['mean_gap']);
+    }
+
+    public function testRaceWithNoScoredPartIsSkippedNotShownAsZeroOfZero(): void
+    {
+        $unscorable = [
+            ['key' => 'engine', 'label' => 'Engine', 'level' => null, 'wear_gain' => 20],
+            ['key' => 'mystery', 'label' => 'Mystery', 'level' => 3, 'wear_gain' => 5],
+        ];
+
+        $this->assertNull($this->calibration()->forRace($this->row(parts: $unscorable), $this->track()));
+        $this->assertNull($this->calibration()->forRace($this->row(parts: []), $this->track()));
+    }
+
     public function testWetRaceIsReportedAsWet(): void
     {
         $result = $this->calibration()->forRace($this->row(wet: true), $this->track());
@@ -198,6 +234,7 @@ final class WearCalibrationTest extends TestCase
             [...$complete, 'avg_part_level' => null],
             [...$complete, 'driver_tal' => null],
             [...$complete, 'was_wet' => 1],
+            [...$complete, 'dnf' => 1],
             [...$complete, 'track_name' => 'Unknown Ring'],
         ];
 

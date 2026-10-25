@@ -828,7 +828,7 @@ class RaceTelemetryRepository
     {
         return $this->rows(
             'SELECT track_name, driver_con, driver_tal, driver_exp, clear_dry_risk,
-                    avg_part_level, total_wear_gain, was_wet
+                    avg_part_level, total_wear_gain, was_wet, dnf
              FROM race_telemetry
              ORDER BY id'
         );

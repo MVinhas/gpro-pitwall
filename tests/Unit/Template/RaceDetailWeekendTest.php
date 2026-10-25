@@ -86,4 +86,45 @@ final class RaceDetailWeekendTest extends TestCase
         $this->assertSame(2, preg_match_all('/class="grid grid-cols-2 sm:grid-cols-3 gap-2/', $html));
         $this->assertStringNotContainsString('grid grid-cols-3 gap-2 mb-4', $html);
     }
+
+    /**
+     * @param array<string, mixed> $detail
+     */
+    private function calibrationText(array $detail): string
+    {
+        $twig = new Environment(new FilesystemLoader(dirname(__DIR__, 3) . '/templates'));
+        $html = $twig->render('debrief/_race_detail.twig', [
+            'sort' => 'recent',
+            'race_options' => [],
+            'detail' => [
+                'season' => 107, 'race' => 13, 'track_name' => 'Testring',
+                'calibration' => [
+                    'wear' => null,
+                    'fuel' => ['wet' => false, 'predicted' => 2.0, 'actual' => 2.126, 'gap_pct' => 6.3, 'flagged' => true],
+                ],
+                ...$detail,
+            ],
+        ]);
+
+        return (string) preg_replace('/\s+/', ' ', strip_tags($html));
+    }
+
+    public function testARetiredRaceSaysWhyWearWasNotCompared(): void
+    {
+        $text = $this->calibrationText(['dnf' => 1, 'laps_completed' => 23, 'laps_total' => 60]);
+
+        $this->assertStringContainsString('Retired on lap 23 — wear not compared.', $text);
+        $this->assertStringContainsString('Fuel per km', $text);
+    }
+
+    public function testAFinishedRaceWithoutWearSaysNothingAboutRetiring(): void
+    {
+        $this->assertStringNotContainsString('Retired on lap', $this->calibrationText(['dnf' => 0]));
+    }
+
+    public function testTheWetNoteFollowsTheRacesOwnWetFlag(): void
+    {
+        $this->assertStringContainsString('not counted in the season bias', $this->calibrationText(['was_wet' => 1]));
+        $this->assertStringNotContainsString('not counted in the season bias', $this->calibrationText(['was_wet' => 0]));
+    }
 }

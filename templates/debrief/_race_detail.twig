@@ -695,7 +695,7 @@
         {% set cal = detail.calibration %}
         {% set wear = cal.wear %}
         {% set fuel = cal.fuel %}
-        {% set wet = (wear and wear.wet) or (fuel and fuel.wet) %}
+        {% set wet = detail.was_wet %}
         {% set wear_flagged = wear and wear.within < wear.total %}
         {% embed 'partials/_acc.twig' with {
             id: 'calibration', title: 'Model error', caption: 'Predicted against what the race actually used',
@@ -719,6 +719,10 @@
                     <div class="notice notice-info notice-slim mb-3">
                         <p><strong>Wet race</strong> — not counted in the season bias.</p>
                     </div>
+                {% endif %}
+
+                {% if not wear and detail.dnf %}
+                    <p class="t-caption mb-3">Retired on lap {{ detail.laps_completed ?? '—' }} — wear not compared.</p>
                 {% endif %}
 
                 {% if wear %}
