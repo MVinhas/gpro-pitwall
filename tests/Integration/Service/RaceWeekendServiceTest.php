@@ -169,6 +169,39 @@ final class RaceWeekendServiceTest extends TestCase
         $this->assertSame(['car.engine' => true], $result['weekend']['changed']);
     }
 
+    public function testAHireReportsNamesNotIds(): void
+    {
+        $this->weekend(12, ['td_json' => json_encode(['id' => 3, 'name' => 'Old TD', 'profile' => ['pitCoord' => 10]])]);
+        $this->weekend(13, [
+            'driver_json' => json_encode(['id' => 9, 'name' => 'B. Newcomer', 'profile' => ['concentration' => 100]]),
+            'td_json' => json_encode(['id' => 4, 'name' => 'New TD', 'profile' => ['pitCoord' => 12]]),
+        ]);
+
+        $weekend = $this->service->forRace(1, 107, 13)['weekend'];
+
+        $this->assertNotNull($weekend);
+        $this->assertSame(
+            [
+                ['group' => 'driver', 'key' => 'id', 'label' => 'Driver', 'from' => 'A. Driver', 'to' => 'B. Newcomer'],
+                ['group' => 'td', 'key' => 'id', 'label' => 'Technical director', 'from' => 'Old TD', 'to' => 'New TD'],
+            ],
+            $weekend['changes'],
+        );
+        $this->assertSame(['driver.id' => true, 'td.id' => true], $weekend['changed']);
+    }
+
+    public function testAHireFallsBackToTheIdWhenANameIsMissing(): void
+    {
+        $this->weekend(12);
+        $this->weekend(13, ['driver_json' => json_encode(['id' => 9, 'profile' => ['concentration' => 100]])]);
+
+        $weekend = $this->service->forRace(1, 107, 13)['weekend'];
+
+        $this->assertNotNull($weekend);
+        $this->assertSame('A. Driver', $weekend['changes'][0]['from']);
+        $this->assertSame(9, $weekend['changes'][0]['to']);
+    }
+
     public function testFirstStoredWeekendHasNoChanges(): void
     {
         $this->weekend(13);

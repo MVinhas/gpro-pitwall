@@ -552,26 +552,18 @@
                     </div>
                 {% endif %}
 
+                {% set overall = {'overall': 'Overall'} %}
                 {% set groups = [
-                    {'id': 'driver', 'title': 'Driver', 'data': wk.driver.profile ?? null, 'labels': {
-                        'overall': 'Overall', 'concentration': 'Concentration', 'talent': 'Talent',
-                        'aggressiveness': 'Aggressiveness', 'experience': 'Experience',
-                        'techInsight': 'Tech insight', 'stamina': 'Stamina', 'charisma': 'Charisma',
-                        'motivation': 'Motivation'}},
-                    {'id': 'td', 'title': 'Technical director', 'data': wk.td.profile ?? null, 'labels': {
-                        'overall': 'Overall', 'leadership': 'Leadership', 'mechanics': 'Mechanics',
-                        'electronics': 'Electronics', 'experience': 'Experience',
-                        'aerodynamics': 'Aerodynamics', 'pitCoord': 'Pit coord', 'motivation': 'Motivation'}},
-                    {'id': 'staff', 'title': 'Staff', 'data': wk.staff, 'labels': {
-                        'overall': 'Overall', 'concentration': 'Concentration', 'experience': 'Experience',
-                        'technical': 'Technical', 'stressHandling': 'Stress handling',
-                        'motivation': 'Motivation', 'efficiency': 'Efficiency'}},
-                    {'id': 'facilities', 'title': 'Facilities', 'data': wk.facilities, 'labels': {
-                        'windtunnel': 'Wind tunnel', 'pitstop': 'Pit stop', 'rdWorkshop': 'R&D workshop',
-                        'rdDesign': 'R&D design', 'engineering': 'Engineering', 'lab': 'Lab',
-                        'commercial': 'Commercial'}},
-                    {'id': 'car', 'title': 'Car', 'data': wk.car, 'labels': {
-                        'power': 'Power', 'handling': 'Handling', 'accel': 'Acceleration'}}
+                    {'id': 'driver', 'title': 'Driver', 'data': wk.driver.profile ?? null,
+                     'labels': overall|merge(constant('App\\Debrief\\WeekendDiff::DRIVER'))},
+                    {'id': 'td', 'title': 'Technical director', 'data': wk.td.profile ?? null,
+                     'labels': overall|merge(constant('App\\Debrief\\WeekendDiff::TD'))},
+                    {'id': 'staff', 'title': 'Staff', 'data': wk.staff,
+                     'labels': overall|merge(constant('App\\Debrief\\WeekendDiff::STAFF'))},
+                    {'id': 'facilities', 'title': 'Facilities', 'data': wk.facilities,
+                     'labels': constant('App\\Debrief\\WeekendDiff::FACILITIES')},
+                    {'id': 'car', 'title': 'Car', 'data': wk.car,
+                     'labels': constant('App\\Debrief\\WeekendDiff::CAR')}
                 ] %}
                 <div class="space-y-4">
                     {% for g in groups|filter(g => g.data is not null) %}
@@ -590,11 +582,12 @@
                                     </div>
                                 {% endfor %}
                                 {% if g.id == 'car' and wk.car.parts is defined %}
+                                    {% set part_labels = constant('App\\Debrief\\WeekendDiff::CAR_PARTS') %}
                                     {% for key, part in wk.car.parts %}
                                         {% set mark = wk.changed['car.' ~ key] is defined %}
                                         <div class="brief-stat">
                                             <div class="brief-stat-v">{{ part.level ?? '—' }}</div>
-                                            <div class="brief-stat-l">{{ key }} level{{ mark ? ' · changed' : '' }}</div>
+                                            <div class="brief-stat-l">{{ part_labels[key] ?? key }} level{{ mark ? ' · changed' : '' }}</div>
                                         </div>
                                     {% endfor %}
                                 {% endif %}

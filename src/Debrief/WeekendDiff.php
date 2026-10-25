@@ -14,31 +14,31 @@ use App\Calibration\StoredRace;
  */
 final readonly class WeekendDiff
 {
-    private const array DRIVER = [
+    public const array DRIVER = [
         'concentration' => 'Concentration', 'talent' => 'Talent', 'aggressiveness' => 'Aggressiveness',
         'experience' => 'Experience', 'techInsight' => 'Technical insight', 'stamina' => 'Stamina',
         'charisma' => 'Charisma', 'motivation' => 'Motivation',
     ];
 
-    private const array TD = [
+    public const array TD = [
         'leadership' => 'Leadership', 'mechanics' => 'Mechanics', 'electronics' => 'Electronics',
         'experience' => 'Experience', 'aerodynamics' => 'Aerodynamics', 'pitCoord' => 'Pit coordination',
         'motivation' => 'Motivation',
     ];
 
-    private const array STAFF = [
+    public const array STAFF = [
         'concentration' => 'Concentration', 'experience' => 'Experience', 'technical' => 'Technical',
         'stressHandling' => 'Stress handling', 'motivation' => 'Motivation', 'efficiency' => 'Efficiency',
     ];
 
-    private const array FACILITIES = [
+    public const array FACILITIES = [
         'windtunnel' => 'Wind tunnel', 'pitstop' => 'Pit stop', 'rdWorkshop' => 'R&D workshop',
         'rdDesign' => 'R&D design', 'engineering' => 'Engineering', 'lab' => 'Lab', 'commercial' => 'Commercial',
     ];
 
-    private const array CAR = ['power' => 'Power', 'handling' => 'Handling', 'accel' => 'Acceleration'];
+    public const array CAR = ['power' => 'Power', 'handling' => 'Handling', 'accel' => 'Acceleration'];
 
-    private const array CAR_PARTS = [
+    public const array CAR_PARTS = [
         'chassis' => 'Chassis', 'engine' => 'Engine', 'fWing' => 'Front wing', 'rWing' => 'Rear wing',
         'underbody' => 'Underbody', 'sidepods' => 'Sidepods', 'cooling' => 'Cooling', 'gear' => 'Gearbox',
         'brakes' => 'Brakes', 'susp' => 'Suspension', 'electronics' => 'Electronics',
