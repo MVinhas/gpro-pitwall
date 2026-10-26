@@ -93,7 +93,7 @@ final readonly class SeasonObjective
             $cashReasons[] = 'The balance is negative';
         }
         if ($endCash !== null && $endCash < 0) {
-            $cashReasons[] = 'Cash is projected to end the season at ' . self::money($endCash);
+            $cashReasons[] = 'Cash is projected to end the season at ' . Money::full($endCash);
         }
 
         $early = $racesRun === null || $racesRun < self::EARLY_RACES;
@@ -389,10 +389,5 @@ final readonly class SeasonObjective
     private static function int(mixed $value): int
     {
         return is_numeric($value) ? (int) $value : 0;
-    }
-
-    private static function money(int $amount): string
-    {
-        return ($amount < 0 ? '-' : '') . '$' . number_format(abs($amount));
     }
 }
