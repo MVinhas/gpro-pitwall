@@ -59,6 +59,7 @@ final class RaceEngineerTest extends TestCase
         $o += [
             'objective' => $this->objective(SeasonObjective::HOLD),
             'outlook' => $this->outlook(5_000_000),
+            'cash' => 1_000_000,
             'currentCtr' => 30,
             'ctrCeiling' => 45,
             'ctrSurvive' => 35,
@@ -309,15 +310,21 @@ final class RaceEngineerTest extends TestCase
         $this->assertSame('amber', $line['tone']);
     }
 
-    public function testOptionalSwapsNeedAKnownOutlook(): void
+    public function testOptionalSwapsUseTheBalanceWhenTheOutlookIsUnknown(): void
     {
-        $in = $this->inputs([
+        $base = [
             'objective' => $this->objective(SeasonObjective::PROMOTE),
-            'optionalSwaps' => [['part' => 'Gearbox', 'cost' => 200_000]],
             'outlook' => $this->outlook(null),
-        ]);
+            'wearAdvice' => $this->wearAdvice(),
+            'forcedSwapCost' => 410_000,
+            'optionalSwaps' => [['part' => 'Gearbox', 'cost' => 200_000]],
+        ];
 
-        $this->assertSame('Nothing to swap', $this->line($in, 'parts')['answer']);
+        $enough = $this->line($this->inputs($base + ['cash' => 610_000]), 'parts');
+        $short = $this->line($this->inputs($base + ['cash' => 609_999]), 'parts');
+
+        $this->assertStringContainsString('Gearbox', $enough['answer']);
+        $this->assertSame('Swap Engine', $short['answer']);
     }
 
     public function testTrainingIsRecommendedWhenFreeCashCoversIt(): void
@@ -339,6 +346,7 @@ final class RaceEngineerTest extends TestCase
         $line = $this->line($this->inputs(['outlook' => $this->outlook(50_000)]), 'training');
 
         $this->assertSame('Skip — keep it for repairs', $line['answer']);
+        $this->assertSame('Free cash does not cover it', $line['reason']);
     }
 
     public function testSurviveSkipsTrainingWhenRepairsNeedTheMoney(): void
@@ -363,13 +371,69 @@ final class RaceEngineerTest extends TestCase
         $this->assertSame('Train Talent course', $this->line($in, 'training')['answer']);
     }
 
-    public function testUnknownOutlookFallsBackToTheAdvisorsOwnCashFilter(): void
+    public function testUnknownOutlookJudgesTrainingAgainstTheBalance(): void
     {
-        $hold = $this->inputs(['outlook' => $this->outlook(null)]);
-        $survive = $this->inputs(['outlook' => $this->outlook(null), 'objective' => $this->objective(SeasonObjective::SURVIVE)]);
+        $unknown = $this->outlook(null);
 
-        $this->assertSame('Train Talent course', $this->line($hold, 'training')['answer']);
-        $this->assertSame('Skip — keep it for repairs', $this->line($survive, 'training')['answer']);
+        $enough = $this->line($this->inputs(['outlook' => $unknown, 'cash' => 90_000]), 'training');
+        $short = $this->line($this->inputs(['outlook' => $unknown, 'cash' => 80_000]), 'training');
+
+        $this->assertSame('Train Talent course', $enough['answer']);
+        $this->assertSame('Your balance covers it; season costs unknown', $enough['reason']);
+        $this->assertSame('Skip — keep it for repairs', $short['answer']);
+        $this->assertSame('Your balance does not cover it; season costs unknown', $short['reason']);
+    }
+
+    public function testKnownOutlookIgnoresTheBalance(): void
+    {
+        $in = $this->inputs(['outlook' => $this->outlook(5_000_000), 'cash' => 0]);
+
+        $line = $this->line($in, 'training');
+
+        $this->assertSame('Train Talent course', $line['answer']);
+        $this->assertSame('Free cash covers it', $line['reason']);
+    }
+
+    public function testSurviveWithUnknownOutlookNeedsTheBalanceToCoverRepairsToo(): void
+    {
+        $base = [
+            'outlook' => $this->outlook(null),
+            'objective' => $this->objective(SeasonObjective::SURVIVE),
+            'forcedSwapCost' => 410_000,
+        ];
+
+        $enough = $this->line($this->inputs($base + ['cash' => 495_000]), 'training');
+        $short = $this->line($this->inputs($base + ['cash' => 494_999]), 'training');
+
+        $this->assertSame('Train Talent course', $enough['answer']);
+        $this->assertSame('Your balance covers it and the forced repairs; season costs unknown', $enough['reason']);
+        $this->assertSame('Skip — keep it for repairs', $short['answer']);
+        $this->assertSame('Survive: your balance must cover repairs first; season costs unknown', $short['reason']);
+    }
+
+    public function testUnknownOutlookCashLineSaysWhatSpendingIsCheckedAgainst(): void
+    {
+        $line = $this->line($this->inputs(['outlook' => $this->outlook(null)]), 'cash');
+
+        $this->assertSame('Spending is checked against your balance until costs are known', $line['reason']);
+    }
+
+    public function testUnknownOutlookJudgesTestingAgainstTheBalance(): void
+    {
+        $unknown = $this->outlook(null);
+
+        $enough = $this->line($this->inputs(['outlook' => $unknown, 'cash' => 300_000]), 'testing');
+        $short = $this->line($this->inputs(['outlook' => $unknown, 'cash' => 299_999]), 'testing');
+        $survive = $this->line($this->inputs([
+            'outlook' => $unknown,
+            'objective' => $this->objective(SeasonObjective::SURVIVE),
+            'forcedSwapCost' => 100_000,
+            'cash' => 350_000,
+        ]), 'testing');
+
+        $this->assertSame('Test at Monza', $enough['answer']);
+        $this->assertSame('Skip — keep it for repairs', $short['answer']);
+        $this->assertSame('Skip — keep it for repairs', $survive['answer']);
     }
 
     public function testTestingIsRecommendedWhenAffordable(): void
@@ -449,6 +513,7 @@ final class RaceEngineerTest extends TestCase
         $line = $this->line($this->inputs(), 'boost');
 
         $this->assertSame('Boost: 3 sets · +24 L', $line['answer']);
+        $this->assertSame(9, RaceEngineer::BOOST_SETS * RaceEngineer::BOOST_LAPS_PER_SET);
         $this->assertSame(['label' => 'Laps in Strategy', 'href' => '/strategy'], $line['action']);
         $this->assertNull($line['anchor']);
     }

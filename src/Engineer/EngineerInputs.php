@@ -47,6 +47,7 @@ final readonly class EngineerInputs
     public function __construct(
         public array $objective,
         public array $outlook,
+        public int $cash,
         public int $currentCtr,
         public ?int $ctrCeiling,
         public ?int $ctrSurvive,

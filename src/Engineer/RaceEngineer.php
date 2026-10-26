@@ -22,6 +22,10 @@ final class RaceEngineer
     /** Tunable: how much a Survive weekend lowers the advisor's overtake risk. */
     public const int SURVIVE_OVERTAKE_STEP = 15;
 
+    /** Boost sets per race; the caller's extra-fuel litres must use BOOST_SETS * BOOST_LAPS_PER_SET laps. */
+    public const int BOOST_SETS = 3;
+    public const int BOOST_LAPS_PER_SET = 3;
+
     private const string SKIP = 'Skip — keep it for repairs';
     private const string NOTHING = 'Nothing to do';
     private const string STALE = 'After you save the race setup';
@@ -73,7 +77,7 @@ final class RaceEngineer
             return self::line(
                 'cash',
                 'Costs unknown — sync once after a race',
-                'Training and testing are checked against your balance only',
+                'Spending is checked against your balance until costs are known',
             );
         }
 
@@ -271,8 +275,9 @@ final class RaceEngineer
 
         return self::line(
             'boost',
-            'Boost: 3 sets · +' . $in->boostLitres . ' L',
-            'Extra fuel for three sets of three laps; Strategy picks the laps',
+            'Boost: ' . self::BOOST_SETS . ' sets · +' . $in->boostLitres . ' L',
+            'Extra fuel for ' . self::BOOST_SETS . ' sets of ' . self::BOOST_LAPS_PER_SET
+                . ' laps; Strategy picks the laps',
             action: $strategy,
         );
     }
@@ -282,12 +287,11 @@ final class RaceEngineer
      */
     private static function offeredOptionals(EngineerInputs $in): array
     {
-        $free = self::free($in);
-        if ($free === null || !self::objectiveIs($in, SeasonObjective::PROMOTE)) {
+        if (!self::objectiveIs($in, SeasonObjective::PROMOTE)) {
             return [];
         }
 
-        $remaining = $free - ($in->forcedSwapCost ?? 0);
+        $remaining = self::spendable($in) - ($in->forcedSwapCost ?? 0);
         $offered = [];
         foreach ($in->optionalSwaps as $swap) {
             if ($swap['cost'] <= $remaining) {
@@ -301,27 +305,35 @@ final class RaceEngineer
 
     private static function affords(EngineerInputs $in, int $cost): bool
     {
-        $survive = self::objectiveIs($in, SeasonObjective::SURVIVE);
-        $free = self::free($in);
-        if ($free === null) {
-            return !$survive;
-        }
+        $reserve = self::objectiveIs($in, SeasonObjective::SURVIVE) ? $in->forcedSwapCost ?? 0 : 0;
 
-        return $free >= $cost + ($survive ? $in->forcedSwapCost ?? 0 : 0);
+        return self::spendable($in) >= $cost + $reserve;
     }
 
     private static function skipReason(EngineerInputs $in): string
     {
-        return self::objectiveIs($in, SeasonObjective::SURVIVE)
-            ? 'Survive: repairs come before anything optional'
-            : 'Free cash does not cover it';
+        $known = $in->outlook['known'];
+        if (self::objectiveIs($in, SeasonObjective::SURVIVE)) {
+            return $known
+                ? 'Survive: repairs come before anything optional'
+                : 'Survive: your balance must cover repairs first; season costs unknown';
+        }
+
+        return $known ? 'Free cash does not cover it' : 'Your balance does not cover it; season costs unknown';
     }
 
     private static function affordReason(EngineerInputs $in): string
     {
-        return self::objectiveIs($in, SeasonObjective::SURVIVE)
-            ? 'Free cash covers it and the forced repairs'
-            : 'Free cash covers it';
+        $subject = $in->outlook['known'] ? 'Free cash' : 'Your balance';
+        $tail = self::objectiveIs($in, SeasonObjective::SURVIVE) ? ' and the forced repairs' : '';
+        $note = $in->outlook['known'] ? '' : '; season costs unknown';
+
+        return $subject . ' covers it' . $tail . $note;
+    }
+
+    private static function spendable(EngineerInputs $in): int
+    {
+        return self::free($in) ?? $in->cash;
     }
 
     private static function free(EngineerInputs $in): ?int
