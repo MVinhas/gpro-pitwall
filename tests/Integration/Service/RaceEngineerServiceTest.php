@@ -55,7 +55,7 @@ final class RaceEngineerServiceTest extends TestCase
 
         $wear = new CarWearService($this->db, [
             'driver_wear_factors' => ['concentration' => 1.0, 'talent' => 1.0, 'experience' => 1.0],
-            'part_level_factors' => array_fill_keys(range(1, 11), 1.0),
+            'part_level_factors' => [1 => 1.05] + array_fill_keys(range(2, 11), 1.0),
         ]);
 
         $this->service = new RaceEngineerService(
@@ -181,18 +181,54 @@ final class RaceEngineerServiceTest extends TestCase
         self::assertSame('$200k', $byKey['parts']['figure']);
     }
 
-    public function testMissingTrackOmitsCtrAndRisk(): void
+    public function testWithoutWearTheCtrLineIsOmitted(): void
     {
         $this->seedPromotionFixture();
 
-        $keys = array_column($this->service->forCockpit(
-            self::USER,
-            $this->cockpit(['track_name' => 'Nowhere', 'wear' => null]),
-        )['lines'], 'key');
+        $keys = array_column($this->service->forCockpit(self::USER, $this->cockpit(['wear' => null]))['lines'], 'key');
 
         self::assertNotContains('ctr', $keys);
+        self::assertContains('risk', $keys);
+        self::assertContains('boost', $keys);
+    }
+
+    public function testATrackMissingFromTheDatabaseKeepsCtrButOmitsRiskAndBoost(): void
+    {
+        $this->seedPromotionFixture();
+
+        $keys = array_column(
+            $this->service->forCockpit(self::USER, $this->cockpit(['track_name' => 'Nowhere']))['lines'],
+            'key',
+        );
+
+        self::assertContains('ctr', $keys);
         self::assertNotContains('risk', $keys);
         self::assertNotContains('boost', $keys);
+    }
+
+    public function testPushAdviceFollowsTheNextRacesRound(): void
+    {
+        $this->seedPromotionFixture();
+        $this->seedWearTracks();
+        $calendar = [
+            ['race' => 9, 'track_name' => 'Alpha'],
+            ['race' => 10, 'track_name' => 'Beta'],
+            ['race' => 11, 'track_name' => 'Gamma'],
+        ];
+        $reasonFor = function (int $raceNb) use ($calendar): string {
+            $lines = $this->service->forCockpit(self::USER, $this->cockpit([
+                'office' => ['seasonNb' => self::SEASON, 'raceNb' => $raceNb],
+                'car' => $this->pricedCar(),
+                'season_calendar' => $calendar,
+            ]))['lines'];
+
+            return array_column($lines, null, 'key')['ctr']['reason'];
+        };
+
+        // Alpha wears the 10x engine, Beta the cheap brakes, Gamma everything alike.
+        self::assertStringStartsWith('Race rated Hold back: ', $reasonFor(9));
+        self::assertStringStartsWith('Race rated Push: the highest CTR where no part breaks', $reasonFor(10));
+        self::assertStringStartsWith('Race rated Normal: ', $reasonFor(11));
     }
 
     public function testStaleSetupKeepsTheRiskLineWithoutWeather(): void
@@ -280,6 +316,42 @@ final class RaceEngineerServiceTest extends TestCase
             'setup_stale' => false,
             'ctr' => 30,
         ], $overrides);
+    }
+
+    private function seedWearTracks(): void
+    {
+        $columns = array_column(CarWearService::PARTS_MAP, 'db');
+        $insert = $this->db->prepare(
+            'INSERT INTO tracks (name, laps, distance, ' . implode(', ', $columns) . ')
+             VALUES (:name, 50, 250.0, ' . implode(', ', array_map(static fn (string $c): string => ':' . $c, $columns)) . ')'
+        );
+        $heavy = ['Alpha' => 'wear_engine', 'Beta' => 'wear_brakes'];
+        foreach (['Alpha', 'Beta', 'Gamma'] as $name) {
+            $params = [':name' => $name];
+            foreach ($columns as $column) {
+                $params[':' . $column] = match (true) {
+                    ($heavy[$name] ?? null) === $column => 20.0,
+                    isset($heavy[$name]) => 5.0,
+                    default => 8.0,
+                };
+            }
+            $insert->execute($params);
+        }
+    }
+
+    /** @return array<string, mixed> level 1 parts, an engine ten times the price of any other */
+    private function pricedCar(): array
+    {
+        $car = [];
+        foreach (CarWearService::PARTS_MAP as $label => $map) {
+            $car[$map['lvl']] = 1;
+            $car[$map['wear']] = 0;
+            $car[$map['options']] = [
+                ['value' => ['value' => 1, 'cost' => $label === 'Engine' ? 10_000_000 : 1_000_000], 'newLvl' => '1'],
+            ];
+        }
+
+        return $car;
     }
 
     private function seedPromotionFixture(): void
