@@ -818,4 +818,19 @@ class RaceTelemetryRepository
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
         return $rows;
     }
+
+    /**
+     * The columns the wear and fuel calibration reads, one row per corpus race.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function calibrationRows(): array
+    {
+        return $this->rows(
+            'SELECT track_name, driver_con, driver_tal, driver_exp, clear_dry_risk,
+                    avg_part_level, total_wear_gain, was_wet, dnf
+             FROM race_telemetry
+             ORDER BY id'
+        );
+    }
 }

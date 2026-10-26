@@ -18,8 +18,11 @@ class StrategyService
     /**
      * @param array<string, mixed> $secrets
      */
-    public function __construct(private readonly PDO $db, private array $secrets)
-    {
+    public function __construct(
+        private readonly PDO $db,
+        private array $secrets,
+        private readonly FuelModel $fuel
+    ) {
     }
 
     /**
@@ -65,16 +68,14 @@ class StrategyService
         // Boost lap stints: 0..3. Each stint runs 3 boost laps (richer
         // engine map). Total boost laps = stints × 3, capped 0..9.
         // Extra fuel per the GPRO formula: laps × lap_length × boost_coeff,
-        // ceil-rounded; spread evenly across race stints below.
+        // unrounded; spread evenly across race stints below.
         $boostStints = max(0, min(3, (int) ($inputs['boost_stints'] ?? 0)));
         $boostLaps = $boostStints * 3;
-        $boostCoeffDry = (float) ($trackDb['boost_dry'] ?? 0.0);
-        $boostCoeffWet = (float) ($trackDb['boost_wet'] ?? $boostCoeffDry);
+        $boostExtraDry = $this->fuel->boostExtra($trackDb, $boostLaps, false);
+        $boostExtraWet = $this->fuel->boostExtra($trackDb, $boostLaps, true);
 
 
-        $trackTotalDist = (float)$trackDb['distance'];
-        $trackTotalLaps = (int)$trackDb['laps'];
-        $lapLen = ($trackTotalLaps > 0) ? ($trackTotalDist / $trackTotalLaps) : 4.5;
+        $lapLen = $this->fuel->lapLength($trackDb);
 
 
         $fplBaseDry = (float)$trackDb['fuel_per_lap'];
@@ -101,16 +102,13 @@ class StrategyService
         $cEng  = (int)($carData['lvlEngine']);
         $cEle  = (int)($carData['lvlElectronics']);
 
-        $fuelAdj = ($dConc * ($ff['conc'])) +
-                   ($dAgg  * ($ff['agg'])) +
-                   ($dExp  * ($ff['exp'])) +
-                   ($dTe   * ($ff['te'])) +
-                   ($cEng  * ($ff['eng_lvl'])) +
-                   ($cEle  * ($ff['ele_lvl'])) +
-                   ($ff['constant']);
-
-        $lkmDry = max(0.1, $fplBaseDry + $fuelAdj);
-        $lkmWet = max(0.1, $fplBaseWet + $fuelAdj);
+        $rates = $this->fuel->perKm(
+            ['fuel_per_lap' => $fplBaseDry, 'fuel_per_lap_wet' => $fplBaseWet],
+            $driver,
+            $carData
+        );
+        $lkmDry = $rates['dry'];
+        $lkmWet = $rates['wet'];
 
         $simulatedDistance = $laps * $lapLen;
 
@@ -199,9 +197,8 @@ class StrategyService
             $lkmDry,
             $fplBaseWet,
             $fplBaseDry,
-            $boostLaps,
-            $boostCoeffWet,
-            $boostCoeffDry,
+            $boostExtraWet,
+            $boostExtraDry,
             $ctrGainPerLap,
             $firstStop
         ): array {
@@ -324,10 +321,7 @@ class StrategyService
             // Boost laps add extra fuel. We don't know which race stint will
             // host them, so spread evenly across stints — gives the manager
             // enough buffer regardless of when they actually press the boost.
-                $boostCoeff = ($comp === 'Rain') ? $boostCoeffWet : $boostCoeffDry;
-                $boostExtraTotal = ($boostLaps > 0 && $boostCoeff > 0 && $lapLen > 0)
-                ? $boostLaps * $lapLen * $boostCoeff
-                : 0.0;
+                $boostExtraTotal = ($comp === 'Rain') ? $boostExtraWet : $boostExtraDry;
 
             // Search the stop counts the tyres allow and keep the cheapest.
             // Pit losses climb with every stop while fuel-weight loss falls,

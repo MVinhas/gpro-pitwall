@@ -162,3 +162,13 @@
         <span class="t-caption hidden sm:inline">{{ row.strength }}</span>
     </span>
 {% endmacro %}
+
+{# Whole dollars, as the header strip prints cash. signed=true adds an explicit
+   + or - so a net figure never relies on colour to say which way it went. #}
+{% macro money(value, signed) %}
+    {%- if value is null -%}—
+    {%- else -%}
+        {%- set sign = value < 0 ? '-' : (signed|default(false) and value > 0 ? '+' : '') -%}
+        {{- sign }}${{ (value < 0 ? -value : value)|number_format(0, '.', ',') -}}
+    {%- endif -%}
+{% endmacro %}

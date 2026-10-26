@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Repository;
 
+use App\Support\TrackName;
 use PDO;
 
 class TrackRepository
@@ -52,5 +53,20 @@ class TrackRepository
             'boost_dry'  => (float) $row['boost_dry'],
             'boost_wet'  => (float) $row['boost_wet'],
         ];
+    }
+
+    /**
+     * The full tracks row for a name (see findLapLength: never by GPRO id).
+     *
+     * @return array<string, mixed>|null
+     */
+    public function findByName(string $name): ?array
+    {
+        $stmt = $this->db->prepare('SELECT * FROM tracks WHERE name = :name LIMIT 1');
+        $stmt->execute([':name' => TrackName::base($name)]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        /** @var array<string, mixed>|false $row */
+        return $row === false ? null : $row;
     }
 }

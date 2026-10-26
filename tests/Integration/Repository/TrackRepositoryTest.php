@@ -90,4 +90,36 @@ final class TrackRepositoryTest extends TestCase
         $this->assertIsArray($profile);
         $this->assertSame(7.004, $profile['lap_length']);
     }
+
+    public function testFindByNameReturnsTheFullRow(): void
+    {
+        $this->seedTrack('Monza', 5.793, 0.2, 0.16);
+        $this->seedTrack('Spa', 7.004, 0.23, 0.19);
+
+        $row = $this->repo->findByName('Spa');
+
+        $this->assertNotNull($row);
+        $this->assertSame('Spa', $row['name']);
+        $this->assertSame(7.004, (float) $row['lap_length']);
+        $this->assertArrayHasKey('id', $row);
+    }
+
+    public function testFindByNameIsNullForAnUnknownNameAndNotAPrefixMatch(): void
+    {
+        $this->seedTrack('Monza', 5.793, 0.2, 0.16);
+
+        $this->assertNull($this->repo->findByName('Unknown'));
+        $this->assertNull($this->repo->findByName('Mon'));
+    }
+
+    public function testFindByNameResolvesACountrySuffixedRaceName(): void
+    {
+        $this->seedTrack('Valencia', 4.005, 0.2, 0.16);
+
+        $row = $this->repo->findByName('Valencia (Spain)');
+
+        $this->assertNotNull($row);
+        $this->assertSame('Valencia', $row['name']);
+        $this->assertSame('Valencia', $this->repo->findByName('Valencia')['name'] ?? null);
+    }
 }

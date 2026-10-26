@@ -9,6 +9,7 @@ use App\Controller\StrategyController;
 use App\Http\Request;
 use App\Repository\UserRepository;
 use App\Security\Authorize;
+use App\Service\FuelModel;
 use App\Service\GproApiClient;
 use App\Service\GproApiFetcher;
 use App\Service\GproDataMapper;
@@ -86,7 +87,7 @@ final class StrategyControllerTest extends TestCase
         $db = new PDO('sqlite::memory:');
 
         return new StrategyController(
-            new StrategyService($db, []),
+            new StrategyService($db, [], new FuelModel([])),
             $api,
             new GproDataMapper(),
             new SetupCalculatorService($db, []),

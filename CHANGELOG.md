@@ -6,6 +6,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.14] - 2026-10-25
+
+### Added
+- Debrief's race report (admin) now shows the whole weekend: the driver, technical
+  director, staff, facilities and car you entered the race with, and what changed since
+  the race before; that race's money movements, by line, with the net; and your place
+  and points in the group after it.
+- A "Model error" block in the race report puts Pitwall's predicted wear for each part,
+  and its predicted fuel per km, next to what GPRO reported, and flags the gaps of 3
+  points or 3 % and over. Nothing elsewhere in Pitwall is corrected by it yet.
+- A new admin **Season** screen: position and points race by race, cash after each race
+  and season income and costs by category, the team changes over the season, and the
+  wear and fuel models' average error over the season's dry races, with a check against
+  the whole race corpus.
+
+### Changed
+- The fuel maths moved into one shared model used by both Strategy and the new
+  comparisons. Strategy's figures are unchanged.
+- An unknown wet fuel rate for a track now falls back to its dry rate.
+
 ## [1.21.13] - 2026-10-24
 
 ### Added

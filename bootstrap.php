@@ -103,6 +103,7 @@ use App\Service\IdealPilotService;
 use App\Service\InsightService;
 use App\Service\RecruitmentService;
 use App\Service\CarWearService;
+use App\Service\FuelModel;
 use App\Service\StrategyService;
 use App\Service\GproApiClient;
 use App\Service\GproDataMapper;
@@ -413,9 +414,12 @@ $container['service.car_wear'] = new CarWearService(
     $container['config']['secrets']
 );
 
+$container['service.fuel_model'] = new FuelModel($container['config']['secrets']);
+
 $container['service.strategy'] = new StrategyService(
     $container['db'],
-    $container['config']['secrets']
+    $container['config']['secrets'],
+    $container['service.fuel_model']
 );
 $container['service.setup_calculator'] = new SetupCalculatorService($container['db'], $container['config']['secrets']);
 $container['service.training'] = new TrainingService($container['db']);
@@ -617,8 +621,37 @@ $container['controller.admin_users'] = new \App\Controller\AdminUserController(
     $container['twig'],
 );
 
+$container['service.race_weekend'] = new \App\Service\RaceWeekendService(
+    $container['repo.race_history'],
+    new \App\Repository\WeekendStateRepository($container['db']),
+    new \App\Repository\StandingsRepository($container['db']),
+    new \App\Repository\EconomyLedgerRepository($container['db']),
+    $container['repo.track'],
+    new \App\Calibration\WearCalibration($container['service.car_wear']),
+    new \App\Calibration\FuelCalibration($container['service.fuel_model']),
+);
+
 $container['controller.debrief'] = new \App\Controller\DebriefController(
     $container['service.debrief'],
+    $container['service.race_weekend'],
+    $container['service.authorize'],
+    $container['twig'],
+    $container['config'],
+);
+
+$container['service.season'] = new \App\Service\SeasonService(
+    $container['repo.race_history'],
+    new \App\Repository\WeekendStateRepository($container['db']),
+    new \App\Repository\StandingsRepository($container['db']),
+    new \App\Repository\EconomyLedgerRepository($container['db']),
+    new \App\Repository\RaceTelemetryRepository($container['db']),
+    $container['repo.track'],
+    new \App\Calibration\WearCalibration($container['service.car_wear']),
+    new \App\Calibration\FuelCalibration($container['service.fuel_model']),
+);
+
+$container['controller.season'] = new \App\Controller\SeasonController(
+    $container['service.season'],
     $container['service.authorize'],
     $container['twig'],
     $container['config'],

@@ -33,6 +33,7 @@ final class Sections
         'Car Wear Planner'     => '/car-wear',
         'Recruitment Analyzer' => '/recruitment',
         'Debrief'              => '/debrief',
+        'Season'               => '/season',
         'Division Baseline'    => '/divisions/baseline',
         'Division Differences' => '/divisions/differences',
     ];
