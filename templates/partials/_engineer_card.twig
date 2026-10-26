@@ -1,0 +1,50 @@
+{# Admin-only race engineer. Renders nothing without `engineer` (non-admins, or the
+   engineer failed): the cockpit never depends on it. The objective label already
+   carries both calls when pinned ("Your call: … (engineer proposes …)"). #}
+{% if engineer is defined and engineer is not empty %}
+    {% set objective = engineer.objective %}
+    {% set labels = {ctr: 'CTR', parts: 'parts', risk: 'risk settings'} %}
+    <section class="card" aria-labelledby="engineer-title">
+        <div class="card-hd flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div class="min-w-0">
+                <h3 id="engineer-title" class="t-section">Race engineer</h3>
+                <p class="t-caption mt-0.5">Season objective: <span class="font-semibold text-slate-900">{{ objective.label }}</span></p>
+            </div>
+            <form method="post" action="/engineer/objective" class="flex items-center gap-2">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="hidden" name="season" value="{{ engineer.season }}">
+                <label for="engineer-objective" class="sr-only">Season objective</label>
+                <select id="engineer-objective" name="objective" class="form-select text-sm">
+                    <option value="auto"{{ not objective.pinned ? ' selected' : '' }}>Auto</option>
+                    <option value="promote"{{ objective.pinned and objective.objective == 'promote' ? ' selected' : '' }}>Promote</option>
+                    <option value="hold"{{ objective.pinned and objective.objective == 'hold' ? ' selected' : '' }}>Hold</option>
+                    <option value="survive"{{ objective.pinned and objective.objective == 'survive' ? ' selected' : '' }}>Survive</option>
+                </select>
+                <button type="submit" class="btn btn-sm btn-secondary">Pin</button>
+            </form>
+        </div>
+        {% if objective.warning %}
+            <div class="notice notice-warn notice-slim mx-4 mt-4 sm:mx-6">
+                <p><span class="font-bold">Check the objective.</span> {{ objective.warning }}</p>
+            </div>
+        {% endif %}
+        <div class="card-bd divide-y divide-slate-200">
+            {% for line in engineer.lines %}
+                <div class="flex flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                    <div class="min-w-0">
+                        <p class="text-sm font-semibold {{ line.tone == 'red' ? 'text-red-700' : (line.tone == 'amber' ? 'text-amber-700' : 'text-slate-900') }}">
+                            {{ line.answer }}{% if line.figure %} <span class="tabular-nums font-normal text-slate-600">· {{ line.figure }}</span>{% endif %}
+                        </p>
+                        {% if line.reason %}<p class="mt-0.5 text-xs text-slate-600">{{ line.reason }}</p>{% endif %}
+                    </div>
+                    {% if line.action or line.anchor %}
+                        <div class="flex shrink-0 items-center gap-3">
+                            {% if line.anchor %}<a href="{{ line.anchor }}" class="text-xs font-medium text-blue-600 hover:underline">Details<span class="sr-only"> for {{ labels[line.key] ?? line.key }}</span></a>{% endif %}
+                            {% if line.action %}<a href="{{ line.action.href }}" class="btn btn-sm btn-secondary">{{ line.action.label }}</a>{% endif %}
+                        </div>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+    </section>
+{% endif %}

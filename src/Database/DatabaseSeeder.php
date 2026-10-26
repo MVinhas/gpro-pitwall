@@ -16,7 +16,7 @@ class DatabaseSeeder
      * calls migrate() on every request; this version lets a warm database skip
      * the entire DDL + scan + legacy-encryption pass.
      */
-    private const int SCHEMA_VERSION = 17;
+    private const int SCHEMA_VERSION = 18;
 
     /**
      * @param array<string, string> $statsSchema
@@ -70,6 +70,7 @@ class DatabaseSeeder
         $this->createUserRaceHistoryTable();
         $this->createUserApiArchiveTable();
         $this->createProjectionTables();
+        $this->createSeasonObjectiveTable();
         $this->dropDeprecatedTables();
 
 
@@ -780,6 +781,27 @@ class DatabaseSeeder
                 PRIMARY KEY (user_id, season, race),
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             )"
+        );
+    }
+
+    /**
+     * The objective a manager pinned for a season. Not derived from the
+     * archive, so unlike the projection tables it cannot be rebuilt.
+     */
+    private function createSeasonObjectiveTable(): void
+    {
+        $this->db->exec(
+            "CREATE TABLE IF NOT EXISTS user_season_objective (
+                user_id INTEGER NOT NULL,
+                season INTEGER NOT NULL,
+                objective TEXT NOT NULL CHECK (objective IN ('promote', 'hold', 'survive')),
+                set_at TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )"
+        );
+        $this->db->exec(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_user_season_objective
+             ON user_season_objective (user_id, season)"
         );
     }
 

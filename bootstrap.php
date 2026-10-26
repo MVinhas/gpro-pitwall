@@ -504,6 +504,22 @@ $container['controller.car_wear'] = new \App\Controller\CarWearController(
     $container['service.season_calendar'],
 );
 
+$container['repository.season_objective'] = new \App\Repository\SeasonObjectiveRepository($container['db']);
+
+$container['service.race_engineer'] = new \App\Service\RaceEngineerService(
+    $container['repository.season_objective'],
+    new \App\Repository\StandingsRepository($container['db']),
+    new \App\Repository\WeekendStateRepository($container['db']),
+    new \App\Repository\EconomyLedgerRepository($container['db']),
+    $container['repo.track'],
+    $container['service.car_wear'],
+    $container['service.car_wear_planner'],
+    new \App\Engineer\CtrCeiling($container['service.car_wear']),
+    $container['service.risk_advisor'],
+    $container['service.boost_fuel'],
+    $container['service.fuel_model'],
+);
+
 $container['controller.page'] = new PageController(
     $container['service.ideal_pilot'],
     $container['service.insight'],
@@ -530,6 +546,7 @@ $container['controller.page'] = new PageController(
     $container['service.recruitment'],
     $container['service.gpro_sync'],
     $container['service.harvest'],
+    $container['service.race_engineer'],
     $container['twig'],
     $container['config']
 );
@@ -648,6 +665,11 @@ $container['service.season'] = new \App\Service\SeasonService(
     $container['repo.track'],
     new \App\Calibration\WearCalibration($container['service.car_wear']),
     new \App\Calibration\FuelCalibration($container['service.fuel_model']),
+);
+
+$container['controller.engineer'] = new \App\Controller\EngineerController(
+    $container['service.race_engineer'],
+    $container['service.authorize'],
 );
 
 $container['controller.season'] = new \App\Controller\SeasonController(

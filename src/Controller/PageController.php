@@ -25,6 +25,7 @@ use App\Service\GproSyncService;
 use App\Service\HarvestService;
 use App\Service\GproDataMapper;
 use App\Service\PhaMatchService;
+use App\Service\RaceEngineerService;
 use App\Service\RaceWeatherService;
 use App\Service\EarlyQualifyingBonusService;
 use App\Service\BillboardService;
@@ -79,9 +80,25 @@ class PageController
         private readonly RecruitmentService $recruitmentService,
         private readonly GproSyncService $syncService,
         private readonly HarvestService $harvest,
+        private readonly RaceEngineerService $raceEngineer,
         private readonly Environment $twig,
         private array $config
     ) {
+    }
+
+    /**
+     * @param array<string, mixed> $cockpit
+     * @return ?array<string, mixed>
+     */
+    public static function buildEngineer(RaceEngineerService $service, int $userId, array $cockpit): ?array
+    {
+        try {
+            return $service->forCockpit($userId, $cockpit);
+        } catch (\Throwable $e) {
+            error_log('[Engineer] ' . $e::class);
+
+            return null;
+        }
     }
 
     public function index(Request $request): void
@@ -578,6 +595,32 @@ class PageController
                             // at a time; the cockpit warns when the whole plan
                             // adds up to more than the manager can pay.
                             $viewData['cockpit_cash'] = $cash;
+                        }
+                    }
+
+                    if ($isAdmin && (string) $request->get('fragment', '') === '') {
+                        $engineer = self::buildEngineer($this->raceEngineer, (int) $user['id'], [
+                            'office'           => $office,
+                            'menu'             => $menu,
+                            'money_levels'     => $moneyLevels,
+                            'division'         => $division,
+                            'car'              => $carData,
+                            'driver'           => $this->mapper->mapDriver($pilot),
+                            'wear'             => $wear,
+                            'wear_advice'      => $viewData['wear_advice'] ?? null,
+                            'swap_plan'        => $viewData['swap_plan'] ?? null,
+                            'training_picks'   => $viewData['training_picks'] ?? [],
+                            'testing_targets'  => $viewData['testing_targets'] ?? [],
+                            'testing_open'     => $testingTrack !== null,
+                            'testing_track'    => $testingTrack,
+                            'season_calendar'  => $viewData['season_calendar'] ?? [],
+                            'track_name'       => $trackName,
+                            'weather'          => $viewData['weather'] ?? null,
+                            'setup_stale'      => $setupStale,
+                            'ctr'              => $cockpitRisk,
+                        ]);
+                        if ($engineer !== null) {
+                            $viewData['engineer'] = $engineer;
                         }
                     }
                 } catch (\Throwable $e) {

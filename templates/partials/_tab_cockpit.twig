@@ -12,6 +12,8 @@
         {% include 'partials/_empty.twig' with { title: 'No synced data yet', body: 'Add your GPRO API token and re-sync to fill the cockpit.' } only %}
     {% else %}
 
+        {% include 'partials/_engineer_card.twig' %}
+
         {# Verdicts computed once, reused by each card's summary and body. A card
            renders open only when its verdict needs the manager; healthy cards stay
            closed and still inform through the verdict in their summary. #}
@@ -110,12 +112,15 @@
                        would duplicate the wrapper. Named group (group/wear) keeps the
                        chevron independent of the nested swap/PHA accordions inside. #}
                     {% if wear_advice is defined %}
-                        <details id="wear" data-acc {{ wear_attention ? 'open' : '' }} class="group/wear scroll-mt-16">
-                            {% include 'partials/_cockpit_wear.twig' %}
-                        </details>
+                        <div id="cockpit-wear" class="scroll-mt-16">
+                            <details id="wear" data-acc {{ wear_attention ? 'open' : '' }} class="group/wear scroll-mt-16">
+                                {% include 'partials/_cockpit_wear.twig' %}
+                            </details>
+                        </div>
                     {% endif %}
 
                     {% if testing_projection is defined and testing_projection is not empty %}
+                        <div id="cockpit-testing" class="scroll-mt-16">
                         {% embed 'partials/_acc.twig' with {
                             id: 'testing',
                             variant: 'row',
@@ -195,6 +200,7 @@
                                 </div>
                             {% endblock %}
                         {% endembed %}
+                        </div>
                     {% endif %}
 
                 </div>
@@ -292,6 +298,7 @@
                     {% endif %}
 
                     {% if training_baseline_count is defined %}
+                        <div id="cockpit-training" class="scroll-mt-16">
                         {% embed 'partials/_acc.twig' with {
                             id: 'training',
                             variant: 'row',
@@ -352,6 +359,7 @@
                                 </div>
                             {% endblock %}
                         {% endembed %}
+                        </div>
                     {% endif %}
 
                     {# GPRO pays per qualifying session done early (from season 113).

@@ -72,7 +72,7 @@ final class ProjectionSchemaMigrationTest extends TestCase
         $seeder->migrate();
         $seeder->migrate();
 
-        $this->assertSame(17, (int) $db->query('PRAGMA user_version')->fetchColumn());
+        $this->assertSame(18, (int) $db->query('PRAGMA user_version')->fetchColumn());
         foreach (self::TABLES as $table) {
             $this->assertSame(
                 1,

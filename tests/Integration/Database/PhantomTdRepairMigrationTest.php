@@ -59,6 +59,6 @@ final class PhantomTdRepairMigrationTest extends TestCase
         $flags = $db->query('SELECT race, has_td FROM race_telemetry ORDER BY race')
             ->fetchAll(PDO::FETCH_KEY_PAIR);
         $this->assertSame([1 => 0, 2 => 0, 3 => 1, 4 => 0], $flags);
-        $this->assertSame(17, (int) $db->query('PRAGMA user_version')->fetchColumn());
+        $this->assertSame(18, (int) $db->query('PRAGMA user_version')->fetchColumn());
     }
 }
