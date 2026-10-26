@@ -650,6 +650,22 @@ $container['service.season'] = new \App\Service\SeasonService(
     new \App\Calibration\FuelCalibration($container['service.fuel_model']),
 );
 
+$container['repository.season_objective'] = new \App\Repository\SeasonObjectiveRepository($container['db']);
+
+$container['service.race_engineer'] = new \App\Service\RaceEngineerService(
+    $container['repository.season_objective'],
+    new \App\Repository\StandingsRepository($container['db']),
+    new \App\Repository\WeekendStateRepository($container['db']),
+    new \App\Repository\EconomyLedgerRepository($container['db']),
+    $container['repo.track'],
+    $container['service.car_wear'],
+    $container['service.car_wear_planner'],
+    new \App\Engineer\CtrCeiling($container['service.car_wear']),
+    $container['service.risk_advisor'],
+    $container['service.boost_fuel'],
+    $container['service.fuel_model'],
+);
+
 $container['controller.season'] = new \App\Controller\SeasonController(
     $container['service.season'],
     $container['service.authorize'],
