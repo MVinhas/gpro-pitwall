@@ -59,9 +59,13 @@ final class RaceEngineer
     private static function objective(EngineerInputs $in): array
     {
         $o = $in->objective;
-        $reason = $o['reasons'][0] ?? ($o['over'] || $o['objective'] !== null
-            ? ''
-            : "Your position in the group isn't known yet; treated as Hold");
+        $pinnedBlind = $o['pinned'] && $o['proposed'] === null;
+        $reason = $o['reasons'][0] ?? match (true) {
+            $o['over'] => '',
+            $o['objective'] === null => "Your position in the group isn't known yet; treated as Hold",
+            $pinnedBlind => "Your position in the group isn't known yet",
+            default => '',
+        };
         $tone = $o['warning'] !== null || $o['cash_alarm'] ? 'amber' : 'ink';
 
         return self::line('objective', $o['label'], $reason, figure: self::objectiveFigure($o['numbers']), tone: $tone);
@@ -252,7 +256,7 @@ final class RaceEngineer
                 ? self::line('testing', self::SKIP, 'The session cost is unknown, and repairs come first', $anchor)
                 : self::line(
                     'testing',
-                    'Test — cost unknown',
+                    $where . ' — cost unknown',
                     'No earlier session this season to price it; ' . $tunes,
                     $anchor,
                 );

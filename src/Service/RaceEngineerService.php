@@ -133,9 +133,11 @@ class RaceEngineerService
         if ($parts !== null) {
             $ceiling = $this->ceiling->for($parts, $driverFactor, WearAdvisorService::THRESHOLD_SWAP);
             $survive = min($ceiling, $this->ceiling->for($parts, $driverFactor, WearAdvisorService::THRESHOLD_RISKY));
+            // Parts past the swap limit even at CTR 0 get replaced, so they aren't stuck in the red.
+            // Both lists ignore the current CTR, which keeps the reason stable once "Use N" is followed.
             $alwaysRed = array_values(array_diff(
                 $this->ceiling->pastLimitAtZero($parts, $driverFactor, WearAdvisorService::THRESHOLD_RISKY),
-                array_map('strval', $forced),
+                $this->ceiling->pastLimitAtZero($parts, $driverFactor, WearAdvisorService::THRESHOLD_SWAP),
             ));
         }
         $testingTrack = $c['testing_track'] ?? null;

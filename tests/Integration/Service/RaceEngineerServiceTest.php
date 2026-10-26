@@ -217,25 +217,32 @@ final class RaceEngineerServiceTest extends TestCase
             'Engine' => ['level' => 1, 'start' => 85, 'est' => 0.0, 'end' => 0.0, 'track_base' => 6.0],
             'Gearbox' => ['level' => 1, 'start' => 10, 'est' => 0.0, 'end' => 0.0, 'track_base' => 6.0],
         ];
-        $ctrLine = function () use ($parts): array {
+        // At CTR 100 the advisor forces the Engine swap; at the advised CTR it only calls it risky.
+        $forcedAt100 = ['swap' => [['part' => 'Engine', 'level' => 1, 'start' => 85, 'est' => 40.7, 'end' => 125.7]], 'risky' => [], 'watch' => [], 'headline' => ''];
+        $riskyOnly = ['swap' => [], 'risky' => [['part' => 'Engine', 'level' => 1, 'start' => 85, 'est' => 14.8, 'end' => 99.8]], 'watch' => [], 'headline' => ''];
+        $ctrLine = function (int $ctr, array $advice) use ($parts): array {
             $lines = $this->service->forCockpit(self::USER, $this->cockpit([
-                'ctr' => 100,
+                'ctr' => $ctr,
                 'wear' => ['track_name' => 'Testring', 'laps' => 50, 'parts' => $parts],
-                'wear_advice' => ['swap' => [], 'risky' => [['part' => 'Engine', 'level' => 1, 'start' => 85, 'est' => 6.0, 'end' => 91.0]], 'watch' => [], 'headline' => ''],
+                'wear_advice' => $advice,
             ]))['lines'];
 
             return array_column($lines, null, 'key')['ctr'];
         };
 
         $this->service->pin(self::USER, self::SEASON, 'hold');
-        $breakCeiling = (int) substr($ctrLine()['answer'], 4);
+        $breakCeiling = (int) substr($ctrLine(100, $forcedAt100)['answer'], 4);
         $this->service->pin(self::USER, self::SEASON, 'survive');
-        $survive = $ctrLine();
+        $survive = $ctrLine(100, $forcedAt100);
+        $target = (int) substr($survive['answer'], 4);
+        $followed = $ctrLine($target, $riskyOnly);
 
         self::assertLessThan(100, $breakCeiling);
-        self::assertLessThanOrEqual($breakCeiling, (int) substr($survive['answer'], 4));
+        self::assertLessThanOrEqual($breakCeiling, $target);
         self::assertStringContainsString('Engine stays in the red at any CTR', $survive['reason']);
         self::assertStringNotContainsString('keeps parts out of the red', $survive['reason']);
+        self::assertSame($survive['answer'], $followed['answer']);
+        self::assertSame($survive['reason'], $followed['reason']);
     }
 
     public function testAForcedSwapPartIsNotReportedAsStuckInTheRed(): void

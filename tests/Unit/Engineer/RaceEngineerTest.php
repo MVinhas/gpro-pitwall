@@ -191,6 +191,16 @@ final class RaceEngineerTest extends TestCase
         $this->assertSame("Your position in the group isn't known yet; treated as Hold", $line['reason']);
     }
 
+    public function testPinWithoutAProposalStillSaysWhyTheEngineerHasNone(): void
+    {
+        $pinned = SeasonObjective::inForce($this->objective(null, ['reasons' => []]), SeasonObjective::SURVIVE);
+
+        $line = $this->line($this->inputs(['objective' => $pinned]), 'objective');
+
+        $this->assertSame('Your call: Survive (engineer has no proposal)', $line['answer']);
+        $this->assertSame("Your position in the group isn't known yet", $line['reason']);
+    }
+
     public function testUnknownCostsLine(): void
     {
         $line = $this->line($this->inputs(['outlook' => $this->outlook(null)]), 'cash');
@@ -561,7 +571,7 @@ final class RaceEngineerTest extends TestCase
     {
         $line = $this->line($this->inputs(['testingCost' => null]), 'testing');
 
-        $this->assertSame('Test — cost unknown', $line['answer']);
+        $this->assertSame('Test at Silverstone — cost unknown', $line['answer']);
         $this->assertSame('No earlier session this season to price it; tunes for Monza (race 10)', $line['reason']);
     }
 
@@ -586,7 +596,7 @@ final class RaceEngineerTest extends TestCase
             'objective' => $this->objective(SeasonObjective::SURVIVE),
         ]), 'testing');
 
-        $this->assertSame('Test — cost unknown', $hold['answer']);
+        $this->assertSame('Test at Silverstone — cost unknown', $hold['answer']);
         $this->assertSame('Skip — keep it for repairs', $survive['answer']);
     }
 
