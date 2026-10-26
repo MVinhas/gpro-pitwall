@@ -210,6 +210,53 @@ final class RaceEngineerServiceTest extends TestCase
         self::assertSame($first, $targetAt($target, $none));
     }
 
+    public function testSurviveNeverAdvisesAboveTheSwapCeilingAndNamesTheStuckPart(): void
+    {
+        $this->seedPromotionFixture();
+        $parts = [
+            'Engine' => ['level' => 1, 'start' => 85, 'est' => 0.0, 'end' => 0.0, 'track_base' => 6.0],
+            'Gearbox' => ['level' => 1, 'start' => 10, 'est' => 0.0, 'end' => 0.0, 'track_base' => 6.0],
+        ];
+        $ctrLine = function () use ($parts): array {
+            $lines = $this->service->forCockpit(self::USER, $this->cockpit([
+                'ctr' => 100,
+                'wear' => ['track_name' => 'Testring', 'laps' => 50, 'parts' => $parts],
+                'wear_advice' => ['swap' => [], 'risky' => [['part' => 'Engine', 'level' => 1, 'start' => 85, 'est' => 6.0, 'end' => 91.0]], 'watch' => [], 'headline' => ''],
+            ]))['lines'];
+
+            return array_column($lines, null, 'key')['ctr'];
+        };
+
+        $this->service->pin(self::USER, self::SEASON, 'hold');
+        $breakCeiling = (int) substr($ctrLine()['answer'], 4);
+        $this->service->pin(self::USER, self::SEASON, 'survive');
+        $survive = $ctrLine();
+
+        self::assertLessThan(100, $breakCeiling);
+        self::assertLessThanOrEqual($breakCeiling, (int) substr($survive['answer'], 4));
+        self::assertStringContainsString('Engine stays in the red at any CTR', $survive['reason']);
+        self::assertStringNotContainsString('keeps parts out of the red', $survive['reason']);
+    }
+
+    public function testAForcedSwapPartIsNotReportedAsStuckInTheRed(): void
+    {
+        $this->seedPromotionFixture();
+        $this->service->pin(self::USER, self::SEASON, 'survive');
+        $engine = ['level' => 1, 'start' => 95, 'est' => 40.0, 'end' => 135.0, 'track_base' => 8.0];
+
+        $lines = $this->service->forCockpit(self::USER, $this->cockpit([
+            'ctr' => 100,
+            'wear' => ['track_name' => 'Testring', 'laps' => 50, 'parts' => ['Engine' => $engine]],
+            'wear_advice' => [
+                'swap' => [['part' => 'Engine', 'level' => 1, 'start' => 95, 'est' => 40.0, 'end' => 135.0]],
+                'risky' => [], 'watch' => [], 'headline' => '',
+            ],
+            'swap_plan' => ['cost' => 200_000],
+        ]))['lines'];
+
+        self::assertStringNotContainsString('stays in the red', array_column($lines, null, 'key')['ctr']['reason']);
+    }
+
     public function testWithoutWearTheCtrLineIsOmitted(): void
     {
         $this->seedPromotionFixture();
@@ -282,6 +329,7 @@ final class RaceEngineerServiceTest extends TestCase
 
         $lines = $this->service->forCockpit(self::USER, $this->cockpit([
             'testing_open' => true,
+            'testing_track' => 'Silverstone',
             'testing_targets' => [[
                 'offset' => 3, 'season' => 'current', 'race' => 13, 'track_id' => 1, 'track_name' => 'Testring',
                 'power' => 1, 'handling' => 1, 'acceleration' => 1,
@@ -289,7 +337,8 @@ final class RaceEngineerServiceTest extends TestCase
         ]))['lines'];
         $testing = array_values(array_filter($lines, static fn (array $l): bool => $l['key'] === 'testing'))[0];
 
-        self::assertSame('Test at Testring', $testing['answer']);
+        self::assertSame('Test at Silverstone', $testing['answer']);
+        self::assertSame('Free cash covers it; tunes for Testring (race 13)', $testing['reason']);
         self::assertSame('$100k', $testing['figure']);
     }
 

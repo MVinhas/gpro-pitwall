@@ -129,4 +129,16 @@ final class CtrCeilingTest extends TestCase
             $this->ceiling->for($parts, 1.3, 100),
         );
     }
+
+    public function testPastLimitAtZeroNamesTheStuckParts(): void
+    {
+        $parts = [
+            'Engine' => ['level' => 1, 'start' => 95.0, 'track_base' => 6.0],
+            'Gearbox' => ['level' => 1, 'start' => 10.0, 'track_base' => 6.0],
+            'Brakes' => ['level' => 1, 'start' => 85.0, 'track_base' => 6.0, 'training' => 3.0],
+        ];
+
+        $this->assertSame(['Engine', 'Brakes'], $this->ceiling->pastLimitAtZero($parts, 1.0, 90));
+        $this->assertSame([], $this->ceiling->pastLimitAtZero($parts, 1.0, 200));
+    }
 }

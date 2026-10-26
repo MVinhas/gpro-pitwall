@@ -361,4 +361,23 @@ final class SeasonObjectiveTest extends TestCase
 
         self::assertSame('Your call: Win the group (same as the engineer)', SeasonObjective::inForce($proposal, SeasonObjective::PROMOTE)['label']);
     }
+
+    public function testProposalCarriesTheEliteFlag(): void
+    {
+        $row = $this->row(9, 2, 46, $this->group([1 => 50, 2 => 46, 3 => 20], 3, 99));
+
+        self::assertTrue(SeasonObjective::propose($row, 9, self::UNKNOWN_OUTLOOK, 1_000_000, null, true)['elite']);
+        self::assertFalse(SeasonObjective::propose($row, 9, self::UNKNOWN_OUTLOOK, 1_000_000, null, false)['elite']);
+        self::assertTrue(SeasonObjective::propose(null, 3, self::UNKNOWN_OUTLOOK, 1_000_000, 5, true)['elite']);
+    }
+
+    public function testEliteManagerPinningPromoteReadsAsWinTheTitle(): void
+    {
+        $proposal = SeasonObjective::propose($this->row(9, 3, 20, $this->group([1 => 50, 2 => 46, 3 => 20], 3, 99)), 9, self::UNKNOWN_OUTLOOK, 1_000_000, null, true);
+
+        $label = SeasonObjective::inForce($proposal, SeasonObjective::PROMOTE)['label'];
+
+        self::assertStringNotContainsString('Promote', $label);
+        self::assertStringStartsWith('Your call: Win the group (', $label);
+    }
 }

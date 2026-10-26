@@ -3,6 +3,7 @@
    carries both calls when pinned ("Your call: … (engineer proposes …)"). #}
 {% if engineer is defined and engineer is not empty %}
     {% set objective = engineer.objective %}
+    {% set labels = {ctr: 'CTR', parts: 'parts', risk: 'risk settings'} %}
     <section class="card" aria-labelledby="engineer-title">
         <div class="card-hd flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div class="min-w-0">
@@ -38,7 +39,7 @@
                     </div>
                     {% if line.action or line.anchor %}
                         <div class="flex shrink-0 items-center gap-3">
-                            {% if line.anchor %}<a href="#{{ line.anchor }}" class="text-xs font-medium text-blue-600 hover:underline">Details</a>{% endif %}
+                            {% if line.anchor %}<a href="{{ line.anchor }}" class="text-xs font-medium text-blue-600 hover:underline">Details<span class="sr-only"> for {{ labels[line.key] ?? line.key }}</span></a>{% endif %}
                             {% if line.action %}<a href="{{ line.action.href }}" class="btn btn-sm btn-secondary">{{ line.action.label }}</a>{% endif %}
                         </div>
                     {% endif %}

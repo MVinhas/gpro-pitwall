@@ -24,10 +24,8 @@ final readonly class CtrCeiling
      */
     public function for(array $parts, float $driverFactor, int $limit): int
     {
-        foreach ($parts as $label => $part) {
-            if (!$this->survivesPart($part, $driverFactor, $limit, 0)) {
-                $parts[$label]['start'] = 0.0;
-            }
+        foreach ($this->pastLimitAtZero($parts, $driverFactor, $limit) as $label) {
+            $parts[$label]['start'] = 0.0;
         }
 
         $ceiling = 0;
@@ -39,6 +37,24 @@ final readonly class CtrCeiling
         }
 
         return $ceiling;
+    }
+
+    /**
+     * Labels of the parts that reach $limit even at CTR 0: they stay past it whatever the CTR.
+     *
+     * @param array<string, array<string, mixed>> $parts label => {level, start, track_base, training?}
+     * @return list<string>
+     */
+    public function pastLimitAtZero(array $parts, float $driverFactor, int $limit): array
+    {
+        $stuck = [];
+        foreach ($parts as $label => $part) {
+            if (!$this->survivesPart($part, $driverFactor, $limit, 0)) {
+                $stuck[] = (string) $label;
+            }
+        }
+
+        return $stuck;
     }
 
     /**

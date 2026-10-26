@@ -127,12 +127,18 @@ class RaceEngineerService
         $stale = (bool) ($c['setup_stale'] ?? false);
         $track = (string) ($c['track_name'] ?? '') === '' ? null : $this->tracks->findByName((string) $c['track_name']);
 
-        [$ceiling, $survive] = $parts === null
-            ? [null, null]
-            : [
-                $this->ceiling->for($parts, $driverFactor, WearAdvisorService::THRESHOLD_SWAP),
-                $this->ceiling->for($parts, $driverFactor, WearAdvisorService::THRESHOLD_RISKY),
-            ];
+        $ceiling = null;
+        $survive = null;
+        $alwaysRed = [];
+        if ($parts !== null) {
+            $ceiling = $this->ceiling->for($parts, $driverFactor, WearAdvisorService::THRESHOLD_SWAP);
+            $survive = min($ceiling, $this->ceiling->for($parts, $driverFactor, WearAdvisorService::THRESHOLD_RISKY));
+            $alwaysRed = array_values(array_diff(
+                $this->ceiling->pastLimitAtZero($parts, $driverFactor, WearAdvisorService::THRESHOLD_RISKY),
+                array_map('strval', $forced),
+            ));
+        }
+        $testingTrack = $c['testing_track'] ?? null;
 
         $targets = self::list($c['testing_targets'] ?? null);
         $picks = self::list($c['training_picks'] ?? null);
@@ -149,6 +155,7 @@ class RaceEngineerService
             currentCtr: (int) ($c['ctr'] ?? 0),
             ctrCeiling: $ceiling,
             ctrSurvive: $survive,
+            alwaysRed: $alwaysRed,
             pushAdvice: $this->pushAdvice($c, $raceNb),
             wearAdvice: $wearAdvice,
             forcedSwapCost: $this->forcedSwapCost($forced, self::arrOrNull($c['swap_plan'] ?? null)),
@@ -156,6 +163,7 @@ class RaceEngineerService
             trainingPick: $pick,
             testingTarget: $target,
             testingOpen: (bool) ($c['testing_open'] ?? false),
+            testingTrack: is_string($testingTrack) && $testingTrack !== '' ? $testingTrack : null,
             testingCost: self::testingCost($seasonLedger),
             risk: $this->risk($driver, $track, $weather, $stale),
             boostLitres: $this->boostLitres($track, $weather, $stale),

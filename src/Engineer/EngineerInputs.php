@@ -41,6 +41,7 @@ final readonly class EngineerInputs
      * @param ?WearAdvice $wearAdvice
      * @param list<array{part: string, cost: int}> $optionalSwaps
      * @param ?array{name: string, score: float, cost: int, gains: array<string, float>} $trainingPick
+     * @param list<string> $alwaysRed
      * @param ?TestingTarget $testingTarget
      * @param ?Risk $risk
      */
@@ -51,6 +52,7 @@ final readonly class EngineerInputs
         public int $currentCtr,
         public ?int $ctrCeiling,
         public ?int $ctrSurvive,
+        public array $alwaysRed,
         public ?string $pushAdvice,
         public ?array $wearAdvice,
         public ?int $forcedSwapCost,
@@ -58,6 +60,7 @@ final readonly class EngineerInputs
         public ?array $trainingPick,
         public ?array $testingTarget,
         public bool $testingOpen,
+        public ?string $testingTrack,
         public ?int $testingCost,
         public ?array $risk,
         public ?int $boostLitres,

@@ -35,7 +35,7 @@ final class EngineerCardTest extends TestCase
     /** @return array<string, mixed> */
     private static function line(string $key, string $answer, string $tone = 'ink', ?array $action = null, string $reason = 'Because.'): array
     {
-        return ['key' => $key, 'answer' => $answer, 'figure' => '4 pts', 'reason' => $reason, 'anchor' => 'cockpit-wear', 'tone' => $tone, 'action' => $action];
+        return ['key' => $key, 'answer' => $answer, 'figure' => '4 pts', 'reason' => $reason, 'anchor' => '#cockpit-wear', 'tone' => $tone, 'action' => $action];
     }
 
     public function testRendersLinesInOrderWithActions(): void
@@ -51,6 +51,9 @@ final class EngineerCardTest extends TestCase
         $this->assertStringContainsString('href="/cockpit?cockpit_risk=41"', $html);
         $this->assertStringContainsString('Use 41', $html);
         $this->assertStringContainsString('href="#cockpit-wear"', $html);
+        $this->assertStringNotContainsString('##', $html);
+        $this->assertStringContainsString('<span class="sr-only"> for CTR</span>', $html);
+        $this->assertStringContainsString('<span class="sr-only"> for parts</span>', $html);
         $this->assertStringContainsString('text-amber-', $html);
         $this->assertStringContainsString('text-red-', $html);
         $this->assertStringContainsString('name="csrf_token" value="tok"', $html);

@@ -59,12 +59,31 @@ final class RaceEngineer
     private static function objective(EngineerInputs $in): array
     {
         $o = $in->objective;
-        $reason = $o['warning'] ?? $o['reasons'][0] ?? ($o['over'] || $o['objective'] !== null
+        $reason = $o['reasons'][0] ?? ($o['over'] || $o['objective'] !== null
             ? ''
-            : 'Treated as Hold until the standings are known');
+            : "Your position in the group isn't known yet; treated as Hold");
         $tone = $o['warning'] !== null || $o['cash_alarm'] ? 'amber' : 'ink';
 
-        return self::line('objective', $o['label'], $reason, tone: $tone);
+        return self::line('objective', $o['label'], $reason, figure: self::objectiveFigure($o['numbers']), tone: $tone);
+    }
+
+    /**
+     * @param array<string, int|null> $n
+     */
+    private static function objectiveFigure(array $n): ?string
+    {
+        $parts = [];
+        if (($n['pos'] ?? null) !== null) {
+            $parts[] = 'P' . $n['pos'];
+        }
+        if (($n['gap'] ?? 0) > 0 && ($n['line_pos'] ?? null) !== null) {
+            $parts[] = $n['gap'] . ' pts behind P' . $n['line_pos'];
+        }
+        if (($n['races_left'] ?? null) !== null) {
+            $parts[] = $n['races_left'] . ($n['races_left'] === 1 ? ' race left' : ' races left');
+        }
+
+        return $parts === [] ? null : implode(' · ', $parts);
     }
 
     /**
@@ -126,6 +145,7 @@ final class RaceEngineer
         $rated = $in->pushAdvice === null ? '' : 'Race rated ' . $in->pushAdvice . ': ';
         $reason = match (true) {
             $push => $rated . 'the highest CTR where no part breaks',
+            $survive && $in->alwaysRed !== [] => self::alwaysRedReason($in->alwaysRed),
             $survive => $rated . 'capped at the highest CTR that keeps parts out of the red',
             default => $rated . 'never above your CTR, and no part breaks',
         };
@@ -140,6 +160,15 @@ final class RaceEngineer
                 ? null
                 : ['label' => 'Use ' . $target, 'href' => '/cockpit?cockpit_risk=' . $target],
         );
+    }
+
+    /**
+     * @param list<string> $parts
+     */
+    private static function alwaysRedReason(array $parts): string
+    {
+        return implode(', ', $parts) . (count($parts) === 1 ? ' stays' : ' stay')
+            . ' in the red at any CTR; capped where nothing breaks';
     }
 
     /**
@@ -163,18 +192,18 @@ final class RaceEngineer
             return self::line(
                 'parts',
                 'Swap ' . $optionalNames . ' (optional)',
-                'In the red zone, and free cash covers it',
+                'In the red zone, and ' . self::affordClause($in, 'it'),
                 '#cockpit-wear',
                 $figure,
             );
         }
 
-        $free = self::free($in);
-        $tone = $free !== null && $free < $forcedCost ? 'red' : 'amber';
+        $tone = self::spendable($in) < $forcedCost ? 'red' : 'amber';
         $answer = 'Swap ' . implode(', ', $forced) . ($optional === [] ? '' : ', optionally ' . $optionalNames);
         $reason = $optional === []
             ? 'Would break this race if kept'
-            : 'Forced swaps break this race; the optional ones are in the red and free cash covers them';
+            : 'Forced swaps break this race; the optional ones are in the red and '
+                . self::affordClause($in, 'them');
 
         return self::line('parts', $answer, $reason, '#cockpit-wear', $figure, $tone);
     }
@@ -213,20 +242,27 @@ final class RaceEngineer
         }
 
         $anchor = '#cockpit-testing';
-        $where = 'Test at ' . ($target['track_name'] ?? 'race ' . $target['race']);
+        $where = $in->testingTrack === null ? 'Test this week' : 'Test at ' . $in->testingTrack;
+        $tunes = 'tunes for ' . ($target['track_name'] ?? 'race ' . $target['race'])
+            . ($target['track_name'] === null ? '' : ' (race ' . $target['race'] . ')');
         $cost = $in->testingCost;
 
         if ($cost === null) {
             return self::objectiveIs($in, SeasonObjective::SURVIVE)
                 ? self::line('testing', self::SKIP, 'The session cost is unknown, and repairs come first', $anchor)
-                : self::line('testing', 'Test — cost unknown', 'No earlier session this season to price it', $anchor);
+                : self::line(
+                    'testing',
+                    'Test — cost unknown',
+                    'No earlier session this season to price it; ' . $tunes,
+                    $anchor,
+                );
         }
 
         if (!self::affords($in, $cost)) {
             return self::line('testing', self::SKIP, self::skipReason($in), '#cockpit-testing');
         }
 
-        return self::line('testing', $where, self::affordReason($in), '#cockpit-testing', Money::short($cost));
+        return self::line('testing', $where, self::affordReason($in) . '; ' . $tunes, $anchor, Money::short($cost));
     }
 
     /**
@@ -324,11 +360,16 @@ final class RaceEngineer
 
     private static function affordReason(EngineerInputs $in): string
     {
-        $subject = $in->outlook['known'] ? 'Free cash' : 'Your balance';
+        return ucfirst(self::affordClause($in, 'it'));
+    }
+
+    private static function affordClause(EngineerInputs $in, string $what): string
+    {
+        $subject = $in->outlook['known'] ? 'free cash' : 'your balance';
         $tail = self::objectiveIs($in, SeasonObjective::SURVIVE) ? ' and the forced repairs' : '';
         $note = $in->outlook['known'] ? '' : '; season costs unknown';
 
-        return $subject . ' covers it' . $tail . $note;
+        return $subject . ' covers ' . $what . $tail . $note;
     }
 
     private static function spendable(EngineerInputs $in): int

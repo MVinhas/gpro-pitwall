@@ -63,6 +63,7 @@ final class RaceEngineerTest extends TestCase
             'currentCtr' => 30,
             'ctrCeiling' => 45,
             'ctrSurvive' => 35,
+            'alwaysRed' => [],
             'pushAdvice' => CarWearPlannerService::ADVICE_NORMAL,
             'wearAdvice' => null,
             'forcedSwapCost' => null,
@@ -79,6 +80,7 @@ final class RaceEngineerTest extends TestCase
                 'acceleration' => 5,
             ],
             'testingOpen' => true,
+            'testingTrack' => 'Silverstone',
             'testingCost' => 300_000,
             'risk' => ['overtake' => 40, 'defend' => 25, 'phrase' => 'x', 'tip' => null, 'distance_tip' => '', 'settings' => []],
             'boostLitres' => 24,
@@ -139,14 +141,54 @@ final class RaceEngineerTest extends TestCase
         $this->assertNull($line['anchor']);
     }
 
-    public function testObjectiveWarningIsAmberAndReplacesTheReason(): void
+    public function testObjectiveWarningIsAmberButNotRepeatedAsTheReason(): void
     {
         $warned = $this->objective(SeasonObjective::HOLD, ['warning' => 'Negative balance relegates']);
 
         $line = $this->line($this->inputs(['objective' => $warned]), 'objective');
 
         $this->assertSame('amber', $line['tone']);
-        $this->assertSame('Negative balance relegates', $line['reason']);
+        $this->assertSame('Projected to finish P3', $line['reason']);
+    }
+
+    public function testObjectiveWarningAloneLeavesNoReason(): void
+    {
+        $warned = $this->objective(SeasonObjective::HOLD, ['warning' => 'Negative balance relegates', 'reasons' => []]);
+
+        $this->assertSame('', $this->line($this->inputs(['objective' => $warned]), 'objective')['reason']);
+    }
+
+    public function testObjectiveFigureCarriesTheSpecNumbers(): void
+    {
+        $numbers = ['pos' => 5, 'gap' => 6, 'line_pos' => 3, 'races_left' => 9];
+
+        $line = $this->line($this->inputs(['objective' => $this->objective(SeasonObjective::PROMOTE, ['numbers' => $numbers])]), 'objective');
+
+        $this->assertSame('P5 · 6 pts behind P3 · 9 races left', $line['figure']);
+    }
+
+    public function testObjectiveFigureOmitsMissingParts(): void
+    {
+        $inside = ['pos' => 2, 'gap' => 0, 'line_pos' => 3, 'races_left' => 1];
+        $blank = ['pos' => null, 'gap' => null, 'line_pos' => null, 'races_left' => null];
+
+        $a = $this->line($this->inputs(['objective' => $this->objective(SeasonObjective::HOLD, ['numbers' => $inside])]), 'objective');
+        $b = $this->line($this->inputs(['objective' => $this->objective(SeasonObjective::HOLD, ['numbers' => $blank])]), 'objective');
+        $c = $this->line($this->inputs(['objective' => $this->objective(SeasonObjective::HOLD, ['numbers' => ['pos' => 4, 'gap' => null, 'line_pos' => null, 'races_left' => 12]])]), 'objective');
+
+        $this->assertSame('P2 · 1 race left', $a['figure']);
+        $this->assertNull($b['figure']);
+        $this->assertSame('P4 · 12 races left', $c['figure']);
+    }
+
+    public function testNoProposalExplainsWhyInsteadOfRepeatingTheHeader(): void
+    {
+        $unknown = $this->objective(null, ['reasons' => []]);
+
+        $line = $this->line($this->inputs(['objective' => $unknown]), 'objective');
+
+        $this->assertSame('Objective unknown', $line['answer']);
+        $this->assertSame("Your position in the group isn't known yet; treated as Hold", $line['reason']);
     }
 
     public function testUnknownCostsLine(): void
@@ -240,6 +282,31 @@ final class RaceEngineerTest extends TestCase
         $this->assertStringContainsString('out of the red', $line['reason']);
     }
 
+    public function testSurviveNamesPartsThatStayRedAtAnyCtr(): void
+    {
+        $in = $this->inputs([
+            'objective' => $this->objective(SeasonObjective::SURVIVE),
+            'currentCtr' => 60,
+            'ctrSurvive' => 35,
+            'alwaysRed' => ['Engine', 'Brakes'],
+        ]);
+
+        $reason = $this->line($in, 'ctr')['reason'];
+
+        $this->assertSame('Engine, Brakes stay in the red at any CTR; capped where nothing breaks', $reason);
+        $this->assertStringNotContainsString('keeps parts out of the red', $reason);
+    }
+
+    public function testSurviveNamesASinglePartInTheSingular(): void
+    {
+        $in = $this->inputs([
+            'objective' => $this->objective(SeasonObjective::SURVIVE),
+            'alwaysRed' => ['Engine'],
+        ]);
+
+        $this->assertStringContainsString('Engine stays in the red at any CTR; capped where nothing breaks', $this->line($in, 'ctr')['reason']);
+    }
+
     public function testNoActionWhenTargetEqualsCurrent(): void
     {
         $line = $this->line($this->inputs(['currentCtr' => 45, 'ctrCeiling' => 45]), 'ctr');
@@ -276,6 +343,38 @@ final class RaceEngineerTest extends TestCase
         $this->assertSame('amber', $amber['tone']);
         $this->assertSame('red', $red['tone']);
         $this->assertSame('amber', $unknown['tone']);
+    }
+
+    public function testForcedSwapIsRedWhenTheBalanceCannotPayItAndTheOutlookIsUnknown(): void
+    {
+        $base = ['wearAdvice' => $this->wearAdvice(), 'forcedSwapCost' => 410_000, 'outlook' => $this->outlook(null)];
+
+        $short = $this->line($this->inputs($base + ['cash' => 409_999]), 'parts');
+        $enough = $this->line($this->inputs($base + ['cash' => 410_000]), 'parts');
+
+        $this->assertSame('red', $short['tone']);
+        $this->assertSame('amber', $enough['tone']);
+    }
+
+    public function testOptionalSwapReasonsNameTheBalanceWhenTheOutlookIsUnknown(): void
+    {
+        $unknown = $this->outlook(null);
+        $promote = $this->objective(SeasonObjective::PROMOTE);
+        $optional = [['part' => 'Gearbox', 'cost' => 200_000]];
+
+        $alone = $this->line($this->inputs([
+            'objective' => $promote, 'outlook' => $unknown, 'optionalSwaps' => $optional,
+        ]), 'parts');
+        $mixed = $this->line($this->inputs([
+            'objective' => $promote, 'outlook' => $unknown, 'optionalSwaps' => $optional,
+            'wearAdvice' => $this->wearAdvice(), 'forcedSwapCost' => 410_000,
+        ]), 'parts');
+        $known = $this->line($this->inputs(['objective' => $promote, 'optionalSwaps' => $optional]), 'parts');
+
+        $this->assertSame('In the red zone, and your balance covers it; season costs unknown', $alone['reason']);
+        $this->assertStringContainsString('and your balance covers them; season costs unknown', $mixed['reason']);
+        $this->assertStringNotContainsString('free cash', strtolower($mixed['reason'] . $alone['reason']));
+        $this->assertSame('In the red zone, and free cash covers it', $known['reason']);
     }
 
     public function testOptionalSwapsOnlyUnderPromote(): void
@@ -431,7 +530,7 @@ final class RaceEngineerTest extends TestCase
             'cash' => 350_000,
         ]), 'testing');
 
-        $this->assertSame('Test at Monza', $enough['answer']);
+        $this->assertSame('Test at Silverstone', $enough['answer']);
         $this->assertSame('Skip — keep it for repairs', $short['answer']);
         $this->assertSame('Skip — keep it for repairs', $survive['answer']);
     }
@@ -440,9 +539,30 @@ final class RaceEngineerTest extends TestCase
     {
         $line = $this->line($this->inputs(), 'testing');
 
-        $this->assertSame('Test at Monza', $line['answer']);
+        $this->assertSame('Test at Silverstone', $line['answer']);
+        $this->assertSame('Free cash covers it; tunes for Monza (race 10)', $line['reason']);
         $this->assertSame('$300k', $line['figure']);
         $this->assertSame('#cockpit-testing', $line['anchor']);
+    }
+
+    public function testTestingFallsBackWhenTheTrackIsUnknown(): void
+    {
+        $noTrack = $this->line($this->inputs(['testingTrack' => null]), 'testing');
+        $noName = $this->line($this->inputs([
+            'testingTarget' => ['offset' => 1, 'season' => 'current', 'race' => 10, 'track_id' => null, 'track_name' => null, 'power' => 1, 'handling' => 1, 'acceleration' => 1],
+        ]), 'testing');
+
+        $this->assertSame('Test this week', $noTrack['answer']);
+        $this->assertSame('Test at Silverstone', $noName['answer']);
+        $this->assertSame('Free cash covers it; tunes for race 10', $noName['reason']);
+    }
+
+    public function testUnknownTestingCostStillNamesTheTarget(): void
+    {
+        $line = $this->line($this->inputs(['testingCost' => null]), 'testing');
+
+        $this->assertSame('Test — cost unknown', $line['answer']);
+        $this->assertSame('No earlier session this season to price it; tunes for Monza (race 10)', $line['reason']);
     }
 
     public function testTestingClosedIsNothingToDo(): void

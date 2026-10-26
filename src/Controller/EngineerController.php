@@ -22,10 +22,8 @@ final readonly class EngineerController
         $season = (string) $request->post('season');
         $objective = (string) $request->post('objective');
 
-        if (ctype_digit($season) && $this->engineer->pin((int) $user['id'], (int) $season, $objective)) {
-            $_SESSION['flash'] = 'Season objective saved.';
-        } else {
-            $_SESSION['flash_error'] = 'That season objective was not recognised.';
+        if (ctype_digit($season)) {
+            $this->engineer->pin((int) $user['id'], (int) $season, $objective);
         }
 
         header('Location: /cockpit');

@@ -21,6 +21,7 @@ namespace App\Engineer;
  *     early: bool,
  *     cash_alarm: bool,
  *     over: bool,
+ *     elite: bool,
  *     numbers: Numbers,
  *     reasons: list<string>
  * }
@@ -33,6 +34,7 @@ namespace App\Engineer;
  *     early: bool,
  *     cash_alarm: bool,
  *     over: bool,
+ *     elite: bool,
  *     numbers: Numbers,
  *     reasons: list<string>
  * }
@@ -69,7 +71,7 @@ final readonly class SeasonObjective
         [$ownPos, $ownPts, $ownColour] = self::own($standingsRow, $managers);
 
         if ($raceNb > self::RACES) {
-            return self::proposal(null, self::overLabel($ownPos, $ownColour), over: true);
+            return self::proposal(null, self::overLabel($ownPos, $ownColour), over: true, elite: $elite);
         }
 
         $endCash = $outlook['known'] ? $outlook['end_committed'] : null;
@@ -103,8 +105,15 @@ final readonly class SeasonObjective
 
         if ($ownPos === null || $ownPts === null) {
             return $cashAlarm
-                ? self::proposal(self::SURVIVE, 'Survive', cashAlarm: true, numbers: $numbers, reasons: $cashReasons)
-                : self::proposal(null, self::UNKNOWN_LABEL, numbers: $numbers);
+                ? self::proposal(
+                    self::SURVIVE,
+                    'Survive',
+                    cashAlarm: true,
+                    numbers: $numbers,
+                    reasons: $cashReasons,
+                    elite: $elite,
+                )
+                : self::proposal(null, self::UNKNOWN_LABEL, numbers: $numbers, elite: $elite);
         }
 
         $linePos = self::linePos($managers, $elite);
@@ -144,16 +153,23 @@ final readonly class SeasonObjective
                 cashAlarm: $cashAlarm,
                 numbers: $numbers,
                 reasons: $reasons,
+                elite: $elite,
             );
         }
 
         $promote = ($projectedPos !== null && $linePos !== null && $projectedPos <= $linePos)
             || ($gap !== null && $gap <= self::PROMOTE_GAP_PER_RACE * $racesLeft);
         if ($promote) {
-            return self::proposal(self::PROMOTE, self::promoteLabel($elite), numbers: $numbers, reasons: $reasons);
+            return self::proposal(
+                self::PROMOTE,
+                self::promoteLabel($elite),
+                numbers: $numbers,
+                reasons: $reasons,
+                elite: $elite,
+            );
         }
 
-        return self::proposal(self::HOLD, 'Hold', numbers: $numbers, reasons: $reasons);
+        return self::proposal(self::HOLD, 'Hold', numbers: $numbers, reasons: $reasons, elite: $elite);
     }
 
     /**
@@ -169,10 +185,7 @@ final readonly class SeasonObjective
             return $proposal + ['pinned' => false, 'proposed' => $proposed, 'warning' => null];
         }
 
-        $pinLabel = match (true) {
-            $pin === self::PROMOTE && $proposal['label'] === self::ELITE_PROMOTE_LABEL => self::ELITE_PROMOTE_LABEL,
-            default => ucfirst($pin),
-        };
+        $pinLabel = $pin === self::PROMOTE && $proposal['elite'] ? self::ELITE_PROMOTE_LABEL : ucfirst($pin);
         $note = match (true) {
             $proposed === null => 'engineer has no proposal',
             $proposed === $pin => 'same as the engineer',
@@ -211,10 +224,11 @@ final readonly class SeasonObjective
                 cashAlarm: true,
                 numbers: $numbers,
                 reasons: $cashReasons,
+                elite: $elite,
             );
         }
         if ($carRank === null) {
-            return self::proposal(null, self::UNKNOWN_LABEL, early: true, numbers: $numbers);
+            return self::proposal(null, self::UNKNOWN_LABEL, early: true, numbers: $numbers, elite: $elite);
         }
 
         $reasons = ['Too early for the standings; the car ranks P' . $carRank . ' in the group'];
@@ -226,8 +240,9 @@ final readonly class SeasonObjective
                 early: true,
                 numbers: $numbers,
                 reasons: $reasons,
+                elite: $elite,
             )
-            : self::proposal(self::HOLD, 'Hold', early: true, numbers: $numbers, reasons: $reasons);
+            : self::proposal(self::HOLD, 'Hold', early: true, numbers: $numbers, reasons: $reasons, elite: $elite);
     }
 
     /**
@@ -243,6 +258,7 @@ final readonly class SeasonObjective
         bool $over = false,
         ?array $numbers = null,
         array $reasons = [],
+        bool $elite = false,
     ): array {
         return [
             'objective' => $objective,
@@ -250,6 +266,7 @@ final readonly class SeasonObjective
             'early' => $early,
             'cash_alarm' => $cashAlarm,
             'over' => $over,
+            'elite' => $elite,
             'numbers' => $numbers ?? [
                 'pos' => null,
                 'pts' => null,

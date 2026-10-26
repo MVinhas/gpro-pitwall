@@ -598,7 +598,7 @@ class PageController
                         }
                     }
 
-                    if ($isAdmin) {
+                    if ($isAdmin && (string) $request->get('fragment', '') === '') {
                         $engineer = self::buildEngineer($this->raceEngineer, (int) $user['id'], [
                             'office'           => $office,
                             'menu'             => $menu,
@@ -612,6 +612,7 @@ class PageController
                             'training_picks'   => $viewData['training_picks'] ?? [],
                             'testing_targets'  => $viewData['testing_targets'] ?? [],
                             'testing_open'     => $testingTrack !== null,
+                            'testing_track'    => $testingTrack,
                             'season_calendar'  => $viewData['season_calendar'] ?? [],
                             'track_name'       => $trackName,
                             'weather'          => $viewData['weather'] ?? null,
