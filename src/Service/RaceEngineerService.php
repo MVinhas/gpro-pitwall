@@ -130,8 +130,8 @@ class RaceEngineerService
         [$ceiling, $survive] = $parts === null
             ? [null, null]
             : [
-                $this->ceiling->for($parts, $driverFactor, WearAdvisorService::THRESHOLD_SWAP, $forced),
-                $this->ceiling->for($parts, $driverFactor, WearAdvisorService::THRESHOLD_RISKY, $forced),
+                $this->ceiling->for($parts, $driverFactor, WearAdvisorService::THRESHOLD_SWAP),
+                $this->ceiling->for($parts, $driverFactor, WearAdvisorService::THRESHOLD_RISKY),
             ];
 
         $targets = self::list($c['testing_targets'] ?? null);

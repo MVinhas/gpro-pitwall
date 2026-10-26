@@ -15,16 +15,20 @@ final readonly class CtrCeiling
     }
 
     /**
-     * Highest Clear Track Risk at which every non-excluded part ends the race below $limit.
-     * Wear only grows with CTR, so the scan stops at the first failure. Forced-swap parts are
-     * excluded because they are replaced before the race.
+     * Highest Clear Track Risk at which every part ends the race below $limit. Wear only grows with CTR,
+     * so the scan stops at the first failure. A part that reaches $limit even at CTR 0 is counted as
+     * swapped before the race (start 0, training wear kept): it needs replacing whatever the CTR, and
+     * CTR-independent data keeps the advice stable when the manager follows it.
      *
      * @param array<string, array<string, mixed>> $parts label => {level, start, track_base, training?}
-     * @param list<string> $exclude part labels to ignore
      */
-    public function for(array $parts, float $driverFactor, int $limit, array $exclude = []): int
+    public function for(array $parts, float $driverFactor, int $limit): int
     {
-        $parts = array_diff_key($parts, array_flip($exclude));
+        foreach ($parts as $label => $part) {
+            if (!$this->survivesPart($part, $driverFactor, $limit, 0)) {
+                $parts[$label]['start'] = 0.0;
+            }
+        }
 
         $ceiling = 0;
         for ($ctr = 0; $ctr <= self::MAX_CTR; $ctr++) {
@@ -43,13 +47,22 @@ final readonly class CtrCeiling
     private function survives(array $parts, float $driverFactor, int $limit, int $ctr): bool
     {
         foreach ($parts as $part) {
-            $raceWear = $this->wear->raceWear((float) $part['track_base'], (int) $part['level'], $driverFactor, $ctr);
-            $end = (float) $part['start'] + (float) ($part['training'] ?? 0) + round($raceWear, 1);
-            if ($end >= $limit) {
+            if (!$this->survivesPart($part, $driverFactor, $limit, $ctr)) {
                 return false;
             }
         }
 
         return true;
+    }
+
+    /**
+     * @param array<string, mixed> $part
+     */
+    private function survivesPart(array $part, float $driverFactor, int $limit, int $ctr): bool
+    {
+        $raceWear = $this->wear->raceWear((float) $part['track_base'], (int) $part['level'], $driverFactor, $ctr);
+        $end = (float) $part['start'] + (float) ($part['training'] ?? 0) + round($raceWear, 1);
+
+        return $end < $limit;
     }
 }

@@ -69,23 +69,30 @@ final class CtrCeilingTest extends TestCase
         $this->assertSame(100, $this->ceiling->for([], 1.0, 100));
     }
 
-    public function testAPartAt99ReturnsZero(): void
+    public function testAFreshPartThatStillReachesTheLimitReturnsZero(): void
     {
-        $parts = ['Chassis' => ['level' => 1, 'start' => 99.0, 'track_base' => 5.0]];
+        $parts = ['Chassis' => ['level' => 1, 'start' => 10.0, 'track_base' => 5.0, 'training' => 100.0]];
 
         $this->assertSame(0, $this->ceiling->for($parts, 1.0, 100));
     }
 
-    public function testExcludedPartsAreIgnored(): void
+    public function testAPartPastTheLimitAtZeroCountsAsFresh(): void
     {
-        $parts = [
-            'Chassis' => ['level' => 1, 'start' => 99.0, 'track_base' => 5.0],
-            'Engine' => ['level' => 1, 'start' => 10.0, 'track_base' => 1.0],
-        ];
+        $worn = ['Chassis' => ['level' => 1, 'start' => 99.0, 'track_base' => 5.0]];
+        $fresh = ['Chassis' => ['level' => 1, 'start' => 0.0, 'track_base' => 5.0]];
 
-        $this->assertSame(0, $this->ceiling->for($parts, 1.0, 100));
-        $this->assertSame(100, $this->ceiling->for($parts, 1.0, 100, ['Chassis']));
-        $this->assertSame(100, $this->ceiling->for($parts, 1.0, 100, ['Chassis', 'Engine']));
+        $this->assertGreaterThan(0, $this->ceiling->for($worn, 1.0, 100));
+        $this->assertSame($this->ceiling->for($fresh, 1.0, 100), $this->ceiling->for($worn, 1.0, 100));
+    }
+
+    public function testASwappedPartStillCarriesItsTrainingWear(): void
+    {
+        $worn = ['Chassis' => ['level' => 1, 'start' => 99.0, 'track_base' => 20.0, 'training' => 40.0]];
+        $fresh = ['Chassis' => ['level' => 1, 'start' => 0.0, 'track_base' => 20.0, 'training' => 40.0]];
+        $untrained = ['Chassis' => ['level' => 1, 'start' => 99.0, 'track_base' => 20.0]];
+
+        $this->assertSame($this->ceiling->for($fresh, 1.0, 100), $this->ceiling->for($worn, 1.0, 100));
+        $this->assertLessThan($this->ceiling->for($untrained, 1.0, 100), $this->ceiling->for($worn, 1.0, 100));
     }
 
     public function testRiskyLimitIsLowerThanSwapLimit(): void

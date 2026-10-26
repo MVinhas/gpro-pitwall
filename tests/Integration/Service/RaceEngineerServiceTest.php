@@ -160,13 +160,14 @@ final class RaceEngineerServiceTest extends TestCase
         self::assertSame('Boost: 3 sets · +18 L', $boost['answer']);
     }
 
-    public function testForcedSwapPartsAreExcludedFromTheCeilingAndPricedFromTheSwapPlan(): void
+    public function testForcedSwapPartsCountAsFreshInTheCeilingAndArePricedFromTheSwapPlan(): void
     {
         $this->seedPromotionFixture();
-        $engine = ['level' => 5, 'start' => 95, 'est' => 40.0, 'end' => 135.0, 'track_base' => 400.0];
+        $engine = ['level' => 1, 'start' => 95, 'est' => 40.0, 'end' => 135.0, 'track_base' => 8.0];
         $brakes = ['level' => 5, 'start' => 10, 'est' => 15.0, 'end' => 25.0, 'track_base' => 30.0];
 
         $lines = $this->service->forCockpit(self::USER, $this->cockpit([
+            'ctr' => 100,
             'wear' => ['track_name' => 'Testring', 'laps' => 50, 'parts' => ['Engine' => $engine, 'Brakes' => $brakes]],
             'wear_advice' => [
                 'swap' => [['part' => 'Engine', 'level' => 5, 'start' => 95, 'est' => 40.0, 'end' => 135.0]],
@@ -176,9 +177,37 @@ final class RaceEngineerServiceTest extends TestCase
         ]))['lines'];
         $byKey = array_column($lines, null, 'key');
 
-        self::assertSame('CTR 30', $byKey['ctr']['answer']);
+        self::assertSame('CTR 51', $byKey['ctr']['answer']);
         self::assertSame('Swap Engine', $byKey['parts']['answer']);
         self::assertSame('$200k', $byKey['parts']['figure']);
+    }
+
+    public function testCeilingIsStableWhenFollowed(): void
+    {
+        $this->seedPromotionFixture();
+        $this->service->pin(self::USER, self::SEASON, 'survive');
+        $parts = [
+            'Engine' => ['level' => 1, 'start' => 60, 'est' => 0.0, 'end' => 0.0, 'track_base' => 8.0],
+            'Brakes' => ['level' => 1, 'start' => 10, 'est' => 0.0, 'end' => 0.0, 'track_base' => 3.0],
+        ];
+        $swapAt100 = ['swap' => [['part' => 'Engine', 'level' => 5, 'start' => 60, 'est' => 50.0, 'end' => 110.0]]];
+        $none = ['swap' => []];
+        $targetAt = function (int $ctr, array $advice) use ($parts): string {
+            $lines = $this->service->forCockpit(self::USER, $this->cockpit([
+                'ctr' => $ctr,
+                'wear' => ['track_name' => 'Testring', 'laps' => 50, 'parts' => $parts],
+                'wear_advice' => $advice + ['risky' => [], 'watch' => [], 'headline' => ''],
+            ]))['lines'];
+
+            return array_column($lines, null, 'key')['ctr']['answer'];
+        };
+
+        $first = $targetAt(100, $swapAt100);
+        self::assertMatchesRegularExpression('/^CTR \d+$/', $first);
+        $target = (int) substr($first, 4);
+        self::assertLessThan(100, $target);
+
+        self::assertSame($first, $targetAt($target, $none));
     }
 
     public function testWithoutWearTheCtrLineIsOmitted(): void
