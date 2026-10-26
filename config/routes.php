@@ -53,6 +53,7 @@ return function (Router $router): void {
 
     // ========== SEASON ==========
     $router->add('GET', '/season', 'controller.season', 'index');
+    $router->add('POST', '/engineer/objective', 'controller.engineer', 'setObjective');
 
     // ========== ADMIN ==========
     $router->add('GET',  '/admin/users', 'controller.admin_users', 'index');

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tests\Unit\Controller;
 
 use App\Controller\PageController;
+use App\Service\RaceEngineerService;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -144,5 +145,25 @@ final class PageControllerTest extends TestCase
         self::assertIsString($source);
         $sessionPin = '$_SESSION[' . chr(39) . 'imported_driver' . chr(39) . ']';
         self::assertStringNotContainsString($sessionPin, $source);
+    }
+
+    public function testEngineerFailureYieldsNullInsteadOfBreakingTheCockpit(): void
+    {
+        $service = $this->createStub(RaceEngineerService::class);
+        $service->method('forCockpit')->willThrowException(new \RuntimeException('boom'));
+        $prior = ini_get('error_log');
+        $log = sys_get_temp_dir() . '/engineer-' . bin2hex(random_bytes(4)) . '.log';
+        ini_set('error_log', $log);
+
+        try {
+            $this->assertNull(PageController::buildEngineer($service, 7, []));
+            $logged = (string) file_get_contents($log);
+        } finally {
+            ini_set('error_log', $prior === false ? '' : $prior);
+            @unlink($log);
+        }
+
+        $this->assertStringContainsString('[Engineer] RuntimeException', $logged);
+        $this->assertStringNotContainsString('boom', $logged);
     }
 }
