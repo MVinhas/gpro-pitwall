@@ -6,6 +6,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.15] - 2026-10-26
+
+### Added
+- A **Race engineer** card (admin) at the top of the Cockpit. It proposes a season
+  objective (Promote, Hold or Survive) from your place, points and the promotion and
+  relegation lines, with races left, and you can pin your own call over it.
+- The card weighs the season's money: free cash after the committed costs (salaries,
+  staff, facilities) to the last race, against expected race income, and warns when a
+  negative balance would relegate you.
+- This weekend's calls, each with a figure and a reason: the highest Clear Track Risk
+  that keeps the car within the objective's wear limit (with a one-click "Use N"), forced
+  part swaps and their cost, whether training and testing are worth their price, and
+  links into the Cockpit card that holds the detail. Following the advised risk gives
+  the same advice back.
+
 ## [1.21.14] - 2026-10-25
 
 ### Added

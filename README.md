@@ -56,6 +56,9 @@ wait on GPRO: one whose data isn't cached yet opens as an outline and fills in w
   error against what GPRO reported.
 - **Season** (admin) — results, cash, money by category, team changes and model
   calibration across one season.
+- **Race engineer** (admin) — a card at the top of the Cockpit: a season objective
+  proposed from the standings (which you can pin), the season's free cash, and this
+  weekend's calls (Clear Track Risk, part swaps, training, testing), each with its figure and reason.
 - **Admin** — division baselines, user management with an append-only audit log, and
   **Race Intelligence**: an anonymous collective race corpus segmented by level, built
   from data managers already sync. Rows carry no user identifier of any kind.
