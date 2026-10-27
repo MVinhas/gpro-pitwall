@@ -170,6 +170,7 @@ class RaceEngineerService
             risk: $this->risk($driver, $track, $weather, $stale),
             boostLitres: $this->boostLitres($track, $weather, $stale),
             weatherStale: $stale,
+            plan: null,
         );
     }
 

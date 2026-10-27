@@ -6,6 +6,7 @@ namespace App\Engineer;
 
 /**
  * @phpstan-import-type InForce from SeasonObjective
+ * @phpstan-import-type Plan from CtrPlanner
  * @phpstan-type Outlook array{known: bool, committed: ?int, income: ?int, free_cash: ?int, end_committed: ?int}
  * @phpstan-type PartAdvice array{part: string, level: int, start: int, est: float, end: float}
  * @phpstan-type WearAdvice array{
@@ -44,6 +45,7 @@ final readonly class EngineerInputs
      * @param list<string> $alwaysRed
      * @param ?TestingTarget $testingTarget
      * @param ?Risk $risk
+     * @param ?Plan $plan
      */
     public function __construct(
         public array $objective,
@@ -65,6 +67,7 @@ final readonly class EngineerInputs
         public ?array $risk,
         public ?int $boostLitres,
         public bool $weatherStale,
+        public ?array $plan,
     ) {
     }
 }

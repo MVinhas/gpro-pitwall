@@ -85,9 +85,42 @@ final class RaceEngineerTest extends TestCase
             'risk' => ['overtake' => 40, 'defend' => 25, 'phrase' => 'x', 'tip' => null, 'distance_tip' => '', 'settings' => []],
             'boostLitres' => 24,
             'weatherStale' => false,
+            'plan' => null,
         ];
 
         return new EngineerInputs(...$o);
+    }
+
+    /**
+     * @param array<string, mixed> $o
+     * @return array<string, mixed>
+     */
+    private function plan(array $o = []): array
+    {
+        $row = [
+            'race' => 8, 'track_name' => 'Monza', 'replaced' => [], 'repairs' => 0,
+            'running' => 0, 'income' => 0, 'balance' => 2_000_000, 'wear_known' => true,
+        ];
+
+        return $o + [
+            'v' => 1, 'ctr' => 40, 'mode' => 'nurse', 'safety' => 40, 'swaps' => [],
+            'refused_swap_cost' => null, 'target' => 2_000_000, 'target_kind' => 'cushion',
+            'cushion' => 2_000_000, 'season_start' => null, 'envelope' => 600_000,
+            'shortfall' => null, 'rows' => [$row], 'partial' => [], 'race' => 8,
+        ];
+    }
+
+    /**
+     * @param list<array{part: string, cost: int}> $replaced
+     * @return list<array<string, mixed>>
+     */
+    private function rowsReplacing(array $replaced): array
+    {
+        return [[
+            'race' => 8, 'track_name' => 'Monza', 'replaced' => $replaced,
+            'repairs' => array_sum(array_column($replaced, 'cost')),
+            'running' => 0, 'income' => 0, 'balance' => 2_000_000, 'wear_known' => true,
+        ]];
     }
 
     /**
@@ -246,18 +279,27 @@ final class RaceEngineerTest extends TestCase
         $this->assertSame('#cockpit-wear', $line['anchor']);
     }
 
-    public function testPromoteOnANormalRaceNeverRaisesCtr(): void
+    public function testPromoteOnANormalRaceAdvisesTheCeilingNotTheCurrentCtr(): void
     {
         $line = $this->line($this->inputs(['objective' => $this->objective(SeasonObjective::PROMOTE)]), 'ctr');
 
-        $this->assertSame('CTR 30', $line['answer']);
+        $this->assertSame('CTR 45', $line['answer']);
     }
 
-    public function testHoldNeverRaisesCtr(): void
+    public function testHoldAdvisesTheCeilingEvenWhenThePlanIsNotRaisingCtr(): void
     {
         $in = $this->inputs(['pushAdvice' => CarWearPlannerService::ADVICE_PUSH]);
 
-        $this->assertSame('CTR 30', $this->line($in, 'ctr')['answer']);
+        $this->assertSame('CTR 45', $this->line($in, 'ctr')['answer']);
+    }
+
+    public function testPickingZeroNeverMakesTheEngineerSuggestZero(): void
+    {
+        $line = $this->line($this->inputs(['currentCtr' => 0]), 'ctr');
+
+        $this->assertSame('CTR 45', $line['answer']);
+        $this->assertSame(['label' => 'Use 45', 'href' => '/cockpit?cockpit_risk=45'], $line['action']);
+        $this->assertSame('On 0 now', $line['figure']);
     }
 
     public function testHoldLowersCtrToTheCeiling(): void
@@ -268,6 +310,13 @@ final class RaceEngineerTest extends TestCase
         $this->assertSame('/cockpit?cockpit_risk=45', $line['action']['href'] ?? null);
     }
 
+    public function testWithoutAPlanTheReasonSaysSeasonCostsAreUnknown(): void
+    {
+        $line = $this->line($this->inputs(), 'ctr');
+
+        $this->assertSame('Race rated Normal: the highest CTR where no part breaks; season costs unknown', $line['reason']);
+    }
+
     public function testNoObjectiveFollowsTheHoldRule(): void
     {
         $in = $this->inputs([
@@ -275,7 +324,7 @@ final class RaceEngineerTest extends TestCase
             'pushAdvice' => CarWearPlannerService::ADVICE_PUSH,
         ]);
 
-        $this->assertSame('CTR 30', $this->line($in, 'ctr')['answer']);
+        $this->assertSame('CTR 45', $this->line($in, 'ctr')['answer']);
     }
 
     public function testSurviveUsesTheRiskyCeiling(): void
@@ -663,6 +712,294 @@ final class RaceEngineerTest extends TestCase
 
         $this->assertSame('No boost — save the fuel', $line['answer']);
         $this->assertNull($line['action']);
+    }
+
+    /**
+     * @param array<string, mixed> $plan
+     * @param array<string, mixed> $o
+     */
+    private function planned(array $plan = [], array $o = []): EngineerInputs
+    {
+        return $this->inputs($o + ['plan' => $this->plan($plan)]);
+    }
+
+    public function testCashSaysSafeToSpendAboveTheSeasonStart(): void
+    {
+        $line = $this->line($this->planned(['target_kind' => 'start', 'target' => 3_000_000, 'season_start' => 3_000_000]), 'cash');
+
+        $this->assertSame('Safe to spend', $line['answer']);
+        $this->assertSame('$600k', $line['figure']);
+        $this->assertSame('ink', $line['tone']);
+        $this->assertSame('Ends the season above your $3M start', $line['reason']);
+        $this->assertSame('/season#season-budget', $line['anchor']);
+    }
+
+    public function testCashCushionReasonUnderPromote(): void
+    {
+        $line = $this->line($this->planned(o: ['objective' => $this->objective(SeasonObjective::PROMOTE)]), 'cash');
+
+        $this->assertSame('Keeps one race of costs in hand', $line['reason']);
+    }
+
+    public function testCashCushionReasonUnderHoldAndSurviveSaysTheStartIsUnknown(): void
+    {
+        $hold = $this->line($this->planned(), 'cash');
+        $survive = $this->line($this->planned(o: ['objective' => $this->objective(SeasonObjective::SURVIVE)]), 'cash');
+
+        $this->assertSame('Keeps one race of costs in hand (season start unknown)', $hold['reason']);
+        $this->assertSame($hold['reason'], $survive['reason']);
+    }
+
+    public function testCashStartOutOfReachNamesTheStart(): void
+    {
+        $line = $this->line($this->planned(['target_kind' => 'start_out_of_reach', 'season_start' => 12_500_000]), 'cash');
+
+        $this->assertSame('Keeps one race of costs in hand (your $12.5M start is out of reach)', $line['reason']);
+    }
+
+    public function testCashNothingToSpareWhenTheEnvelopeIsZero(): void
+    {
+        $line = $this->line($this->planned(['envelope' => 0]), 'cash');
+
+        $this->assertSame('Nothing to spare', $line['answer']);
+        $this->assertSame('The forecast only just meets the target', $line['reason']);
+        $this->assertSame('amber', $line['tone']);
+    }
+
+    public function testCashOverBudgetWhenTheModeIsShort(): void
+    {
+        $line = $this->line($this->planned(['mode' => 'short', 'envelope' => 0, 'shortfall' => 450_000, 'ctr' => 0]), 'cash');
+
+        $this->assertSame('Over budget', $line['answer']);
+        $this->assertSame('The forecast misses the target by $450k', $line['reason']);
+        $this->assertSame('red', $line['tone']);
+        $this->assertSame('/season#season-budget', $line['anchor']);
+    }
+
+    public function testCashAppendsThePartialItems(): void
+    {
+        $line = $this->line($this->planned(['partial' => ['Gearbox price', 'race 12 wear']]), 'cash');
+
+        $this->assertStringEndsWith('; forecast partial: Gearbox price, race 12 wear', $line['reason']);
+    }
+
+    public function testCashWithoutAPlanKeepsTheP123aLine(): void
+    {
+        $line = $this->line($this->inputs(), 'cash');
+
+        $this->assertSame('Cash covers the season', $line['answer']);
+        $this->assertSame('$5M', $line['figure']);
+    }
+
+    public function testCtrAnswersWithThePlanCtr(): void
+    {
+        $line = $this->line($this->planned(['ctr' => 52, 'safety' => 40]), 'ctr');
+
+        $this->assertSame('CTR 52', $line['answer']);
+        $this->assertSame('On 30 now', $line['figure']);
+        $this->assertSame(['label' => 'Use 52', 'href' => '/cockpit?cockpit_risk=52'], $line['action']);
+        $this->assertSame('#cockpit-wear', $line['anchor']);
+    }
+
+    public function testCtrHasNoActionWhenItAlreadyMatches(): void
+    {
+        $this->assertNull($this->line($this->planned(['ctr' => 30]), 'ctr')['action']);
+    }
+
+    public function testCtrAnswerIsTheSameWhateverTheCurrentCtr(): void
+    {
+        $seen = [];
+        foreach ([0, 30, 60, 100] as $current) {
+            $line = $this->line($this->planned(['ctr' => 38], ['currentCtr' => $current]), 'ctr');
+            $seen[] = [$line['answer'], $line['reason']];
+            $this->assertSame('On ' . $current . ' now', $line['figure']);
+        }
+
+        $this->assertCount(1, array_unique($seen, SORT_REGULAR));
+        $this->assertSame('CTR 38', $seen[0][0]);
+    }
+
+    public function testCtrShortSaysEvenAtZero(): void
+    {
+        $line = $this->line($this->planned(['mode' => 'short', 'ctr' => 0, 'shortfall' => 450_000]), 'ctr');
+
+        $this->assertSame('CTR 0', $line['answer']);
+        $this->assertSame('Even at CTR 0 the forecast misses the target by $450k', $line['reason']);
+    }
+
+    public function testCtrPushNamesTheSwapsAndTheirCost(): void
+    {
+        $swaps = [['part' => 'Gearbox', 'cost' => 200_000], ['part' => 'Brakes', 'cost' => 100_000]];
+        $line = $this->line($this->planned(['mode' => 'push', 'ctr' => 70, 'safety' => 55, 'swaps' => $swaps]), 'ctr');
+
+        $this->assertSame('Race rated Normal: swap Gearbox + Brakes ($300k); the budget covers the swaps', $line['reason']);
+    }
+
+    public function testCtrSurviveReasonsComeBeforeTheNurseOnes(): void
+    {
+        $base = ['objective' => $this->objective(SeasonObjective::SURVIVE)];
+        $plain = $this->line($this->planned(['ctr' => 20, 'safety' => 35], $base), 'ctr');
+        $red = $this->line($this->planned(['ctr' => 35, 'safety' => 35], $base + ['alwaysRed' => ['Engine']]), 'ctr');
+
+        $this->assertSame('Race rated Normal: capped at the highest CTR that keeps parts out of the red', $plain['reason']);
+        $this->assertSame('Engine stays in the red at any CTR; capped where nothing breaks', $red['reason']);
+    }
+
+    public function testCtrNurseNamesTheRefusedSwaps(): void
+    {
+        $line = $this->line($this->planned(['ctr' => 40, 'safety' => 40, 'refused_swap_cost' => 250_000]), 'ctr');
+
+        $this->assertSame("Race rated Normal: pushing past 40 needs \$250k of swaps the budget can't cover", $line['reason']);
+    }
+
+    public function testCtrBelowSafetyBlamesTheBudget(): void
+    {
+        $line = $this->line($this->planned(['ctr' => 25, 'safety' => 40]), 'ctr');
+
+        $this->assertSame('CTR 25', $line['answer']);
+        $this->assertSame('Race rated Normal: the highest CTR the budget covers to season end', $line['reason']);
+    }
+
+    public function testCtrNurseAtSafetyIsTheNoPartBreaksReason(): void
+    {
+        $line = $this->line($this->planned(['ctr' => 40, 'safety' => 40]), 'ctr');
+
+        $this->assertSame('Race rated Normal: the highest CTR where no part breaks', $line['reason']);
+    }
+
+    public function testCtrReasonOmitsTheRatingWhenThereIsNone(): void
+    {
+        $line = $this->line($this->planned(['ctr' => 40, 'safety' => 40], ['pushAdvice' => null]), 'ctr');
+
+        $this->assertSame('the highest CTR where no part breaks', $line['reason']);
+    }
+
+    public function testPartsPushSwapsTheForecastParts(): void
+    {
+        $replaced = [['part' => 'Gearbox', 'cost' => 200_000], ['part' => 'Brakes', 'cost' => 100_000]];
+        $plan = ['mode' => 'push', 'ctr' => 70, 'swaps' => $replaced, 'rows' => $this->rowsReplacing($replaced)];
+
+        $line = $this->line($this->planned($plan), 'parts');
+
+        $this->assertSame('Swap Gearbox, Brakes', $line['answer']);
+        $this->assertSame('$300k', $line['figure']);
+        $this->assertSame('Lets you push to CTR 70', $line['reason']);
+    }
+
+    public function testPartsForcedComeFromThePlanNotTheCurrentCtr(): void
+    {
+        $replaced = [['part' => 'Engine', 'cost' => 410_000]];
+        $in = $this->planned(['rows' => $this->rowsReplacing($replaced)], ['wearAdvice' => null, 'forcedSwapCost' => null]);
+
+        $line = $this->line($in, 'parts');
+
+        $this->assertSame('Swap Engine', $line['answer']);
+        $this->assertSame('$410k', $line['figure']);
+        $this->assertSame('Would break this race if kept', $line['reason']);
+        $this->assertSame('amber', $line['tone']);
+    }
+
+    public function testPartsForcedIsAmberEvenWhenTheEnvelopeIsSmaller(): void
+    {
+        $replaced = [['part' => 'Engine', 'cost' => 410_000]];
+
+        $line = $this->line($this->planned(['envelope' => 0, 'rows' => $this->rowsReplacing($replaced)]), 'parts');
+
+        $this->assertSame('amber', $line['tone']);
+    }
+
+    public function testPartsNothingToSwapUnderAPlan(): void
+    {
+        $this->assertSame('Nothing to swap', $this->line($this->planned(), 'parts')['answer']);
+    }
+
+    public function testPartsIgnoreTheOldAdviceWhenThereIsAPlan(): void
+    {
+        $in = $this->planned([], ['wearAdvice' => $this->wearAdvice(), 'forcedSwapCost' => 410_000]);
+
+        $this->assertSame('Nothing to swap', $this->line($in, 'parts')['answer']);
+    }
+
+    public function testBudgetOptionalSwapsDrawFromTheEnvelope(): void
+    {
+        $in = $this->planned(['envelope' => 250_000], [
+            'objective' => $this->objective(SeasonObjective::PROMOTE),
+            'optionalSwaps' => [['part' => 'Gearbox', 'cost' => 200_000], ['part' => 'Brakes', 'cost' => 100_000]],
+        ]);
+
+        $line = $this->line($in, 'parts');
+
+        $this->assertSame('Swap Gearbox (optional)', $line['answer']);
+        $this->assertSame('In the red zone, and the budget covers it', $line['reason']);
+        $this->assertSame('$200k', $line['figure']);
+    }
+
+    public function testBudgetTrainingIsCoveredAndSurviveKeepsNoRepairReserve(): void
+    {
+        $in = $this->planned(['envelope' => 100_000], [
+            'objective' => $this->objective(SeasonObjective::SURVIVE),
+            'forcedSwapCost' => 410_000,
+        ]);
+
+        $line = $this->line($in, 'training');
+
+        $this->assertSame('Train Talent course', $line['answer']);
+        $this->assertSame('The budget covers it', $line['reason']);
+    }
+
+    public function testBudgetTrainingSkippedWhenTheEnvelopeIsTooSmall(): void
+    {
+        $line = $this->line($this->planned(['envelope' => 50_000]), 'training');
+
+        $this->assertSame('Skip — keep it for repairs', $line['answer']);
+        $this->assertSame('Only $50k left in the budget', $line['reason']);
+    }
+
+    public function testBudgetTestingIsCoveredWithItsTrack(): void
+    {
+        $line = $this->line($this->planned(['envelope' => 1_000_000]), 'testing');
+
+        $this->assertSame('Test at Silverstone', $line['answer']);
+        $this->assertSame('The budget covers it; tunes for Monza (race 10)', $line['reason']);
+    }
+
+    public function testDiscretionaryLinesDrawFromTheEnvelopeInOrder(): void
+    {
+        $in = $this->planned(['envelope' => 600_000], [
+            'trainingPick' => ['name' => 'Talent course', 'score' => 1.0, 'cost' => 550_000, 'gains' => []],
+            'testingCost' => 120_000,
+        ]);
+
+        $training = $this->line($in, 'training');
+        $testing = $this->line($in, 'testing');
+
+        $this->assertSame('Train Talent course', $training['answer']);
+        $this->assertSame('Skip — keep it for repairs', $testing['answer']);
+        $this->assertSame('Only $50k left in the budget', $testing['reason']);
+    }
+
+    public function testDiscretionaryOptionalSwapsComeBeforeTraining(): void
+    {
+        $in = $this->planned(['envelope' => 250_000], [
+            'objective' => $this->objective(SeasonObjective::PROMOTE),
+            'optionalSwaps' => [['part' => 'Gearbox', 'cost' => 200_000]],
+        ]);
+
+        $training = $this->line($in, 'training');
+
+        $this->assertSame('Skip — keep it for repairs', $training['answer']);
+        $this->assertSame('Only $50k left in the budget', $training['reason']);
+    }
+
+    public function testASkippedTrainingLeavesItsMoneyForTesting(): void
+    {
+        $in = $this->planned(['envelope' => 200_000], [
+            'trainingPick' => ['name' => 'Talent course', 'score' => 1.0, 'cost' => 250_000, 'gains' => []],
+            'testingCost' => 120_000,
+        ]);
+
+        $this->assertSame('Skip — keep it for repairs', $this->line($in, 'training')['answer']);
+        $this->assertSame('Test at Silverstone', $this->line($in, 'testing')['answer']);
     }
 
     public function testNoLineClaimsAGain(): void
