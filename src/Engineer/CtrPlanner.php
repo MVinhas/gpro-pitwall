@@ -25,7 +25,9 @@ final readonly class CtrPlanner
 
     /**
      * The Clear Track Risk to advise: the highest value whose season forecast keeps every race's balance at
-     * or above the target. It reads no current CTR, so the advice holds still when the manager follows it.
+     * or above its target: the cushion, and at the last race the end target (the season start for Hold and
+     * Survive when it is above the cushion). It reads no current CTR, so the advice holds still when the
+     * manager follows it.
      *
      * @param list<array{race: int, track_name: ?string, base: ?array<string, float>}> $rounds next race first
      * @param array<string, array{level: int, start: int|float, track_base: int|float, training?: int|float}> $parts
@@ -75,24 +77,24 @@ final readonly class CtrPlanner
         if ($objective !== SeasonObjective::PROMOTE && $seasonStart !== null && $seasonStart > $cushion) {
             $target = $seasonStart;
             $targetKind = 'start';
-            if ($survive && $this->minBalance($forecastAt(0)['rows']) < $target) {
+            if ($survive && self::headroom($forecastAt(0)['rows'], $cushion, $target) < 0) {
                 $target = $cushion;
                 $targetKind = 'start_out_of_reach';
             }
         }
 
+        $forced = $this->ceiling->pastLimitAtZero($parts, $driverFactor, $limit);
+
         $chosen = null;
         $ctr = 0;
         for ($c = $survive ? $safety : self::MAX_CTR; $c >= 0; $c--) {
             $forecast = $forecastAt($c);
-            if ($this->minBalance($forecast['rows']) >= $target) {
+            if ($this->passes($forecast, $c, $safety, $forced, $prices, $cushion, $target)) {
                 $chosen = $forecast;
                 $ctr = $c;
                 break;
             }
         }
-
-        $forced = $this->ceiling->pastLimitAtZero($parts, $driverFactor, $limit);
 
         if ($chosen === null) {
             $chosen = $forecastAt(0);
@@ -108,7 +110,7 @@ final readonly class CtrPlanner
                 $cushion,
                 $seasonStart,
                 0,
-                $target - $this->minBalance($chosen['rows']),
+                max(0, -self::headroom($chosen['rows'], $cushion, $target)),
                 $chosen,
                 $rounds,
             );
@@ -134,7 +136,7 @@ final readonly class CtrPlanner
             $targetKind,
             $cushion,
             $seasonStart,
-            max(0, $this->minBalance($chosen['rows']) - $target),
+            max(0, self::headroom($chosen['rows'], $cushion, $target)),
             null,
             $chosen,
             $rounds,
@@ -142,11 +144,55 @@ final readonly class CtrPlanner
     }
 
     /**
+     * A CTR passes when every row meets its own target. Above the safety ceiling it must also be a real push:
+     * an unforced swap in the next race, every one of them priced, so the budget actually pays for it. CTR 0
+     * is never ruled out for a fresh part that would reach the limit in one race: no lower CTR avoids it.
+     *
+     * @param array{rows: list<BudgetRow>, partial: list<string>, infeasible: bool} $forecast
+     * @param list<string> $forced
+     * @param array<string, ?int> $prices
+     */
+    private function passes(
+        array $forecast,
+        int $ctr,
+        int $safety,
+        array $forced,
+        array $prices,
+        int $cushion,
+        int $endTarget,
+    ): bool {
+        if (($forecast['infeasible'] && $ctr > 0) || self::headroom($forecast['rows'], $cushion, $endTarget) < 0) {
+            return false;
+        }
+        if ($ctr <= $safety) {
+            return true;
+        }
+
+        $swaps = $this->unforced($forecast['rows'][0]['replaced'], $forced);
+        foreach ($swaps as $swap) {
+            if (($prices[$swap['part']] ?? null) === null) {
+                return false;
+            }
+        }
+
+        return $swaps !== [];
+    }
+
+    /**
+     * The smallest margin of any row over its target: the cushion, or the end target on the last row.
+     * Negative when some row misses its target.
+     *
      * @param list<BudgetRow> $rows
      */
-    private function minBalance(array $rows): int
+    private static function headroom(array $rows, int $cushion, int $endTarget): int
     {
-        return min(PHP_INT_MAX, ...array_column($rows, 'balance'));
+        $last = array_key_last($rows);
+        $headroom = PHP_INT_MAX;
+        foreach ($rows as $i => $row) {
+            $headroom = min($headroom, $row['balance'] - ($i === $last ? $endTarget : $cushion));
+        }
+
+        return $headroom;
     }
 
     /**
@@ -166,7 +212,7 @@ final readonly class CtrPlanner
      * @param 'nurse'|'push'|'short' $mode
      * @param list<array{part: string, cost: int}> $swaps
      * @param 'cushion'|'start'|'start_out_of_reach' $targetKind
-     * @param array{rows: list<BudgetRow>, partial: list<string>} $forecast
+     * @param array{rows: list<BudgetRow>, partial: list<string>, infeasible: bool} $forecast
      * @param non-empty-list<array{race: int, track_name: ?string, base: ?array<string, float>}> $rounds
      * @return Plan
      */

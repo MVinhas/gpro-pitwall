@@ -123,7 +123,54 @@ final class CtrPlannerTest extends TestCase
         $this->assertSame('start', $plan['target_kind']);
         $this->assertSame(500_000, $plan['target']);
         $this->assertSame(500_000, $plan['season_start']);
-        $this->assertGreaterThanOrEqual(500_000, min(array_column($plan['rows'], 'balance')));
+        $this->assertGreaterThanOrEqual(500_000, $plan['rows'][array_key_last($plan['rows'])]['balance']);
+    }
+
+    public function testHoldStartTargetIsJudgedAtSeasonEnd(): void
+    {
+        // Race 10 of 17: cash dips below the start mid-season, then income lifts it $3M above by the end.
+        $rounds = [];
+        for ($race = 10; $race <= 17; $race++) {
+            $rounds[] = ['race' => $race, 'track_name' => 'T' . $race, 'base' => ['Engine' => 1.0]];
+        }
+        $parts = ['Engine' => ['level' => 1, 'start' => 0.0, 'track_base' => 1.0]];
+
+        $plan = $this->planner->plan(
+            SeasonObjective::HOLD,
+            $rounds,
+            $parts,
+            self::PRICES,
+            1.0,
+            19_000_000,
+            2_000_000,
+            2_500_000,
+            20_000_000,
+        );
+
+        $balances = array_column($plan['rows'], 'balance');
+        $this->assertSame(19_500_000, $balances[0]);
+        $this->assertSame(23_000_000, $balances[7]);
+        $this->assertSame('start', $plan['target_kind']);
+        $this->assertSame(20_000_000, $plan['target']);
+        $this->assertSame(2_000_000, $plan['cushion']);
+        $this->assertNotSame('short', $plan['mode']);
+        $this->assertSame(100, $plan['ctr']);
+        $this->assertSame(min(min($balances) - 2_000_000, 23_000_000 - 20_000_000), $plan['envelope']);
+        $this->assertSame(3_000_000, $plan['envelope']);
+    }
+
+    public function testShortfallIsTheWidestMissOfAnyRowsOwnTarget(): void
+    {
+        $plan = $this->plan(SeasonObjective::HOLD, 1_000_000, 100_000, 0, 1_500_000);
+
+        $this->assertSame('short', $plan['mode']);
+        $rows = $plan['rows'];
+        $last = count($rows) - 1;
+        $misses = [];
+        foreach ($rows as $i => $row) {
+            $misses[] = ($i === $last ? $plan['target'] : $plan['cushion']) - $row['balance'];
+        }
+        $this->assertSame(max($misses), $plan['shortfall']);
     }
 
     public function testHoldTargetIsTheCushionWhenTheStartIsLowerOrUnknown(): void
@@ -204,6 +251,53 @@ final class CtrPlannerTest extends TestCase
         $this->assertSame('nurse', $plan['mode']);
         $this->assertLessThan(100, $plan['safety']);
         $this->assertNull($plan['refused_swap_cost']);
+    }
+
+    public function testPushIsNotAdvisedWhenASwapPriceIsUnknown(): void
+    {
+        $plan = $this->planner->plan(
+            SeasonObjective::HOLD,
+            $this->rounds(),
+            self::ENGINE,
+            ['Engine' => null],
+            1.0,
+            10_000_000,
+            0,
+            0,
+            null,
+        );
+
+        $this->assertSame('nurse', $plan['mode']);
+        $this->assertSame($plan['safety'], $plan['ctr']);
+        $this->assertSame([], $plan['swaps']);
+    }
+
+    public function testPushNeedsASwapToPayFor(): void
+    {
+        // Round 0's wear is unknown, so nothing is replaced in it at any CTR: there is no swap to push on.
+        $rounds = $this->rounds();
+        $rounds[0]['base'] = null;
+
+        $plan = $this->planner->plan(SeasonObjective::HOLD, $rounds, self::ENGINE, self::PRICES, 1.0, 10_000_000, 0, 0, null);
+
+        $this->assertLessThan(100, $plan['safety']);
+        $this->assertSame('nurse', $plan['mode']);
+        $this->assertSame($plan['safety'], $plan['ctr']);
+    }
+
+    public function testACtrAtWhichAFreshPartWouldReachTheLimitIsNotAdvised(): void
+    {
+        $parts = ['Engine' => ['level' => 1, 'start' => 50.0, 'track_base' => 20.0]];
+        $rounds = $this->rounds();
+        foreach ($rounds as $i => $round) {
+            $rounds[$i]['base'] = ['Engine' => 20.0];
+        }
+
+        $plan = $this->planner->plan(SeasonObjective::HOLD, $rounds, $parts, self::PRICES, 1.0, 10_000_000, 0, 0, null);
+
+        $this->assertSame('push', $plan['mode']);
+        $this->assertLessThan(100.0, 20.0 * 1.02 ** $plan['ctr']);
+        $this->assertGreaterThanOrEqual(100.0, 20.0 * 1.02 ** ($plan['ctr'] + 1));
     }
 
     public function testSurviveNeverPushes(): void

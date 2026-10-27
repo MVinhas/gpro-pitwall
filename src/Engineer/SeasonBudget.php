@@ -10,7 +10,7 @@ use App\Service\CarWearService;
  * @phpstan-type Round array{race: int, track_name: ?string, base: ?array<string, float>}
  * @phpstan-type BudgetRow array{race: int, track_name: ?string, replaced: list<array{part: string, cost: int}>,
  *   repairs: int, running: int, income: int, balance: int, wear_known: bool}
- * @phpstan-type Forecast array{rows: list<BudgetRow>, partial: list<string>}
+ * @phpstan-type Forecast array{rows: list<BudgetRow>, partial: list<string>, infeasible: bool}
  */
 final readonly class SeasonBudget
 {
@@ -22,7 +22,8 @@ final readonly class SeasonBudget
      * Race-by-race balance. A part that would reach $limit during a race is replaced before it
      * (start 0, price charged), the same swap rule as CtrCeiling. Training wear lands on the first
      * round only; a round whose track wear is unknown, or lacks any part, carries part wear forward
-     * and charges nothing.
+     * and charges nothing. A fresh part that would reach $limit within one race makes the forecast
+     * infeasible: it would carry past the limit into the next round, which this model can't charge.
      *
      * @param list<Round> $rounds remaining races, next race first
      * @param array<string, array{level: int, start: int|float, training?: int|float}> $parts
@@ -47,6 +48,7 @@ final readonly class SeasonBudget
 
         $rows = [];
         $partial = [];
+        $infeasible = false;
         $balance = $cash;
 
         foreach ($rounds as $i => $round) {
@@ -74,6 +76,7 @@ final readonly class SeasonBudget
                         $replaced[] = ['part' => (string) $label, 'cost' => $cost];
                         $repairs += $cost;
                         $end = $training + $raceWear;
+                        $infeasible = $infeasible || $end >= $limit;
                     }
 
                     $wear[$label] = $end;
@@ -93,6 +96,10 @@ final readonly class SeasonBudget
             ];
         }
 
-        return ['rows' => $rows, 'partial' => array_map('strval', array_keys($partial))];
+        return [
+            'rows' => $rows,
+            'partial' => array_map('strval', array_keys($partial)),
+            'infeasible' => $infeasible,
+        ];
     }
 }

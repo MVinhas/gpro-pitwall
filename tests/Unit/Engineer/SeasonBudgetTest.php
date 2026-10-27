@@ -244,14 +244,8 @@ final class SeasonBudgetTest extends TestCase
         $this->assertSame(180_000, $out['rows'][1]['repairs']);
     }
 
-    public function testHigherCtrNeverLowersTotalWear(): void
+    public function testHigherCtrCostsMoreRepairs(): void
     {
-        $totalAt = function (int $ctr): float {
-            $perRace = round($this->wear->raceWear(8.0, 2, 1.0, $ctr), 1);
-            return 3 * $perRace;
-        };
-        $this->assertGreaterThanOrEqual($totalAt(20), $totalAt(80));
-
         $repairsAt = function (int $ctr): int {
             $out = $this->budget->forecast(
                 array_map(fn (int $r): array => $this->round($r, 8.0), [1, 2, 3, 4, 5, 6]),
@@ -266,6 +260,27 @@ final class SeasonBudgetTest extends TestCase
             );
             return array_sum(array_column($out['rows'], 'repairs'));
         };
-        $this->assertGreaterThanOrEqual($repairsAt(20), $repairsAt(80));
+
+        $this->assertSame(0, $repairsAt(20));
+        $this->assertGreaterThan($repairsAt(20), $repairsAt(80));
+    }
+
+    public function testAFreshPartReachingTheLimitInOneRaceMakesTheForecastInfeasible(): void
+    {
+        $at = fn (int $ctr): array => $this->budget->forecast(
+            [$this->round(1, 15.0), $this->round(2, 15.0)],
+            ['Engine' => ['level' => 1, 'start' => 0]],
+            ['Engine' => 100],
+            1.0,
+            $ctr,
+            100,
+            1_000_000,
+            0,
+            0,
+        );
+
+        $this->assertGreaterThanOrEqual(100.0, round($this->wear->raceWear(15.0, 1, 1.0, 100), 1));
+        $this->assertTrue($at(100)['infeasible']);
+        $this->assertFalse($at(50)['infeasible']);
     }
 }

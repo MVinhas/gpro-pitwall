@@ -478,6 +478,35 @@ final class RaceEngineerServiceTest extends TestCase
         self::assertStringContainsString('Ends the season above your', array_column($lines, null, 'key')['cash']['reason']);
     }
 
+    public function testSeasonStartReadsRaceOneTheWayTheProjectorStoresIt(): void
+    {
+        $this->seedPromotionFixture();
+        $this->ledger->save([
+            'user_id' => self::USER, 'season' => self::SEASON, 'race' => 1, 'source' => 'race',
+            'occurred_at' => null, 'description' => 'Race prize', 'amount' => 1_200_000,
+            'balance_after' => null, 'fingerprint' => sha1('race|1|prize'),
+        ]);
+        // EconomyHistory's race 1 lines, in API order: one shared second, newest first.
+        $lines = [
+            ['Tyre supplier costs (Pipirelli)', -250_000, 27_472_820],
+            ['Facility costs', 0, 27_722_820],
+            ['Salary for your staff', -298_000, 27_722_820],
+            ['Salary for your driver', -888_060, 28_020_820],
+            ['Sponsor money', 1_000_000, 28_908_880],
+        ];
+        foreach ($lines as [$description, $amount, $after]) {
+            $this->ledger->save([
+                'user_id' => self::USER, 'season' => self::SEASON, 'race' => 1, 'source' => 'economy',
+                'occurred_at' => 'Jun 11th 2024, 23:06:43', 'description' => $description, 'amount' => $amount,
+                'balance_after' => $after, 'fingerprint' => sha1('economy|' . $description . $after),
+            ]);
+        }
+
+        $this->service->forCockpit(self::USER, $this->cockpit());
+
+        self::assertSame(27_908_880, $this->budgets->find(self::USER, self::SEASON)['plan']['season_start'] ?? null);
+    }
+
     public function testUnknownOutlookKeepsTheP12aCashLineAndSafetyCtr(): void
     {
         $lines = $this->service->forCockpit(99, $this->cockpit(['menu' => ['cash' => 1_000_000]]))['lines'];
