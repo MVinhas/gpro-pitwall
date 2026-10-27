@@ -181,7 +181,9 @@ final class SeasonServiceTest extends TestCase
         $this->assertSame('End above $4M', $budget['view']['target']);
         $this->assertSame('$1.2M', $budget['view']['spend']['value']);
         $this->assertSame('ink', $budget['view']['spend']['tone']);
-        $this->assertSame('Engine · $180k', $budget['view']['rows'][0]['replaced']);
+        $this->assertSame('As of race 9', $budget['view']['as_of']);
+        $this->assertSame([['part' => 'Engine', 'cost' => '$180k']], $budget['view']['rows'][0]['replaced']);
+        $this->assertSame('', $budget['view']['rows'][0]['replaced_none']);
         $this->assertSame('$4.4M', $budget['view']['rows'][0]['balance']);
         $this->assertSame('', $budget['view']['rows'][0]['balance_note']);
     }
@@ -248,15 +250,16 @@ final class SeasonServiceTest extends TestCase
         );
     }
 
-    public function testBalancesBelowTheTargetAreAmberAndNegativeOnesRed(): void
+    public function testEachBalanceIsJudgedAgainstItsOwnTarget(): void
     {
         $this->race(1);
         $row = static fn (int $race, int $balance): array => [
             'race' => $race, 'track_name' => null, 'replaced' => [], 'repairs' => 0,
             'running' => 300_000, 'income' => 900_000, 'balance' => $balance, 'wear_known' => false,
         ];
+        // Mid-season rows keep the $300k cushion; only the last must end above the $4M start.
         $this->budgets->save(1, 107, 9, $this->plan(['rows' => [
-            $row(9, 4_100_000), $row(10, 3_000_000), $row(11, -50_000),
+            $row(9, 3_000_000), $row(10, 200_000), $row(11, -50_000), $row(12, 3_900_000),
         ]]));
 
         $rows = $this->service->build(1, null)['budget']['view']['rows'] ?? [];
@@ -264,16 +267,118 @@ final class SeasonServiceTest extends TestCase
         $this->assertSame(['ink', ''], [$rows[0]['tone'], $rows[0]['balance_note']]);
         $this->assertSame(['amber', ' · below target'], [$rows[1]['tone'], $rows[1]['balance_note']]);
         $this->assertSame(['red', ' · negative'], [$rows[2]['tone'], $rows[2]['balance_note']]);
+        $this->assertSame(['amber', ' · below target'], [$rows[3]['tone'], $rows[3]['balance_note']]);
         $this->assertSame('-$50k', $rows[2]['balance']);
         $this->assertSame('—', $rows[0]['track']);
-        $this->assertSame('wear unknown', $rows[0]['replaced']);
+        $this->assertSame([], $rows[0]['replaced']);
+        $this->assertSame('wear unknown', $rows[0]['replaced_none']);
+    }
+
+    public function testNoReplacementReadsADash(): void
+    {
+        $this->race(1);
+        $rows = $this->plan()['rows'];
+        $rows[0]['replaced'] = [];
+        $rows[0]['repairs'] = 0;
+        $this->budgets->save(1, 107, 9, $this->plan(['rows' => $rows]));
+
+        $row = $this->service->build(1, null)['budget']['view']['rows'][0] ?? null;
+
+        $this->assertSame([], $row['replaced'] ?? null);
+        $this->assertSame('—', $row['replaced_none'] ?? null);
+    }
+
+    public function testAStartOutOfReachIsNamedInTheTarget(): void
+    {
+        $this->race(1);
+        $this->budgets->save(1, 107, 9, $this->plan(['target_kind' => 'start_out_of_reach', 'target' => 300_000]));
+
+        $this->assertSame(
+            'Keep one race of costs in hand (your $4M start is out of reach)',
+            $this->service->build(1, null)['budget']['view']['target'] ?? null,
+        );
+    }
+
+    public function testBudgetShowsForANewSeasonWithoutHistory(): void
+    {
+        $this->race(17, season: 106);
+        $this->race(17);
+        $this->budgets->save(1, 108, 1, $this->plan(['race' => 1, 'rows' => [
+            array_merge($this->plan()['rows'][0], ['race' => 1]),
+            array_merge($this->plan()['rows'][0], ['race' => 2]),
+        ]]));
+
+        $view = $this->service->build(1, null);
+
+        $this->assertSame(107, $view['season']);
+        $this->assertSame(108, $view['budget']['season'] ?? null);
+        $this->assertSame('Season 108 · as of race 1', $view['budget']['view']['as_of'] ?? null);
+        $this->assertNotNull($this->service->build(1, 107)['budget']);
+        $this->assertNull($this->service->build(1, 106)['budget']);
+    }
+
+    public function testBudgetShowsWhenThereIsNoHistoryAtAll(): void
+    {
+        $this->budgets->save(1, 108, 1, $this->plan(['race' => 1]));
+
+        $view = $this->service->build(1, null);
+
+        $this->assertFalse($view['has_races']);
+        $this->assertSame('Season 108 · as of race 1', $view['budget']['view']['as_of'] ?? null);
+        $this->assertFalse($view['budget_over']);
+    }
+
+    public function testAPastSeasonSelectedShowsNoBudget(): void
+    {
+        $this->race(1, season: 106);
+        $this->race(1);
+        $this->budgets->save(1, 107, 9, $this->plan());
+
+        $this->assertNull($this->service->build(1, 106)['budget']);
+        $this->assertFalse($this->service->build(1, 106)['budget_over']);
+        $this->assertNotNull($this->service->build(1, 107)['budget']);
+    }
+
+    public function testBudgetHiddenOnceTheLastForecastRaceIsArchived(): void
+    {
+        $this->race(8);
+        $this->budgets->save(1, 107, 9, $this->plan());
+        $this->assertNotNull($this->service->build(1, null)['budget']);
+        $this->assertFalse($this->service->build(1, null)['budget_over']);
+
+        $this->race(9);
+        $view = $this->service->build(1, null);
+
+        $this->assertNull($view['budget']);
+        $this->assertTrue($view['budget_over']);
+    }
+
+    public function testASavedPlanMissingKeysIsLoggedByClassAndGivesNull(): void
+    {
+        $this->race(1);
+        $this->budgets->save(1, 107, 9, ['v' => 1]);
+        $log = tempnam(sys_get_temp_dir(), 'season-log');
+        $this->assertIsString($log);
+        $previous = ini_set('error_log', $log);
+
+        try {
+            $budget = $this->service->build(1, null)['budget'];
+        } finally {
+            ini_set('error_log', (string) $previous);
+        }
+
+        $logged = (string) file_get_contents($log);
+        unlink($log);
+        $this->assertNull($budget);
+        $this->assertMatchesRegularExpression('/\[Season\] [A-Za-z\\\\]+$/m', $logged);
+        $this->assertStringNotContainsString('target', $logged);
     }
 
     public function testAFailingBudgetReadIsLoggedByClassAndGivesNull(): void
     {
         $this->race(1);
         $broken = new class ($this->db) extends SeasonBudgetRepository {
-            public function find(int $userId, int $season): ?array
+            public function latest(int $userId): ?array
             {
                 throw new \RuntimeException('secret detail');
             }

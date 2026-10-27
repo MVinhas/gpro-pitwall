@@ -63,6 +63,46 @@ final class SeasonBudgetRepositoryTest extends TestCase
         );
     }
 
+    public function testSaveRefreshesComputedAt(): void
+    {
+        $this->repo->save(1, 112, 8, ['v' => 1, 'ctr' => 40]);
+        $this->db->exec("UPDATE user_season_budget SET computed_at = '2000-01-01 00:00:00'");
+
+        $this->repo->save(1, 112, 9, ['v' => 1, 'ctr' => 55]);
+
+        $this->assertNotSame('2000-01-01 00:00:00', $this->repo->find(1, 112)['computed_at'] ?? null);
+    }
+
+    public function testLatestIsTheNewestSeasonsPlan(): void
+    {
+        $this->repo->save(1, 113, 2, ['v' => 1, 'ctr' => 60]);
+        $this->repo->save(1, 112, 17, ['v' => 1, 'ctr' => 40]);
+        $this->repo->save(2, 114, 1, ['v' => 1, 'ctr' => 10]);
+
+        $latest = $this->repo->latest(1);
+
+        $this->assertNotNull($latest);
+        $this->assertSame(113, $latest['season']);
+        $this->assertSame(2, $latest['race']);
+        $this->assertSame(['v' => 1, 'ctr' => 60], $latest['plan']);
+        $this->assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $latest['computed_at']);
+    }
+
+    public function testLatestIgnoresAPlanOfAnotherVersion(): void
+    {
+        $this->repo->save(1, 112, 17, ['v' => 1, 'ctr' => 40]);
+        $this->repo->save(1, 113, 2, ['v' => 2, 'ctr' => 60]);
+
+        $this->assertNull($this->repo->latest(1));
+    }
+
+    public function testLatestIsNullWithoutAPlan(): void
+    {
+        $this->repo->save(2, 112, 8, ['v' => 1, 'ctr' => 40]);
+
+        $this->assertNull($this->repo->latest(1));
+    }
+
     public function testFindIgnoresAnotherVersion(): void
     {
         $this->repo->save(1, 112, 8, ['v' => 2, 'ctr' => 40]);

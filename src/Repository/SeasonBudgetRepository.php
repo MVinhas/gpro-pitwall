@@ -25,10 +25,38 @@ class SeasonBudgetRepository
     public function find(int $userId, int $season): ?array
     {
         $stmt = $this->pdo->prepare(
-            'SELECT race, plan_json, computed_at FROM user_season_budget WHERE user_id = :u AND season = :s'
+            'SELECT season, race, plan_json, computed_at FROM user_season_budget WHERE user_id = :u AND season = :s'
         );
         $stmt->execute([':u' => $userId, ':s' => $season]);
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        $row = $this->decode($stmt->fetch(PDO::FETCH_ASSOC));
+
+        return $row === null
+            ? null
+            : ['race' => $row['race'], 'computed_at' => $row['computed_at'], 'plan' => $row['plan']];
+    }
+
+    /**
+     * The plan of the user's newest season, whichever that is. A newest plan of another shape gives null
+     * rather than an older season's plan.
+     *
+     * @return array{season: int, race: int, computed_at: string, plan: array<string, mixed>}|null
+     */
+    public function latest(int $userId): ?array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT season, race, plan_json, computed_at FROM user_season_budget
+             WHERE user_id = :u ORDER BY season DESC LIMIT 1'
+        );
+        $stmt->execute([':u' => $userId]);
+
+        return $this->decode($stmt->fetch(PDO::FETCH_ASSOC));
+    }
+
+    /**
+     * @return array{season: int, race: int, computed_at: string, plan: array<string, mixed>}|null
+     */
+    private function decode(mixed $row): ?array
+    {
         if (!is_array($row) || !is_string($row['plan_json'])) {
             return null;
         }
@@ -38,7 +66,9 @@ class SeasonBudgetRepository
             return null;
         }
 
+        /** @var array<string, mixed> $plan */
         return [
+            'season' => (int) $row['season'],
             'race' => (int) $row['race'],
             'computed_at' => (string) $row['computed_at'],
             'plan' => $plan,
