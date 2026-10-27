@@ -47,11 +47,12 @@ use App\Support\Sparkline;
  *     race: int, track: string, replaced: list<array{part: string, cost: string}>, replaced_none: string,
  *     running: string, income: string, balance: string, balance_note: string, tone: 'ink'|'amber'|'red'
  * }
+ * @phpstan-type UpgradeRowView array{part: string, level: string, gain: string, price: string, net: string, fits: bool}
  * @phpstan-type BudgetView array{
  *     season: int, race: int, computed_at: string, plan: Plan,
  *     view: array{
  *         as_of: string, target: string, spend: array{value: string, tone: 'ink'|'amber'|'red'},
- *         rows: list<BudgetRowView>, partial: string
+ *         rows: list<BudgetRowView>, partial: string, upgrades: list<UpgradeRowView>|null
  *     }
  * }
  */
@@ -167,6 +168,7 @@ class SeasonService
                     'spend' => $this->spend($plan),
                     'rows' => $this->budgetRows($plan),
                     'partial' => implode(', ', $plan['partial']),
+                    'upgrades' => $this->upgradeRows($plan),
                 ],
             ], false];
         } catch (\Throwable $e) {
@@ -262,6 +264,29 @@ class SeasonService
         }
 
         return $rows;
+    }
+
+    /**
+     * Null for a plan saved before the ranking existed; an empty list is a ranking that found nothing worth buying.
+     *
+     * @param Plan $plan
+     *
+     * @return list<UpgradeRowView>|null
+     */
+    private function upgradeRows(array $plan): ?array
+    {
+        if (!isset($plan['upgrades'])) {
+            return null;
+        }
+
+        return array_map(static fn (array $u): array => [
+            'part' => $u['part'],
+            'level' => 'L' . $u['from'] . ' → L' . $u['to'],
+            'gain' => number_format($u['gain'], 1),
+            'price' => Dollars::short($u['price']),
+            'net' => $u['net_cost'] > 0 ? Dollars::short($u['net_cost']) : 'no extra cost',
+            'fits' => $u['affordable'],
+        ], $plan['upgrades']);
     }
 
     /**

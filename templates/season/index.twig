@@ -51,6 +51,7 @@
 
         {# A new season's plan exists before its first race is archived. #}
         {% include 'season/_budget.twig' %}
+        {% include 'season/_upgrades.twig' %}
     {% else %}
 
     {# ---- Results ---- #}
@@ -92,6 +93,7 @@
 
     {# ---- Budget to season end ---- #}
     {% include 'season/_budget.twig' %}
+    {% include 'season/_upgrades.twig' %}
 
     {# ---- Money ---- #}
     <section class="card" aria-labelledby="season-money">
