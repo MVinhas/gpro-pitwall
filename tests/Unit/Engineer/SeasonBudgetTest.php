@@ -203,6 +203,29 @@ final class SeasonBudgetTest extends TestCase
         $this->assertSame(['Nowhere wear unknown', 'race 2 wear unknown'], $out['partial']);
     }
 
+    public function testRoundMissingAPartBaseIsTreatedAsUnknown(): void
+    {
+        $out = $this->budget->forecast(
+            [
+                ['race' => 1, 'track_name' => 'Gap', 'base' => ['Chassis' => 5.0]],
+                ['race' => 2, 'track_name' => null, 'base' => ['Chassis' => 5.0]],
+            ],
+            ['Engine' => ['level' => 1, 'start' => 99]],
+            ['Engine' => 180_000],
+            1.0,
+            0,
+            100,
+            1_000_000,
+            0,
+            0,
+        );
+
+        $this->assertFalse($out['rows'][0]['wear_known']);
+        $this->assertSame(0, $out['rows'][0]['repairs']);
+        $this->assertSame([], $out['rows'][0]['replaced']);
+        $this->assertSame(['Gap wear unknown', 'race 2 wear unknown'], $out['partial']);
+    }
+
     public function testUnknownRowLeavesPartWearForTheNextRound(): void
     {
         $out = $this->budget->forecast(

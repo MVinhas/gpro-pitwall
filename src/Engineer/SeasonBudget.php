@@ -21,7 +21,8 @@ final readonly class SeasonBudget
     /**
      * Race-by-race balance. A part that would reach $limit during a race is replaced before it
      * (start 0, price charged), the same swap rule as CtrCeiling. Training wear lands on the first
-     * round only; a round with unknown track wear carries part wear forward and charges nothing.
+     * round only; a round whose track wear is unknown, or lacks any part, carries part wear forward
+     * and charges nothing.
      *
      * @param list<Round> $rounds remaining races, next race first
      * @param array<string, array{level: int, start: int|float, training?: int|float}> $parts
@@ -51,15 +52,16 @@ final readonly class SeasonBudget
         foreach ($rounds as $i => $round) {
             $replaced = [];
             $repairs = 0;
-            $known = $round['base'] !== null;
+            $base = $round['base'];
+            $known = $base !== null && array_diff_key($parts, $base) === [];
 
-            if ($round['base'] === null) {
+            if ($base === null || !$known) {
                 $partial[($round['track_name'] ?? 'race ' . $round['race']) . ' wear unknown'] = true;
             } else {
                 foreach ($parts as $label => $part) {
                     $training = $i === 0 ? (float) ($part['training'] ?? 0) : 0.0;
                     $raceWear = round(
-                        $this->wear->raceWear($round['base'][$label] ?? 0.0, (int) $part['level'], $driverFactor, $ctr),
+                        $this->wear->raceWear($base[$label], (int) $part['level'], $driverFactor, $ctr),
                         1,
                     );
                     $end = $wear[$label] + $training + $raceWear;
