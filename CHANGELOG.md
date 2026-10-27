@@ -6,6 +6,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.16] - 2026-10-27
+
+### Added
+- The **Race engineer** (admin) plans the money to season end: a race-by-race forecast of
+  repairs (a part is replaced before the race it would reach the objective's wear limit),
+  running costs and income, and a **Safe to spend** figure on the card. Promote keeps one
+  race of costs in hand; Hold and Survive also aim to end the season above the cash you
+  started it with.
+- The engineer's Clear Track Risk now comes from that budget: the highest risk whose
+  repairs the season can pay for, pushing past the wear-safe risk only when the budget
+  covers the extra swaps. Training, testing and optional swaps are drawn from the same
+  envelope.
+- A **Budget to season end** card on the Season screen (admin) shows the saved plan race
+  by race, including a new season before its first race is archived.
+
+### Fixed
+- The engineer's advice no longer depends on the Clear Track Risk you have set: the same
+  data gives the same advice at any slider position.
+
 ## [1.21.15] - 2026-10-26
 
 ### Added
