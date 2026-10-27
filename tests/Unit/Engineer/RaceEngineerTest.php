@@ -503,7 +503,7 @@ final class RaceEngineerTest extends TestCase
     {
         $line = $this->line($this->inputs(['outlook' => $this->outlook(50_000)]), 'training');
 
-        $this->assertSame('Skip — keep it for repairs', $line['answer']);
+        $this->assertSame('Skip Talent course training', $line['answer']);
         $this->assertSame('Free cash does not cover it', $line['reason']);
     }
 
@@ -515,7 +515,7 @@ final class RaceEngineerTest extends TestCase
             'forcedSwapCost' => 410_000,
         ]);
 
-        $this->assertSame('Skip — keep it for repairs', $this->line($in, 'training')['answer']);
+        $this->assertSame('Skip Talent course training', $this->line($in, 'training')['answer']);
     }
 
     public function testSurviveTrainsWhenRepairsAreCoveredToo(): void
@@ -538,7 +538,7 @@ final class RaceEngineerTest extends TestCase
 
         $this->assertSame('Train Talent course', $enough['answer']);
         $this->assertSame('Your balance covers it; season costs unknown', $enough['reason']);
-        $this->assertSame('Skip — keep it for repairs', $short['answer']);
+        $this->assertSame('Skip Talent course training', $short['answer']);
         $this->assertSame('Your balance does not cover it; season costs unknown', $short['reason']);
     }
 
@@ -565,7 +565,7 @@ final class RaceEngineerTest extends TestCase
 
         $this->assertSame('Train Talent course', $enough['answer']);
         $this->assertSame('Your balance covers it and the forced repairs; season costs unknown', $enough['reason']);
-        $this->assertSame('Skip — keep it for repairs', $short['answer']);
+        $this->assertSame('Skip Talent course training', $short['answer']);
         $this->assertSame('Survive: your balance must cover repairs first; season costs unknown', $short['reason']);
     }
 
@@ -590,8 +590,8 @@ final class RaceEngineerTest extends TestCase
         ]), 'testing');
 
         $this->assertSame('Test at Silverstone', $enough['answer']);
-        $this->assertSame('Skip — keep it for repairs', $short['answer']);
-        $this->assertSame('Skip — keep it for repairs', $survive['answer']);
+        $this->assertSame('Skip testing at Silverstone', $short['answer']);
+        $this->assertSame('Skip testing at Silverstone', $survive['answer']);
     }
 
     public function testTestingIsRecommendedWhenAffordable(): void
@@ -634,7 +634,7 @@ final class RaceEngineerTest extends TestCase
     {
         $line = $this->line($this->inputs(['outlook' => $this->outlook(100_000)]), 'testing');
 
-        $this->assertSame('Skip — keep it for repairs', $line['answer']);
+        $this->assertSame('Skip testing at Silverstone', $line['answer']);
     }
 
     public function testUnknownTestingCost(): void
@@ -646,7 +646,7 @@ final class RaceEngineerTest extends TestCase
         ]), 'testing');
 
         $this->assertSame('Test at Silverstone — cost unknown', $hold['answer']);
-        $this->assertSame('Skip — keep it for repairs', $survive['answer']);
+        $this->assertSame('Skip testing at Silverstone', $survive['answer']);
     }
 
     public function testRiskPassesTheAdvisorNumbersThrough(): void
@@ -978,8 +978,28 @@ final class RaceEngineerTest extends TestCase
     {
         $line = $this->line($this->planned(['envelope' => 50_000]), 'training');
 
-        $this->assertSame('Skip — over the budget', $line['answer']);
+        $this->assertSame('Skip Talent course training', $line['answer']);
         $this->assertSame('Only $50k left in the budget', $line['reason']);
+    }
+
+    public function testASkipNamesWhatItSkipsAndItsPrice(): void
+    {
+        $in = $this->inputs(['outlook' => $this->outlook(50_000)]);
+        $training = $this->line($in, 'training');
+        $testing = $this->line($in, 'testing');
+        $noTrack = $this->line($this->inputs(['outlook' => $this->outlook(50_000), 'testingTrack' => null]), 'testing');
+
+        $this->assertSame(['Skip Talent course training', '$85k'], [$training['answer'], $training['figure']]);
+        $this->assertSame(['Skip testing at Silverstone', '$300k'], [$testing['answer'], $testing['figure']]);
+        $this->assertSame('Skip testing this week', $noTrack['answer']);
+    }
+
+    public function testAnEmptyEnvelopeSaysNothingIsLeft(): void
+    {
+        $line = $this->line($this->planned(['envelope' => 0]), 'training');
+
+        $this->assertSame('Skip Talent course training', $line['answer']);
+        $this->assertSame('Nothing left in the budget', $line['reason']);
     }
 
     public function testBudgetTestingIsCoveredWithItsTrack(): void
@@ -1001,7 +1021,7 @@ final class RaceEngineerTest extends TestCase
         $testing = $this->line($in, 'testing');
 
         $this->assertSame('Train Talent course', $training['answer']);
-        $this->assertSame('Skip — over the budget', $testing['answer']);
+        $this->assertSame('Skip testing at Silverstone', $testing['answer']);
         $this->assertSame('Only $50k left in the budget', $testing['reason']);
     }
 
@@ -1014,7 +1034,7 @@ final class RaceEngineerTest extends TestCase
 
         $training = $this->line($in, 'training');
 
-        $this->assertSame('Skip — over the budget', $training['answer']);
+        $this->assertSame('Skip Talent course training', $training['answer']);
         $this->assertSame('Only $50k left in the budget', $training['reason']);
     }
 
@@ -1025,7 +1045,7 @@ final class RaceEngineerTest extends TestCase
             'testingCost' => 120_000,
         ]);
 
-        $this->assertSame('Skip — over the budget', $this->line($in, 'training')['answer']);
+        $this->assertSame('Skip Talent course training', $this->line($in, 'training')['answer']);
         $this->assertSame('Test at Silverstone', $this->line($in, 'testing')['answer']);
     }
 

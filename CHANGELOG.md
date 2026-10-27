@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.17] - 2026-10-27
+
+### Fixed
+- The race engineer's skipped training and testing lines now say what they skip and what
+  it costs ("Skip Ninja training · $550k", "Skip testing at Singapore · $1M"), and an
+  empty budget reads "Nothing left in the budget" instead of "Only $0 left".
+
 ## [1.21.16] - 2026-10-27
 
 ### Added
