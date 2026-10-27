@@ -94,25 +94,54 @@ final class CtrPlannerTest extends TestCase
 
     public function testBudgetCeilingIsTheHighestPassingCtr(): void
     {
+        $scenarios = [];
         foreach ([0, 40_000, 80_000, 120_000, 150_000, 250_000, 400_000, 1_000_000] as $cash) {
-            $plan = $this->plan(SeasonObjective::PROMOTE, $cash);
-            $rounds = $this->rounds();
+            $scenarios[] = [SeasonObjective::PROMOTE, $cash, 0, 0, null];
+        }
+        foreach ([300_000, 600_000, 900_000, 2_000_000] as $cash) {
+            $scenarios[] = [SeasonObjective::PROMOTE, $cash, 50_000, 30_000, null];
+            $scenarios[] = [SeasonObjective::HOLD, $cash, 50_000, 30_000, 400_000];
+        }
+        $rounds = $this->rounds();
 
-            $atSafety = $this->budget->forecast($rounds, self::ENGINE, self::PRICES, 1.0, $plan['safety'], 100, $cash, 0, 0);
-            $target = intdiv(array_sum(array_column($atSafety['rows'], 'repairs')), 3);
-            $this->assertSame($target, $plan['target']);
+        foreach ($scenarios as [$objective, $cash, $committed, $income, $start]) {
+            $label = "$objective cash $cash committed $committed";
+            $plan = $this->plan($objective, $cash, $committed, $income, $start);
+            $at = fn (int $c): array => $this->budget->forecast(
+                $rounds,
+                self::ENGINE,
+                self::PRICES,
+                1.0,
+                $c,
+                100,
+                $cash,
+                $committed,
+                $income,
+            )['rows'];
+
+            $cushion = $committed + intdiv(array_sum(array_column($at($plan['safety']), 'repairs')), 3);
+            $end = $start !== null && $start > $cushion ? $start : $cushion;
+            $this->assertSame($cushion, $plan['cushion'], $label);
+            $this->assertSame($end, $plan['target'], $label);
 
             $expected = null;
             for ($c = 100; $c >= 0; $c--) {
-                $rows = $this->budget->forecast($rounds, self::ENGINE, self::PRICES, 1.0, $c, 100, $cash, 0, 0)['rows'];
-                if (min(array_column($rows, 'balance')) >= $target) {
+                $rows = $at($c);
+                $ok = $rows[2]['balance'] >= $end
+                    && min(array_column($rows, 'balance')) >= $cushion
+                    && ($c <= $plan['safety'] || $rows[0]['replaced'] !== []);
+                if ($ok) {
                     $expected = $c;
                     break;
                 }
             }
 
-            $this->assertSame($expected ?? 0, $plan['ctr'], "cash $cash");
-            $this->assertSame($expected === null ? 'short' : ($expected > $plan['safety'] ? 'push' : 'nurse'), $plan['mode']);
+            $this->assertSame($expected ?? 0, $plan['ctr'], $label);
+            $this->assertSame(
+                $expected === null ? 'short' : ($expected > $plan['safety'] ? 'push' : 'nurse'),
+                $plan['mode'],
+                $label,
+            );
         }
     }
 
