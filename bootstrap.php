@@ -670,6 +670,7 @@ $container['service.season'] = new \App\Service\SeasonService(
     $container['repo.track'],
     new \App\Calibration\WearCalibration($container['service.car_wear']),
     new \App\Calibration\FuelCalibration($container['service.fuel_model']),
+    $container['repository.season_budget'],
 );
 
 $container['controller.engineer'] = new \App\Controller\EngineerController(

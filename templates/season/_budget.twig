@@ -1,0 +1,60 @@
+{# The engineer's saved season plan. The Cockpit computes it; this card only shows it, so it can be as old as the
+   manager's last Cockpit visit ("As of race N"). #}
+{% set tone_class = {'ink': 'text-slate-900', 'amber': 'font-medium text-amber-700', 'red': 'font-medium text-red-700'} %}
+{% if budget %}
+    <section id="season-budget" class="card" aria-labelledby="season-budget-title">
+        <div class="card-hd">
+            <h2 id="season-budget-title" class="t-heading">Budget to season end</h2>
+            <p class="t-caption mt-1">As of race {{ budget.race }} · forecast at CTR {{ budget.plan.ctr }}, the engineer's advice</p>
+        </div>
+        <div class="card-bd space-y-4">
+            <dl class="grid gap-4 sm:grid-cols-2">
+                <div>
+                    <dt class="t-label">Target</dt>
+                    <dd class="mt-1 text-sm font-semibold text-slate-900">{{ budget.view.target }}</dd>
+                </div>
+                <div>
+                    <dt class="t-label">Safe to spend</dt>
+                    <dd class="mt-1 text-sm font-semibold {{ tone_class[budget.view.spend.tone] }}">{{ budget.view.spend.value }}</dd>
+                </div>
+            </dl>
+
+            <div class="dt-scroll">
+                <table class="dt">
+                    <thead class="bg-slate-50">
+                        <tr>
+                            <th class="dt-th">Race</th>
+                            <th class="dt-th">Track</th>
+                            <th class="dt-th">Replaced</th>
+                            <th class="dt-th text-right hidden sm:table-cell">Running</th>
+                            <th class="dt-th text-right hidden sm:table-cell">Income</th>
+                            <th class="dt-th text-right">Balance after</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        {% for r in budget.view.rows %}
+                            <tr>
+                                <td class="dt-td">{{ r.race }}</td>
+                                <td class="dt-td whitespace-normal">{{ r.track }}</td>
+                                <td class="dt-td whitespace-normal">{{ r.replaced }}</td>
+                                <td class="dt-td text-right hidden sm:table-cell">{{ r.running }}</td>
+                                <td class="dt-td text-right hidden sm:table-cell">{{ r.income }}</td>
+                                <td class="dt-td text-right {{ tone_class[r.tone] }}">{{ r.balance }}{{ r.balance_note }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <p class="t-caption">Repairs at today's part prices; income from this season's average.</p>
+            {% if budget.view.partial %}
+                <p class="t-caption">Forecast partial: {{ budget.view.partial }}</p>
+            {% endif %}
+        </div>
+    </section>
+{% elseif seasons and season == seasons|first %}
+    {% include 'partials/_empty.twig' with {
+        title: 'No budget yet',
+        body: "Open the Cockpit once the season's costs are known to build the forecast."
+    } only %}
+{% endif %}

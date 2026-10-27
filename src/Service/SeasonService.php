@@ -8,9 +8,12 @@ use App\Calibration\FuelCalibration;
 use App\Calibration\LedgerCategories;
 use App\Calibration\WearCalibration;
 use App\Debrief\WeekendDiff;
+use App\Engineer\CtrPlanner;
+use App\Engineer\Money as Dollars;
 use App\Repository\EconomyLedgerRepository;
 use App\Repository\RaceHistoryRepository;
 use App\Repository\RaceTelemetryRepository;
+use App\Repository\SeasonBudgetRepository;
 use App\Repository\StandingsRepository;
 use App\Repository\TrackRepository;
 use App\Repository\WeekendStateRepository;
@@ -24,6 +27,7 @@ use App\Support\Sparkline;
  * track rather than one per race.
  *
  * @phpstan-import-type Change from WeekendDiff
+ * @phpstan-import-type Plan from CtrPlanner
  * @phpstan-type Result array{
  *     race: int, track_name: string, final_pos: int|null, points: int|null, dnf: bool,
  *     champ_pos: int|null, champ_pts: int|null
@@ -38,6 +42,17 @@ use App\Support\Sparkline;
  *     wear: array{parts: array<string, PartBias>, skipped: int, enough: bool},
  *     fuel: array{mean_gap_pct: float|null, n: int, skipped: int, enough: bool},
  *     corpus: array{mean_gap: float|null, n: int}
+ * }
+ * @phpstan-type BudgetRowView array{
+ *     race: int, track: string, replaced: string, running: string, income: string,
+ *     balance: string, balance_note: string, tone: 'ink'|'amber'|'red'
+ * }
+ * @phpstan-type BudgetView array{
+ *     race: int, computed_at: string, plan: Plan,
+ *     view: array{
+ *         target: string, spend: array{value: string, tone: 'ink'|'amber'|'red'},
+ *         rows: list<BudgetRowView>, partial: string
+ *     }
  * }
  */
 class SeasonService
@@ -54,6 +69,7 @@ class SeasonService
         private readonly TrackRepository $tracks,
         private readonly WearCalibration $wear,
         private readonly FuelCalibration $fuel,
+        private readonly SeasonBudgetRepository $budgets,
     ) {
     }
 
@@ -62,7 +78,7 @@ class SeasonService
      *     season: int|null, seasons: list<int>, has_races: bool,
      *     results: list<Result>, results_line: string,
      *     money: Money, changes: list<array{race: int, items: list<Change>}>,
-     *     calibration: Calibration
+     *     calibration: Calibration, budget: BudgetView|null
      * }
      */
     public function build(int $userId, ?int $season): array
@@ -81,6 +97,7 @@ class SeasonService
                 'money' => ['cash' => [], 'cash_line' => '', 'categories' => [], 'income' => 0, 'costs' => 0],
                 'changes' => [],
                 'calibration' => $this->calibration([]),
+                'budget' => null,
             ];
         }
 
@@ -100,7 +117,99 @@ class SeasonService
             'money' => $this->money($userId, $season),
             'changes' => $this->changes($userId, $season),
             'calibration' => $this->calibration($rows),
+            'budget' => $season === ($seasons[0] ?? null) ? $this->budget($userId, $season) : null,
         ];
+    }
+
+    /**
+     * The plan the Cockpit's engineer last saved, formatted for the page. The Season screen has none of the
+     * Cockpit's live inputs, so it only ever shows what was saved.
+     *
+     * @return BudgetView|null
+     */
+    private function budget(int $userId, int $season): ?array
+    {
+        try {
+            $saved = $this->budgets->find($userId, $season);
+        } catch (\Throwable $e) {
+            error_log('[Season] ' . $e::class);
+
+            return null;
+        }
+        if ($saved === null) {
+            return null;
+        }
+
+        /** @var Plan $plan */
+        $plan = $saved['plan'];
+
+        return [
+            'race' => $saved['race'],
+            'computed_at' => $saved['computed_at'],
+            'plan' => $plan,
+            'view' => [
+                'target' => $plan['target_kind'] === 'start'
+                    ? 'End above ' . Dollars::short($plan['target'])
+                    : 'Keep one race of costs in hand',
+                'spend' => $this->spend($plan),
+                'rows' => $this->budgetRows($plan),
+                'partial' => implode(', ', $plan['partial']),
+            ],
+        ];
+    }
+
+    /**
+     * @param Plan $plan
+     *
+     * @return array{value: string, tone: 'ink'|'amber'|'red'}
+     */
+    private function spend(array $plan): array
+    {
+        return match (true) {
+            $plan['mode'] === 'short' => [
+                'value' => 'Over budget by ' . Dollars::short($plan['shortfall'] ?? 0),
+                'tone' => 'red',
+            ],
+            $plan['envelope'] <= 0 => ['value' => 'Nothing to spare', 'tone' => 'amber'],
+            default => ['value' => Dollars::short($plan['envelope']), 'tone' => 'ink'],
+        };
+    }
+
+    /**
+     * @param Plan $plan
+     *
+     * @return list<BudgetRowView>
+     */
+    private function budgetRows(array $plan): array
+    {
+        $rows = [];
+        foreach ($plan['rows'] as $row) {
+            [$tone, $note] = match (true) {
+                $row['balance'] < 0 => ['red', ' · negative'],
+                $row['balance'] < $plan['target'] => ['amber', ' · below target'],
+                default => ['ink', ''],
+            };
+            $replaced = match (true) {
+                !$row['wear_known'] => 'wear unknown',
+                $row['replaced'] === [] => '—',
+                default => implode(', ', array_map(
+                    static fn (array $swap): string => $swap['part'] . ' · ' . Dollars::short($swap['cost']),
+                    $row['replaced'],
+                )),
+            };
+            $rows[] = [
+                'race' => $row['race'],
+                'track' => $row['track_name'] ?? '—',
+                'replaced' => $replaced,
+                'running' => Dollars::short($row['running']),
+                'income' => Dollars::short($row['income']),
+                'balance' => Dollars::short($row['balance']),
+                'balance_note' => $note,
+                'tone' => $tone,
+            ];
+        }
+
+        return $rows;
     }
 
     /**
