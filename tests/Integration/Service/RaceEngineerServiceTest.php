@@ -286,6 +286,26 @@ final class RaceEngineerServiceTest extends TestCase
         self::assertStringNotContainsString('stays in the red', array_column($lines, null, 'key')['ctr']['reason']);
     }
 
+    public function testWithoutAnOutlookAForcedSwapPartIsNotReportedAsStuckInTheRed(): void
+    {
+        $this->service->pin(99, self::SEASON, 'survive');
+        $engine = ['level' => 1, 'start' => 95, 'est' => 40.0, 'end' => 135.0, 'track_base' => 8.0];
+
+        $lines = $this->service->forCockpit(99, $this->cockpit([
+            'ctr' => 100,
+            'wear' => ['track_name' => 'Testring', 'laps' => 50, 'parts' => ['Engine' => $engine]],
+            'wear_advice' => [
+                'swap' => [['part' => 'Engine', 'level' => 1, 'start' => 95, 'est' => 40.0, 'end' => 135.0]],
+                'risky' => [], 'watch' => [], 'headline' => '',
+            ],
+            'swap_plan' => ['cost' => 200_000],
+        ]))['lines'];
+        $reason = array_column($lines, null, 'key')['ctr']['reason'];
+
+        self::assertStringContainsString('capped at the highest CTR that keeps parts out of the red', $reason);
+        self::assertStringNotContainsString('stays in the red', $reason);
+    }
+
     public function testWithoutWearTheCtrLineIsOmitted(): void
     {
         $this->seedPromotionFixture();
@@ -398,29 +418,32 @@ final class RaceEngineerServiceTest extends TestCase
     public function testAdviceIgnoresTheCurrentCtr(): void
     {
         $this->seedPromotionFixture();
+        $this->service->pin(self::USER, self::SEASON, 'survive');
 
-        $answers = [];
+        // The Cockpit's own advice changes with the CTR: at 100 it forces the Engine swap, lower it doesn't.
+        $lines = [];
         foreach ([0, 30, 60, 100] as $ctr) {
-            $lines = $this->service->forCockpit(self::USER, $this->cockpit(['ctr' => $ctr]))['lines'];
-            $line = array_column($lines, null, 'key')['ctr'];
-            $answers[] = [$line['answer'], $line['reason']];
+            $lines[$ctr] = $this->surviveCtrLine($ctr, $ctr === 100 ? $this->swapAt100() : $this->noSwap());
         }
 
-        self::assertCount(1, array_unique($answers, SORT_REGULAR));
+        self::assertLessThan(100, (int) substr($lines[0]['answer'], 4));
+        foreach ($lines as $line) {
+            self::assertSame($lines[0]['answer'], $line['answer']);
+            self::assertSame($lines[0]['reason'], $line['reason']);
+        }
     }
 
     public function testFollowingUseNGivesNAgain(): void
     {
         $this->seedPromotionFixture();
-        $ctrLine = fn (int $ctr): array => array_column(
-            $this->service->forCockpit(self::USER, $this->cockpit(['ctr' => $ctr]))['lines'],
-            null,
-            'key',
-        )['ctr'];
+        $this->service->pin(self::USER, self::SEASON, 'survive');
 
-        $first = $ctrLine(100);
+        $first = $this->surviveCtrLine(100, $this->swapAt100());
         $target = (int) substr($first['answer'], 4);
-        $followed = $ctrLine($target);
+        self::assertLessThan(100, $target);
+        self::assertSame('Use ' . $target, $first['action']['label'] ?? null);
+
+        $followed = $this->surviveCtrLine($target, $this->noSwap());
 
         self::assertSame($first['answer'], $followed['answer']);
         self::assertSame($first['reason'], $followed['reason']);
@@ -477,6 +500,53 @@ final class RaceEngineerServiceTest extends TestCase
 
         self::assertStringEndsWith('season costs unknown', array_column($lines, null, 'key')['ctr']['reason']);
         self::assertNull($this->budgets->find(self::USER, self::SEASON));
+    }
+
+    public function testNextRaceBaseMissingAPartGivesNoPlan(): void
+    {
+        $this->seedPromotionFixture();
+        $parts = $this->cockpit()['wear']['parts'];
+        $parts['Phantom'] = ['level' => 5, 'start' => 10, 'est' => 15.0, 'end' => 25.0, 'track_base' => 30.0];
+
+        $lines = $this->service->forCockpit(self::USER, $this->cockpit([
+            'wear' => ['track_name' => 'Testring', 'laps' => 50, 'parts' => $parts],
+        ]))['lines'];
+
+        self::assertStringEndsWith('season costs unknown', array_column($lines, null, 'key')['ctr']['reason']);
+        self::assertNull($this->budgets->find(self::USER, self::SEASON));
+    }
+
+    /** @return array{swap: list<array<string, mixed>>, risky: list<mixed>, watch: list<mixed>, headline: string} */
+    private function swapAt100(): array
+    {
+        return [
+            'swap' => [['part' => 'Engine', 'level' => 5, 'start' => 60, 'est' => 50.0, 'end' => 110.0]],
+            'risky' => [], 'watch' => [], 'headline' => '',
+        ];
+    }
+
+    /** @return array{swap: list<array<string, mixed>>, risky: list<mixed>, watch: list<mixed>, headline: string} */
+    private function noSwap(): array
+    {
+        return ['swap' => [], 'risky' => [], 'watch' => [], 'headline' => ''];
+    }
+
+    /**
+     * @param array<string, mixed> $advice
+     * @return array<string, mixed>
+     */
+    private function surviveCtrLine(int $ctr, array $advice): array
+    {
+        $lines = $this->service->forCockpit(self::USER, $this->cockpit([
+            'ctr' => $ctr,
+            'wear' => ['track_name' => 'Testring', 'laps' => 50, 'parts' => [
+                'Engine' => ['level' => 1, 'start' => 60, 'est' => 0.0, 'end' => 0.0, 'track_base' => 8.0],
+                'Brakes' => ['level' => 1, 'start' => 10, 'est' => 0.0, 'end' => 0.0, 'track_base' => 3.0],
+            ]],
+            'wear_advice' => $advice,
+        ]))['lines'];
+
+        return array_column($lines, null, 'key')['ctr'];
     }
 
     /** @param array<string, mixed> $overrides */
