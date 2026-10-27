@@ -79,4 +79,12 @@ final readonly class EngineerInputs
         public ?array $carStanding = null,
     ) {
     }
+
+    /**
+     * @param Plan $plan
+     */
+    public function withPlan(array $plan): self
+    {
+        return clone($this, ['plan' => $plan]);
+    }
 }

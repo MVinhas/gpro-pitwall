@@ -8,6 +8,7 @@ use App\Database\DatabaseSeeder;
 use App\Engineer\CtrCeiling;
 use App\Engineer\CtrPlanner;
 use App\Engineer\SeasonBudget;
+use App\Engineer\UpgradeRanker;
 use App\Repository\EconomyLedgerRepository;
 use App\Repository\SeasonBudgetRepository;
 use App\Repository\SeasonObjectiveRepository;
@@ -58,12 +59,23 @@ final class RaceEngineerServiceTest extends TestCase
         $this->ledger = new EconomyLedgerRepository($this->db);
         $this->budgets = new SeasonBudgetRepository($this->db);
 
+        $this->service = $this->engineer();
+
+        $this->db->exec(
+            "INSERT INTO tracks (name, laps, distance, fuel_per_lap, fuel_per_lap_wet, boost_dry, boost_wet,
+                overtaking, grip, tyre_wear, pit_time, wear_engine, wear_brakes, wear_electronics)
+             VALUES ('Testring', 50, 250.0, 2.0, 3.0, 0.3, 0.4, 'Normal', 'Normal', 'Normal', 20.0, 40, 30, 10)"
+        );
+    }
+
+    private function engineer(?SeasonBudgetRepository $budgets = null, ?UpgradeRanker $ranker = null): RaceEngineerService
+    {
         $wear = new CarWearService($this->db, [
             'driver_wear_factors' => ['concentration' => 1.0, 'talent' => 1.0, 'experience' => 1.0],
             'part_level_factors' => [1 => 1.05] + array_fill_keys(range(2, 11), 1.0),
         ]);
 
-        $this->service = new RaceEngineerService(
+        return new RaceEngineerService(
             $this->pins,
             $this->standings,
             $this->weekends,
@@ -72,7 +84,7 @@ final class RaceEngineerServiceTest extends TestCase
             $wear,
             new CarWearPlannerService($wear),
             new CtrPlanner(new CtrCeiling($wear), new SeasonBudget($wear)),
-            $this->budgets,
+            $budgets ?? $this->budgets,
             new CtrCeiling($wear),
             new RiskAdvisorService(),
             new BoostFuelService(),
@@ -80,12 +92,10 @@ final class RaceEngineerServiceTest extends TestCase
                 'conc' => 0.0, 'agg' => 0.0, 'exp' => 0.0, 'te' => 0.0,
                 'eng_lvl' => 0.0, 'ele_lvl' => 0.0, 'constant' => 0.0,
             ]]),
-        );
-
-        $this->db->exec(
-            "INSERT INTO tracks (name, laps, distance, fuel_per_lap, fuel_per_lap_wet, boost_dry, boost_wet,
-                overtaking, grip, tyre_wear, pit_time, wear_engine, wear_brakes, wear_electronics)
-             VALUES ('Testring', 50, 250.0, 2.0, 3.0, 0.3, 0.4, 'Normal', 'Normal', 'Normal', 20.0, 40, 30, 10)"
+            $ranker ?? new UpgradeRanker(new SeasonBudget($wear), [
+                'Engine' => ['power' => 3, 'handling' => 1, 'acceleration' => 1],
+                'Brakes' => ['power' => 0, 'handling' => 1, 'acceleration' => 2],
+            ]),
         );
     }
 
@@ -594,6 +604,184 @@ final class RaceEngineerServiceTest extends TestCase
         }
     }
 
+    public function testPlanSavesTheUpgradeRanking(): void
+    {
+        $this->seedPromotionFixture();
+        $this->seedWearTracks();
+
+        $this->service->forCockpit(self::USER, $this->upgradeCockpit(30));
+        $plan = $this->budgets->find(self::USER, self::SEASON)['plan'] ?? [];
+
+        self::assertArrayHasKey('upgrades', $plan);
+        self::assertSame(['Engine', 'Brakes'], array_column($plan['upgrades'], 'part'));
+        self::assertSame(1, $plan['upgrades'][0]['from']);
+        self::assertSame(2, $plan['upgrades'][0]['to']);
+        self::assertSame(1, $plan['v']);
+    }
+
+    public function testTheUpgradesLineAgreesWithTheSavedRanking(): void
+    {
+        $this->seedPromotionFixture();
+        $this->seedWearTracks();
+
+        $lines = $this->service->forCockpit(self::USER, $this->upgradeCockpit(30))['lines'];
+        $plan = $this->budgets->find(self::USER, self::SEASON)['plan'] ?? [];
+
+        self::assertArrayHasKey('upgrades', array_column($lines, null, 'key'));
+        self::assertNotSame([], $plan['upgrades'] ?? []);
+    }
+
+    public function testWholeCardIsIdenticalAtAnyCurrentCtr(): void
+    {
+        $this->seedPromotionFixture();
+        $this->seedWearTracks();
+        $this->movement('Testing session 1', -150_000, 8);
+
+        $cardAt = function (int $ctr): array {
+            $cockpit = $this->upgradeCockpit($ctr);
+            $cockpit['wear_advice'] = $this->adviceAt($ctr, $cockpit['wear']['parts']);
+
+            return $this->service->forCockpit(self::USER, $cockpit)['lines'];
+        };
+
+        // The CTR line's figure is the one place the current CTR is meant to show ("On N now").
+        $withoutCurrentCtr = static function (array $lines, int $ctr): array {
+            foreach ($lines as &$line) {
+                if ($line['key'] === 'ctr') {
+                    self::assertSame('On ' . $ctr . ' now', $line['figure']);
+                    $line['figure'] = null;
+                }
+            }
+
+            return $lines;
+        };
+        $low = $withoutCurrentCtr($cardAt(0), 0);
+        $high = $withoutCurrentCtr($cardAt(80), 80);
+
+        self::assertContains('upgrades', array_column($low, 'key'));
+        self::assertSame($low, $high);
+    }
+
+    public function testRankerFailureDropsOnlyTheUpgradesLine(): void
+    {
+        $this->seedPromotionFixture();
+        $this->seedWearTracks();
+        $baseline = array_column($this->service->forCockpit(self::USER, $this->upgradeCockpit(30))['lines'], 'key');
+        self::assertContains('upgrades', $baseline);
+
+        $wear = new CarWearService($this->db, [
+            'driver_wear_factors' => ['concentration' => 1.0, 'talent' => 1.0, 'experience' => 1.0],
+            'part_level_factors' => [1 => 1.05] + array_fill_keys(range(2, 11), 1.0),
+        ]);
+        $throwing = new readonly class (new SeasonBudget($wear), []) extends UpgradeRanker {
+            public function rank(
+                array $plan,
+                string $objective,
+                array $rounds,
+                array $demands,
+                array $parts,
+                array $prices,
+                array $options,
+                float $driverFactor,
+                int $cash,
+                int $committed,
+                int $income,
+                int $budget,
+            ): array {
+                throw new \RuntimeException('secret detail');
+            }
+        };
+        $service = $this->engineer(null, $throwing);
+
+        $log = tempnam(sys_get_temp_dir(), 'engineer-log');
+        self::assertIsString($log);
+        $prior = ini_set('error_log', $log);
+        try {
+            $lines = $service->forCockpit(self::USER, $this->upgradeCockpit(30))['lines'];
+        } finally {
+            ini_set('error_log', $prior === false ? '' : $prior);
+        }
+        $logged = (string) file_get_contents($log);
+        unlink($log);
+
+        self::assertSame(array_values(array_diff($baseline, ['upgrades'])), array_column($lines, 'key'));
+        self::assertSame(1, substr_count($logged, '[Engineer] '));
+        self::assertStringContainsString('[Engineer] RuntimeException', $logged);
+        self::assertStringNotContainsString('secret', $logged);
+        $plan = $this->budgets->find(self::USER, self::SEASON)['plan'] ?? [];
+        self::assertArrayNotHasKey('upgrades', $plan);
+        self::assertSame(10, $plan['race']);
+    }
+
+    public function testStaffNudgeFromGroupStaff(): void
+    {
+        $this->seedPromotionFixture();
+        $this->service->pin(self::USER, self::SEASON, 'promote');
+
+        $lines = $this->service->forCockpit(self::USER, $this->cockpit([
+            'group_staff' => $this->groupStaff(40, 20),
+        ]))['lines'];
+        $staff = array_column($lines, null, 'key')['staff'] ?? null;
+
+        self::assertNotNull($staff);
+        self::assertSame('Staff and facilities trail your group', $staff['answer']);
+        self::assertStringContainsString('20th of 40', $staff['reason']);
+    }
+
+    public function testNoNudgeWhenGroupStaffIsEmpty(): void
+    {
+        $this->seedPromotionFixture();
+        $this->service->pin(self::USER, self::SEASON, 'promote');
+
+        foreach ([[], ['managers' => []]] as $groupStaff) {
+            $lines = $this->service->forCockpit(self::USER, $this->cockpit(['group_staff' => $groupStaff]))['lines'];
+            self::assertNotContains('staff', array_column($lines, 'key'));
+        }
+        $lines = $this->service->forCockpit(self::USER, $this->cockpit())['lines'];
+        self::assertNotContains('staff', array_column($lines, 'key'));
+    }
+
+    /** @return array{managers: list<array<string, int>>} staff OA falls with rank; the manager is at $ownRank */
+    private function groupStaff(int $size, int $ownRank): array
+    {
+        $managers = [];
+        for ($rank = 1; $rank <= $size; $rank++) {
+            $managers[] = ['IDM' => $rank === $ownRank ? 7 : 100 + $rank, 'staffOA' => 1000 - $rank * 10];
+        }
+
+        return ['managers' => $managers];
+    }
+
+    /**
+     * A cockpit with a priced car that offers Engine and Brakes one level up, a two-race calendar with
+     * known PHA demand, and level 1 parts.
+     *
+     * @return array<string, mixed>
+     */
+    private function upgradeCockpit(int $ctr): array
+    {
+        $car = $this->pricedCar(200_000);
+        foreach (['Engine' => 300_000, 'Brakes' => 150_000] as $label => $price) {
+            $options = CarWearService::PARTS_MAP[$label]['options'];
+            $car[$options][] = ['value' => ['value' => 1, 'cost' => $price], 'newLvl' => '2'];
+        }
+        $demand = ['power' => 5, 'handling' => 3, 'acceleration' => 2];
+
+        return $this->cockpit([
+            'ctr' => $ctr,
+            'car' => $car,
+            'season_calendar' => [
+                ['race' => 10, 'track_name' => 'Gamma'] + $demand,
+                ['race' => 11, 'track_name' => 'Gamma'] + $demand,
+            ],
+            'track_name' => 'Gamma',
+            'wear' => ['track_name' => 'Gamma', 'laps' => 50, 'parts' => [
+                'Engine' => ['level' => 1, 'start' => 10, 'est' => 0.0, 'end' => 0.0, 'track_base' => 8.0],
+                'Brakes' => ['level' => 1, 'start' => 10, 'est' => 0.0, 'end' => 0.0, 'track_base' => 8.0],
+            ]],
+        ]);
+    }
+
     /**
      * The Cockpit's wear advice at the given CTR, the way WearAdvisorService buckets it.
      *
@@ -703,28 +891,7 @@ final class RaceEngineerServiceTest extends TestCase
                 throw new \PDOException('database is locked');
             }
         };
-        $wear = new CarWearService($this->db, [
-            'driver_wear_factors' => ['concentration' => 1.0, 'talent' => 1.0, 'experience' => 1.0],
-            'part_level_factors' => [1 => 1.05] + array_fill_keys(range(2, 11), 1.0),
-        ]);
-        $service = new RaceEngineerService(
-            $this->pins,
-            $this->standings,
-            $this->weekends,
-            $this->ledger,
-            new TrackRepository($this->db),
-            $wear,
-            new CarWearPlannerService($wear),
-            new CtrPlanner(new CtrCeiling($wear), new SeasonBudget($wear)),
-            $failing,
-            new CtrCeiling($wear),
-            new RiskAdvisorService(),
-            new BoostFuelService(),
-            new FuelModel(['fuel_factors' => [
-                'conc' => 0.0, 'agg' => 0.0, 'exp' => 0.0, 'te' => 0.0,
-                'eng_lvl' => 0.0, 'ele_lvl' => 0.0, 'constant' => 0.0,
-            ]]),
-        );
+        $service = $this->engineer($failing);
         $log = tempnam(sys_get_temp_dir(), 'engineer-log');
         self::assertIsString($log);
         $prior = ini_set('error_log', $log);
