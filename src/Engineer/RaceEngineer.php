@@ -25,8 +25,6 @@ final class RaceEngineer
     public const int BOOST_SETS = 3;
     public const int BOOST_LAPS_PER_SET = 3;
 
-    private const string SKIP = 'Skip — keep it for repairs';
-    private const string SKIP_BUDGET = 'Skip — over the budget';
     private const string NOTHING = 'Nothing to do';
     private const string STALE = 'After you save the race setup';
     private const string BUDGET_ANCHOR = '/season#season-budget';
@@ -323,9 +321,10 @@ final class RaceEngineer
         if (!self::affords($in, $pick['cost'], self::STAGE_TRAINING)) {
             return self::line(
                 'training',
-                self::skip($in),
+                'Skip ' . $pick['name'] . ' training',
                 self::skipReason($in, self::STAGE_TRAINING),
                 '#cockpit-training',
+                Money::short($pick['cost']),
             );
         }
 
@@ -350,13 +349,14 @@ final class RaceEngineer
 
         $anchor = '#cockpit-testing';
         $where = $in->testingTrack === null ? 'Test this week' : 'Test at ' . $in->testingTrack;
+        $skip = $in->testingTrack === null ? 'Skip testing this week' : 'Skip testing at ' . $in->testingTrack;
         $tunes = 'tunes for ' . ($target['track_name'] ?? 'race ' . $target['race'])
             . ($target['track_name'] === null ? '' : ' (race ' . $target['race'] . ')');
         $cost = $in->testingCost;
 
         if ($cost === null) {
             return self::objectiveIs($in, SeasonObjective::SURVIVE)
-                ? self::line('testing', self::SKIP, 'The session cost is unknown, and repairs come first', $anchor)
+                ? self::line('testing', $skip, 'The session cost is unknown, and repairs come first', $anchor)
                 : self::line(
                     'testing',
                     $where . ' — cost unknown',
@@ -366,7 +366,13 @@ final class RaceEngineer
         }
 
         if (!self::affords($in, $cost, self::STAGE_TESTING)) {
-            return self::line('testing', self::skip($in), self::skipReason($in, self::STAGE_TESTING), $anchor);
+            return self::line(
+                'testing',
+                $skip,
+                self::skipReason($in, self::STAGE_TESTING),
+                $anchor,
+                Money::short($cost),
+            );
         }
 
         return self::line('testing', $where, self::affordReason($in) . '; ' . $tunes, $anchor, Money::short($cost));
@@ -479,18 +485,12 @@ final class RaceEngineer
         return self::spendable($in) >= $cost + $reserve;
     }
 
-    /**
-     * Under a plan repairs are already inside the forecast, so the money is held for the budget, not repairs.
-     */
-    private static function skip(EngineerInputs $in): string
-    {
-        return $in->plan === null ? self::SKIP : self::SKIP_BUDGET;
-    }
-
     private static function skipReason(EngineerInputs $in, string $stage): string
     {
         if ($in->plan !== null) {
-            return 'Only ' . Money::short(self::envelopeLeft($in, $stage)) . ' left in the budget';
+            $left = self::envelopeLeft($in, $stage);
+
+            return $left > 0 ? 'Only ' . Money::short($left) . ' left in the budget' : 'Nothing left in the budget';
         }
 
         $known = $in->outlook['known'];
