@@ -7,10 +7,13 @@ namespace App\Service;
 use App\Calibration\LedgerCategories;
 use App\Engineer\CashOutlook;
 use App\Engineer\CtrCeiling;
+use App\Engineer\CtrPlanner;
 use App\Engineer\EngineerInputs;
 use App\Engineer\RaceEngineer;
 use App\Engineer\SeasonObjective;
+use App\Engineer\SeasonStart;
 use App\Repository\EconomyLedgerRepository;
+use App\Repository\SeasonBudgetRepository;
 use App\Repository\SeasonObjectiveRepository;
 use App\Repository\StandingsRepository;
 use App\Repository\TrackRepository;
@@ -23,6 +26,8 @@ use App\Repository\WeekendStateRepository;
  *
  * @phpstan-import-type InForce from SeasonObjective
  * @phpstan-import-type Line from RaceEngineer
+ * @phpstan-import-type Plan from CtrPlanner
+ * @phpstan-import-type Round from \App\Engineer\SeasonBudget
  * @phpstan-import-type Risk from EngineerInputs
  * @phpstan-import-type TestingTarget from EngineerInputs
  * @phpstan-import-type WearAdvice from EngineerInputs
@@ -40,6 +45,8 @@ class RaceEngineerService
         private readonly TrackRepository $tracks,
         private readonly CarWearService $wear,
         private readonly CarWearPlannerService $planner,
+        private readonly CtrPlanner $ctrPlanner,
+        private readonly SeasonBudgetRepository $budgets,
         private readonly CtrCeiling $ceiling,
         private readonly RiskAdvisorService $riskAdvisor,
         private readonly BoostFuelService $boost,
@@ -81,7 +88,15 @@ class RaceEngineerService
         );
         $objective = SeasonObjective::inForce($proposal, $this->pins->find($userId, $season));
 
-        $lines = RaceEngineer::brief($this->inputs($objective, $outlook, $cash, $season, $raceNb, $seasonLedger, $c));
+        $rounds = $this->rounds($c);
+        $plan = $this->plan($objective, $outlook, $cash, $raceNb, $rounds, $seasonLedger, $weekends, $c);
+        if ($plan !== null) {
+            $this->budgets->save($userId, $season, $raceNb, $plan);
+        }
+
+        $lines = RaceEngineer::brief(
+            $this->inputs($objective, $outlook, $cash, $raceNb, $seasonLedger, $rounds, $plan, $c),
+        );
 
         return ['objective' => $objective, 'lines' => $lines, 'season' => $season];
     }
@@ -106,15 +121,18 @@ class RaceEngineerService
      * @param InForce $objective
      * @param array{known: bool, committed: ?int, income: ?int, free_cash: ?int, end_committed: ?int} $outlook
      * @param list<array<string, mixed>> $seasonLedger
+     * @param list<Round> $rounds
+     * @param ?Plan $plan
      * @param array<string, mixed> $c
      */
     private function inputs(
         array $objective,
         array $outlook,
         int $cash,
-        int $season,
         int $raceNb,
         array $seasonLedger,
+        array $rounds,
+        ?array $plan,
         array $c,
     ): EngineerInputs {
         $parts = $this->wearParts($c);
@@ -158,7 +176,7 @@ class RaceEngineerService
             ctrCeiling: $ceiling,
             ctrSurvive: $survive,
             alwaysRed: $alwaysRed,
-            pushAdvice: $this->pushAdvice($c, $raceNb),
+            pushAdvice: $this->pushAdvice($c, $rounds, $raceNb),
             wearAdvice: $wearAdvice,
             forcedSwapCost: $this->forcedSwapCost($forced, self::arrOrNull($c['swap_plan'] ?? null)),
             optionalSwaps: $this->optionalSwaps($wearAdvice, self::arr($c['car'] ?? null)),
@@ -170,13 +188,13 @@ class RaceEngineerService
             risk: $this->risk($driver, $track, $weather, $stale),
             boostLitres: $this->boostLitres($track, $weather, $stale),
             weatherStale: $stale,
-            plan: null,
+            plan: $plan,
         );
     }
 
     /**
      * @param array<string, mixed> $c
-     * @return ?array<string, array<string, mixed>>
+     * @return ?array<string, array{level: int, start: int|float, track_base: int|float, training?: int|float}>
      */
     private function wearParts(array $c): ?array
     {
@@ -185,23 +203,70 @@ class RaceEngineerService
             return null;
         }
 
-        /** @var array<string, array<string, mixed>> $parts */
+        /** @var array<string, array{level: int, start: int|float, track_base: int|float, training?: int|float}> $parts */
         $parts = $wear['parts'];
 
         return $parts;
     }
 
     /**
+     * Built only when the budget can be forecast: costs known, parts known, a race left, and the
+     * next race's track wear known for every part. Otherwise the engineer falls back to the safety CTR.
+     *
+     * @param InForce $objective
+     * @param array{known: bool, committed: ?int, income: ?int, free_cash: ?int, end_committed: ?int} $outlook
+     * @param list<Round> $rounds
+     * @param list<array<string, mixed>> $seasonLedger
+     * @param list<array<string, mixed>> $weekends
      * @param array<string, mixed> $c
+     * @return ?Plan
      */
-    private function pushAdvice(array $c, int $raceNb): ?string
-    {
-        $calendar = self::list($c['season_calendar'] ?? null);
-        if ($calendar === []) {
+    private function plan(
+        array $objective,
+        array $outlook,
+        int $cash,
+        int $raceNb,
+        array $rounds,
+        array $seasonLedger,
+        array $weekends,
+        array $c,
+    ): ?array {
+        $parts = $this->wearParts($c);
+        if (!$outlook['known'] || $parts === null || $raceNb > SeasonObjective::RACES) {
+            return null;
+        }
+
+        $remaining = array_values(array_filter(
+            $rounds,
+            static fn (array $round): bool => $round['race'] >= $raceNb,
+        ));
+        $nextBase = $remaining[0]['base'] ?? null;
+        if ($nextBase === null || array_diff_key($parts, $nextBase) !== []) {
             return null;
         }
 
         $car = self::arr($c['car'] ?? null);
+
+        return $this->ctrPlanner->plan(
+            $objective['objective'] ?? SeasonObjective::HOLD,
+            $remaining,
+            $parts,
+            $this->planner->partPrices($car),
+            $this->wear->driverFactor(self::arr($c['driver'] ?? null)),
+            $cash,
+            (int) $outlook['committed'],
+            (int) $outlook['income'],
+            SeasonStart::cash($seasonLedger, $weekends),
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $c
+     * @return list<Round>
+     */
+    private function rounds(array $c): array
+    {
+        $calendar = self::list($c['season_calendar'] ?? null);
         $names = [];
         foreach ($calendar as $row) {
             $name = (string) ($row['track_name'] ?? '');
@@ -210,7 +275,8 @@ class RaceEngineerService
             }
         }
         $bases = $this->wear->trackBaseWearByName($names);
-        $rounds = array_map(static function (array $row) use ($bases): array {
+
+        return array_map(static function (array $row) use ($bases): array {
             $name = $row['track_name'] ?? null;
 
             return [
@@ -219,7 +285,19 @@ class RaceEngineerService
                 'base' => $name !== null ? ($bases[(string) $name] ?? null) : null,
             ];
         }, $calendar);
+    }
 
+    /**
+     * @param array<string, mixed> $c
+     * @param list<Round> $rounds
+     */
+    private function pushAdvice(array $c, array $rounds, int $raceNb): ?string
+    {
+        if ($rounds === []) {
+            return null;
+        }
+
+        $car = self::arr($c['car'] ?? null);
         $rows = $this->planner->seasonWear(
             $rounds,
             $raceNb,

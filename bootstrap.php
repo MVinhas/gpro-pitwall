@@ -507,6 +507,8 @@ $container['controller.car_wear'] = new \App\Controller\CarWearController(
 $container['repository.season_objective'] = new \App\Repository\SeasonObjectiveRepository($container['db']);
 $container['repository.season_budget'] = new \App\Repository\SeasonBudgetRepository($container['db']);
 
+$ctrCeiling = new \App\Engineer\CtrCeiling($container['service.car_wear']);
+
 $container['service.race_engineer'] = new \App\Service\RaceEngineerService(
     $container['repository.season_objective'],
     new \App\Repository\StandingsRepository($container['db']),
@@ -515,7 +517,9 @@ $container['service.race_engineer'] = new \App\Service\RaceEngineerService(
     $container['repo.track'],
     $container['service.car_wear'],
     $container['service.car_wear_planner'],
-    new \App\Engineer\CtrCeiling($container['service.car_wear']),
+    new \App\Engineer\CtrPlanner($ctrCeiling, new \App\Engineer\SeasonBudget($container['service.car_wear'])),
+    $container['repository.season_budget'],
+    $ctrCeiling,
     $container['service.risk_advisor'],
     $container['service.boost_fuel'],
     $container['service.fuel_model'],
