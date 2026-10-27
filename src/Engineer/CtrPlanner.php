@@ -9,11 +9,12 @@ use InvalidArgumentException;
 
 /**
  * @phpstan-import-type BudgetRow from SeasonBudget
+ * @phpstan-import-type Upgrade from UpgradeRanker
  * @phpstan-type Plan array{
  *   v: int, ctr: int, mode: 'nurse'|'push'|'short', safety: int,
  *   swaps: list<array{part: string, cost: int}>, refused_swap_cost: ?int,
  *   target: int, target_kind: 'cushion'|'start'|'start_out_of_reach', cushion: int, season_start: ?int,
- *   envelope: int, shortfall: ?int, rows: list<BudgetRow>, partial: list<string>, race: int}
+ *   envelope: int, shortfall: ?int, rows: list<BudgetRow>, partial: list<string>, race: int, upgrades?: list<Upgrade>}
  */
 final readonly class CtrPlanner
 {
@@ -21,6 +22,16 @@ final readonly class CtrPlanner
 
     public function __construct(private CtrCeiling $ceiling, private SeasonBudget $budget)
     {
+    }
+
+    /**
+     * The wear (%) at which a part counts as gone: Survive plays it safer than the others.
+     */
+    public static function limit(string $objective): int
+    {
+        return $objective === SeasonObjective::SURVIVE
+            ? WearAdvisorService::THRESHOLD_RISKY
+            : WearAdvisorService::THRESHOLD_SWAP;
     }
 
     /**
@@ -50,7 +61,7 @@ final readonly class CtrPlanner
         }
 
         $survive = $objective === SeasonObjective::SURVIVE;
-        $limit = $survive ? WearAdvisorService::THRESHOLD_RISKY : WearAdvisorService::THRESHOLD_SWAP;
+        $limit = self::limit($objective);
 
         $safety = $this->ceiling->for($parts, $driverFactor, $limit);
         if ($survive) {

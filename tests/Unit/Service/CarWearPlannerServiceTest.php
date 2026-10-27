@@ -377,6 +377,34 @@ final class CarWearPlannerServiceTest extends TestCase
         $this->assertNull($prices['Brakes']);
     }
 
+    public function testUpgradeOptionsListEnabledHigherLevelsWithPrices(): void
+    {
+        $options = $this->planner()->upgradeOptions([
+            'lvlEngine'     => 7,
+            'engineOptions' => [
+                ['value' => ['value' => 0, 'cost' => 0], 'newLvl' => '7', 'text' => "Don't replace"],
+                ['value' => ['value' => 9, 'cost' => 4101586], 'newLvl' => '9'],
+                ['value' => ['value' => 8, 'cost' => 3311737], 'newLvl' => '8'],
+                ['value' => ['value' => 10, 'cost' => 5000000], 'newLvl' => '10', 'disabled' => 'true'],
+                ['value' => ['value' => 7, 'cost' => 2500000], 'newLvl' => '7'],
+                ['value' => ['value' => 6, 'cost' => 2000000], 'newLvl' => '6'],
+                ['value' => ['value' => -1, 'cost' => 0], 'newLvl' => '8'],
+            ],
+            'lvlBrakes'     => 9,
+            'brakesOptions' => [
+                ['value' => ['value' => 0, 'cost' => 0], 'newLvl' => '9'],
+                ['value' => ['value' => 9, 'cost' => 6000000], 'newLvl' => '9'],
+            ],
+        ]);
+
+        $this->assertSame(
+            [['level' => 8, 'price' => 3311737], ['level' => 9, 'price' => 4101586]],
+            $options['Engine'],
+        );
+        $this->assertSame([], $options['Brakes'] ?? []);
+        $this->assertSame([], $options['Chassis'] ?? []);
+    }
+
     public function testSeasonAdvisesPushingWhereTheWearLandsOnCheapParts(): void
     {
         // Engine costs ten times any other part. Round A wears the engine,
