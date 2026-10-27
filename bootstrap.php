@@ -505,6 +505,7 @@ $container['controller.car_wear'] = new \App\Controller\CarWearController(
 );
 
 $container['repository.season_objective'] = new \App\Repository\SeasonObjectiveRepository($container['db']);
+$container['repository.season_budget'] = new \App\Repository\SeasonBudgetRepository($container['db']);
 
 $container['service.race_engineer'] = new \App\Service\RaceEngineerService(
     $container['repository.season_objective'],

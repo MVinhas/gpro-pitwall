@@ -16,7 +16,7 @@ class DatabaseSeeder
      * calls migrate() on every request; this version lets a warm database skip
      * the entire DDL + scan + legacy-encryption pass.
      */
-    private const int SCHEMA_VERSION = 18;
+    private const int SCHEMA_VERSION = 19;
 
     /**
      * @param array<string, string> $statsSchema
@@ -71,6 +71,7 @@ class DatabaseSeeder
         $this->createUserApiArchiveTable();
         $this->createProjectionTables();
         $this->createSeasonObjectiveTable();
+        $this->createSeasonBudgetTable();
         $this->dropDeprecatedTables();
 
 
@@ -802,6 +803,29 @@ class DatabaseSeeder
         $this->db->exec(
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_user_season_objective
              ON user_season_objective (user_id, season)"
+        );
+    }
+
+    /**
+     * The engineer's latest season plan, kept so the Season screen can show it
+     * without the car, calendar and driver inputs the Cockpit computes it from.
+     * Derived, so a lost row is rebuilt by the next Cockpit visit.
+     */
+    private function createSeasonBudgetTable(): void
+    {
+        $this->db->exec(
+            "CREATE TABLE IF NOT EXISTS user_season_budget (
+                user_id INTEGER NOT NULL,
+                season INTEGER NOT NULL,
+                race INTEGER NOT NULL,
+                plan_json TEXT NOT NULL,
+                computed_at TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )"
+        );
+        $this->db->exec(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_user_season_budget
+             ON user_season_budget (user_id, season)"
         );
     }
 
