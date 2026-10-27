@@ -91,7 +91,12 @@ class RaceEngineerService
         $rounds = $this->rounds($c);
         $plan = $this->plan($objective, $outlook, $cash, $raceNb, $rounds, $seasonLedger, $weekends, $c);
         if ($plan !== null) {
-            $this->budgets->save($userId, $season, $raceNb, $plan);
+            try {
+                $this->budgets->save($userId, $season, $raceNb, $plan);
+            } catch (\Throwable $e) {
+                // Saving only feeds the Season screen; the advice stands without it.
+                error_log('[Engineer] ' . $e::class);
+            }
         }
 
         $lines = RaceEngineer::brief(
@@ -159,6 +164,7 @@ class RaceEngineerService
             ));
         }
         $testingTrack = $c['testing_track'] ?? null;
+        $car = self::arr($c['car'] ?? null);
 
         $targets = self::list($c['testing_targets'] ?? null);
         $picks = self::list($c['training_picks'] ?? null);
@@ -179,7 +185,9 @@ class RaceEngineerService
             pushAdvice: $this->pushAdvice($c, $rounds, $raceNb),
             wearAdvice: $wearAdvice,
             forcedSwapCost: $this->forcedSwapCost($forced, self::arrOrNull($c['swap_plan'] ?? null)),
-            optionalSwaps: $this->optionalSwaps($wearAdvice, self::arr($c['car'] ?? null)),
+            optionalSwaps: $plan !== null && $parts !== null
+                ? $this->plannedOptionalSwaps($plan, $parts, $driverFactor, $car)
+                : $this->optionalSwaps($wearAdvice, $car),
             trainingPick: $pick,
             testingTarget: $target,
             testingOpen: (bool) ($c['testing_open'] ?? false),
@@ -189,7 +197,71 @@ class RaceEngineerService
             boostLitres: $this->boostLitres($track, $weather, $stale),
             weatherStale: $stale,
             plan: $plan,
+            redZoneSwaps: $plan !== null && $parts !== null ? $this->redZoneSwaps($plan, $parts, $driverFactor) : [],
         );
+    }
+
+    /**
+     * Under a plan the optional swaps are the parts that would end the next race in the red at the plan's CTR,
+     * not at the manager's current one, so following "Use N" changes nothing. Parts the plan already
+     * replaces are paid for inside the envelope.
+     *
+     * @param Plan $plan
+     * @param array<string, array{level: int, start: int|float, track_base: int|float, training?: int|float}> $parts
+     * @param array<string, mixed> $car
+     * @return list<array{part: string, cost: int}>
+     */
+    private function plannedOptionalSwaps(array $plan, array $parts, float $driverFactor, array $car): array
+    {
+        $prices = $this->planner->partPrices($car);
+        $replaced = array_column($plan['rows'][0]['replaced'], 'part');
+        $out = [];
+        foreach ($parts as $label => $part) {
+            $end = $this->endAt($part, $driverFactor, $plan['ctr']);
+            $price = $prices[$label] ?? null;
+            if (
+                $end >= WearAdvisorService::THRESHOLD_RISKY
+                && $end < WearAdvisorService::THRESHOLD_SWAP
+                && !in_array($label, $replaced, true)
+                && $price !== null
+            ) {
+                $out[] = ['part' => (string) $label, 'cost' => $price];
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Parts the plan replaces before the next race that would only finish it in the red at the plan's CTR
+     * (a Survive plan swaps at 90), so the engineer doesn't call them a break.
+     *
+     * @param Plan $plan
+     * @param array<string, array{level: int, start: int|float, track_base: int|float, training?: int|float}> $parts
+     * @return list<string>
+     */
+    private function redZoneSwaps(array $plan, array $parts, float $driverFactor): array
+    {
+        $out = [];
+        foreach ($plan['rows'][0]['replaced'] as $swap) {
+            $part = $parts[$swap['part']] ?? null;
+            $end = $part === null ? null : $this->endAt($part, $driverFactor, $plan['ctr']);
+            if ($end !== null && $end < WearAdvisorService::THRESHOLD_SWAP) {
+                $out[] = $swap['part'];
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param array{level: int, start: int|float, track_base: int|float, training?: int|float} $part
+     */
+    private function endAt(array $part, float $driverFactor, int $ctr): float
+    {
+        $raceWear = $this->wear->raceWear((float) $part['track_base'], (int) $part['level'], $driverFactor, $ctr);
+
+        return (float) $part['start'] + (float) ($part['training'] ?? 0) + round($raceWear, 1);
     }
 
     /**
@@ -210,8 +282,9 @@ class RaceEngineerService
     }
 
     /**
-     * Built only when the budget can be forecast: costs known, parts known, a race left, and the
-     * next race's track wear known for every part. Otherwise the engineer falls back to the safety CTR.
+     * Built only when the budget can be forecast: costs known, parts known, a race left, the calendar's
+     * first remaining round being the next race, and its track wear known for every part. Otherwise the
+     * engineer falls back to the safety CTR.
      *
      * @param InForce $objective
      * @param array{known: bool, committed: ?int, income: ?int, free_cash: ?int, end_committed: ?int} $outlook
@@ -232,7 +305,7 @@ class RaceEngineerService
         array $c,
     ): ?array {
         $parts = $this->wearParts($c);
-        if (!$outlook['known'] || $parts === null || $raceNb > SeasonObjective::RACES) {
+        if (!$outlook['known'] || $parts === null || $raceNb < 1 || $raceNb > SeasonObjective::RACES) {
             return null;
         }
 
@@ -240,7 +313,11 @@ class RaceEngineerService
             $rounds,
             static fn (array $round): bool => $round['race'] >= $raceNb,
         ));
-        $nextBase = $remaining[0]['base'] ?? null;
+        // The first round must be the next race itself: a calendar gap would price the wrong track.
+        if (($remaining[0]['race'] ?? null) !== $raceNb) {
+            return null;
+        }
+        $nextBase = $remaining[0]['base'];
         if ($nextBase === null || array_diff_key($parts, $nextBase) !== []) {
             return null;
         }

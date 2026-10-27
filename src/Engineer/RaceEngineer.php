@@ -26,6 +26,7 @@ final class RaceEngineer
     public const int BOOST_LAPS_PER_SET = 3;
 
     private const string SKIP = 'Skip — keep it for repairs';
+    private const string SKIP_BUDGET = 'Skip — over the budget';
     private const string NOTHING = 'Nothing to do';
     private const string STALE = 'After you save the race setup';
     private const string BUDGET_ANCHOR = '/season#season-budget';
@@ -171,6 +172,7 @@ final class RaceEngineer
             $plan['target_kind'] === 'start_out_of_reach' => 'Keeps one race of costs in hand (your ' . $start
                 . ' start is out of reach)',
             self::objectiveIs($in, SeasonObjective::PROMOTE) => 'Keeps one race of costs in hand',
+            $plan['season_start'] !== null => 'Keeps one race of costs in hand (above your ' . $start . ' start)',
             default => 'Keeps one race of costs in hand (season start unknown)',
         };
 
@@ -189,7 +191,8 @@ final class RaceEngineer
 
         $survive = self::objectiveIs($in, SeasonObjective::SURVIVE);
         $rated = $in->pushAdvice === null ? '' : 'Race rated ' . $in->pushAdvice . ': ';
-        $alwaysRed = $survive && $in->alwaysRed !== [];
+        // A plan replaces the parts that would stay in the red, so none is stuck there.
+        $alwaysRed = $survive && $in->alwaysRed !== [] && $plan === null;
 
         if ($plan !== null) {
             $target = $plan['ctr'];
@@ -200,12 +203,11 @@ final class RaceEngineer
                 $plan['mode'] === 'push' && $plan['swaps'] !== [] => $rated . 'swap ' . $swapNames . ' ('
                     . Money::short(array_sum(array_column($plan['swaps'], 'cost')))
                     . '); the budget covers the swaps',
-                $alwaysRed => self::alwaysRedReason($in->alwaysRed),
+                $plan['ctr'] < $plan['safety'] => $rated . 'the highest CTR the budget covers to season end',
                 $survive => $rated . 'capped at the highest CTR that keeps parts out of the red',
                 $plan['mode'] === 'nurse' && $plan['refused_swap_cost'] !== null => $rated . 'pushing past '
                     . $plan['safety'] . ' needs ' . Money::short($plan['refused_swap_cost'])
                     . " of swaps the budget can't cover",
-                $plan['ctr'] < $plan['safety'] => $rated . 'the highest CTR the budget covers to season end',
                 default => $rated . 'the highest CTR where no part breaks',
             };
         } else {
@@ -282,11 +284,30 @@ final class RaceEngineer
         $tone = $plan === null && self::spendable($in) < $forcedCost ? 'red' : 'amber';
         $answer = 'Swap ' . implode(', ', $forced) . ($optional === [] ? '' : ', optionally ' . $optionalNames);
         $reason = $optional === []
-            ? 'Would break this race if kept'
+            ? self::keptReason($forced, $plan === null ? [] : $in->redZoneSwaps)
             : 'Forced swaps break this race; the optional ones are in the red and '
                 . self::affordClause($in, 'them');
 
         return self::line('parts', $answer, $reason, '#cockpit-wear', $figure, $tone);
+    }
+
+    /**
+     * What keeping the swapped parts would cost: a break, or (under a Survive plan) only a finish in the red.
+     *
+     * @param list<string> $swapped
+     * @param list<string> $redZone
+     */
+    private static function keptReason(array $swapped, array $redZone): string
+    {
+        $red = array_values(array_intersect($swapped, $redZone));
+        $breaks = array_values(array_diff($swapped, $redZone));
+
+        return match (true) {
+            $red === [] => 'Would break this race if kept',
+            $breaks === [] => 'Would finish in the red if kept',
+            default => implode(', ', $breaks) . ' would break this race if kept; ' . implode(', ', $red)
+                . ' would finish in the red',
+        };
     }
 
     /**
@@ -300,7 +321,12 @@ final class RaceEngineer
         }
 
         if (!self::affords($in, $pick['cost'], self::STAGE_TRAINING)) {
-            return self::line('training', self::SKIP, self::skipReason($in, self::STAGE_TRAINING), '#cockpit-training');
+            return self::line(
+                'training',
+                self::skip($in),
+                self::skipReason($in, self::STAGE_TRAINING),
+                '#cockpit-training',
+            );
         }
 
         return self::line(
@@ -340,7 +366,7 @@ final class RaceEngineer
         }
 
         if (!self::affords($in, $cost, self::STAGE_TESTING)) {
-            return self::line('testing', self::SKIP, self::skipReason($in, self::STAGE_TESTING), '#cockpit-testing');
+            return self::line('testing', self::skip($in), self::skipReason($in, self::STAGE_TESTING), $anchor);
         }
 
         return self::line('testing', $where, self::affordReason($in) . '; ' . $tunes, $anchor, Money::short($cost));
@@ -411,8 +437,13 @@ final class RaceEngineer
         $remaining = $in->plan === null
             ? self::spendable($in) - ($in->forcedSwapCost ?? 0)
             : $in->plan['envelope'];
+        // A part the plan already replaces in the next race is paid for inside the envelope.
+        $planned = $in->plan === null ? [] : array_column($in->plan['rows'][0]['replaced'], 'part');
         $offered = [];
         foreach ($in->optionalSwaps as $swap) {
+            if (in_array($swap['part'], $planned, true)) {
+                continue;
+            }
             if ($swap['cost'] <= $remaining) {
                 $offered[] = $swap;
                 $remaining -= $swap['cost'];
@@ -446,6 +477,14 @@ final class RaceEngineer
         $reserve = self::objectiveIs($in, SeasonObjective::SURVIVE) ? $in->forcedSwapCost ?? 0 : 0;
 
         return self::spendable($in) >= $cost + $reserve;
+    }
+
+    /**
+     * Under a plan repairs are already inside the forecast, so the money is held for the budget, not repairs.
+     */
+    private static function skip(EngineerInputs $in): string
+    {
+        return $in->plan === null ? self::SKIP : self::SKIP_BUDGET;
     }
 
     private static function skipReason(EngineerInputs $in, string $stage): string

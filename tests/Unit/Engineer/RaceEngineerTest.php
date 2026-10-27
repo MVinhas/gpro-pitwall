@@ -750,6 +750,13 @@ final class RaceEngineerTest extends TestCase
         $this->assertSame($hold['reason'], $survive['reason']);
     }
 
+    public function testCashCushionReasonWhenTheStartIsBelowTheCushion(): void
+    {
+        $line = $this->line($this->planned(['season_start' => 1_000_000]), 'cash');
+
+        $this->assertSame('Keeps one race of costs in hand (above your $1M start)', $line['reason']);
+    }
+
     public function testCashStartOutOfReachNamesTheStart(): void
     {
         $line = $this->line($this->planned(['target_kind' => 'start_out_of_reach', 'season_start' => 12_500_000]), 'cash');
@@ -838,11 +845,31 @@ final class RaceEngineerTest extends TestCase
     public function testCtrSurviveReasonsComeBeforeTheNurseOnes(): void
     {
         $base = ['objective' => $this->objective(SeasonObjective::SURVIVE)];
-        $plain = $this->line($this->planned(['ctr' => 20, 'safety' => 35], $base), 'ctr');
-        $red = $this->line($this->planned(['ctr' => 35, 'safety' => 35], $base + ['alwaysRed' => ['Engine']]), 'ctr');
+        $budget = $this->line($this->planned(['ctr' => 20, 'safety' => 35], $base), 'ctr');
+        $capped = $this->line($this->planned(['ctr' => 35, 'safety' => 35, 'refused_swap_cost' => 250_000], $base), 'ctr');
 
-        $this->assertSame('Race rated Normal: capped at the highest CTR that keeps parts out of the red', $plain['reason']);
-        $this->assertSame('Engine stays in the red at any CTR; capped where nothing breaks', $red['reason']);
+        $this->assertSame('Race rated Normal: the highest CTR the budget covers to season end', $budget['reason']);
+        $this->assertSame('Race rated Normal: capped at the highest CTR that keeps parts out of the red', $capped['reason']);
+    }
+
+    public function testCtrUnderASurvivePlanDoesNotCallTheReplacedPartsStuckInTheRed(): void
+    {
+        $in = $this->planned(['ctr' => 35, 'safety' => 35], [
+            'objective' => $this->objective(SeasonObjective::SURVIVE),
+            'alwaysRed' => ['Engine'],
+        ]);
+
+        $this->assertSame(
+            'Race rated Normal: capped at the highest CTR that keeps parts out of the red',
+            $this->line($in, 'ctr')['reason'],
+        );
+    }
+
+    public function testCtrBelowSafetyBlamesTheBudgetEvenWithARefusedCost(): void
+    {
+        $line = $this->line($this->planned(['ctr' => 25, 'safety' => 40, 'refused_swap_cost' => 250_000]), 'ctr');
+
+        $this->assertSame('Race rated Normal: the highest CTR the budget covers to season end', $line['reason']);
     }
 
     public function testCtrNurseNamesTheRefusedSwaps(): void
@@ -951,7 +978,7 @@ final class RaceEngineerTest extends TestCase
     {
         $line = $this->line($this->planned(['envelope' => 50_000]), 'training');
 
-        $this->assertSame('Skip — keep it for repairs', $line['answer']);
+        $this->assertSame('Skip — over the budget', $line['answer']);
         $this->assertSame('Only $50k left in the budget', $line['reason']);
     }
 
@@ -974,7 +1001,7 @@ final class RaceEngineerTest extends TestCase
         $testing = $this->line($in, 'testing');
 
         $this->assertSame('Train Talent course', $training['answer']);
-        $this->assertSame('Skip — keep it for repairs', $testing['answer']);
+        $this->assertSame('Skip — over the budget', $testing['answer']);
         $this->assertSame('Only $50k left in the budget', $testing['reason']);
     }
 
@@ -987,7 +1014,7 @@ final class RaceEngineerTest extends TestCase
 
         $training = $this->line($in, 'training');
 
-        $this->assertSame('Skip — keep it for repairs', $training['answer']);
+        $this->assertSame('Skip — over the budget', $training['answer']);
         $this->assertSame('Only $50k left in the budget', $training['reason']);
     }
 
@@ -998,8 +1025,74 @@ final class RaceEngineerTest extends TestCase
             'testingCost' => 120_000,
         ]);
 
-        $this->assertSame('Skip — keep it for repairs', $this->line($in, 'training')['answer']);
+        $this->assertSame('Skip — over the budget', $this->line($in, 'training')['answer']);
         $this->assertSame('Test at Silverstone', $this->line($in, 'testing')['answer']);
+    }
+
+    public function testAPushSwapOfferedAgainAsOptionalIsNotChargedTwice(): void
+    {
+        $replaced = [['part' => 'Engine', 'cost' => 100_000]];
+        $in = $this->planned(
+            ['mode' => 'push', 'ctr' => 100, 'safety' => 81, 'swaps' => $replaced, 'envelope' => 750_000,
+             'rows' => $this->rowsReplacing($replaced)],
+            [
+                'objective' => $this->objective(SeasonObjective::PROMOTE),
+                'optionalSwaps' => [['part' => 'Engine', 'cost' => 100_000]],
+                'trainingPick' => ['name' => 'Talent course', 'score' => 1.0, 'cost' => 700_000, 'gains' => []],
+            ],
+        );
+
+        $training = $this->line($in, 'training');
+
+        $this->assertSame('Train Talent course', $training['answer']);
+        $this->assertSame('The budget covers it', $training['reason']);
+    }
+
+    public function testSurvivePlanRedZoneSwapIsNotCalledABreak(): void
+    {
+        $replaced = [['part' => 'Engine', 'cost' => 100_000]];
+        $in = $this->planned(['ctr' => 12, 'safety' => 12, 'rows' => $this->rowsReplacing($replaced)], [
+            'objective' => $this->objective(SeasonObjective::SURVIVE),
+            'alwaysRed' => ['Engine'],
+            'redZoneSwaps' => ['Engine'],
+        ]);
+
+        $parts = $this->line($in, 'parts');
+        $ctr = $this->line($in, 'ctr');
+
+        $this->assertSame('Swap Engine', $parts['answer']);
+        $this->assertSame('Would finish in the red if kept', $parts['reason']);
+        $this->assertStringNotContainsString('stays in the red', $ctr['reason']);
+    }
+
+    public function testAPlanSwapMixingBreaksAndRedZoneNamesEach(): void
+    {
+        $replaced = [['part' => 'Engine', 'cost' => 100_000], ['part' => 'Gearbox', 'cost' => 50_000]];
+        $in = $this->planned(['ctr' => 12, 'safety' => 12, 'rows' => $this->rowsReplacing($replaced)], [
+            'objective' => $this->objective(SeasonObjective::SURVIVE),
+            'redZoneSwaps' => ['Gearbox'],
+        ]);
+
+        $this->assertSame(
+            'Engine would break this race if kept; Gearbox would finish in the red',
+            $this->line($in, 'parts')['reason'],
+        );
+    }
+
+    public function testPushPartsFigureCountsForcedSwapsWhileTheCtrReasonCountsOnlyThePushSwaps(): void
+    {
+        // The Chassis is past the limit at any CTR, so it is no push swap; the parts line still pays for it.
+        $replaced = [['part' => 'Chassis', 'cost' => 300_000], ['part' => 'Engine', 'cost' => 100_000]];
+        $in = $this->planned([
+            'mode' => 'push', 'ctr' => 90, 'safety' => 60,
+            'swaps' => [['part' => 'Engine', 'cost' => 100_000]], 'rows' => $this->rowsReplacing($replaced),
+        ]);
+
+        $this->assertSame('$400k', $this->line($in, 'parts')['figure']);
+        $this->assertSame(
+            'Race rated Normal: swap Engine ($100k); the budget covers the swaps',
+            $this->line($in, 'ctr')['reason'],
+        );
     }
 
     public function testNoLineClaimsAGain(): void

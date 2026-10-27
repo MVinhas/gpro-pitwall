@@ -46,6 +46,8 @@ final readonly class EngineerInputs
      * @param ?TestingTarget $testingTarget
      * @param ?Risk $risk
      * @param ?Plan $plan
+     * @param list<string> $redZoneSwaps parts the plan replaces that would only finish in the red, not break,
+     *     at the plan's CTR
      */
     public function __construct(
         public array $objective,
@@ -68,6 +70,7 @@ final readonly class EngineerInputs
         public ?int $boostLitres,
         public bool $weatherStale,
         public ?array $plan,
+        public array $redZoneSwaps = [],
     ) {
     }
 }

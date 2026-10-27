@@ -545,6 +545,203 @@ final class RaceEngineerServiceTest extends TestCase
         self::assertNull($this->budgets->find(self::USER, self::SEASON));
     }
 
+    public function testUnderAPlanTheDiscretionaryLinesIgnoreTheCurrentCtr(): void
+    {
+        $this->seedPromotionFixture();
+        $this->seedWearTracks();
+        $this->movement('Testing session 1', -150_000, 8);
+        // At the current CTR 30 the Cockpit calls the Engine risky; at 60 and 100 it forces it; at 0 neither.
+        $parts = [
+            'Engine' => ['level' => 1, 'start' => 60, 'est' => 0.0, 'end' => 0.0, 'track_base' => 8.0],
+            'Brakes' => ['level' => 1, 'start' => 10, 'est' => 0.0, 'end' => 0.0, 'track_base' => 8.0],
+        ];
+        $linesAt = function (int $ctr, int $trainingCost) use ($parts): array {
+            $lines = $this->service->forCockpit(self::USER, $this->cockpit([
+                'ctr' => $ctr,
+                'car' => $this->pricedCar(200_000),
+                'season_calendar' => [['race' => 10, 'track_name' => 'Gamma'], ['race' => 11, 'track_name' => 'Gamma']],
+                'track_name' => 'Gamma',
+                'wear' => ['track_name' => 'Gamma', 'laps' => 50, 'parts' => $parts],
+                'wear_advice' => $this->adviceAt($ctr, $parts),
+                'training_picks' => [['name' => 'Talent course', 'score' => 1.0, 'cost' => $trainingCost, 'gains' => []]],
+                'testing_open' => true,
+                'testing_track' => 'Silverstone',
+                'testing_targets' => [[
+                    'offset' => 1, 'season' => 'current', 'race' => 11, 'track_id' => 1, 'track_name' => 'Gamma',
+                    'power' => 1, 'handling' => 1, 'acceleration' => 1,
+                ]],
+            ]))['lines'];
+            $byKey = array_column($lines, null, 'key');
+
+            return [$byKey['parts'], $byKey['training'], $byKey['testing']];
+        };
+
+        $linesAt(0, 0);
+        $plan = $this->budgets->find(self::USER, self::SEASON)['plan'] ?? [];
+        self::assertSame('push', $plan['mode'] ?? null);
+        self::assertSame(['Engine'], array_column($this->adviceAt(30, $parts)['risky'], 'part'));
+        // Training takes all but $100k of the envelope, so a risky Engine charged on top would push it out.
+        $trainingCost = (int) $plan['envelope'] - 100_000;
+
+        $seen = [];
+        foreach ([0, 30, 60, 100] as $ctr) {
+            $seen[$ctr] = $linesAt($ctr, $trainingCost);
+        }
+
+        self::assertSame('Train Talent course', $seen[0][1]['answer']);
+        foreach ($seen as $lines) {
+            self::assertSame($seen[0], $lines);
+        }
+    }
+
+    /**
+     * The Cockpit's wear advice at the given CTR, the way WearAdvisorService buckets it.
+     *
+     * @param array<string, array{level: int, start: int, track_base: float}> $parts
+     * @return array{swap: list<array<string, mixed>>, risky: list<array<string, mixed>>, watch: list<mixed>, headline: string}
+     */
+    private function adviceAt(int $ctr, array $parts): array
+    {
+        $advice = ['swap' => [], 'risky' => [], 'watch' => [], 'headline' => ''];
+        foreach ($parts as $label => $part) {
+            $est = round($part['track_base'] * 1.05 ** $ctr, 1);
+            $end = $part['start'] + $est;
+            $row = ['part' => $label, 'level' => $part['level'], 'start' => $part['start'], 'est' => $est, 'end' => $end];
+            if ($end >= 100) {
+                $advice['swap'][] = $row;
+            } elseif ($end >= 90) {
+                $advice['risky'][] = $row;
+            }
+        }
+
+        return $advice;
+    }
+
+    public function testUnderANursePlanTheOptionalSwapsAreThePartsInTheRedAtThePlanCtr(): void
+    {
+        $this->seedPromotionFixture();
+        $this->seedWearTracks();
+        // The Engine caps the CTR and has no price, so there is no push; at that CTR the Brakes end in the red.
+        $parts = [
+            'Engine' => ['level' => 1, 'start' => 60, 'est' => 0.0, 'end' => 0.0, 'track_base' => 8.0],
+            'Brakes' => ['level' => 1, 'start' => 55, 'est' => 0.0, 'end' => 0.0, 'track_base' => 8.0],
+        ];
+        $car = $this->pricedCar(200_000);
+        $car[CarWearService::PARTS_MAP['Engine']['options']] = [];
+        $partsLineAt = function (int $ctr) use ($parts, $car): array {
+            $lines = $this->service->forCockpit(self::USER, $this->cockpit([
+                'ctr' => $ctr,
+                'car' => $car,
+                'season_calendar' => [['race' => 10, 'track_name' => 'Gamma'], ['race' => 11, 'track_name' => 'Gamma']],
+                'track_name' => 'Gamma',
+                'wear' => ['track_name' => 'Gamma', 'laps' => 50, 'parts' => $parts],
+                'wear_advice' => $this->adviceAt($ctr, $parts),
+            ]))['lines'];
+
+            return array_column($lines, null, 'key')['parts'];
+        };
+
+        $seen = [];
+        foreach ([0, 30, 60, 100] as $ctr) {
+            $seen[$ctr] = $partsLineAt($ctr);
+        }
+
+        self::assertSame('nurse', $this->budgets->find(self::USER, self::SEASON)['plan']['mode'] ?? null);
+        self::assertSame('Swap Brakes (optional)', $seen[0]['answer']);
+        foreach ($seen as $line) {
+            self::assertSame($seen[0], $line);
+        }
+    }
+
+    public function testASurvivePlanCallsARedZoneSwapARedFinishNotABreak(): void
+    {
+        $this->seedPromotionFixture();
+        $this->seedWearTracks();
+        $this->service->pin(self::USER, self::SEASON, 'survive');
+        // Engine 85 ends a race at 93 even at CTR 0: past Survive's 90, short of the 100 that breaks it.
+        $parts = [
+            'Engine' => ['level' => 1, 'start' => 85, 'est' => 0.0, 'end' => 0.0, 'track_base' => 8.0],
+            'Brakes' => ['level' => 1, 'start' => 10, 'est' => 0.0, 'end' => 0.0, 'track_base' => 8.0],
+        ];
+
+        $lines = $this->service->forCockpit(self::USER, $this->cockpit([
+            'ctr' => 0,
+            'car' => $this->pricedCar(100_000),
+            'season_calendar' => [['race' => 10, 'track_name' => 'Gamma'], ['race' => 11, 'track_name' => 'Gamma']],
+            'track_name' => 'Gamma',
+            'wear' => ['track_name' => 'Gamma', 'laps' => 50, 'parts' => $parts],
+            'wear_advice' => $this->adviceAt(0, $parts),
+        ]))['lines'];
+        $byKey = array_column($lines, null, 'key');
+
+        self::assertNotNull($this->budgets->find(self::USER, self::SEASON));
+        self::assertSame('Swap Engine', $byKey['parts']['answer']);
+        self::assertSame('Would finish in the red if kept', $byKey['parts']['reason']);
+        self::assertStringNotContainsString('stays in the red', $byKey['ctr']['reason']);
+    }
+
+    public function testACalendarGapAtTheNextRaceGivesNoPlan(): void
+    {
+        $this->seedPromotionFixture();
+
+        $lines = $this->service->forCockpit(self::USER, $this->cockpit(['season_calendar' => [
+            ['race' => 9, 'track_name' => 'Testring'],
+            ['race' => 11, 'track_name' => 'Testring'],
+            ['race' => 12, 'track_name' => 'Testring'],
+        ]]))['lines'];
+
+        self::assertStringEndsWith('season costs unknown', array_column($lines, null, 'key')['ctr']['reason']);
+        self::assertNull($this->budgets->find(self::USER, self::SEASON));
+    }
+
+    public function testAFailedPlanSaveIsLoggedAndTheLinesStillCome(): void
+    {
+        $this->seedPromotionFixture();
+        $failing = new class ($this->db) extends SeasonBudgetRepository {
+            public function save(int $userId, int $season, int $race, array $plan): void
+            {
+                throw new \PDOException('database is locked');
+            }
+        };
+        $wear = new CarWearService($this->db, [
+            'driver_wear_factors' => ['concentration' => 1.0, 'talent' => 1.0, 'experience' => 1.0],
+            'part_level_factors' => [1 => 1.05] + array_fill_keys(range(2, 11), 1.0),
+        ]);
+        $service = new RaceEngineerService(
+            $this->pins,
+            $this->standings,
+            $this->weekends,
+            $this->ledger,
+            new TrackRepository($this->db),
+            $wear,
+            new CarWearPlannerService($wear),
+            new CtrPlanner(new CtrCeiling($wear), new SeasonBudget($wear)),
+            $failing,
+            new CtrCeiling($wear),
+            new RiskAdvisorService(),
+            new BoostFuelService(),
+            new FuelModel(['fuel_factors' => [
+                'conc' => 0.0, 'agg' => 0.0, 'exp' => 0.0, 'te' => 0.0,
+                'eng_lvl' => 0.0, 'ele_lvl' => 0.0, 'constant' => 0.0,
+            ]]),
+        );
+        $log = tempnam(sys_get_temp_dir(), 'engineer-log');
+        self::assertIsString($log);
+        $prior = ini_set('error_log', $log);
+
+        try {
+            $lines = $service->forCockpit(self::USER, $this->cockpit())['lines'];
+        } finally {
+            ini_set('error_log', $prior === false ? '' : $prior);
+        }
+        $logged = (string) file_get_contents($log);
+        unlink($log);
+
+        self::assertSame('Safe to spend', array_column($lines, null, 'key')['cash']['answer']);
+        self::assertStringContainsString('[Engineer] PDOException', $logged);
+        self::assertStringNotContainsString('locked', $logged);
+    }
+
     /** @return array{swap: list<array<string, mixed>>, risky: list<mixed>, watch: list<mixed>, headline: string} */
     private function swapAt100(): array
     {
