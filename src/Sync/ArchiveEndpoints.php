@@ -27,6 +27,7 @@ final class ArchiveEndpoints
         'RaceAnalysis' => Endpoint::ANALYSIS,
         'Standings' => Endpoint::STANDINGS,
         'EconomyHistory' => Endpoint::ECONOMY,
+        'ViewStaff' => Endpoint::GROUP_STAFF,
         'SFHistory' => Endpoint::SF_HISTORY,
         'CCPHistory' => Endpoint::CCP_HISTORY,
     ];

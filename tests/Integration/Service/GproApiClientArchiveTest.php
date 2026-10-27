@@ -165,6 +165,24 @@ final class GproApiClientArchiveTest extends TestCase
         );
     }
 
+    public function testCachedGroupStaffNeverFetches(): void
+    {
+        $client = $this->client();
+
+        $this->assertSame([], $client->getCachedGroupStaff());
+        $this->assertSame([], $this->fetcher->calls, 'a miss must not spend a call');
+
+        $client->getGroupStaff();
+        $this->assertCount(1, $this->fetcher->calls);
+
+        $this->flushCache();
+        $this->ageArchive(7 * 86400);
+        $archived = $client->getCachedGroupStaff();
+
+        $this->assertCount(1, $this->fetcher->calls, 'served from the archive, whatever its age');
+        $this->assertSame('/gb/backend/api/v2/ViewStaff', $archived['endpoint']);
+    }
+
     public function testForceBypassesArchiveAndRefreshesIt(): void
     {
         $client = $this->client();

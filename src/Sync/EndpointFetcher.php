@@ -37,6 +37,7 @@ final class EndpointFetcher
             Endpoint::TYRES => $this->apiClient->getTyreSuppliers(true),
             Endpoint::STANDINGS => $this->apiClient->getStandings(true),
             Endpoint::ECONOMY => $this->apiClient->getEconomyHistory(1, true),
+            Endpoint::GROUP_STAFF => $this->apiClient->getGroupStaff(true),
             Endpoint::SF_HISTORY => $this->apiClient->getSfHistory($this->season($endpoint, $params), true),
             Endpoint::CCP_HISTORY => $this->apiClient->getCcpHistory($this->season($endpoint, $params), true),
             Endpoint::ANALYSIS => $this->analysis($params),
