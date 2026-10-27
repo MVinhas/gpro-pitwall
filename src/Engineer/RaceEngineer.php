@@ -4,9 +4,8 @@ declare(strict_types=1);
 
 namespace App\Engineer;
 
-use App\Service\CarWearPlannerService;
-
 /**
+ * @phpstan-import-type Plan from CtrPlanner
  * @phpstan-type Line array{
  *     key: string,
  *     answer: string,
@@ -27,8 +26,12 @@ final class RaceEngineer
     public const int BOOST_LAPS_PER_SET = 3;
 
     private const string SKIP = 'Skip — keep it for repairs';
+    private const string SKIP_BUDGET = 'Skip — over the budget';
     private const string NOTHING = 'Nothing to do';
     private const string STALE = 'After you save the race setup';
+    private const string BUDGET_ANCHOR = '/season#season-budget';
+    private const string STAGE_TRAINING = 'training';
+    private const string STAGE_TESTING = 'testing';
 
     /**
      * @return list<Line>
@@ -95,6 +98,10 @@ final class RaceEngineer
      */
     private static function cash(EngineerInputs $in): array
     {
+        if ($in->plan !== null) {
+            return self::budgetCash($in, $in->plan);
+        }
+
         $free = self::free($in);
         if ($free === null) {
             return self::line(
@@ -132,27 +139,85 @@ final class RaceEngineer
     }
 
     /**
+     * @param Plan $plan
+     * @return Line
+     */
+    private static function budgetCash(EngineerInputs $in, array $plan): array
+    {
+        $partial = $plan['partial'] === [] ? '' : '; forecast partial: ' . implode(', ', $plan['partial']);
+        $envelope = $plan['envelope'];
+
+        if ($plan['mode'] === 'short') {
+            return self::line(
+                'cash',
+                'Over budget',
+                'The forecast misses the target by ' . Money::short($plan['shortfall'] ?? 0) . $partial,
+                self::BUDGET_ANCHOR,
+                tone: 'red',
+            );
+        }
+        if ($envelope <= 0) {
+            return self::line(
+                'cash',
+                'Nothing to spare',
+                'The forecast only just meets the target' . $partial,
+                self::BUDGET_ANCHOR,
+                tone: 'amber',
+            );
+        }
+
+        $start = Money::short($plan['season_start'] ?? $plan['target']);
+        $reason = match (true) {
+            $plan['target_kind'] === 'start' => 'Ends the season above your ' . $start . ' start',
+            $plan['target_kind'] === 'start_out_of_reach' => 'Keeps one race of costs in hand (your ' . $start
+                . ' start is out of reach)',
+            self::objectiveIs($in, SeasonObjective::PROMOTE) => 'Keeps one race of costs in hand',
+            $plan['season_start'] !== null => 'Keeps one race of costs in hand (above your ' . $start . ' start)',
+            default => 'Keeps one race of costs in hand (season start unknown)',
+        };
+
+        return self::line('cash', 'Safe to spend', $reason . $partial, self::BUDGET_ANCHOR, Money::short($envelope));
+    }
+
+    /**
      * @return ?Line
      */
     private static function ctr(EngineerInputs $in): ?array
     {
-        if ($in->ctrCeiling === null) {
+        $plan = $in->plan;
+        if ($plan === null && $in->ctrCeiling === null) {
             return null;
         }
 
         $survive = self::objectiveIs($in, SeasonObjective::SURVIVE);
-        $push = self::objectiveIs($in, SeasonObjective::PROMOTE)
-            && $in->pushAdvice === CarWearPlannerService::ADVICE_PUSH;
-        $ceiling = $survive ? ($in->ctrSurvive ?? $in->ctrCeiling) : $in->ctrCeiling;
-        $target = $push ? $ceiling : min($in->currentCtr, $ceiling);
-
         $rated = $in->pushAdvice === null ? '' : 'Race rated ' . $in->pushAdvice . ': ';
-        $reason = match (true) {
-            $push => $rated . 'the highest CTR where no part breaks',
-            $survive && $in->alwaysRed !== [] => self::alwaysRedReason($in->alwaysRed),
-            $survive => $rated . 'capped at the highest CTR that keeps parts out of the red',
-            default => $rated . 'never above your CTR, and no part breaks',
-        };
+        // A plan replaces the parts that would stay in the red, so none is stuck there.
+        $alwaysRed = $survive && $in->alwaysRed !== [] && $plan === null;
+
+        if ($plan !== null) {
+            $target = $plan['ctr'];
+            $swapNames = implode(' + ', array_column($plan['swaps'], 'part'));
+            $reason = match (true) {
+                $plan['mode'] === 'short' => 'Even at CTR 0 the forecast misses the target by '
+                    . Money::short($plan['shortfall'] ?? 0),
+                $plan['mode'] === 'push' && $plan['swaps'] !== [] => $rated . 'swap ' . $swapNames . ' ('
+                    . Money::short(array_sum(array_column($plan['swaps'], 'cost')))
+                    . '); the budget covers the swaps',
+                $plan['ctr'] < $plan['safety'] => $rated . 'the highest CTR the budget covers to season end',
+                $survive => $rated . 'capped at the highest CTR that keeps parts out of the red',
+                $plan['mode'] === 'nurse' && $plan['refused_swap_cost'] !== null => $rated . 'pushing past '
+                    . $plan['safety'] . ' needs ' . Money::short($plan['refused_swap_cost'])
+                    . " of swaps the budget can't cover",
+                default => $rated . 'the highest CTR where no part breaks',
+            };
+        } else {
+            $target = $survive ? ($in->ctrSurvive ?? $in->ctrCeiling) : $in->ctrCeiling;
+            $reason = match (true) {
+                $alwaysRed => self::alwaysRedReason($in->alwaysRed),
+                $survive => $rated . 'capped at the highest CTR that keeps parts out of the red',
+                default => $rated . 'the highest CTR where no part breaks; season costs unknown',
+            };
+        }
 
         return self::line(
             'ctr',
@@ -180,16 +245,30 @@ final class RaceEngineer
      */
     private static function parts(EngineerInputs $in): array
     {
-        $forced = array_column($in->wearAdvice['swap'] ?? [], 'part');
+        $plan = $in->plan;
+        $replaced = $plan === null ? [] : $plan['rows'][0]['replaced'];
+        $forced = array_column($plan === null ? $in->wearAdvice['swap'] ?? [] : $replaced, 'part');
+        $forcedSwapCost = $plan === null ? $in->forcedSwapCost : $plan['rows'][0]['repairs'];
+
+        if ($plan !== null && $plan['mode'] === 'push' && $plan['swaps'] !== []) {
+            return self::line(
+                'parts',
+                'Swap ' . implode(', ', $forced),
+                'Lets you push to CTR ' . $plan['ctr'],
+                '#cockpit-wear',
+                Money::short($forcedSwapCost ?? 0),
+            );
+        }
+
         $optional = self::offeredOptionals($in);
 
         if ($forced === [] && $optional === []) {
             return self::line('parts', 'Nothing to swap', 'No forced swap this race', '#cockpit-wear');
         }
 
-        $forcedCost = $in->forcedSwapCost ?? 0;
+        $forcedCost = $forcedSwapCost ?? 0;
         $total = $forcedCost + array_sum(array_column($optional, 'cost'));
-        $figure = $forced !== [] && $in->forcedSwapCost === null && $optional === [] ? null : Money::short($total);
+        $figure = $forced !== [] && $forcedSwapCost === null && $optional === [] ? null : Money::short($total);
         $optionalNames = implode(', ', array_column($optional, 'part'));
 
         if ($forced === []) {
@@ -202,14 +281,33 @@ final class RaceEngineer
             );
         }
 
-        $tone = self::spendable($in) < $forcedCost ? 'red' : 'amber';
+        $tone = $plan === null && self::spendable($in) < $forcedCost ? 'red' : 'amber';
         $answer = 'Swap ' . implode(', ', $forced) . ($optional === [] ? '' : ', optionally ' . $optionalNames);
         $reason = $optional === []
-            ? 'Would break this race if kept'
+            ? self::keptReason($forced, $plan === null ? [] : $in->redZoneSwaps)
             : 'Forced swaps break this race; the optional ones are in the red and '
                 . self::affordClause($in, 'them');
 
         return self::line('parts', $answer, $reason, '#cockpit-wear', $figure, $tone);
+    }
+
+    /**
+     * What keeping the swapped parts would cost: a break, or (under a Survive plan) only a finish in the red.
+     *
+     * @param list<string> $swapped
+     * @param list<string> $redZone
+     */
+    private static function keptReason(array $swapped, array $redZone): string
+    {
+        $red = array_values(array_intersect($swapped, $redZone));
+        $breaks = array_values(array_diff($swapped, $redZone));
+
+        return match (true) {
+            $red === [] => 'Would break this race if kept',
+            $breaks === [] => 'Would finish in the red if kept',
+            default => implode(', ', $breaks) . ' would break this race if kept; ' . implode(', ', $red)
+                . ' would finish in the red',
+        };
     }
 
     /**
@@ -222,8 +320,13 @@ final class RaceEngineer
             return self::line('training', self::NOTHING, 'No course is worth the money right now', '#cockpit-training');
         }
 
-        if (!self::affords($in, $pick['cost'])) {
-            return self::line('training', self::SKIP, self::skipReason($in), '#cockpit-training');
+        if (!self::affords($in, $pick['cost'], self::STAGE_TRAINING)) {
+            return self::line(
+                'training',
+                self::skip($in),
+                self::skipReason($in, self::STAGE_TRAINING),
+                '#cockpit-training',
+            );
         }
 
         return self::line(
@@ -262,8 +365,8 @@ final class RaceEngineer
                 );
         }
 
-        if (!self::affords($in, $cost)) {
-            return self::line('testing', self::SKIP, self::skipReason($in), '#cockpit-testing');
+        if (!self::affords($in, $cost, self::STAGE_TESTING)) {
+            return self::line('testing', self::skip($in), self::skipReason($in, self::STAGE_TESTING), $anchor);
         }
 
         return self::line('testing', $where, self::affordReason($in) . '; ' . $tunes, $anchor, Money::short($cost));
@@ -331,9 +434,16 @@ final class RaceEngineer
             return [];
         }
 
-        $remaining = self::spendable($in) - ($in->forcedSwapCost ?? 0);
+        $remaining = $in->plan === null
+            ? self::spendable($in) - ($in->forcedSwapCost ?? 0)
+            : $in->plan['envelope'];
+        // A part the plan already replaces in the next race is paid for inside the envelope.
+        $planned = $in->plan === null ? [] : array_column($in->plan['rows'][0]['replaced'], 'part');
         $offered = [];
         foreach ($in->optionalSwaps as $swap) {
+            if (in_array($swap['part'], $planned, true)) {
+                continue;
+            }
             if ($swap['cost'] <= $remaining) {
                 $offered[] = $swap;
                 $remaining -= $swap['cost'];
@@ -343,15 +453,46 @@ final class RaceEngineer
         return $offered;
     }
 
-    private static function affords(EngineerInputs $in, int $cost): bool
+    /**
+     * What is left of the plan's envelope when a discretionary line is judged: optional swaps first, then
+     * training, then testing.
+     */
+    private static function envelopeLeft(EngineerInputs $in, string $stage): int
     {
+        $left = ($in->plan['envelope'] ?? 0) - array_sum(array_column(self::offeredOptionals($in), 'cost'));
+        $pick = $in->trainingPick;
+        if ($stage === self::STAGE_TESTING && $pick !== null && $pick['cost'] <= $left) {
+            $left -= $pick['cost'];
+        }
+
+        return $left;
+    }
+
+    private static function affords(EngineerInputs $in, int $cost, string $stage): bool
+    {
+        if ($in->plan !== null) {
+            return $cost <= self::envelopeLeft($in, $stage);
+        }
+
         $reserve = self::objectiveIs($in, SeasonObjective::SURVIVE) ? $in->forcedSwapCost ?? 0 : 0;
 
         return self::spendable($in) >= $cost + $reserve;
     }
 
-    private static function skipReason(EngineerInputs $in): string
+    /**
+     * Under a plan repairs are already inside the forecast, so the money is held for the budget, not repairs.
+     */
+    private static function skip(EngineerInputs $in): string
     {
+        return $in->plan === null ? self::SKIP : self::SKIP_BUDGET;
+    }
+
+    private static function skipReason(EngineerInputs $in, string $stage): string
+    {
+        if ($in->plan !== null) {
+            return 'Only ' . Money::short(self::envelopeLeft($in, $stage)) . ' left in the budget';
+        }
+
         $known = $in->outlook['known'];
         if (self::objectiveIs($in, SeasonObjective::SURVIVE)) {
             return $known
@@ -369,6 +510,10 @@ final class RaceEngineer
 
     private static function affordClause(EngineerInputs $in, string $what): string
     {
+        if ($in->plan !== null) {
+            return 'the budget covers ' . $what;
+        }
+
         $subject = $in->outlook['known'] ? 'free cash' : 'your balance';
         $tail = self::objectiveIs($in, SeasonObjective::SURVIVE) ? ' and the forced repairs' : '';
         $note = $in->outlook['known'] ? '' : '; season costs unknown';

@@ -7,10 +7,13 @@ namespace App\Service;
 use App\Calibration\LedgerCategories;
 use App\Engineer\CashOutlook;
 use App\Engineer\CtrCeiling;
+use App\Engineer\CtrPlanner;
 use App\Engineer\EngineerInputs;
 use App\Engineer\RaceEngineer;
 use App\Engineer\SeasonObjective;
+use App\Engineer\SeasonStart;
 use App\Repository\EconomyLedgerRepository;
+use App\Repository\SeasonBudgetRepository;
 use App\Repository\SeasonObjectiveRepository;
 use App\Repository\StandingsRepository;
 use App\Repository\TrackRepository;
@@ -23,6 +26,8 @@ use App\Repository\WeekendStateRepository;
  *
  * @phpstan-import-type InForce from SeasonObjective
  * @phpstan-import-type Line from RaceEngineer
+ * @phpstan-import-type Plan from CtrPlanner
+ * @phpstan-import-type Round from \App\Engineer\SeasonBudget
  * @phpstan-import-type Risk from EngineerInputs
  * @phpstan-import-type TestingTarget from EngineerInputs
  * @phpstan-import-type WearAdvice from EngineerInputs
@@ -40,6 +45,8 @@ class RaceEngineerService
         private readonly TrackRepository $tracks,
         private readonly CarWearService $wear,
         private readonly CarWearPlannerService $planner,
+        private readonly CtrPlanner $ctrPlanner,
+        private readonly SeasonBudgetRepository $budgets,
         private readonly CtrCeiling $ceiling,
         private readonly RiskAdvisorService $riskAdvisor,
         private readonly BoostFuelService $boost,
@@ -81,7 +88,20 @@ class RaceEngineerService
         );
         $objective = SeasonObjective::inForce($proposal, $this->pins->find($userId, $season));
 
-        $lines = RaceEngineer::brief($this->inputs($objective, $outlook, $cash, $season, $raceNb, $seasonLedger, $c));
+        $rounds = $this->rounds($c);
+        $plan = $this->plan($objective, $outlook, $cash, $raceNb, $rounds, $seasonLedger, $weekends, $c);
+        if ($plan !== null) {
+            try {
+                $this->budgets->save($userId, $season, $raceNb, $plan);
+            } catch (\Throwable $e) {
+                // Saving only feeds the Season screen; the advice stands without it.
+                error_log('[Engineer] ' . $e::class);
+            }
+        }
+
+        $lines = RaceEngineer::brief(
+            $this->inputs($objective, $outlook, $cash, $raceNb, $seasonLedger, $rounds, $plan, $c),
+        );
 
         return ['objective' => $objective, 'lines' => $lines, 'season' => $season];
     }
@@ -106,15 +126,18 @@ class RaceEngineerService
      * @param InForce $objective
      * @param array{known: bool, committed: ?int, income: ?int, free_cash: ?int, end_committed: ?int} $outlook
      * @param list<array<string, mixed>> $seasonLedger
+     * @param list<Round> $rounds
+     * @param ?Plan $plan
      * @param array<string, mixed> $c
      */
     private function inputs(
         array $objective,
         array $outlook,
         int $cash,
-        int $season,
         int $raceNb,
         array $seasonLedger,
+        array $rounds,
+        ?array $plan,
         array $c,
     ): EngineerInputs {
         $parts = $this->wearParts($c);
@@ -141,6 +164,7 @@ class RaceEngineerService
             ));
         }
         $testingTrack = $c['testing_track'] ?? null;
+        $car = self::arr($c['car'] ?? null);
 
         $targets = self::list($c['testing_targets'] ?? null);
         $picks = self::list($c['training_picks'] ?? null);
@@ -158,10 +182,12 @@ class RaceEngineerService
             ctrCeiling: $ceiling,
             ctrSurvive: $survive,
             alwaysRed: $alwaysRed,
-            pushAdvice: $this->pushAdvice($c, $raceNb),
+            pushAdvice: $this->pushAdvice($c, $rounds, $raceNb),
             wearAdvice: $wearAdvice,
             forcedSwapCost: $this->forcedSwapCost($forced, self::arrOrNull($c['swap_plan'] ?? null)),
-            optionalSwaps: $this->optionalSwaps($wearAdvice, self::arr($c['car'] ?? null)),
+            optionalSwaps: $plan !== null && $parts !== null
+                ? $this->plannedOptionalSwaps($plan, $parts, $driverFactor, $car)
+                : $this->optionalSwaps($wearAdvice, $car),
             trainingPick: $pick,
             testingTarget: $target,
             testingOpen: (bool) ($c['testing_open'] ?? false),
@@ -170,12 +196,77 @@ class RaceEngineerService
             risk: $this->risk($driver, $track, $weather, $stale),
             boostLitres: $this->boostLitres($track, $weather, $stale),
             weatherStale: $stale,
+            plan: $plan,
+            redZoneSwaps: $plan !== null && $parts !== null ? $this->redZoneSwaps($plan, $parts, $driverFactor) : [],
         );
     }
 
     /**
+     * Under a plan the optional swaps are the parts that would end the next race in the red at the plan's CTR,
+     * not at the manager's current one, so following "Use N" changes nothing. Parts the plan already
+     * replaces are paid for inside the envelope.
+     *
+     * @param Plan $plan
+     * @param array<string, array{level: int, start: int|float, track_base: int|float, training?: int|float}> $parts
+     * @param array<string, mixed> $car
+     * @return list<array{part: string, cost: int}>
+     */
+    private function plannedOptionalSwaps(array $plan, array $parts, float $driverFactor, array $car): array
+    {
+        $prices = $this->planner->partPrices($car);
+        $replaced = array_column($plan['rows'][0]['replaced'], 'part');
+        $out = [];
+        foreach ($parts as $label => $part) {
+            $end = $this->endAt($part, $driverFactor, $plan['ctr']);
+            $price = $prices[$label] ?? null;
+            if (
+                $end >= WearAdvisorService::THRESHOLD_RISKY
+                && $end < WearAdvisorService::THRESHOLD_SWAP
+                && !in_array($label, $replaced, true)
+                && $price !== null
+            ) {
+                $out[] = ['part' => (string) $label, 'cost' => $price];
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Parts the plan replaces before the next race that would only finish it in the red at the plan's CTR
+     * (a Survive plan swaps at 90), so the engineer doesn't call them a break.
+     *
+     * @param Plan $plan
+     * @param array<string, array{level: int, start: int|float, track_base: int|float, training?: int|float}> $parts
+     * @return list<string>
+     */
+    private function redZoneSwaps(array $plan, array $parts, float $driverFactor): array
+    {
+        $out = [];
+        foreach ($plan['rows'][0]['replaced'] as $swap) {
+            $part = $parts[$swap['part']] ?? null;
+            $end = $part === null ? null : $this->endAt($part, $driverFactor, $plan['ctr']);
+            if ($end !== null && $end < WearAdvisorService::THRESHOLD_SWAP) {
+                $out[] = $swap['part'];
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param array{level: int, start: int|float, track_base: int|float, training?: int|float} $part
+     */
+    private function endAt(array $part, float $driverFactor, int $ctr): float
+    {
+        $raceWear = $this->wear->raceWear((float) $part['track_base'], (int) $part['level'], $driverFactor, $ctr);
+
+        return (float) $part['start'] + (float) ($part['training'] ?? 0) + round($raceWear, 1);
+    }
+
+    /**
      * @param array<string, mixed> $c
-     * @return ?array<string, array<string, mixed>>
+     * @return ?array<string, array{level: int, start: int|float, track_base: int|float, training?: int|float}>
      */
     private function wearParts(array $c): ?array
     {
@@ -184,23 +275,75 @@ class RaceEngineerService
             return null;
         }
 
-        /** @var array<string, array<string, mixed>> $parts */
+        /** @var array<string, array{level: int, start: int|float, track_base: int|float, training?: int|float}> $parts */
         $parts = $wear['parts'];
 
         return $parts;
     }
 
     /**
+     * Built only when the budget can be forecast: costs known, parts known, a race left, the calendar's
+     * first remaining round being the next race, and its track wear known for every part. Otherwise the
+     * engineer falls back to the safety CTR.
+     *
+     * @param InForce $objective
+     * @param array{known: bool, committed: ?int, income: ?int, free_cash: ?int, end_committed: ?int} $outlook
+     * @param list<Round> $rounds
+     * @param list<array<string, mixed>> $seasonLedger
+     * @param list<array<string, mixed>> $weekends
      * @param array<string, mixed> $c
+     * @return ?Plan
      */
-    private function pushAdvice(array $c, int $raceNb): ?string
-    {
-        $calendar = self::list($c['season_calendar'] ?? null);
-        if ($calendar === []) {
+    private function plan(
+        array $objective,
+        array $outlook,
+        int $cash,
+        int $raceNb,
+        array $rounds,
+        array $seasonLedger,
+        array $weekends,
+        array $c,
+    ): ?array {
+        $parts = $this->wearParts($c);
+        if (!$outlook['known'] || $parts === null || $raceNb < 1 || $raceNb > SeasonObjective::RACES) {
+            return null;
+        }
+
+        $remaining = array_values(array_filter(
+            $rounds,
+            static fn (array $round): bool => $round['race'] >= $raceNb,
+        ));
+        // The first round must be the next race itself: a calendar gap would price the wrong track.
+        if (($remaining[0]['race'] ?? null) !== $raceNb) {
+            return null;
+        }
+        $nextBase = $remaining[0]['base'];
+        if ($nextBase === null || array_diff_key($parts, $nextBase) !== []) {
             return null;
         }
 
         $car = self::arr($c['car'] ?? null);
+
+        return $this->ctrPlanner->plan(
+            $objective['objective'] ?? SeasonObjective::HOLD,
+            $remaining,
+            $parts,
+            $this->planner->partPrices($car),
+            $this->wear->driverFactor(self::arr($c['driver'] ?? null)),
+            $cash,
+            (int) $outlook['committed'],
+            (int) $outlook['income'],
+            SeasonStart::cash($seasonLedger, $weekends),
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $c
+     * @return list<Round>
+     */
+    private function rounds(array $c): array
+    {
+        $calendar = self::list($c['season_calendar'] ?? null);
         $names = [];
         foreach ($calendar as $row) {
             $name = (string) ($row['track_name'] ?? '');
@@ -209,7 +352,8 @@ class RaceEngineerService
             }
         }
         $bases = $this->wear->trackBaseWearByName($names);
-        $rounds = array_map(static function (array $row) use ($bases): array {
+
+        return array_map(static function (array $row) use ($bases): array {
             $name = $row['track_name'] ?? null;
 
             return [
@@ -218,7 +362,19 @@ class RaceEngineerService
                 'base' => $name !== null ? ($bases[(string) $name] ?? null) : null,
             ];
         }, $calendar);
+    }
 
+    /**
+     * @param array<string, mixed> $c
+     * @param list<Round> $rounds
+     */
+    private function pushAdvice(array $c, array $rounds, int $raceNb): ?string
+    {
+        if ($rounds === []) {
+            return null;
+        }
+
+        $car = self::arr($c['car'] ?? null);
         $rows = $this->planner->seasonWear(
             $rounds,
             $raceNb,

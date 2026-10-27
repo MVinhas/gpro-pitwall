@@ -48,6 +48,9 @@
             title: season ? 'No races recorded for Season ' ~ season ~ ' yet' : 'No races recorded yet',
             body: 'Races appear here one at a time as you sync after each race weekend.'
         } only %}
+
+        {# A new season's plan exists before its first race is archived. #}
+        {% include 'season/_budget.twig' %}
     {% else %}
 
     {# ---- Results ---- #}
@@ -86,6 +89,9 @@
             </div>
         </div>
     </section>
+
+    {# ---- Budget to season end ---- #}
+    {% include 'season/_budget.twig' %}
 
     {# ---- Money ---- #}
     <section class="card" aria-labelledby="season-money">

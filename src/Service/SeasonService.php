@@ -8,9 +8,12 @@ use App\Calibration\FuelCalibration;
 use App\Calibration\LedgerCategories;
 use App\Calibration\WearCalibration;
 use App\Debrief\WeekendDiff;
+use App\Engineer\CtrPlanner;
+use App\Engineer\Money as Dollars;
 use App\Repository\EconomyLedgerRepository;
 use App\Repository\RaceHistoryRepository;
 use App\Repository\RaceTelemetryRepository;
+use App\Repository\SeasonBudgetRepository;
 use App\Repository\StandingsRepository;
 use App\Repository\TrackRepository;
 use App\Repository\WeekendStateRepository;
@@ -24,6 +27,7 @@ use App\Support\Sparkline;
  * track rather than one per race.
  *
  * @phpstan-import-type Change from WeekendDiff
+ * @phpstan-import-type Plan from CtrPlanner
  * @phpstan-type Result array{
  *     race: int, track_name: string, final_pos: int|null, points: int|null, dnf: bool,
  *     champ_pos: int|null, champ_pts: int|null
@@ -39,11 +43,25 @@ use App\Support\Sparkline;
  *     fuel: array{mean_gap_pct: float|null, n: int, skipped: int, enough: bool},
  *     corpus: array{mean_gap: float|null, n: int}
  * }
+ * @phpstan-type BudgetRowView array{
+ *     race: int, track: string, replaced: list<array{part: string, cost: string}>, replaced_none: string,
+ *     running: string, income: string, balance: string, balance_note: string, tone: 'ink'|'amber'|'red'
+ * }
+ * @phpstan-type BudgetView array{
+ *     season: int, race: int, computed_at: string, plan: Plan,
+ *     view: array{
+ *         as_of: string, target: string, spend: array{value: string, tone: 'ink'|'amber'|'red'},
+ *         rows: list<BudgetRowView>, partial: string
+ *     }
+ * }
  */
 class SeasonService
 {
     private const int SPARK_WIDTH = 240;
     private const int SPARK_HEIGHT = 40;
+    private const array PLAN_KEYS = [
+        'ctr', 'mode', 'target', 'target_kind', 'cushion', 'season_start', 'envelope', 'shortfall', 'rows', 'partial',
+    ];
 
     public function __construct(
         private readonly RaceHistoryRepository $history,
@@ -54,6 +72,7 @@ class SeasonService
         private readonly TrackRepository $tracks,
         private readonly WearCalibration $wear,
         private readonly FuelCalibration $fuel,
+        private readonly SeasonBudgetRepository $budgets,
     ) {
     }
 
@@ -62,7 +81,7 @@ class SeasonService
      *     season: int|null, seasons: list<int>, has_races: bool,
      *     results: list<Result>, results_line: string,
      *     money: Money, changes: list<array{race: int, items: list<Change>}>,
-     *     calibration: Calibration
+     *     calibration: Calibration, budget: BudgetView|null, budget_over: bool
      * }
      */
     public function build(int $userId, ?int $season): array
@@ -70,6 +89,9 @@ class SeasonService
         $seasons = $this->history->seasons($userId);
         $season = $season !== null && in_array($season, $seasons, true) ? $season : ($seasons[0] ?? null);
         $rows = $season === null ? [] : $this->history->forSeason($userId, $season);
+        [$budget, $budgetOver] = $season === ($seasons[0] ?? null)
+            ? $this->budget($userId, $season, $rows)
+            : [null, false];
 
         if ($season === null || $rows === []) {
             return [
@@ -81,6 +103,8 @@ class SeasonService
                 'money' => ['cash' => [], 'cash_line' => '', 'categories' => [], 'income' => 0, 'costs' => 0],
                 'changes' => [],
                 'calibration' => $this->calibration([]),
+                'budget' => $budget,
+                'budget_over' => $budgetOver,
             ];
         }
 
@@ -100,7 +124,144 @@ class SeasonService
             'money' => $this->money($userId, $season),
             'changes' => $this->changes($userId, $season),
             'calibration' => $this->calibration($rows),
+            'budget' => $budget,
+            'budget_over' => $budgetOver,
         ];
+    }
+
+    /**
+     * The plan the Cockpit's engineer last saved, formatted for the page. The Season screen has none of the
+     * Cockpit's live inputs, so it only ever shows what was saved. It belongs to the newest season view, and
+     * its season may be newer than any race history (a new season's first weekend). Once that season's
+     * history reaches the plan's last forecast race the plan is spent: no budget, and $over is true.
+     *
+     * @param list<array<string, mixed>> $rows the shown season's race history
+     * @return array{BudgetView|null, bool}
+     */
+    private function budget(int $userId, ?int $season, array $rows): array
+    {
+        try {
+            $saved = $this->budgets->latest($userId);
+            if ($saved === null || ($season !== null && $saved['season'] < $season)) {
+                return [null, false];
+            }
+
+            $plan = self::checkedPlan($saved['plan']);
+            $history = $saved['season'] === $season ? $rows : $this->history->forSeason($userId, $saved['season']);
+            $lastForecast = max(array_column($plan['rows'], 'race') ?: [0]);
+            if (max(array_map(static fn (array $r): int => (int) $r['race'], $history) ?: [0]) >= $lastForecast) {
+                return [null, true];
+            }
+
+            $asOf = 'as of race ' . $saved['race'];
+            $asOf = $saved['season'] === $season ? ucfirst($asOf) : 'Season ' . $saved['season'] . ' · ' . $asOf;
+
+            return [[
+                'season' => $saved['season'],
+                'race' => $saved['race'],
+                'computed_at' => $saved['computed_at'],
+                'plan' => $plan,
+                'view' => [
+                    'as_of' => $asOf,
+                    'target' => $this->target($plan),
+                    'spend' => $this->spend($plan),
+                    'rows' => $this->budgetRows($plan),
+                    'partial' => implode(', ', $plan['partial']),
+                ],
+            ], false];
+        } catch (\Throwable $e) {
+            error_log('[Season] ' . $e::class);
+
+            return [null, false];
+        }
+    }
+
+    /**
+     * A v1 plan saved with keys missing (a hand edit, or a shape change without a version bump) is refused
+     * rather than half-rendered.
+     *
+     * @param array<string, mixed> $plan
+     * @return Plan
+     */
+    private static function checkedPlan(array $plan): array
+    {
+        $missing = array_diff(self::PLAN_KEYS, array_keys($plan));
+        if ($missing !== [] || !is_array($plan['rows']) || !is_array($plan['partial'])) {
+            throw new \UnexpectedValueException('Saved budget plan has an unexpected shape.');
+        }
+
+        /** @var Plan $plan */
+        return $plan;
+    }
+
+    /**
+     * @param Plan $plan
+     */
+    private function target(array $plan): string
+    {
+        return match ($plan['target_kind']) {
+            'start' => 'End above ' . Dollars::short($plan['target']),
+            'start_out_of_reach' => 'Keep one race of costs in hand (your '
+                . Dollars::short($plan['season_start'] ?? $plan['target']) . ' start is out of reach)',
+            default => 'Keep one race of costs in hand',
+        };
+    }
+
+    /**
+     * @param Plan $plan
+     *
+     * @return array{value: string, tone: 'ink'|'amber'|'red'}
+     */
+    private function spend(array $plan): array
+    {
+        return match (true) {
+            $plan['mode'] === 'short' => [
+                'value' => 'Over budget by ' . Dollars::short($plan['shortfall'] ?? 0),
+                'tone' => 'red',
+            ],
+            $plan['envelope'] <= 0 => ['value' => 'Nothing to spare', 'tone' => 'amber'],
+            default => ['value' => Dollars::short($plan['envelope']), 'tone' => 'ink'],
+        };
+    }
+
+    /**
+     * @param Plan $plan
+     *
+     * @return list<BudgetRowView>
+     */
+    private function budgetRows(array $plan): array
+    {
+        $rows = [];
+        $last = array_key_last($plan['rows']);
+        foreach ($plan['rows'] as $i => $row) {
+            // Every race keeps the cushion; only the last must reach the end target.
+            $target = $i === $last ? $plan['target'] : $plan['cushion'];
+            [$tone, $note] = match (true) {
+                $row['balance'] < 0 => ['red', ' · negative'],
+                $row['balance'] < $target => ['amber', ' · below target'],
+                default => ['ink', ''],
+            };
+            $rows[] = [
+                'race' => $row['race'],
+                'track' => $row['track_name'] ?? '—',
+                'replaced' => $row['wear_known'] ? array_map(
+                    static fn (array $s): array => ['part' => $s['part'], 'cost' => Dollars::short($s['cost'])],
+                    $row['replaced'],
+                ) : [],
+                'replaced_none' => match (true) {
+                    !$row['wear_known'] => 'wear unknown',
+                    $row['replaced'] === [] => '—',
+                    default => '',
+                },
+                'running' => Dollars::short($row['running']),
+                'income' => Dollars::short($row['income']),
+                'balance' => Dollars::short($row['balance']),
+                'balance_note' => $note,
+                'tone' => $tone,
+            ];
+        }
+
+        return $rows;
     }
 
     /**
