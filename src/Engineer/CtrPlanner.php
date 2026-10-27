@@ -120,7 +120,8 @@ final readonly class CtrPlanner
         $refused = null;
         if ($mode === 'nurse' && $safety < self::MAX_CTR && !$survive) {
             $above = $this->unforced($forecastAt($safety + 1)['rows'][0]['replaced'], $forced);
-            $refused = array_sum(array_column($above, 'cost'));
+            $sum = array_sum(array_column($above, 'cost'));
+            $refused = $sum > 0 ? $sum : null;
         }
 
         return $this->result(

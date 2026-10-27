@@ -194,6 +194,18 @@ final class CtrPlannerTest extends TestCase
         $this->assertSame(100_000, $plan['refused_swap_cost']);
     }
 
+    public function testRefusedSwapCostIsNullWhenNothingCanBeQuoted(): void
+    {
+        $rounds = $this->rounds();
+        $rounds[0]['base'] = null;
+
+        $plan = $this->planner->plan(SeasonObjective::HOLD, $rounds, self::ENGINE, self::PRICES, 1.0, 150_000, 0, 0, null);
+
+        $this->assertSame('nurse', $plan['mode']);
+        $this->assertLessThan(100, $plan['safety']);
+        $this->assertNull($plan['refused_swap_cost']);
+    }
+
     public function testSurviveNeverPushes(): void
     {
         $plan = $this->plan(SeasonObjective::SURVIVE, 50_000_000);
