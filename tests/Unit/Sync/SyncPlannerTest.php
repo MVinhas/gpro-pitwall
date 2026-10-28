@@ -85,6 +85,8 @@ final class SyncPlannerTest extends TestCase
             'sponsorsAlert changed' => [[], ['sponsorsAlert' => '1'], $same, ['SPONSORS'], []],
             'tdId changed to a new TD' => [[], ['tdId' => '55'], self::office(['tdId' => '']), ['TD'], []],
             'tdId dropped plans no TD' => [[], ['tdId' => ''], $same, [], []],
+            'driId changed to a new driver' => [[], ['driId' => '456'], $same, ['DRIVER'], []],
+            'driId dropped plans no DRIVER' => [[], ['driId' => ''], $same, [], []],
             'manual unchanged' => [['mode' => SyncPlanner::MODE_MANUAL], [], $same, ['CAR', 'SETUP'], []],
             'manual with setup flip has no duplicates' => [['mode' => SyncPlanner::MODE_MANUAL], ['doneRaceSetup' => true], $same, ['CAR', 'SETUP'], []],
             'no driver on a new race' => [['race' => []], ['driId' => ''], null,

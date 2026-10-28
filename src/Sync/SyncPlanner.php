@@ -145,6 +145,9 @@ final class SyncPlanner
                 $planned = [...$planned, ...$endpoints];
             }
         }
+        if (self::text($previous, 'driId') !== self::text($ctx->office, 'driId')) {
+            $planned[] = Endpoint::DRIVER;
+        }
         if (self::text($previous, 'tdId') !== self::text($ctx->office, 'tdId')) {
             $planned[] = Endpoint::TD;
         }
