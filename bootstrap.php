@@ -188,7 +188,7 @@ $container['twig']->addGlobal('is_logged_in', $currentUser !== null);
 $container['twig']->addGlobal('user', $currentUserSafe);
 // A separate global rather than a key on `user`: controllers that pass their own
 // `user` into render would otherwise shadow it (the Account page does).
-// A login sync that is owed but not yet run (see AuthService::SYNC_PENDING)
+// A first sync that is owed but not yet run (see AuthService::SYNC_PENDING)
 // reads as running: the skeleton page is about to run it.
 $container['twig']->addGlobal(
     'sync_state',
@@ -391,7 +391,6 @@ $container['service.auth_service']  = new \App\Service\AuthService(
     $container['service.security_log'],
     Env::int('VERIFICATION_CODE_TTL_SECONDS', 600),
     Env::int('VERIFICATION_MAX_ATTEMPTS', 5),
-    Env::int('SYNC_MIN_INTERVAL_SECONDS', 600),
     Env::int('MAX_CODES_PER_USER_PER_HOUR', 3),
 );
 $container['service.data_mapper'] = new GproDataMapper();
@@ -620,7 +619,6 @@ use App\Controller\ApiWarmupController;
 $container['controller.api_warmup'] = new ApiWarmupController(
     $container['service.gpro_sync'],
     $container['service.authorize'],
-    $container['service.harvest'],
 );
 
 $container['controller.api_harvest'] = new \App\Controller\ApiHarvestController(

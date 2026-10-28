@@ -175,7 +175,7 @@ final class AuthServiceTest extends TestCase
         $this->assertTrue($_SESSION['auth_fresh'] ?? false);
     }
 
-    public function testLoginWithATokenDefersTheSyncToTheFirstPage(): void
+    public function testFirstLoginOwesTheFirstSync(): void
     {
         $userId = $this->makeVerifiedUser('tokenholder');
         $this->userRepo()->updateApiToken($userId, 'synthetic-token');
@@ -190,14 +190,14 @@ final class AuthServiceTest extends TestCase
         $this->assertSame('idle', $this->syncStatusOf($userId));
     }
 
-    public function testLoginRightAfterASyncLeavesNothingPending(): void
+    public function testLoginAfterAnEarlierSyncOwesNoSync(): void
     {
-        $userId = $this->makeVerifiedUser('freshsync');
+        $userId = $this->makeVerifiedUser('syncedbefore');
         $this->userRepo()->updateApiToken($userId, 'synthetic-token');
-        $this->db->prepare("UPDATE users SET last_synced_at = datetime('now') WHERE id = :id")
+        $this->db->prepare("UPDATE users SET last_synced_at = datetime('now', '-3 days') WHERE id = :id")
             ->execute(['id' => $userId]);
 
-        $this->auth->login('freshsync', '', '127.0.0.1');
+        $this->auth->login('syncedbefore', '', '127.0.0.1');
         $this->setLatestLoginCode($userId, '123456');
 
         $this->assertTrue($this->auth->verifyCode($userId, '123456'));

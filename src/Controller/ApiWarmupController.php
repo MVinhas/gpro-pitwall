@@ -8,17 +8,12 @@ use App\Http\Request;
 use App\Security\Authorize;
 use App\Service\AuthService;
 use App\Service\GproSyncService;
-use App\Service\HarvestService;
-use App\Support\HarvestOwed;
-use App\Support\SessionBudget;
-use App\Sync\SyncPlanner;
 
 final readonly class ApiWarmupController
 {
     public function __construct(
         private GproSyncService $syncService,
         private Authorize $authorize,
-        private HarvestService $harvest,
     ) {
     }
 
@@ -36,8 +31,8 @@ final readonly class ApiWarmupController
             return;
         }
 
-        // A manual re-sync settles any login sync still owed.
-        unset($_SESSION[AuthService::SYNC_PENDING], $_SESSION[AuthService::IDLE_SYNC_OFFERED]);
+        // A manual re-sync settles any first sync still owed.
+        unset($_SESSION[AuthService::SYNC_PENDING]);
         $status = $this->syncService->trySyncForUser($user, true);
         if ($status === 'synced') {
             $_SESSION[AuthService::HARVEST_OWED] = true;
@@ -66,37 +61,14 @@ final readonly class ApiWarmupController
     }
 
     /**
-     * The login sync a warm page left owed, run once the browser is idle. Login
-     * mode: the plan spends only what changed, so it is cheap as well as late.
+     * Kept for pages opened before the sync became manual-only: they still
+     * POST here once idle. It answers "idle" and does nothing.
      */
     public function idle(Request $request): void
     {
-        $user = $this->authorize->requireAuth();
+        $this->authorize->requireAuth();
 
         header('Content-Type: application/json');
-
-        if (empty($_SESSION[AuthService::SYNC_PENDING])) {
-            echo json_encode([
-                'status' => 'idle',
-                'fetched' => [],
-                'harvest_due' => HarvestOwed::due($this->harvest, $user),
-            ]);
-            return;
-        }
-
-        unset($_SESSION[AuthService::SYNC_PENDING], $_SESSION[AuthService::IDLE_SYNC_OFFERED]);
-        $budget = SessionBudget::release((int) $user['id']);
-
-        $outcome = $this->syncService->sync($user, SyncPlanner::MODE_LOGIN);
-
-        $budget->persist();
-
-        // Asked after the sync: the page starts the harvest loop only on this
-        // answer, so a slice never runs alongside the sync.
-        echo json_encode([
-            'status' => $outcome->status,
-            'fetched' => $outcome->fetched,
-            'harvest_due' => HarvestOwed::due($this->harvest, $user),
-        ]);
+        echo json_encode(['status' => 'idle', 'fetched' => [], 'harvest_due' => false]);
     }
 }

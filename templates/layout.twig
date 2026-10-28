@@ -104,7 +104,7 @@
                 {% elseif sync_state == 'deferred' %}
                     <span class="font-medium text-amber-700" title="GPRO API budget low. Pitwall keeps calls in reserve for you and syncs again as the budget refills each race.">Sync paused — API budget low</span>
                 {% elseif sync_state == 'synced' and sync_stale %}
-                    <span class="font-semibold text-amber-800">Synced before this race weekend · {{ t.localtime(user.last_synced_at, 'datetime') }}</span>
+                    <span class="font-semibold text-amber-800">New race weekend · synced {{ t.localtime(user.last_synced_at, 'datetime') }} · Re-sync to load it</span>
                 {% elseif sync_state == 'synced' %}
                     <span>Synced {{ t.localtime(user.last_synced_at, 'datetime') }}</span>
                 {% elseif sync_state == 'never' %}
@@ -427,7 +427,7 @@ window.localizeTimes(document);
 })();
 </script>
 
-{% if (idle_sync is defined and idle_sync) or (harvest_due is defined and harvest_due) %}
+{% if harvest_due is defined and harvest_due %}
 <script>
 // Background GPRO work (phase 2 of the sync plan), a few calls per slice, only
 // while the browser is idle. The server caps what a slice may spend; this loop
@@ -437,138 +437,31 @@ window.localizeTimes(document);
 (() => {
     const MAX_SLICES = 20;
     const GAP_MS = 1000;
-    let started = false;
-    window.startHarvest = () => {
-        if (started) return;
-        started = true;
-        let slices = 0;
-        const schedule = () => {
-            if (slices >= MAX_SLICES) return;
-            setTimeout(() => {
-                if ('requestIdleCallback' in window) window.requestIdleCallback(slice, { timeout: 5000 });
-                else slice();
-            }, GAP_MS);
-        };
-        const slice = async () => {
-            slices++;
-            try {
-                const res = await fetch('/api/harvest', {
-                    method: 'POST',
-                    keepalive: true,
-                    headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'},
-                    body: new URLSearchParams({ csrf_token: '{{ csrf_token }}' })
-                });
-                if (!res.ok) return;
-                const data = await res.json();
-                if (data.status === 'more') schedule();
-            } catch {
-                // Best effort: nothing on screen depends on it.
-            }
-        };
-        schedule();
-    };
-{% if harvest_due is defined and harvest_due %}
-    window.startHarvest();
-{% endif %}
-})();
-</script>
-{% endif %}
-
-{% if idle_sync is defined and idle_sync %}
-<script>
-// The login sync is owed but the page already rendered from warm data: run it
-// once the browser is idle. The sync is cheap (it only spends what changed);
-// when it did fetch something, fetch the screen again to show it. The server
-// marked the offer in the session: if this never runs (no JavaScript) the next
-// page request sees the sync still owed and runs it inline instead.
-(() => {
-    const followUp = '{{ idle_follow_url|e('js') }}';
-    const inMain = (el) => el instanceof Element && !!el.closest('#main-content-tabs');
-    // A swap would drop whatever the manager typed or moved meanwhile, so any
-    // edit inside the screen, or a field still holding focus, vetoes it.
-    let touched = false;
-    const mark = (e) => { if (inMain(e.target)) touched = true; };
-    document.addEventListener('input', mark, true);
-    document.addEventListener('change', mark, true);
-    const editing = () => touched
-        || (inMain(document.activeElement) && document.activeElement.matches('input, select, textarea'));
-    const offerReload = () => {
-        if (document.getElementById('newDataNotice')) return;
-        const wrap = document.createElement('div');
-        wrap.id = 'newDataNotice';
-        wrap.className = 'mx-auto max-w-7xl px-4 pt-2';
-        // The live region goes in empty and is filled afterwards, so assistive
-        // technology announces the text as a change rather than skipping it.
-        wrap.setAttribute('role', 'status');
-        const note = document.createElement('div');
-        note.className = 'notice notice-info notice-slim';
-        const lead = document.createElement('span');
-        lead.className = 'font-bold';
-        lead.textContent = 'New data available';
-        const link = document.createElement('a');
-        link.href = window.location.href;
-        link.className = 'underline';
-        link.textContent = 'reload to update';
-        note.append(lead, ' \u2014 ', link);
-        const anchor = document.getElementById('statusLine');
-        if (anchor) anchor.after(wrap);
-        else document.querySelector('main')?.before(wrap);
-        setTimeout(() => wrap.append(note), 100);
-    };
-    // The page was served saying "Syncing…". When the answer can not say the
-    // sync finished (still running elsewhere, or the request failed), look at the
-    // status once more shortly after, so the line never stays stuck. Status only:
-    // no content swap, no navigation.
-    let rechecked = false;
-    const recheckStatus = () => {
-        if (rechecked) return;
-        rechecked = true;
+    let slices = 0;
+    const schedule = () => {
+        if (slices >= MAX_SLICES) return;
         setTimeout(() => {
-            window.swapScreen(followUp, { content: false, redirect: false }).catch(() => {});
-        }, 3000);
+            if ('requestIdleCallback' in window) window.requestIdleCallback(slice, { timeout: 5000 });
+            else slice();
+        }, GAP_MS);
     };
-    const run = async () => {
+    const slice = async () => {
+        slices++;
         try {
-            const res = await fetch('/api/sync', {
+            const res = await fetch('/api/harvest', {
                 method: 'POST',
+                keepalive: true,
                 headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'},
                 body: new URLSearchParams({ csrf_token: '{{ csrf_token }}' })
             });
-            if (res.status === 401 || res.status === 403) {
-                window.location = '/login?expired=1';
-                return;
-            }
-            if (!res.ok) {
-                recheckStatus();
-                return;
-            }
+            if (!res.ok) return;
             const data = await res.json();
-            if (data.status === 'in_progress') {
-                recheckStatus();
-                return;
-            }
-            // The harvest waits for the sync's answer (never alongside the sync);
-            // started before the swap so a failed screen fetch does not lose it.
-            if (data.harvest_due === true) window.startHarvest?.();
-            const fetched = Array.isArray(data.fetched) ? data.fetched : [];
-            // The office is fetched on every sync: only the other endpoints
-            // change what a screen shows. The status line follows either way.
-            const changed = fetched.some((e) => e !== 'OFFICE');
-            // editing() is asked again right before the content is replaced, after
-            // the screen has been fetched: typing during that fetch counts too.
-            const result = await window.swapScreen(followUp, {
-                content: changed,
-                allow: () => !editing(),
-                redirect: false,
-            });
-            if (changed && result !== 'swapped') offerReload();
+            if (data.status === 'more') schedule();
         } catch {
-            // Best effort: the data on screen is still the warm data.
-            recheckStatus();
+            // Best effort: nothing on screen depends on it.
         }
     };
-    if ('requestIdleCallback' in window) window.requestIdleCallback(run, { timeout: 2000 });
-    else setTimeout(run, 200);
+    schedule();
 })();
 </script>
 {% endif %}

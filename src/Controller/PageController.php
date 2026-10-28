@@ -215,10 +215,10 @@ class PageController
             $activeMainTab = $defaultTab;
         }
 
-        // A cold screen (or a login whose sync is still owed on cold data) is
-        // sent as a skeleton first; its follow-up request (wait=1) does the
-        // GPRO work. A login owed on warm data renders from what is cached and
-        // leaves the sync to an idle POST /api/sync.
+        // A cold screen (or a first sync still owed on cold data) is sent as a
+        // skeleton first; its follow-up request (wait=1) does the GPRO work.
+        // Only a never-synced account owes a sync here; every other refresh is
+        // the manager's Re-sync click.
         $syncPending = !empty($_SESSION[AuthService::SYNC_PENDING]);
         $wait = (string) $request->get(DeferredRender::WAIT_PARAM, '') === '1';
         $warm = null;
@@ -229,17 +229,10 @@ class PageController
         };
         $deferred = (string) $request->get('fragment', '') === ''
             && DeferredRender::shouldDefer($wait, $syncPending, $activeMainTab, $isWarm);
-        $idleSync = DeferredRender::idleSync(
-            $wait,
-            $syncPending,
-            $deferred,
-            !empty($_SESSION[AuthService::IDLE_SYNC_OFFERED]),
-            $isWarm,
-        );
 
         $freshSync = false;
-        if (DeferredRender::syncsInline($syncPending, $deferred, $idleSync)) {
-            unset($_SESSION[AuthService::SYNC_PENDING], $_SESSION[AuthService::IDLE_SYNC_OFFERED]);
+        if (DeferredRender::syncsInline($syncPending, $deferred)) {
+            unset($_SESSION[AuthService::SYNC_PENDING]);
             if ($this->syncService->trySyncForUser($user, false) === 'synced') {
                 $_SESSION[AuthService::HARVEST_OWED] = true;
             }
@@ -292,19 +285,9 @@ class PageController
             'can_submit'      => $isLoggedIn,
         ];
 
-        if ($idleSync) {
-            // Only a full page carries the script that answers the offer.
-            if ((string) $request->get('fragment', '') === '') {
-                $_SESSION[AuthService::IDLE_SYNC_OFFERED] = true;
-            }
-            $viewData['idle_sync'] = true;
-            $viewData['idle_follow_url'] = DeferredRender::followUpUrl($request->getPath(), $request->query());
-        }
-
-        // A page still owed its login sync starts the harvest only from the sync's
-        // answer; every other full page (not a skeleton, fragment or follow-up,
-        // whose script is discarded) starts it itself.
-        if (!$deferred && !$idleSync && !$wait && (string) $request->get('fragment', '') === '') {
+        // A skeleton, fragment or follow-up discards its script, so only a full
+        // page starts the harvest the last Re-sync (or first sync) owed.
+        if (!$deferred && !$wait && (string) $request->get('fragment', '') === '') {
             $viewData['harvest_due'] = HarvestOwed::due($this->harvest, $user);
         }
 

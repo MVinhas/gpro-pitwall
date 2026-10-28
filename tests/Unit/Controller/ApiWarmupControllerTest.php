@@ -16,8 +16,6 @@ use App\Security\Authorize;
 use App\Service\AuthService;
 use App\Service\GproApiClient;
 use App\Service\GproSyncService;
-use App\Service\HarvestService;
-use App\Sync\Endpoint;
 use App\Sync\SyncPlanner;
 use App\Tests\Support\ScriptedGproFetcher;
 use PDO;
@@ -61,10 +59,7 @@ final class ApiWarmupControllerTest extends TestCase
     private function controller(
         UserRepository $users,
         ScriptedGproFetcher $fetcher,
-        bool $harvestDue = false,
     ): ApiWarmupController {
-        $harvest = $this->createStub(HarvestService::class);
-        $harvest->method('isDueSafely')->willReturn($harvestDue);
         // The sync logs through error_log(); keep the run quiet (PHPUnit swaps the setting per test).
         ini_set('error_log', $this->cacheDir . '.log');
 
@@ -89,7 +84,7 @@ final class ApiWarmupControllerTest extends TestCase
             new SyncPlanner(),
         );
 
-        return new ApiWarmupController($sync, new Authorize($users), $harvest);
+        return new ApiWarmupController($sync, new Authorize($users));
     }
 
     private function idle(ApiWarmupController $controller): string
@@ -104,217 +99,32 @@ final class ApiWarmupControllerTest extends TestCase
         return $body;
     }
 
-    public function testIdleSyncClearsThePendingFlagAndReportsOnlyStatusAndFetched(): void
+    public function testTheOldIdleRouteDoesNoWorkEvenWhenASyncIsOwed(): void
     {
         $users = $this->createStub(UserRepository::class);
         $users->method('findById')->willReturn(['id' => 7, 'api_token' => 'secret-token']);
         $fetcher = new ScriptedGproFetcher();
-        $_SESSION = ['user_id' => 7, AuthService::SYNC_PENDING => true];
+        $_SESSION = ['user_id' => 7, AuthService::SYNC_PENDING => true, AuthService::HARVEST_OWED => true];
 
         $body = $this->idle($this->controller($users, $fetcher));
 
-        $this->assertArrayNotHasKey(AuthService::SYNC_PENDING, $_SESSION);
-        $json = json_decode($body, true);
-        $this->assertIsArray($json);
-        $this->assertSame(['status', 'fetched', 'harvest_due'], array_keys($json));
-        $this->assertSame('synced', $json['status']);
-        $this->assertContains(Endpoint::OFFICE, $json['fetched']);
-        $this->assertStringNotContainsString('secret-token', $body);
-        $this->assertNotSame([], $fetcher->calls, 'the sync really ran');
-    }
-
-    public function testIdleSyncSaysWhetherTheHarvestIsDueOnceTheSyncIsDone(): void
-    {
-        $users = $this->createStub(UserRepository::class);
-        $users->method('findById')->willReturn(['id' => 7, 'api_token' => 'tok']);
-        $_SESSION = ['user_id' => 7, AuthService::SYNC_PENDING => true];
-
-        $body = $this->idle($this->controller($users, new ScriptedGproFetcher(), true));
-
-        $json = json_decode($body, true);
-        $this->assertIsArray($json);
-        $this->assertTrue($json['harvest_due']);
-    }
-
-    public function testIdleSyncWhenNothingIsOwedStillSaysWhetherTheHarvestIsDue(): void
-    {
-        $users = $this->createStub(UserRepository::class);
-        $users->method('findById')->willReturn(['id' => 7, 'api_token' => 'tok']);
-        $fetcher = new ScriptedGproFetcher();
-        $_SESSION = ['user_id' => 7];
-
-        $body = $this->idle($this->controller($users, $fetcher, true));
-
-        $this->assertSame('{"status":"idle","fetched":[],"harvest_due":true}', $body);
-        $this->assertSame([], $fetcher->calls);
-    }
-
-    public function testAnOwedHarvestWithNothingDueIsSettledByTheIdleAnswer(): void
-    {
-        $users = $this->createStub(UserRepository::class);
-        $users->method('findById')->willReturn(['id' => 7, 'api_token' => 'tok']);
-        $_SESSION = ['user_id' => 7, AuthService::HARVEST_OWED => true];
-
-        $body = $this->idle($this->controller($users, new ScriptedGproFetcher(), false));
-
         $this->assertSame('{"status":"idle","fetched":[],"harvest_due":false}', $body);
-        $this->assertArrayNotHasKey(AuthService::HARVEST_OWED, $_SESSION);
+        $this->assertSame([], $fetcher->calls, 'an old open tab cannot spend GPRO calls');
+        $this->assertTrue($_SESSION[AuthService::SYNC_PENDING], 'the answer settles nothing');
+        $this->assertTrue($_SESSION[AuthService::HARVEST_OWED], 'the answer settles nothing');
     }
 
-    public function testAnOwedHarvestWithWorkDueStaysOwed(): void
-    {
-        $users = $this->createStub(UserRepository::class);
-        $users->method('findById')->willReturn(['id' => 7, 'api_token' => 'tok']);
-        $_SESSION = ['user_id' => 7, AuthService::HARVEST_OWED => true];
-
-        $body = $this->idle($this->controller($users, new ScriptedGproFetcher(), true));
-
-        $this->assertSame('{"status":"idle","fetched":[],"harvest_due":true}', $body);
-        $this->assertTrue($_SESSION[AuthService::HARVEST_OWED]);
-    }
-
-    public function testIdleSyncWithoutATokenSpendsNothing(): void
+    public function testTheOldIdleRouteAnswersTheSameWithoutAToken(): void
     {
         $users = $this->createStub(UserRepository::class);
         $users->method('findById')->willReturn(['id' => 7, 'api_token' => '']);
         $fetcher = new ScriptedGproFetcher();
-        $_SESSION = ['user_id' => 7, AuthService::SYNC_PENDING => true];
-
-        $body = $this->idle($this->controller($users, $fetcher));
-
-        $this->assertSame('{"status":"needs_token","fetched":[],"harvest_due":false}', $body);
-        $this->assertSame([], $fetcher->calls);
-    }
-
-    public function testIdleSyncRespectsTheRunningSyncLock(): void
-    {
-        $this->cache->set('sync_lock_7', time(), 60);
-        $users = $this->createStub(UserRepository::class);
-        $users->method('findById')->willReturn(['id' => 7, 'api_token' => 'tok']);
-        $fetcher = new ScriptedGproFetcher();
-        $_SESSION = ['user_id' => 7, AuthService::SYNC_PENDING => true];
-
-        $body = $this->idle($this->controller($users, $fetcher));
-
-        $this->assertSame('{"status":"in_progress","fetched":[],"harvest_due":false}', $body);
-        $this->assertSame([], $fetcher->calls);
-    }
-
-    public function testIdleSyncSavesTheBudgetFigureItProducedAfterReleasingTheSession(): void
-    {
-        $dir = $this->cacheDir . '_sessions';
-        mkdir($dir, 0700, true);
-        $prior = [
-            ini_set('session.save_path', $dir),
-            ini_set('session.use_cookies', '0'),
-            ini_set('session.cache_limiter', ''),
-        ];
-        try {
-            session_id('idlebudgettest');
-            $this->assertTrue(session_start());
-            $_SESSION = [
-                'user_id' => 7,
-                AuthService::SYNC_PENDING => true,
-                AuthService::IDLE_SYNC_OFFERED => true,
-                'api_limit' => 100,
-                'api_limit_updated_at' => 1,
-            ];
-            $users = $this->createStub(UserRepository::class);
-            $users->method('findById')->willReturn(['id' => 7, 'api_token' => 'tok']);
-            $fetcher = new ScriptedGproFetcher();
-            $fetcher->remaining = 64;
-
-            $this->idle($this->controller($users, $fetcher));
-
-            $this->assertSame(PHP_SESSION_NONE, session_status(), 'the session is released again');
-            session_id('idlebudgettest');
-            $this->assertTrue(session_start());
-            $this->assertSame(64, $_SESSION['api_limit']);
-            $this->assertGreaterThan(1, $_SESSION['api_limit_updated_at']);
-            $this->assertArrayNotHasKey(AuthService::SYNC_PENDING, $_SESSION);
-            $this->assertArrayNotHasKey(AuthService::IDLE_SYNC_OFFERED, $_SESSION);
-            $this->assertSame(7, $_SESSION['user_id']);
-        } finally {
-            if (session_status() === PHP_SESSION_ACTIVE) {
-                session_write_close();
-            }
-            ini_set('session.save_path', (string) $prior[0]);
-            ini_set('session.use_cookies', (string) $prior[1]);
-            ini_set('session.cache_limiter', (string) $prior[2]);
-            foreach (glob($dir . '/*') ?: [] as $f) {
-                @unlink($f);
-            }
-            @rmdir($dir);
-        }
-    }
-
-    public function testIdleSyncWhenNothingIsOwedSpendsNothingAndAnswersIdle(): void
-    {
-        $users = $this->createStub(UserRepository::class);
-        $users->method('findById')->willReturn(['id' => 7, 'api_token' => 'tok']);
-        $fetcher = new ScriptedGproFetcher();
         $_SESSION = ['user_id' => 7];
 
         $body = $this->idle($this->controller($users, $fetcher));
 
         $this->assertSame('{"status":"idle","fetched":[],"harvest_due":false}', $body);
         $this->assertSame([], $fetcher->calls);
-    }
-
-    /** @return array<string, array{string}> */
-    public static function foreignSessionFiles(): array
-    {
-        return [
-            'another user' => ['user_id|i:8;api_limit|i:100;api_limit_updated_at|i:1;'],
-            'logged out' => ['api_limit|i:100;api_limit_updated_at|i:1;'],
-        ];
-    }
-
-    #[\PHPUnit\Framework\Attributes\DataProvider('foreignSessionFiles')]
-    public function testIdleSyncWritesNoBudgetWhenTheSessionNoLongerBelongsToTheSyncingUser(string $fileNow): void
-    {
-        $dir = $this->cacheDir . '_sessions';
-        mkdir($dir, 0700, true);
-        $prior = [
-            ini_set('session.save_path', $dir),
-            ini_set('session.use_cookies', '0'),
-            ini_set('session.cache_limiter', ''),
-        ];
-        try {
-            session_id('idlemismatchtest');
-            $this->assertTrue(session_start());
-            $_SESSION = [
-                'user_id' => 7,
-                AuthService::SYNC_PENDING => true,
-                'api_limit' => 100,
-                'api_limit_updated_at' => 1,
-            ];
-            $users = $this->createStub(UserRepository::class);
-            $users->method('findById')->willReturn(['id' => 7, 'api_token' => 'tok']);
-            $users->method('updateSyncStatus')->willReturnCallback(
-                static function () use ($dir, $fileNow): void {
-                    file_put_contents($dir . '/sess_idlemismatchtest', $fileNow);
-                },
-            );
-            $fetcher = new ScriptedGproFetcher();
-            $fetcher->remaining = 64;
-
-            $this->idle($this->controller($users, $fetcher));
-
-            $this->assertSame(PHP_SESSION_NONE, session_status(), 'the reopened session is aborted, not left open');
-            $this->assertSame($fileNow, file_get_contents($dir . '/sess_idlemismatchtest'), 'nothing was written');
-        } finally {
-            if (session_status() === PHP_SESSION_ACTIVE) {
-                session_abort();
-            }
-            ini_set('session.save_path', (string) $prior[0]);
-            ini_set('session.use_cookies', (string) $prior[1]);
-            ini_set('session.cache_limiter', (string) $prior[2]);
-            foreach (glob($dir . '/*') ?: [] as $f) {
-                @unlink($f);
-            }
-            @rmdir($dir);
-        }
     }
 
     private function warmup(ApiWarmupController $controller): string
@@ -357,16 +167,12 @@ final class ApiWarmupControllerTest extends TestCase
         $this->assertArrayNotHasKey(AuthService::HARVEST_OWED, $_SESSION);
     }
 
-    public function testManualResyncClearsBothSyncFlags(): void
+    public function testManualResyncSettlesTheOwedLoginSync(): void
     {
         $users = $this->createStub(UserRepository::class);
         $users->method('findById')->willReturn(['id' => 7, 'api_token' => 'tok']);
         $fetcher = new ScriptedGproFetcher();
-        $_SESSION = [
-            'user_id' => 7,
-            AuthService::SYNC_PENDING => true,
-            AuthService::IDLE_SYNC_OFFERED => true,
-        ];
+        $_SESSION = ['user_id' => 7, AuthService::SYNC_PENDING => true];
 
         ob_start();
         try {
@@ -376,6 +182,5 @@ final class ApiWarmupControllerTest extends TestCase
         }
 
         $this->assertArrayNotHasKey(AuthService::SYNC_PENDING, $_SESSION);
-        $this->assertArrayNotHasKey(AuthService::IDLE_SYNC_OFFERED, $_SESSION);
     }
 }
