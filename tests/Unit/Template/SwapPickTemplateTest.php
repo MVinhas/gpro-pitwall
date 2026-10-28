@@ -86,7 +86,7 @@ final class SwapPickTemplateTest extends TestCase
         ));
 
         $this->assertMatchesRegularExpression(
-            '#<p class="t-caption[^"]*">\s*Top-3 car: same level, no extra spend\s*</p>#',
+            '#<p id="[^"]+" class="t-caption[^"]*">\s*Top-3 car: same level, no extra spend\s*</p>#',
             $html,
         );
         $this->assertStringNotContainsString('Season plan unavailable', $html);
@@ -97,6 +97,40 @@ final class SwapPickTemplateTest extends TestCase
         $html = $this->row(self::plan([self::option(5, 0, 'sidegrade', 500_000, true)], false));
 
         $this->assertStringContainsString('Season plan unavailable: ranked for this race', $html);
+    }
+
+    public function testAPickedSeasonlessPartExplainsWhyItWasPassedOver(): void
+    {
+        $html = $this->row(self::plan(
+            [self::option(5, 0, 'sidegrade', 500_000, true)],
+            false,
+            'No season pick for this part: ranked for this race',
+        ));
+
+        $this->assertStringContainsString('No season pick for this part: ranked for this race', $html);
+        $this->assertStringNotContainsString('Season plan unavailable', $html);
+    }
+
+    public function testTheCaptionDescribesTheRadiogroup(): void
+    {
+        $html = $this->row(self::plan([self::option(5, 0, 'sidegrade', 500_000, true)], false));
+
+        $this->assertMatchesRegularExpression('#role="radiogroup"[^>]*aria-describedby="(swap-why-brakes)"#', $html);
+        $this->assertMatchesRegularExpression('#<p id="swap-why-brakes" class="t-caption#', $html);
+    }
+
+    public function testAFreeDowngradeChipDropsTheRedundantFreeTag(): void
+    {
+        $free = self::option(4, -1, 'free_downgrade', 0, true);
+        $spare = self::option(5, 0, 'sidegrade', 0);
+        $spare['is_free'] = true;
+        $html = $this->row(self::plan([$free, $spare], true, 'Most PHA the season budget allows'));
+
+        $chips = array_slice(explode('<label', $html), 1);
+        $this->assertCount(2, $chips);
+        $this->assertStringContainsString('Free downgrade to L4', $chips[0]);
+        $this->assertStringNotContainsString('plan-tag-free', $chips[0]);
+        $this->assertStringContainsString('plan-tag-free', $chips[1]);
     }
 
     public function testTwoPaidPicksOverCashStillWarn(): void

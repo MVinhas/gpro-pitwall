@@ -320,12 +320,39 @@ final class PartSwapAdvisorServiceTest extends TestCase
         $this->assertGreaterThan($byLevel[6]['fit'], $byLevel[8]['fit']);
         $recommended = array_column(array_filter($options, static fn(array $o): bool => $o['recommended']), 'level');
         $this->assertCount(1, $recommended);
-        $this->assertContains($recommended[array_key_first($recommended)], [4, 5, 6]);
+        $this->assertSame([6], array_values($recommended));
         $this->assertTrue($options[0]['recommended']);
         $this->assertSame([4, 5, 6, 7, 8], (static function (array $l): array {
             sort($l);
             return $l;
         })($this->levels($options)));
+    }
+
+    public function testWithoutASeasonAndNothingWithinOneStepTheSmallestJumpIsRecommended(): void
+    {
+        $track = ['power' => 20, 'handling' => 5, 'acceleration' => 5];
+        $car   = ['power' => 80, 'handling' => 90, 'acceleration' => 85];
+        $carData = $this->carData([
+            ['level' => 7, 'wear' => 0, 'cost' => 900_000,   'action' => 7],
+            ['level' => 8, 'wear' => 0, 'cost' => 1_100_000, 'action' => 8],
+        ]);
+
+        $options = $this->svc->advise(
+            $this->flaggedEngine(level: 5),
+            $carData,
+            $this->wearParts(level: 5),
+            [],
+            $track,
+            $car,
+            0,
+            [],
+            10_000_000,
+        )['Engine']['options'];
+
+        $recommended = array_values(array_column(array_filter($options, static fn(array $o): bool => $o['recommended']), 'level'));
+        $this->assertSame([7], $recommended);
+        $this->assertSame(7, $options[0]['level']);
+        $this->assertSame('value', $options[0]['recommend_reason']);
     }
 
     public function testWhenThePickerFindsNothingTheTrackFitRankingStands(): void
@@ -349,7 +376,7 @@ final class PartSwapAdvisorServiceTest extends TestCase
         $plain = $this->svc->advise($this->flaggedEngine(), $carData, $this->wearParts(), [], $track, $car, 0, [], 10_000_000);
 
         $this->assertFalse($out['Engine']['season']);
-        $this->assertNull($out['Engine']['season_reason']);
+        $this->assertSame('No season pick for this part: ranked for this race', $out['Engine']['season_reason']);
         $this->assertSame($plain['Engine']['options'], $out['Engine']['options']);
     }
 

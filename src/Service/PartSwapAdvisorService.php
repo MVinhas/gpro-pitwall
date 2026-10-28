@@ -216,7 +216,11 @@ final class PartSwapAdvisorService
                 ],
                 'options' => $options,
                 'season'        => $pick !== null,
-                'season_reason' => $pick !== null ? SwapLevelPicker::REASONS[$pick['reason']] : null,
+                'season_reason' => match (true) {
+                    $pick !== null => SwapLevelPicker::REASONS[$pick['reason']],
+                    $season !== null && $this->picker !== null => 'No season pick for this part: ranked for this race',
+                    default => null,
+                },
             ];
         }
 
@@ -469,7 +473,8 @@ final class PartSwapAdvisorService
      * Marks the ranked leader among the levels within one step of the current
      * one, and records whether it led on alignment or merely on price — only a
      * strictly better alignment band is a fit win. A bigger jump is a season
-     * decision, so without a season plan it is listed but never pre-selected.
+     * decision, so without a season plan it is only pre-selected when nothing
+     * lies within one step — then the smallest jump, track-fit order on ties.
      *
      * @param list<SwapOption> $options
      * @return list<SwapOption>
@@ -481,7 +486,14 @@ final class PartSwapAdvisorService
             static fn(array $o): bool => abs($o['delta']) <= self::LEVELS_UP_UNPLANNED,
         ));
         if ($near === []) {
-            return $this->withPick($options, null, '');
+            $smallest = null;
+            foreach ($options as $option) {
+                if ($smallest === null || abs($option['delta']) < abs($smallest['delta'])) {
+                    $smallest = $option;
+                }
+            }
+
+            return $this->withPick($options, $smallest['level'] ?? null, $smallest === null ? '' : 'value');
         }
         $reason = count($near) > 1 && $this->fitBand($near[0]) > $this->fitBand($near[1])
             ? 'fit'
