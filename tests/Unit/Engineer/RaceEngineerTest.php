@@ -1207,6 +1207,16 @@ final class RaceEngineerTest extends TestCase
         $this->assertSame('No level above yours adds PHA for the remaining tracks', $line['reason']);
     }
 
+    public function testAnInfeasiblePlanForecastSaysThePlanRunsShort(): void
+    {
+        $line = $this->line($this->withUpgrades([], plan: ['infeasible' => true]), 'upgrades');
+
+        $this->assertSame('No upgrade fits the budget', $line['answer']);
+        $this->assertSame('The season plan already runs short', $line['reason']);
+        $this->assertNull($line['figure']);
+        $this->assertSame('/season#season-upgrades', $line['anchor']);
+    }
+
     public function testUpgradesLineOmittedWithoutAPlanOrRanking(): void
     {
         $keys = static fn(EngineerInputs $in): array => array_column(RaceEngineer::brief($in), 'key');

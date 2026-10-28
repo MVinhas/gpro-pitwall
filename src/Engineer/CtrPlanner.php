@@ -14,7 +14,8 @@ use InvalidArgumentException;
  *   v: int, ctr: int, mode: 'nurse'|'push'|'short', safety: int,
  *   swaps: list<array{part: string, cost: int}>, refused_swap_cost: ?int,
  *   target: int, target_kind: 'cushion'|'start'|'start_out_of_reach', cushion: int, season_start: ?int,
- *   envelope: int, shortfall: ?int, rows: list<BudgetRow>, partial: list<string>, race: int, upgrades?: list<Upgrade>}
+ *   envelope: int, shortfall: ?int, rows: list<BudgetRow>, partial: list<string>, race: int, infeasible?: bool,
+ *   upgrades?: list<Upgrade>}
  */
 final readonly class CtrPlanner
 {
@@ -258,6 +259,7 @@ final readonly class CtrPlanner
             'rows' => $forecast['rows'],
             'partial' => $forecast['partial'],
             'race' => $rounds[0]['race'],
+            'infeasible' => $forecast['infeasible'],
         ];
     }
 }

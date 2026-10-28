@@ -634,6 +634,24 @@ final class RaceEngineerServiceTest extends TestCase
         self::assertSame('Upgrade ' . $affordable[0]['part'] . ' to L' . $affordable[0]['to'], $line['answer']);
     }
 
+    public function testAnInfeasiblePlanForecastSaysThePlanRunsShortNotThatNothingAddsPha(): void
+    {
+        $this->seedPromotionFixture();
+        $this->seedWearTracks();
+        // At Gamma a fresh engine wears past the limit inside one race, even at CTR 0.
+        $this->db->exec("UPDATE tracks SET wear_engine = 120.0 WHERE name = 'Gamma'");
+
+        $lines = $this->service->forCockpit(self::USER, $this->upgradeCockpit(30))['lines'];
+        $plan = $this->budgets->find(self::USER, self::SEASON)['plan'] ?? [];
+        $line = array_column($lines, null, 'key')['upgrades'] ?? null;
+
+        self::assertTrue($plan['infeasible'] ?? null);
+        self::assertSame([], $plan['upgrades'] ?? null);
+        self::assertNotNull($line);
+        self::assertSame('No upgrade fits the budget', $line['answer']);
+        self::assertSame('The season plan already runs short', $line['reason']);
+    }
+
     public function testWholeCardIsIdenticalAtAnyCurrentCtr(): void
     {
         $this->seedPromotionFixture();

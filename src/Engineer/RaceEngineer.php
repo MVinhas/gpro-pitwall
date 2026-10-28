@@ -422,6 +422,14 @@ final class RaceEngineer
         }
 
         $upgrades = $plan['upgrades'];
+        if ($upgrades === [] && ($plan['infeasible'] ?? false)) {
+            return self::line(
+                'upgrades',
+                'No upgrade fits the budget',
+                'The season plan already runs short',
+                self::UPGRADES_ANCHOR,
+            );
+        }
         if ($upgrades === []) {
             return self::line(
                 'upgrades',

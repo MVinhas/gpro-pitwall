@@ -461,6 +461,25 @@ final class UpgradeRankerTest extends TestCase
         $this->assertFalse($this->rank($ranker, $missed, $rounds, $demand, $parts, $prices, $options)[0]['affordable']);
     }
 
+    public function testAnInfeasiblePlanForecastRanksNothing(): void
+    {
+        $rounds = $this->rounds();
+        $parts = $this->parts();
+        $prices = ['Engine' => 100_000, 'Chassis' => 100_000];
+
+        $out = $this->rank(
+            $this->ranker($this->engineOnly()),
+            ['infeasible' => true] + $this->plan($rounds, $parts, $prices, budget: 1_000_000),
+            $rounds,
+            $this->evenDemand(),
+            $parts,
+            $prices,
+            ['Engine' => [['level' => 2, 'price' => 100_000]]],
+        );
+
+        $this->assertSame([], $out);
+    }
+
     public function testInfeasibleForecastDropsTheCandidate(): void
     {
         // A fresh level-2 engine would reach the limit inside one race (110 > 100).

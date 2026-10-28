@@ -53,6 +53,11 @@ readonly class UpgradeRanker
         int $income,
         int $spent,
     ): array {
+        // A fresh part the plan can't keep under the limit stays in every candidate's forecast too.
+        if ($plan['infeasible'] ?? false) {
+            return [];
+        }
+
         $limit = CtrPlanner::limit($objective);
         $planned = array_sum(array_column($plan['rows'], 'repairs'));
 
