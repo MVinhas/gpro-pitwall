@@ -523,6 +523,10 @@ $container['service.race_engineer'] = new \App\Service\RaceEngineerService(
     $container['service.risk_advisor'],
     $container['service.boost_fuel'],
     $container['service.fuel_model'],
+    new \App\Engineer\UpgradeRanker(
+        new \App\Engineer\SeasonBudget($container['service.car_wear']),
+        $container['config']['secrets']['part_pha_contribution'] ?? [],
+    ),
 );
 
 $container['controller.page'] = new PageController(

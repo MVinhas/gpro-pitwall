@@ -392,6 +392,21 @@ final class CtrPlannerTest extends TestCase
         $this->assertSame(4, $plan['race']);
     }
 
+    public function testPlanSaysWhetherItsForecastIsInfeasible(): void
+    {
+        $this->assertFalse($this->plan(SeasonObjective::HOLD, 10_000_000)['infeasible']);
+
+        // A fresh engine would reach the limit inside one race even at CTR 0 (110 > 100).
+        $parts = ['Engine' => ['level' => 1, 'start' => 50.0, 'track_base' => 110.0]];
+        $rounds = $this->rounds();
+        foreach ($rounds as $i => $round) {
+            $rounds[$i]['base'] = ['Engine' => 110.0];
+        }
+        $plan = $this->planner->plan(SeasonObjective::HOLD, $rounds, $parts, self::PRICES, 1.0, 10_000_000, 0, 0, null);
+
+        $this->assertTrue($plan['infeasible']);
+    }
+
     public function testPlanCarriesVersionAndPartial(): void
     {
         $rounds = $this->rounds();

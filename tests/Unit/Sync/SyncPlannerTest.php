@@ -20,7 +20,7 @@ final class SyncPlannerTest extends TestCase
     private const array SNAPSHOT = [
         Endpoint::DRIVER, Endpoint::CAR, Endpoint::TRACK, Endpoint::SETUP, Endpoint::TESTING,
         Endpoint::STAFF, Endpoint::TD, Endpoint::SPONSORS, Endpoint::MONEY, Endpoint::ANALYSIS,
-        Endpoint::STANDINGS, Endpoint::ECONOMY,
+        Endpoint::STANDINGS, Endpoint::ECONOMY, Endpoint::GROUP_STAFF,
     ];
 
     private const array SEASONAL = [Endpoint::CALENDAR, Endpoint::TYRES, Endpoint::MENU, Endpoint::SF_HISTORY, Endpoint::CCP_HISTORY];
@@ -69,7 +69,7 @@ final class SyncPlannerTest extends TestCase
         return [
             'first sync' => [['race' => []], [], null,
                 ['DRIVER', 'CAR', 'TRACK', 'SETUP', 'TESTING', 'STAFF', 'TD', 'SPONSORS', 'MONEY'],
-                ['ANALYSIS', 'STANDINGS', 'ECONOMY']],
+                ['ANALYSIS', 'STANDINGS', 'ECONOMY', 'GROUP_STAFF']],
             'unchanged office' => [[], [], $same, [], []],
             'doneRaceSetup flip' => [[], ['doneRaceSetup' => true], $same, $ps, []],
             'doneQ2 flip' => [[], ['doneQ2' => true], $same, $ps, []],
@@ -86,18 +86,18 @@ final class SyncPlannerTest extends TestCase
             'manual unchanged' => [['mode' => SyncPlanner::MODE_MANUAL], [], $same, ['CAR', 'SETUP'], []],
             'manual with setup flip has no duplicates' => [['mode' => SyncPlanner::MODE_MANUAL], ['doneRaceSetup' => true], $same, ['CAR', 'SETUP'], []],
             'no driver on a new race' => [['race' => []], ['driId' => ''], null,
-                ['CAR', 'TRACK', 'SETUP', 'TESTING', 'STAFF', 'TD', 'SPONSORS', 'MONEY'], ['ANALYSIS', 'STANDINGS', 'ECONOMY']],
+                ['CAR', 'TRACK', 'SETUP', 'TESTING', 'STAFF', 'TD', 'SPONSORS', 'MONEY'], ['ANALYSIS', 'STANDINGS', 'ECONOMY', 'GROUP_STAFF']],
             'no driver on driver flip' => [[], ['doneDriTrain' => true, 'driId' => '0'], $same, [], []],
             'no TD on a new race' => [['race' => []], ['tdId' => ''], null,
-                ['DRIVER', 'CAR', 'TRACK', 'SETUP', 'TESTING', 'STAFF', 'SPONSORS', 'MONEY'], ['ANALYSIS', 'STANDINGS', 'ECONOMY']],
+                ['DRIVER', 'CAR', 'TRACK', 'SETUP', 'TESTING', 'STAFF', 'SPONSORS', 'MONEY'], ['ANALYSIS', 'STANDINGS', 'ECONOMY', 'GROUP_STAFF']],
             'season rollover at end of season has no TRACK' => [['race' => []], ['seasonNb' => 11, 'raceNb' => 1, 'endOfSeason' => '1'], self::office(['seasonNb' => 10, 'raceNb' => 17]),
-                ['DRIVER', 'CAR', 'SETUP', 'TESTING', 'STAFF', 'TD', 'SPONSORS', 'MONEY'], ['ANALYSIS', 'STANDINGS', 'ECONOMY']],
+                ['DRIVER', 'CAR', 'SETUP', 'TESTING', 'STAFF', 'TD', 'SPONSORS', 'MONEY'], ['ANALYSIS', 'STANDINGS', 'ECONOMY', 'GROUP_STAFF']],
             'new race phase 2' => [['race' => []], ['raceNb' => 6], $same,
-                ['DRIVER', 'CAR', 'TRACK', 'SETUP', 'TESTING', 'STAFF', 'TD', 'SPONSORS', 'MONEY'], ['ANALYSIS', 'STANDINGS', 'ECONOMY']],
+                ['DRIVER', 'CAR', 'TRACK', 'SETUP', 'TESTING', 'STAFF', 'TD', 'SPONSORS', 'MONEY'], ['ANALYSIS', 'STANDINGS', 'ECONOMY', 'GROUP_STAFF']],
             'heal a missing analysis' => [['race' => array_diff(self::SNAPSHOT, ['ANALYSIS'])], [], $same, [], ['ANALYSIS']],
             'new season not archived' => [['race' => [], 'season' => []], ['seasonNb' => 11, 'raceNb' => 1], self::office(['seasonNb' => 10, 'raceNb' => 17]),
                 ['DRIVER', 'CAR', 'TRACK', 'SETUP', 'TESTING', 'STAFF', 'TD', 'SPONSORS', 'MONEY', 'CALENDAR', 'TYRES', 'MENU'],
-                ['ANALYSIS', 'STANDINGS', 'ECONOMY', 'SF_HISTORY[season=10]', 'CCP_HISTORY[season=10]']],
+                ['ANALYSIS', 'STANDINGS', 'ECONOMY', 'GROUP_STAFF', 'SF_HISTORY[season=10]', 'CCP_HISTORY[season=10]']],
             'season endpoints missing on unchanged office' => [['season' => ['TYRES']], [], $same, ['CALENDAR', 'MENU'], ['SF_HISTORY[season=9]', 'CCP_HISTORY[season=9]']],
             'one season history already archived' => [['season' => ['CALENDAR', 'TYRES', 'MENU', 'SF_HISTORY']], [], $same, [], ['CCP_HISTORY[season=9]']],
             'first season has no completed season to ask about' => [['season' => ['CALENDAR', 'TYRES', 'MENU']], ['seasonNb' => 1], self::office(['seasonNb' => 1]), [], []],
@@ -124,6 +124,7 @@ final class SyncPlannerTest extends TestCase
             'phase 2 trimmed to the floor' => [['race' => [], 'remaining' => 61, 'pending' => ['10,1']], [], null,
                 ['DRIVER', 'CAR', 'TRACK', 'SETUP', 'TESTING', 'STAFF', 'TD', 'SPONSORS', 'MONEY'], ['ANALYSIS', 'STANDINGS']],
             'heal STANDINGS only' => [['race' => array_diff(self::SNAPSHOT, ['STANDINGS'])], [], $same, [], ['STANDINGS']],
+            'heal GROUP_STAFF only' => [['race' => array_diff(self::SNAPSHOT, ['GROUP_STAFF'])], [], $same, [], ['GROUP_STAFF']],
             'heal ECONOMY only' => [['race' => array_diff(self::SNAPSHOT, ['ECONOMY'])], [], $same, [], ['ECONOMY']],
             'heal both on an unchanged office' => [['race' => array_diff(self::SNAPSHOT, ['STANDINGS', 'ECONOMY'])], [], $same, [], ['STANDINGS', 'ECONOMY']],
             'heal trimmed by the phase 2 floor' => [['race' => array_diff(self::SNAPSHOT, ['STANDINGS', 'ECONOMY']), 'remaining' => 51], [], $same, [], ['STANDINGS']],
@@ -135,7 +136,7 @@ final class SyncPlannerTest extends TestCase
             'backfill gated after earlier phase 2 entries (61 - 2 = 59)' => [['race' => array_diff(self::SNAPSHOT, ['STANDINGS', 'ECONOMY']), 'remaining' => 61, 'pending' => ['10,1']], [], $same, [], ['STANDINGS', 'ECONOMY']],
             'backfill full allowance at 68 left' => [['remaining' => 68, 'pending' => ['10,1', '10,2', '10,3', '10,4', '10,5']], [], $same, [],
                 ['ANALYSIS[SR=10,1]', 'ANALYSIS[SR=10,2]', 'ANALYSIS[SR=10,3]', 'ANALYSIS[SR=10,4]', 'ANALYSIS[SR=10,5]']],
-            'harvest new race has no phase 1' => [['mode' => SyncPlanner::MODE_HARVEST, 'race' => []], [], null, [], ['ANALYSIS', 'STANDINGS', 'ECONOMY']],
+            'harvest new race has no phase 1' => [['mode' => SyncPlanner::MODE_HARVEST, 'race' => []], [], null, [], ['ANALYSIS', 'STANDINGS', 'ECONOMY', 'GROUP_STAFF']],
             'harvest ignores season-scoped phase 1' => [['mode' => SyncPlanner::MODE_HARVEST, 'season' => []], [], $same, [], ['SF_HISTORY[season=9]', 'CCP_HISTORY[season=9]']],
             'harvest backfill' => [['mode' => SyncPlanner::MODE_HARVEST, 'remaining' => 80, 'pending' => ['9,3']], [], $same, [], ['ANALYSIS[SR=9,3]']],
         ];

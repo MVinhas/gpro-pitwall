@@ -20,11 +20,16 @@ final class ArchiveEndpointsTest extends TestCase
         );
     }
 
+    public function testViewStaffMapsToGroupStaff(): void
+    {
+        $this->assertSame([Endpoint::GROUP_STAFF], ArchiveEndpoints::toPlanner(['ViewStaff']));
+    }
+
     public function testUnmappedNamesAreDroppedAndDuplicatesCollapse(): void
     {
         $this->assertSame(
             [Endpoint::OFFICE],
-            ArchiveEndpoints::toPlanner(['office', 'ViewStaff', 'office']),
+            ArchiveEndpoints::toPlanner(['office', 'ViewDrivers', 'office']),
         );
     }
 }

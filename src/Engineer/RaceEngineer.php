@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace App\Engineer;
 
+use App\Support\Ordinal;
+
 /**
  * @phpstan-import-type Plan from CtrPlanner
+ * @phpstan-import-type Upgrade from UpgradeRanker
  * @phpstan-type Line array{
  *     key: string,
  *     answer: string,
@@ -30,6 +33,7 @@ final class RaceEngineer
     private const string BUDGET_ANCHOR = '/season#season-budget';
     private const string STAGE_TRAINING = 'training';
     private const string STAGE_TESTING = 'testing';
+    private const string UPGRADES_ANCHOR = '/season#season-upgrades';
 
     /**
      * @return list<Line>
@@ -47,6 +51,8 @@ final class RaceEngineer
             self::parts($in),
             self::training($in),
             self::testing($in),
+            self::upgrades($in),
+            self::staff($in),
             self::risk($in),
             self::boost($in),
         ];
@@ -365,7 +371,7 @@ final class RaceEngineer
                 );
         }
 
-        if (!self::affords($in, $cost, self::STAGE_TESTING)) {
+        if (self::testingSpend($in) === null) {
             return self::line(
                 'testing',
                 $skip,
@@ -376,6 +382,118 @@ final class RaceEngineer
         }
 
         return self::line('testing', $where, self::affordReason($in) . '; ' . $tunes, $anchor, Money::short($cost));
+    }
+
+    /**
+     * What the testing line spends: the session cost when a session is open, aimed and affordable; null when
+     * the line spends nothing.
+     */
+    private static function testingSpend(EngineerInputs $in): ?int
+    {
+        $cost = $in->testingCost;
+        if (!$in->testingOpen || $in->testingTarget === null || $cost === null) {
+            return null;
+        }
+
+        return self::affords($in, $cost, self::STAGE_TESTING) ? $cost : null;
+    }
+
+    /**
+     * What is left of the plan's envelope for car upgrades, after the lines that draw first: optional swaps,
+     * training, then testing.
+     */
+    public static function upgradeBudget(EngineerInputs $in): int
+    {
+        if ($in->plan === null) {
+            return 0;
+        }
+
+        return max(0, self::envelopeLeft($in, self::STAGE_TESTING) - (self::testingSpend($in) ?? 0));
+    }
+
+    /**
+     * @return ?Line
+     */
+    private static function upgrades(EngineerInputs $in): ?array
+    {
+        $plan = $in->plan;
+        if ($plan === null || !isset($plan['upgrades'])) {
+            return null;
+        }
+
+        $upgrades = $plan['upgrades'];
+        if ($upgrades === [] && ($plan['infeasible'] ?? false)) {
+            return self::line(
+                'upgrades',
+                'No upgrade fits the budget',
+                'The season plan already runs short',
+                self::UPGRADES_ANCHOR,
+            );
+        }
+        if ($upgrades === []) {
+            return self::line(
+                'upgrades',
+                'Nothing worth buying',
+                'No level above yours adds PHA for the remaining tracks',
+                self::UPGRADES_ANCHOR,
+            );
+        }
+
+        $races = count($plan['rows']);
+        foreach ($upgrades as $upgrade) {
+            if ($upgrade['affordable']) {
+                return self::line(
+                    'upgrades',
+                    'Upgrade ' . $upgrade['part'] . ' to L' . $upgrade['to'],
+                    'Most PHA per $ over the ' . $races . ($races === 1 ? ' race' : ' races') . ' left'
+                        . self::carClause($in),
+                    self::UPGRADES_ANCHOR,
+                    $upgrade['net_cost'] > 0 ? Money::short($upgrade['net_cost']) . ' net' : 'no extra cost',
+                );
+            }
+        }
+
+        $best = $upgrades[0];
+        $budget = self::upgradeBudget($in);
+        // A net that fits was refused for its price: paid now, while the repair it saves lands later.
+        $cost = $best['net_cost'] <= $budget
+            ? ' needs ' . Money::short($best['price']) . ' up front'
+            : ' for a net ' . Money::short($best['net_cost']);
+
+        return self::line(
+            'upgrades',
+            'No upgrade fits the budget',
+            'Best: ' . $best['part'] . ' L' . $best['to'] . $cost
+                . ($budget > 0 ? '; ' . Money::short($budget) . ' left' : '; nothing left'),
+            self::UPGRADES_ANCHOR,
+        );
+    }
+
+    private static function carClause(EngineerInputs $in): string
+    {
+        $car = $in->carStanding;
+
+        return $car === null ? '' : '; car level ' . $car['level'] . ', ' . Ordinal::of($car['rank'])
+            . ' of ' . $car['of'] . ' in your group';
+    }
+
+    /**
+     * @return ?Line
+     */
+    private static function staff(EngineerInputs $in): ?array
+    {
+        $staff = $in->staffStanding;
+        if ($staff === null || !$staff['nudge']) {
+            return null;
+        }
+
+        return self::line(
+            'staff',
+            'Staff and facilities trail your group',
+            'Staff OA ' . Ordinal::of($staff['rank']) . ' of ' . $staff['of'] . '; the ' . $staff['band']
+                . ' third averages ' . $staff['band_average'] . ', you have ' . $staff['own'],
+            tone: 'amber',
+        );
     }
 
     /**

@@ -1,0 +1,55 @@
+{# The ranking the engineer saved with the season plan, best first; shown only beside the budget it was ranked against. #}
+{% if budget and budget.view.upgrades is not null %}
+    <section id="season-upgrades" class="card scroll-mt-16" aria-labelledby="season-upgrades-title">
+        <div class="card-hd">
+            <h2 id="season-upgrades-title" class="t-heading">Upgrades to season end</h2>
+            <p class="t-caption mt-1">{{ budget.view.as_of }}</p>
+        </div>
+        <div class="card-bd space-y-4">
+            {% if budget.view.upgrades is empty and budget.view.upgrades_short %}
+                {% include 'partials/_empty.twig' with {
+                    title: 'No upgrade fits the budget',
+                    body: 'The season plan already runs short.'
+                } only %}
+            {% elseif budget.view.upgrades is empty %}
+                {% include 'partials/_empty.twig' with {
+                    title: 'No upgrade adds PHA',
+                    body: 'No level above yours adds PHA for the remaining tracks.'
+                } only %}
+            {% else %}
+                <div class="dt-scroll">
+                    <table class="dt">
+                        <thead class="bg-slate-50">
+                            <tr>
+                                <th class="dt-th">Part</th>
+                                <th class="dt-th">Level</th>
+                                <th class="dt-th text-right hidden sm:table-cell">PHA gain</th>
+                                <th class="dt-th text-right hidden sm:table-cell">Price</th>
+                                <th class="dt-th text-right">Net cost</th>
+                                <th class="dt-th text-right">Fits budget</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            {% for u in budget.view.upgrades %}
+                                <tr>
+                                    <td class="dt-td whitespace-normal">{{ u.part }}</td>
+                                    <td class="dt-td">{{ u.level }}</td>
+                                    <td class="dt-td text-right hidden sm:table-cell">{{ u.gain }}</td>
+                                    <td class="dt-td text-right hidden sm:table-cell">{{ u.price }}</td>
+                                    <td class="dt-td text-right">{{ u.net }}</td>
+                                    {% if u.fits %}
+                                        <td class="dt-td text-right font-medium text-emerald-700">Yes</td>
+                                    {% else %}
+                                        <td class="dt-td text-right">—</td>
+                                    {% endif %}
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <p class="t-caption">Gain = PHA points over the remaining races, weighted by each track's demands; net cost includes the extra repairs a higher level causes.</p>
+            {% endif %}
+        </div>
+    </section>
+{% endif %}

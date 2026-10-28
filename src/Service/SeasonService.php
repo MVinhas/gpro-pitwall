@@ -47,11 +47,12 @@ use App\Support\Sparkline;
  *     race: int, track: string, replaced: list<array{part: string, cost: string}>, replaced_none: string,
  *     running: string, income: string, balance: string, balance_note: string, tone: 'ink'|'amber'|'red'
  * }
+ * @phpstan-type UpgradeRowView array{part: string, level: string, gain: string, price: string, net: string, fits: bool}
  * @phpstan-type BudgetView array{
  *     season: int, race: int, computed_at: string, plan: Plan,
  *     view: array{
  *         as_of: string, target: string, spend: array{value: string, tone: 'ink'|'amber'|'red'},
- *         rows: list<BudgetRowView>, partial: string
+ *         rows: list<BudgetRowView>, partial: string, upgrades: list<UpgradeRowView>|null, upgrades_short: bool
  *     }
  * }
  */
@@ -167,6 +168,8 @@ class SeasonService
                     'spend' => $this->spend($plan),
                     'rows' => $this->budgetRows($plan),
                     'partial' => implode(', ', $plan['partial']),
+                    'upgrades' => $this->upgradeRows($plan),
+                    'upgrades_short' => $plan['infeasible'] ?? false,
                 ],
             ], false];
         } catch (\Throwable $e) {
@@ -262,6 +265,62 @@ class SeasonService
         }
 
         return $rows;
+    }
+
+    /**
+     * Null for a plan saved before the ranking existed, or whose ranking has a malformed row (that costs only
+     * the Upgrades card, never the budget); an empty list is a ranking that found nothing worth buying.
+     *
+     * @param Plan $plan
+     *
+     * @return list<UpgradeRowView>|null
+     */
+    private function upgradeRows(array $plan): ?array
+    {
+        if (!isset($plan['upgrades'])) {
+            return null;
+        }
+
+        try {
+            if (!self::isRanking($plan['upgrades'])) {
+                throw new \UnexpectedValueException('Saved upgrade ranking has an unexpected row.');
+            }
+
+            return array_map(static fn (array $u): array => [
+                'part' => $u['part'],
+                'level' => 'L' . $u['from'] . ' → L' . $u['to'],
+                'gain' => number_format($u['gain'], 1),
+                'price' => Dollars::short($u['price']),
+                'net' => $u['net_cost'] > 0 ? Dollars::short($u['net_cost']) : 'no extra cost',
+                'fits' => $u['affordable'],
+            ], $plan['upgrades']);
+        } catch (\Throwable $e) {
+            error_log('[Season] ' . $e::class);
+
+            return null;
+        }
+    }
+
+    private static function isRanking(mixed $rows): bool
+    {
+        if (!is_array($rows)) {
+            return false;
+        }
+        foreach ($rows as $u) {
+            $ok = is_array($u)
+                && is_string($u['part'] ?? null)
+                && is_int($u['from'] ?? null)
+                && is_int($u['to'] ?? null)
+                && is_int($u['price'] ?? null)
+                && is_int($u['net_cost'] ?? null)
+                && (is_int($u['gain'] ?? null) || is_float($u['gain'] ?? null))
+                && is_bool($u['affordable'] ?? null);
+            if (!$ok) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

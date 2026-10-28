@@ -270,8 +270,11 @@ final class HarvestServiceTest extends TestCase
 
         $second = $harvest->runSlice(self::USER);
 
-        $this->assertSame(['SFHistory?season=106', 'CCPHistory?season=106'], array_slice($this->gpro->requests, 3));
-        $this->assertSame(2, $second->calls);
+        $this->assertSame(
+            ['ViewStaff', 'SFHistory?season=106', 'CCPHistory?season=106'],
+            array_slice($this->gpro->requests, 3),
+        );
+        $this->assertSame(3, $second->calls);
         $this->settle();
 
         $this->gpro->requests = [];
@@ -429,6 +432,7 @@ final class HarvestServiceTest extends TestCase
         $this->archive->put(1, $scope, 'RaceAnalysis', '', 'w', 107, 13, ['racesToSelect' => $races] + $this->gpro->analysis);
         $this->archive->put(1, $scope, 'Standings', '', 'w', 107, 14, ['data' => []]);
         $this->archive->put(1, $scope, 'EconomyHistory', 'Page=1&show=table', 'w', 107, 14, ['data' => []]);
+        $this->archive->put(1, $scope, 'ViewStaff', '', 'w', 107, 14, ['data' => []]);
         $this->archive->put(1, $scope, 'SFHistory', 'season=106', '', 107, 14, ['data' => []]);
         $this->archive->put(1, $scope, 'CCPHistory', 'season=106', '', 107, 14, ['data' => []]);
         $this->settle();
@@ -641,8 +645,11 @@ final class HarvestServiceTest extends TestCase
 
         $second = $harvest->runSlice(self::USER);
 
-        $this->assertSame(['SFHistory?season=106', 'CCPHistory?season=106'], $this->gpro->requests);
-        $this->assertSame(2, $second->calls);
+        $this->assertSame(
+            ['ViewStaff', 'SFHistory?season=106', 'CCPHistory?season=106'],
+            $this->gpro->requests,
+        );
+        $this->assertSame(3, $second->calls);
         $this->settle();
         $this->gpro->requests = [];
 

@@ -1115,6 +1115,206 @@ final class RaceEngineerTest extends TestCase
         );
     }
 
+    /**
+     * @return array<string, mixed>
+     */
+    private function upgrade(string $part = 'Engine', int $to = 4, int $net = 800_000, bool $affordable = true): array
+    {
+        return [
+            'part' => $part, 'from' => $to - 1, 'to' => $to, 'price' => $net + 100_000, 'net_cost' => $net,
+            'gain' => 1.5, 'affordable' => $affordable,
+        ];
+    }
+
+    /**
+     * @param list<array<string, mixed>> $upgrades
+     * @param array<string, mixed> $o
+     */
+    private function withUpgrades(array $upgrades, array $o = [], array $plan = []): EngineerInputs
+    {
+        return $this->planned($plan + ['upgrades' => $upgrades], $o);
+    }
+
+    public function testUpgradePickNamesPartLevelAndNetCost(): void
+    {
+        $in = $this->withUpgrades(
+            [$this->upgrade('Brakes', 5, 400_000, false), $this->upgrade('Engine', 4, 800_000)],
+            plan: ['rows' => $this->plan()['rows'] + [1 => [], 2 => []]],
+        );
+        $line = $this->line($in, 'upgrades');
+
+        $this->assertSame('Upgrade Engine to L4', $line['answer']);
+        $this->assertSame('$800k net', $line['figure']);
+        $this->assertSame('Most PHA per $ over the 3 races left', $line['reason']);
+        $this->assertSame('/season#season-upgrades', $line['anchor']);
+        $this->assertSame('ink', $line['tone']);
+        $this->assertNull($line['action']);
+    }
+
+    public function testUpgradePickAddsTheGroupCarLevel(): void
+    {
+        $in = $this->withUpgrades([$this->upgrade()], ['carStanding' => ['level' => 14, 'rank' => 22, 'of' => 30]]);
+
+        $this->assertSame(
+            'Most PHA per $ over the 1 race left; car level 14, 22nd of 30 in your group',
+            $this->line($in, 'upgrades')['reason'],
+        );
+    }
+
+    public function testUpgradeWithNoExtraCost(): void
+    {
+        $line = $this->line($this->withUpgrades([$this->upgrade(net: 0)]), 'upgrades');
+
+        $this->assertSame('no extra cost', $line['figure']);
+    }
+
+    public function testNoUpgradeFitsTheBudget(): void
+    {
+        $in = $this->withUpgrades([$this->upgrade('Gearbox', 3, 1_200_000, false)], plan: ['envelope' => 900_000]);
+        $line = $this->line($in, 'upgrades');
+
+        $this->assertSame('No upgrade fits the budget', $line['answer']);
+        $this->assertNull($line['figure']);
+        $this->assertSame('Best: Gearbox L3 for a net $1.2M; $515k left', $line['reason']);
+        $this->assertSame('/season#season-upgrades', $line['anchor']);
+    }
+
+    public function testANetThatFitsButAPriceThatDoesNotNamesThePriceUpFront(): void
+    {
+        $best = ['price' => 1_300_000] + $this->upgrade('Gearbox', 3, 300_000, false);
+        $in = $this->withUpgrades([$best], plan: ['envelope' => 900_000]);
+        $line = $this->line($in, 'upgrades');
+
+        $this->assertSame('No upgrade fits the budget', $line['answer']);
+        $this->assertSame('Best: Gearbox L3 needs $1.3M up front; $515k left', $line['reason']);
+    }
+
+    public function testNoUpgradeFitsAnEmptyBudget(): void
+    {
+        $in = $this->withUpgrades([$this->upgrade('Gearbox', 3, 1_200_000, false)], plan: ['envelope' => 0]);
+
+        $this->assertSame(
+            'Best: Gearbox L3 for a net $1.2M; nothing left',
+            $this->line($in, 'upgrades')['reason'],
+        );
+    }
+
+    public function testNothingWorthBuying(): void
+    {
+        $line = $this->line($this->withUpgrades([]), 'upgrades');
+
+        $this->assertSame('Nothing worth buying', $line['answer']);
+        $this->assertSame('No level above yours adds PHA for the remaining tracks', $line['reason']);
+    }
+
+    public function testAnInfeasiblePlanForecastSaysThePlanRunsShort(): void
+    {
+        $line = $this->line($this->withUpgrades([], plan: ['infeasible' => true]), 'upgrades');
+
+        $this->assertSame('No upgrade fits the budget', $line['answer']);
+        $this->assertSame('The season plan already runs short', $line['reason']);
+        $this->assertNull($line['figure']);
+        $this->assertSame('/season#season-upgrades', $line['anchor']);
+    }
+
+    public function testUpgradesLineOmittedWithoutAPlanOrRanking(): void
+    {
+        $keys = static fn(EngineerInputs $in): array => array_column(RaceEngineer::brief($in), 'key');
+
+        $this->assertNotContains('upgrades', $keys($this->inputs()));
+        $this->assertNotContains('upgrades', $keys($this->planned()));
+        $this->assertContains('upgrades', $keys($this->withUpgrades([])));
+    }
+
+    public function testUpgradeBudgetDrawsAfterTesting(): void
+    {
+        $training = ['name' => 'Talent course', 'score' => 1.0, 'cost' => 550_000, 'gains' => []];
+
+        $covered = $this->withUpgrades([], ['trainingPick' => $training, 'testingCost' => 1_000_000], ['envelope' => 2_000_000]);
+        $skipped = $this->withUpgrades([], ['trainingPick' => $training, 'testingCost' => 2_000_000], ['envelope' => 2_000_000]);
+        $closed = $this->withUpgrades([], ['trainingPick' => $training, 'testingOpen' => false], ['envelope' => 2_000_000]);
+
+        $this->assertSame(450_000, RaceEngineer::upgradeBudget($covered));
+        $this->assertSame(1_450_000, RaceEngineer::upgradeBudget($skipped));
+        $this->assertSame(1_450_000, RaceEngineer::upgradeBudget($closed));
+        $this->assertSame(0, RaceEngineer::upgradeBudget($this->inputs()));
+    }
+
+    public function testUpgradeBudgetTakesTestingOnlyWhenTheTestingLineSpendsIt(): void
+    {
+        $training = ['name' => 'Talent course', 'score' => 1.0, 'cost' => 550_000, 'gains' => []];
+        $states = [
+            'fits' => ['testingCost' => 1_000_000],
+            'too dear' => ['testingCost' => 1_450_001],
+            'exact' => ['testingCost' => 1_450_000],
+            'cost unknown' => ['testingCost' => null],
+            'closed' => ['testingOpen' => false],
+            'no target' => ['testingTarget' => null],
+            'free' => ['testingCost' => 0],
+        ];
+
+        foreach ($states as $state => $o) {
+            $in = $this->withUpgrades([], $o + ['trainingPick' => $training], ['envelope' => 2_000_000]);
+            $testing = $this->line($in, 'testing');
+            $spends = str_starts_with($testing['answer'], 'Test at');
+
+            $this->assertSame(
+                1_450_000 - ($spends ? (int) $in->testingCost : 0),
+                RaceEngineer::upgradeBudget($in),
+                $state,
+            );
+        }
+    }
+
+    public function testUpgradeBudgetNeverGoesBelowZero(): void
+    {
+        $in = $this->withUpgrades([], ['trainingPick' => null, 'testingCost' => 100_000], ['envelope' => -50_000]);
+
+        $this->assertSame(0, RaceEngineer::upgradeBudget($in));
+    }
+
+    public function testStaffNudgeForPromote(): void
+    {
+        $staff = ['rank' => 27, 'of' => 30, 'own' => 41, 'band' => 'top', 'band_average' => 63, 'nudge' => true];
+        $line = $this->line($this->inputs(['staffStanding' => $staff]), 'staff');
+
+        $this->assertSame('Staff and facilities trail your group', $line['answer']);
+        $this->assertSame('Staff OA 27th of 30; the top third averages 63, you have 41', $line['reason']);
+        $this->assertSame('amber', $line['tone']);
+        $this->assertNull($line['figure']);
+        $this->assertNull($line['action']);
+    }
+
+    public function testStaffNudgeForHoldNamesTheMiddleThird(): void
+    {
+        $staff = ['rank' => 21, 'of' => 30, 'own' => 50, 'band' => 'middle', 'band_average' => 58, 'nudge' => true];
+
+        $this->assertSame(
+            'Staff OA 21st of 30; the middle third averages 58, you have 50',
+            $this->line($this->inputs(['staffStanding' => $staff]), 'staff')['reason'],
+        );
+    }
+
+    public function testNoStaffLineWithoutANudge(): void
+    {
+        $staff = ['rank' => 3, 'of' => 30, 'own' => 70, 'band' => 'top', 'band_average' => 63, 'nudge' => false];
+        $keys = static fn(EngineerInputs $in): array => array_column(RaceEngineer::brief($in), 'key');
+
+        $this->assertNotContains('staff', $keys($this->inputs(['staffStanding' => $staff])));
+        $this->assertNotContains('staff', $keys($this->inputs()));
+    }
+
+    public function testUpgradesComeAfterTestingAndBeforeRisk(): void
+    {
+        $staff = ['rank' => 27, 'of' => 30, 'own' => 41, 'band' => 'top', 'band_average' => 63, 'nudge' => true];
+        $in = $this->withUpgrades([$this->upgrade()], ['staffStanding' => $staff]);
+
+        $this->assertSame(
+            ['objective', 'cash', 'ctr', 'parts', 'training', 'testing', 'upgrades', 'staff', 'risk', 'boost'],
+            array_column(RaceEngineer::brief($in), 'key'),
+        );
+    }
+
     public function testNoLineClaimsAGain(): void
     {
         foreach ([SeasonObjective::PROMOTE, SeasonObjective::HOLD, SeasonObjective::SURVIVE] as $objective) {

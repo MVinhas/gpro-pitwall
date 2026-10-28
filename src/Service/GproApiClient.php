@@ -483,6 +483,29 @@ final class GproApiClient
         return is_array($cached) ? $cached : [];
     }
 
+    /**
+     * The group's staff only if already cached or archived for this race
+     * window — never spends an API call. The archive row is served whatever
+     * its age: the harvest files it once per window, and a stale answer beats
+     * none for a read that must not fetch.
+     *
+     * @return array<string, mixed>
+     */
+    public function getCachedGroupStaff(): array
+    {
+        $cached = $this->cache->get($this->userKey('group_staff'));
+        if (is_array($cached)) {
+            /** @var array<string, mixed> $cached */
+            return $cached;
+        }
+        $row = $this->archivedRow(
+            ...self::splitEndpoint('/gb/backend/api/v2/ViewStaff'),
+            window: $this->archiveWindow(),
+        );
+
+        return $row['payload'] ?? [];
+    }
+
     /** @return array<string, mixed> */
     public function getAllTracksPreview(bool $forceRefresh = false): array
     {

@@ -603,6 +603,7 @@ class PageController
                             'office'           => $office,
                             'menu'             => $menu,
                             'money_levels'     => $moneyLevels,
+                            'group_staff'      => $this->apiClient->getCachedGroupStaff(),
                             'division'         => $division,
                             'car'              => $carData,
                             'driver'           => $this->mapper->mapDriver($pilot),

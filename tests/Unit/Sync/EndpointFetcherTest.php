@@ -35,6 +35,7 @@ final class EndpointFetcherTest extends TestCase
             'latest analysis' => [Endpoint::ANALYSIS, '', 'RaceAnalysis'],
             'named analysis' => [Endpoint::ANALYSIS, 'SR=107,5', 'RaceAnalysis?SR=107,5'],
             'standings' => [Endpoint::STANDINGS, '', 'Standings'],
+            'group staff' => [Endpoint::GROUP_STAFF, '', 'ViewStaff'],
             'economy' => [Endpoint::ECONOMY, '', 'EconomyHistory?Page=1&show=table'],
             'staff and facilities history' => [Endpoint::SF_HISTORY, 'season=106', 'SFHistory?season=106'],
             'car character points history' => [Endpoint::CCP_HISTORY, 'season=106', 'CCPHistory?season=106'],

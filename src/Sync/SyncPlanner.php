@@ -86,7 +86,7 @@ final class SyncPlanner
     {
         $planned = [];
         $newRace = $this->isNewRace($ctx);
-        foreach ([Endpoint::ANALYSIS, Endpoint::STANDINGS, Endpoint::ECONOMY] as $endpoint) {
+        foreach ([Endpoint::ANALYSIS, Endpoint::STANDINGS, Endpoint::ECONOMY, Endpoint::GROUP_STAFF] as $endpoint) {
             if ($newRace || !in_array($endpoint, $ctx->archivedThisRace, true)) {
                 $planned[] = $endpoint;
             }

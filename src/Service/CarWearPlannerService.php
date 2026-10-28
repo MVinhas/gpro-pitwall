@@ -261,6 +261,44 @@ final readonly class CarWearPlannerService
     }
 
     /**
+     * The levels above the current one that GPRO offers for each part, with
+     * their price, cheapest level first. Parts with nothing to offer (top
+     * level, every higher level disabled) are left out.
+     *
+     * @param array<string, mixed> $carData GPRO Car payload
+     * @return array<string, list<array{level: int, price: int}>> part label → upgrades
+     */
+    public function upgradeOptions(array $carData): array
+    {
+        $out = [];
+        foreach (CarWearService::PARTS_MAP as $label => $map) {
+            $level = (int) ($carData[$map['lvl']] ?? 0);
+            $options = $carData[$map['options']] ?? null;
+            if (!is_array($options)) {
+                continue;
+            }
+            $found = [];
+            foreach ($options as $opt) {
+                if (
+                    !is_array($opt)
+                    || (int) ($opt['value']['value'] ?? 0) <= 0
+                    || (int) ($opt['newLvl'] ?? 0) <= $level
+                    || in_array($opt['disabled'] ?? null, ['true', true], true)
+                    || (int) ($opt['value']['cost'] ?? 0) <= 0
+                ) {
+                    continue;
+                }
+                $found[] = ['level' => (int) $opt['newLvl'], 'price' => (int) $opt['value']['cost']];
+            }
+            if ($found !== []) {
+                usort($found, static fn (array $a, array $b): int => $a['level'] <=> $b['level']);
+                $out[$label] = $found;
+            }
+        }
+        return $out;
+    }
+
+    /**
      * How hard each round is on each part for this driver, before clear-track
      * risk (which multiplies it by the part level and so depends on choices
      * made race by race).

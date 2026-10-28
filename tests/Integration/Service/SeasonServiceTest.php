@@ -188,6 +188,97 @@ final class SeasonServiceTest extends TestCase
         $this->assertSame('', $budget['view']['rows'][0]['balance_note']);
     }
 
+    public function testUpgradesViewFormatsRows(): void
+    {
+        $this->race(1);
+        $this->budgets->save(1, 107, 9, $this->plan(['upgrades' => [
+            ['part' => 'Engine', 'from' => 4, 'to' => 5, 'price' => 1_250_000, 'net_cost' => 1_480_000, 'gain' => 3.46, 'affordable' => true],
+            ['part' => 'Front wing', 'from' => 2, 'to' => 3, 'price' => 90_000, 'net_cost' => 0, 'gain' => 0.5, 'affordable' => false],
+            ['part' => 'Brakes', 'from' => 3, 'to' => 4, 'price' => 400_000, 'net_cost' => -20_000, 'gain' => 1.0, 'affordable' => true],
+        ]]));
+
+        $upgrades = $this->service->build(1, null)['budget']['view']['upgrades'] ?? null;
+
+        $this->assertSame([
+            ['part' => 'Engine', 'level' => 'L4 → L5', 'gain' => '3.5', 'price' => '$1.3M', 'net' => '$1.5M', 'fits' => true],
+            ['part' => 'Front wing', 'level' => 'L2 → L3', 'gain' => '0.5', 'price' => '$90k', 'net' => 'no extra cost', 'fits' => false],
+            ['part' => 'Brakes', 'level' => 'L3 → L4', 'gain' => '1.0', 'price' => '$400k', 'net' => 'no extra cost', 'fits' => true],
+        ], $upgrades);
+    }
+
+    public function testOldPlanWithoutUpgradesHidesTheCard(): void
+    {
+        $this->race(1);
+        $this->budgets->save(1, 107, 9, $this->plan());
+
+        $budget = $this->service->build(1, null)['budget'];
+
+        $this->assertNotNull($budget);
+        $this->assertArrayHasKey('upgrades', $budget['view']);
+        $this->assertNull($budget['view']['upgrades']);
+    }
+
+    public function testEmptyRankingShowsTheEmptyState(): void
+    {
+        $this->race(1);
+        $this->budgets->save(1, 107, 9, $this->plan(['upgrades' => []]));
+
+        $this->assertSame([], $this->service->build(1, null)['budget']['view']['upgrades'] ?? null);
+        $this->assertFalse($this->service->build(1, null)['budget']['view']['upgrades_short'] ?? null);
+    }
+
+    public function testAnInfeasiblePlanMarksTheRankingShort(): void
+    {
+        $this->race(1);
+        $this->budgets->save(1, 107, 9, $this->plan(['upgrades' => [], 'infeasible' => true]));
+
+        $this->assertTrue($this->service->build(1, null)['budget']['view']['upgrades_short'] ?? null);
+    }
+
+    public function testAMalformedUpgradeRowHidesOnlyTheUpgradesCard(): void
+    {
+        $this->race(1);
+        $this->budgets->save(1, 107, 9, $this->plan(['upgrades' => [
+            ['part' => 'Engine', 'from' => 4, 'to' => 5, 'price' => 1_250_000, 'gain' => 3.46, 'affordable' => true],
+        ]]));
+        $log = tempnam(sys_get_temp_dir(), 'season-log');
+        $this->assertIsString($log);
+        $previous = ini_set('error_log', $log);
+
+        try {
+            $budget = $this->service->build(1, null)['budget'];
+        } finally {
+            ini_set('error_log', (string) $previous);
+        }
+
+        $logged = (string) file_get_contents($log);
+        unlink($log);
+        $this->assertNotNull($budget);
+        $this->assertSame('$1.2M', $budget['view']['spend']['value']);
+        $this->assertNull($budget['view']['upgrades']);
+        $this->assertMatchesRegularExpression('/\[Season\] [A-Za-z\\\\]+$/m', $logged);
+        $this->assertStringNotContainsString('Engine', $logged);
+    }
+
+    public function testANonListRankingHidesOnlyTheUpgradesCard(): void
+    {
+        $this->race(1);
+        $this->budgets->save(1, 107, 9, $this->plan(['upgrades' => 'Engine']));
+        $log = tempnam(sys_get_temp_dir(), 'season-log');
+        $this->assertIsString($log);
+        $previous = ini_set('error_log', $log);
+
+        try {
+            $budget = $this->service->build(1, null)['budget'];
+        } finally {
+            ini_set('error_log', (string) $previous);
+        }
+
+        unlink($log);
+        $this->assertNotNull($budget);
+        $this->assertNull($budget['view']['upgrades']);
+    }
+
     public function testBudgetOnlyForTheLatestSeason(): void
     {
         $this->race(1, season: 106);

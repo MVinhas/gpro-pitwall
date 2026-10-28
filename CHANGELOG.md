@@ -6,6 +6,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.18] - 2026-10-28
+
+### Added
+- The **Race engineer** (admin) ranks part upgrades for the rest of the season: PHA gained,
+  weighted by each remaining track's demands, per net dollar (the level price plus the extra
+  repairs a higher level causes, less the replacements the plan already pays for). The card
+  names the best upgrade that fits the budget ("Upgrade Underbody to L2 · $243k net"); an
+  upgrade fits only if the season stays on target after paying for it up front. The Season
+  screen lists every part's best level under **Upgrades to season end**.
+- The engineer compares your staff OA with the managers in your group and flags staff and
+  facilities that trail it for your objective (Promote: outside the top third; Hold: in
+  the bottom third), and adds your car level and its rank in the group to the upgrade
+  reason. The group's staff is harvested once per race window.
+
 ## [1.21.17] - 2026-10-27
 
 ### Fixed
