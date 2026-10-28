@@ -23,6 +23,7 @@ final class ArchiveEndpoints
         'MoneyLevels' => Endpoint::MONEY,
         'Calendar' => Endpoint::CALENDAR,
         'TyreSuppliers' => Endpoint::TYRES,
+        'Tracks' => Endpoint::TRACKS,
         'Menu' => Endpoint::MENU,
         'RaceAnalysis' => Endpoint::ANALYSIS,
         'Standings' => Endpoint::STANDINGS,

@@ -239,7 +239,9 @@ class PageController
         $freshSync = false;
         if (DeferredRender::syncsInline($syncPending, $deferred, $idleSync)) {
             unset($_SESSION[AuthService::SYNC_PENDING], $_SESSION[AuthService::IDLE_SYNC_OFFERED]);
-            $this->syncService->trySyncForUser($user, false);
+            if ($this->syncService->trySyncForUser($user, false) === 'synced') {
+                $_SESSION[AuthService::HARVEST_OWED] = true;
+            }
             // Re-read for the sync outcome and timestamp the status line shows.
             $user = $this->userRepo->findById((int) $user['id']) ?? $user;
             $freshSync = true;
@@ -302,7 +304,7 @@ class PageController
         // answer; every other full page (not a skeleton, fragment or follow-up,
         // whose script is discarded) starts it itself.
         if (!$deferred && !$idleSync && !$wait && (string) $request->get('fragment', '') === '') {
-            $viewData['harvest_due'] = $this->harvest->isDueSafely($user);
+            $viewData['harvest_due'] = $this->harvest->isDueSafely($user, !empty($_SESSION[AuthService::HARVEST_OWED]));
         }
 
         if ($freshSync) {

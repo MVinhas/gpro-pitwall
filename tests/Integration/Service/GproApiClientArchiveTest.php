@@ -349,19 +349,19 @@ final class GproApiClientArchiveTest extends TestCase
         $this->assertSame(0, (int) $this->db->query('SELECT COUNT(*) FROM user_api_archive')->fetchColumn());
     }
 
-    public function testSharedKeysAreNotArchivedExceptTheTyreFeedWhichIsFiledUnderTheCaller(): void
+    public function testTheSharedTyreFeedAndTrackListAreFiledUnderTheCaller(): void
     {
         $client = $this->client();
         $this->sync($client, 'getTyreSuppliers', 'getAllTracksPreview');
         $this->flushCache();
         $this->sync($client, 'getTyreSuppliers', 'getAllTracksPreview');
 
-        $this->assertCount(3, $this->fetcher->calls, 'only the tyre feed reads its archived row after a flush');
+        $this->assertCount(2, $this->fetcher->calls, 'after a flush both read the caller\'s archived row');
         $this->assertSame(
-            [['endpoint' => 'TyreSuppliers', 'user_id' => 1]],
-            $this->db->query('SELECT endpoint, user_id FROM user_api_archive')->fetchAll(PDO::FETCH_ASSOC),
-            'the track list is shared and never archived',
+            [['endpoint' => 'TyreSuppliers', 'user_id' => 1], ['endpoint' => 'Tracks', 'user_id' => 1]],
+            $this->db->query('SELECT endpoint, user_id FROM user_api_archive ORDER BY id')->fetchAll(PDO::FETCH_ASSOC),
         );
+        $this->assertNull($this->cache->get('all_tracks_preview'), 'an archived row is never written to the shared key');
     }
 
     public function testTyreSuppliersAreArchivedForEachUserWhoFetchesThemEvenWhenTheSharedCacheIsWarm(): void

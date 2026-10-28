@@ -38,6 +38,9 @@ final readonly class ApiWarmupController
         // A manual re-sync settles any login sync still owed.
         unset($_SESSION[AuthService::SYNC_PENDING], $_SESSION[AuthService::IDLE_SYNC_OFFERED]);
         $status = $this->syncService->trySyncForUser($user, true);
+        if ($status === 'synced') {
+            $_SESSION[AuthService::HARVEST_OWED] = true;
+        }
 
         $messages = [
             'synced'              => 'API cache ready',
@@ -75,7 +78,7 @@ final readonly class ApiWarmupController
             echo json_encode([
                 'status' => 'idle',
                 'fetched' => [],
-                'harvest_due' => $this->harvest->isDueSafely($user),
+                'harvest_due' => $this->harvest->isDueSafely($user, !empty($_SESSION[AuthService::HARVEST_OWED])),
             ]);
             return;
         }
@@ -92,7 +95,7 @@ final readonly class ApiWarmupController
         echo json_encode([
             'status' => $outcome->status,
             'fetched' => $outcome->fetched,
-            'harvest_due' => $this->harvest->isDueSafely($user),
+            'harvest_due' => $this->harvest->isDueSafely($user, !empty($_SESSION[AuthService::HARVEST_OWED])),
         ]);
     }
 }

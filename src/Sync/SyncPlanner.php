@@ -28,7 +28,7 @@ final class SyncPlanner
         Endpoint::STAFF, Endpoint::TD, Endpoint::SPONSORS, Endpoint::MONEY,
     ];
 
-    private const array SEASON_PHASE1 = [Endpoint::CALENDAR, Endpoint::TYRES, Endpoint::MENU];
+    private const array SEASON_PHASE1 = [Endpoint::CALENDAR, Endpoint::TYRES, Endpoint::MENU, Endpoint::TRACKS];
     /** Fetched for the last completed season, which never changes. */
     private const array SEASON_PHASE2 = [Endpoint::SF_HISTORY, Endpoint::CCP_HISTORY];
 
@@ -46,8 +46,7 @@ final class SyncPlanner
     public function plan(SyncContext $ctx): SyncPlan
     {
         $phase1 = $ctx->mode === self::MODE_HARVEST ? [] : $this->phase1($ctx);
-        $floor = $ctx->mode === self::MODE_MANUAL ? self::MANUAL_FLOOR : self::LOGIN_FLOOR;
-        $allowed = $this->budget($ctx->remaining, $floor);
+        $allowed = $this->budget($ctx->remaining, self::floor($ctx->mode));
         $trimmed = count($phase1) > $allowed;
         $dropped = array_slice($phase1, $allowed);
         $phase1 = array_slice($phase1, 0, $allowed);
@@ -55,6 +54,20 @@ final class SyncPlanner
         $phase2 = $this->phase2($ctx, $ctx->remaining - count($phase1));
 
         return new SyncPlan(array_map(self::entry(...), $phase1), $phase2, $trimmed, $dropped);
+    }
+
+    /**
+     * Calls the mode's phase-1 floor still allows once $spent have been made:
+     * what a sync may spend on follow-up reads its plan cannot name up front.
+     */
+    public function spareCalls(SyncContext $ctx, int $spent): int
+    {
+        return $this->budget($ctx->remaining - $spent, self::floor($ctx->mode));
+    }
+
+    private static function floor(string $mode): int
+    {
+        return $mode === self::MODE_MANUAL ? self::MANUAL_FLOOR : self::LOGIN_FLOOR;
     }
 
     /**

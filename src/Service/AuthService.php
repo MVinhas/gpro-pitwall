@@ -48,6 +48,13 @@ class AuthService
      */
     public const string IDLE_SYNC_OFFERED = 'idle_sync_offered';
 
+    /**
+     * Session flag: a sync succeeded, so the background harvest may spend GPRO
+     * calls until a slice answers that nothing is left. Without it a slice only
+     * rebuilds projections from the archive.
+     */
+    public const string HARVEST_OWED = 'harvest_owed';
+
     public function __construct(
         private readonly UserRepository $users,
         private readonly TokenRepository $tokens,

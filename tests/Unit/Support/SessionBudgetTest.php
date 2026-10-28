@@ -93,6 +93,31 @@ final class SessionBudgetTest extends TestCase
         $this->assertSame(PHP_SESSION_NONE, session_status());
     }
 
+    public function testPersistDropsTheFlagsTheWorkSettledEvenWhenTheFigureDidNotChange(): void
+    {
+        $this->openSession('budgetforget');
+        $_SESSION['harvest_owed'] = true;
+        $budget = SessionBudget::release(7);
+        // Another request moved the figure meanwhile: an unchanged one here must not overwrite it.
+        file_put_contents($this->dir . '/sess_budgetforget', 'user_id|i:7;harvest_owed|b:1;api_limit|i:40;api_limit_updated_at|i:9;');
+
+        $budget->persist(['harvest_owed']);
+
+        $this->assertSame(PHP_SESSION_NONE, session_status());
+        $this->assertSame('user_id|i:7;api_limit|i:40;api_limit_updated_at|i:9;', file_get_contents($this->dir . '/sess_budgetforget'));
+    }
+
+    public function testWithoutAReleasedSessionTheSettledFlagsLeaveMemory(): void
+    {
+        $_SESSION = ['user_id' => 7, 'harvest_owed' => true];
+        $budget = SessionBudget::release(7);
+
+        $budget->persist(['harvest_owed']);
+
+        $this->assertSame(['user_id' => 7], $_SESSION);
+        $this->assertSame([], glob($this->dir . '/*'));
+    }
+
     public function testPersistDoesNothingWhenNoSessionWasActive(): void
     {
         $_SESSION = ['user_id' => 7, 'api_limit_updated_at' => 1];

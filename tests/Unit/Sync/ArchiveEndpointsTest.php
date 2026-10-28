@@ -25,6 +25,11 @@ final class ArchiveEndpointsTest extends TestCase
         $this->assertSame([Endpoint::GROUP_STAFF], ArchiveEndpoints::toPlanner(['ViewStaff']));
     }
 
+    public function testTheSharedTrackListMapsToTracks(): void
+    {
+        $this->assertSame([Endpoint::TRACKS], ArchiveEndpoints::toPlanner(['Tracks']));
+    }
+
     public function testUnmappedNamesAreDroppedAndDuplicatesCollapse(): void
     {
         $this->assertSame(

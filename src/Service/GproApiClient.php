@@ -488,10 +488,22 @@ final class GproApiClient
         return $this->stored($this->userKey('group_staff'), '/gb/backend/api/v2/ViewStaff') ?? [];
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * The same track list for everyone, but filed under each user who fetches
+     * it, like the tyre feed: a sync asks for it once a season, and a rotated
+     * shared cache then still has the caller's copy to serve.
+     *
+     * @return array<string, mixed>
+     */
     public function getAllTracksPreview(bool $forceRefresh = false): array
     {
-        return $this->getCached('all_tracks_preview', '/gb/backend/api/v2/Tracks', $forceRefresh, shared: true);
+        return $this->getCached(
+            'all_tracks_preview',
+            '/gb/backend/api/v2/Tracks',
+            $forceRefresh,
+            shared: true,
+            archiveShared: true,
+        );
     }
 
     /** @return array<string, mixed> */

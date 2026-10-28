@@ -25,8 +25,6 @@ final class GproSyncServiceTest extends TestCase
 {
     private string $cacheDir;
     private FilesystemCache $cache;
-    /** The client of the last service built, whose gate fetching() opens. */
-    private ?GproApiClient $client = null;
     private mixed $priorRaceDays = null;
     private string|false $priorErrorLog = false;
     private string $quietLog = '';
@@ -99,7 +97,6 @@ final class GproSyncServiceTest extends TestCase
         }
         $db ??= $this->sink();
         $client ??= $this->apiClient();
-        $this->client = $client;
 
         return new GproSyncService(
             $client,
@@ -133,17 +130,10 @@ final class GproSyncServiceTest extends TestCase
     }
 
     /**
-     * Runs a sync inside the client's fetch gate. GproSyncService does not
-     * open the gate itself yet (Task B2), so the test opens it for the run.
+     * What the idle harvest does with RaceAnalysis: fetch it through the same
+     * fetcher, which archives the answer. The harvest opens the gate for its
+     * fetches; this drives the fetcher directly, so it opens it here.
      */
-    private function fetching(\Closure $work): mixed
-    {
-        $this->assertNotNull($this->client);
-
-        return $this->client->withFetching($work);
-    }
-
-    /** What the idle harvest does with RaceAnalysis: fetch it through the same fetcher, which archives the answer. */
     private function harvestAnswersTheAnalysis(GproApiClient $client): void
     {
         $client->withFetching(static fn (): array => (new EndpointFetcher($client))->fetch(Endpoint::ANALYSIS));
@@ -175,7 +165,7 @@ final class GproSyncServiceTest extends TestCase
             ->with(7, 'needs_token');
 
         $svc = $this->service($users);
-        $this->assertSame('needs_token', $this->fetching(static fn (): mixed => $svc->trySyncForUser(['id' => 7, 'api_token' => ''])));
+        $this->assertSame('needs_token', $svc->trySyncForUser(['id' => 7, 'api_token' => '']));
     }
 
     public function testConcurrentSyncIsCoalesced(): void
@@ -189,7 +179,7 @@ final class GproSyncServiceTest extends TestCase
         $users->expects($this->never())->method('markSynced');
 
         $svc = $this->service($users);
-        $this->assertSame('in_progress', $this->fetching(static fn (): mixed => $svc->trySyncForUser(['id' => 7, 'api_token' => 'tok'])));
+        $this->assertSame('in_progress', $svc->trySyncForUser(['id' => 7, 'api_token' => 'tok']));
     }
 
     public function testDefersWhenBudgetBelowMargin(): void
@@ -204,7 +194,7 @@ final class GproSyncServiceTest extends TestCase
         $users->expects($this->never())->method('markSynced');
 
         $svc = $this->service($users, margin: 20);
-        $this->assertSame('deferred_low_budget', $this->fetching(static fn (): mixed => $svc->trySyncForUser(['id' => 7, 'api_token' => 'tok'])));
+        $this->assertSame('deferred_low_budget', $svc->trySyncForUser(['id' => 7, 'api_token' => 'tok']));
 
         // Deferring must not leave a lock behind.
         $this->assertFalse($this->cache->has('sync_lock_7'));
@@ -224,7 +214,7 @@ final class GproSyncServiceTest extends TestCase
             });
 
         $svc = $this->service($users, margin: 20);
-        $result = $this->fetching(static fn (): mixed => $svc->trySyncForUser(['id' => 7, 'api_token' => 'tok']));
+        $result = $svc->trySyncForUser(['id' => 7, 'api_token' => 'tok']);
 
         $this->assertContains('running', $statuses, 'sufficient budget must start the sync');
         $this->assertNotContains('deferred_low_budget', $statuses);
@@ -243,7 +233,7 @@ final class GproSyncServiceTest extends TestCase
             });
 
         $svc = $this->service($users, margin: 20);
-        $this->fetching(static fn (): mixed => $svc->trySyncForUser(['id' => 7, 'api_token' => 'tok']));
+        $svc->trySyncForUser(['id' => 7, 'api_token' => 'tok']);
 
         $this->assertContains('running', $statuses);
     }
@@ -253,7 +243,7 @@ final class GproSyncServiceTest extends TestCase
         $users = $this->createStub(UserRepository::class);
 
         $svc = $this->service($users);
-        $this->fetching(static fn (): mixed => $svc->trySyncForUser(['id' => 7, 'api_token' => 'tok']));
+        $svc->trySyncForUser(['id' => 7, 'api_token' => 'tok']);
 
         // Whether the sync succeeded or failed, the lock must be gone so the
         // next attempt isn't blocked.
@@ -273,7 +263,7 @@ final class GproSyncServiceTest extends TestCase
             });
 
         $svc = $this->service($users);
-        $this->fetching(static fn (): mixed => $svc->trySyncForUser(['id' => 7, 'api_token' => 'tok']));
+        $svc->trySyncForUser(['id' => 7, 'api_token' => 'tok']);
 
         $this->assertSame('running', $statuses[0] ?? null, 'first status must be running');
         $this->assertContains('failed', $statuses, 'unreachable API must end in failed');
@@ -285,7 +275,7 @@ final class GproSyncServiceTest extends TestCase
     {
         [$svc, $fetcher, $db] = $this->scripted();
 
-        $outcome = $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $outcome = $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
 
         $this->assertSame('synced', $outcome->status);
         $this->assertNotContains('RaceAnalysis', $fetcher->calls, 'RaceAnalysis is the idle harvest\'s');
@@ -297,14 +287,14 @@ final class GproSyncServiceTest extends TestCase
     {
         [$svc, $fetcher] = $this->scripted();
 
-        $outcome = $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $outcome = $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
 
         $this->assertInstanceOf(SyncOutcome::class, $outcome);
         $this->assertSame('synced', $outcome->status);
         $this->assertSame(
             self::sorted([
                 'office', 'DriProfile', 'UpdateCar', 'TrackProfile', 'RaceSetup', 'Testing', 'StaffAndFacilities',
-                'TDProfile', 'NegOverview', 'MoneyLevels', 'Calendar', 'TyreSuppliers', 'Menu',
+                'TDProfile', 'NegOverview', 'MoneyLevels', 'Calendar', 'TyreSuppliers', 'Menu', 'Tracks',
             ]),
             self::sorted($fetcher->calls),
         );
@@ -316,10 +306,10 @@ final class GproSyncServiceTest extends TestCase
     public function testUnchangedReloginCostsExactlyTheOfficeCall(): void
     {
         [$svc, $fetcher] = $this->scripted();
-        $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
         $fetcher->calls = [];
 
-        $outcome = $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $outcome = $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
 
         $this->assertSame(['office'], $fetcher->calls);
         $this->assertSame('synced', $outcome->status);
@@ -332,7 +322,7 @@ final class GproSyncServiceTest extends TestCase
         [$svc, $fetcher, $db] = $this->scripted();
         $this->cache->set('tyre_suppliers', ['suppliers' => []], 3600);
 
-        $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
 
         $this->assertContains('TyreSuppliers', $fetcher->calls, 'a warm shared feed is not this user\'s record');
         $row = $db->query("SELECT user_id, season FROM user_api_archive WHERE endpoint = 'TyreSuppliers'")
@@ -340,23 +330,23 @@ final class GproSyncServiceTest extends TestCase
         $this->assertSame(['user_id' => 7, 'season' => 107], $row);
 
         $fetcher->calls = [];
-        $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
         $this->assertSame(['office'], $fetcher->calls, 'asked once per season, then archived');
     }
 
     public function testRowsArchivedUnderAnotherTokenAreNotTreatedAsCurrent(): void
     {
         [$svc, $fetcher] = $this->scripted();
-        $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
         $fetcher->calls = [];
 
-        $swapped = $this->fetching(static fn (): mixed => $svc->sync(['id' => 7, 'api_token' => 'another-account'], SyncPlanner::MODE_LOGIN));
+        $swapped = $svc->sync(['id' => 7, 'api_token' => 'another-account'], SyncPlanner::MODE_LOGIN);
 
         $this->assertSame('synced', $swapped->status);
         $this->assertSame(
             self::sorted([
                 'office', 'DriProfile', 'UpdateCar', 'TrackProfile', 'RaceSetup', 'Testing', 'StaffAndFacilities',
-                'TDProfile', 'NegOverview', 'MoneyLevels', 'Calendar', 'TyreSuppliers', 'Menu',
+                'TDProfile', 'NegOverview', 'MoneyLevels', 'Calendar', 'TyreSuppliers', 'Menu', 'Tracks',
             ]),
             self::sorted($fetcher->calls),
             'the previous account\'s rows must not suppress the new account\'s first snapshot',
@@ -366,11 +356,11 @@ final class GproSyncServiceTest extends TestCase
     public function testDoneRaceSetupFlipFetchesOnlyTheSetup(): void
     {
         [$svc, $fetcher] = $this->scripted();
-        $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
         $fetcher->calls = [];
         $fetcher->office['doneRaceSetup'] = true;
 
-        $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
 
         $this->assertSame(['office', 'RaceSetup'], $fetcher->calls);
     }
@@ -378,10 +368,10 @@ final class GproSyncServiceTest extends TestCase
     public function testManualSyncRefreshesCarAndSetupEvenWhenNothingChanged(): void
     {
         [$svc, $fetcher] = $this->scripted();
-        $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
         $fetcher->calls = [];
 
-        $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_MANUAL));
+        $svc->sync(self::USER, SyncPlanner::MODE_MANUAL);
 
         $this->assertSame(['office', 'UpdateCar', 'RaceSetup'], $fetcher->calls);
     }
@@ -389,14 +379,14 @@ final class GproSyncServiceTest extends TestCase
     public function testTrySyncForUserMapsForceToManualAndNotForceToLogin(): void
     {
         [$svc, $fetcher] = $this->scripted();
-        $this->assertSame('synced', $this->fetching(static fn (): mixed => $svc->trySyncForUser(self::USER, false)));
+        $this->assertSame('synced', $svc->trySyncForUser(self::USER, false));
         $fetcher->calls = [];
 
-        $this->assertSame('synced', $this->fetching(static fn (): mixed => $svc->trySyncForUser(self::USER, true)));
+        $this->assertSame('synced', $svc->trySyncForUser(self::USER, true));
         $this->assertSame(['office', 'UpdateCar', 'RaceSetup'], $fetcher->calls);
 
         $fetcher->calls = [];
-        $this->assertSame('synced', $this->fetching(static fn (): mixed => $svc->trySyncForUser(self::USER, false)));
+        $this->assertSame('synced', $svc->trySyncForUser(self::USER, false));
         $this->assertSame(['office'], $fetcher->calls);
     }
 
@@ -405,7 +395,7 @@ final class GproSyncServiceTest extends TestCase
         [$svc, $fetcher] = $this->scripted();
         $fetcher->failing = ['Testing'];
 
-        $outcome = $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $outcome = $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
 
         $this->assertSame('synced', $outcome->status);
         $this->assertNotContains('TESTING', $outcome->fetched);
@@ -420,7 +410,7 @@ final class GproSyncServiceTest extends TestCase
         $prior = ini_set('error_log', $log);
 
         try {
-            $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+            $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
         } finally {
             ini_set('error_log', (string) $prior);
         }
@@ -445,7 +435,7 @@ final class GproSyncServiceTest extends TestCase
         [$svc, $fetcher] = $this->scripted($users);
         $fetcher->failing = ['office'];
 
-        $outcome = $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $outcome = $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
 
         $this->assertSame('failed', $outcome->status);
         $this->assertSame(['office'], $fetcher->calls);
@@ -465,7 +455,7 @@ final class GproSyncServiceTest extends TestCase
         [$svc, $fetcher] = $this->scripted($users);
         $fetcher->remaining = 15;
 
-        $outcome = $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $outcome = $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
 
         $this->assertSame('deferred_low_budget', $outcome->status);
         $this->assertSame(['office'], $fetcher->calls);
@@ -485,7 +475,7 @@ final class GproSyncServiceTest extends TestCase
         [$svc, $fetcher] = $this->scripted($users);
         $fetcher->remaining = 55;
 
-        $outcome = $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $outcome = $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
 
         $this->assertSame('deferred_low_budget', $outcome->status);
         $this->assertSame('deferred_low_budget', end($statuses));
@@ -500,11 +490,11 @@ final class GproSyncServiceTest extends TestCase
         $users->expects($this->once())->method('markSynced');
         [$svc, $fetcher] = $this->scripted($users);
         $fetcher->remaining = 55;
-        $this->assertSame('deferred_low_budget', $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN))->status);
+        $this->assertSame('deferred_low_budget', $svc->sync(self::USER, SyncPlanner::MODE_LOGIN)->status);
 
         $fetcher->remaining = 90;
         $fetcher->calls = [];
-        $outcome = $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $outcome = $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
 
         $this->assertSame('synced', $outcome->status, 'the next login really syncs and stamps last_synced_at');
         $this->assertNotSame(['office'], $fetcher->calls, 'the endpoints the trim cut are healed');
@@ -515,7 +505,7 @@ final class GproSyncServiceTest extends TestCase
         [$svc, $fetcher] = $this->scripted();
         $fetcher->office['driId'] = '';
 
-        $outcome = $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $outcome = $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
 
         $this->assertSame('synced', $outcome->status);
         $this->assertNotContains('DriProfile', $fetcher->calls);
@@ -528,7 +518,7 @@ final class GproSyncServiceTest extends TestCase
         $fetcher->office['tdId'] = '';
         $fetcher->office['group'] = 'Elite - 1';
 
-        $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
 
         $this->assertNotContains('TDProfile', $fetcher->calls);
     }
@@ -538,7 +528,7 @@ final class GproSyncServiceTest extends TestCase
         [$svc, $fetcher] = $this->scripted();
         $fetcher->failing = ['DriProfile'];
 
-        $outcome = $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $outcome = $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
 
         $this->assertSame('synced', $outcome->status);
         $this->assertNotContains('DRIVER', $outcome->fetched);
@@ -551,7 +541,7 @@ final class GproSyncServiceTest extends TestCase
         $fetcher->office['endOfSeason'] = true;
         $fetcher->failing = ['TrackProfile'];
 
-        $outcome = $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $outcome = $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
 
         $this->assertSame('synced', $outcome->status);
         $this->assertNotContains('TrackProfile', $fetcher->calls);
@@ -562,7 +552,7 @@ final class GproSyncServiceTest extends TestCase
         $users = $this->createStub(UserRepository::class);
 
         $svc = $this->service($users);
-        $outcome = $this->fetching(static fn (): mixed => $svc->sync(['id' => 7, 'api_token' => ''], SyncPlanner::MODE_LOGIN));
+        $outcome = $svc->sync(['id' => 7, 'api_token' => ''], SyncPlanner::MODE_LOGIN);
 
         $this->assertSame('needs_token', $outcome->status);
         $this->assertSame([], $outcome->fetched);
@@ -574,7 +564,7 @@ final class GproSyncServiceTest extends TestCase
         [$svc, $fetcher] = $this->scripted();
         $this->cache->set(GproApiClient::budgetKeyForToken('tok'), 15, 3600);
 
-        $outcome = $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $outcome = $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
 
         $this->assertSame('deferred_low_budget', $outcome->status);
         $this->assertSame([], $fetcher->calls);
@@ -584,11 +574,11 @@ final class GproSyncServiceTest extends TestCase
     {
         [$svc, $fetcher, $db, $client] = $this->scripted();
         $fetcher->analysis['selRaceNb'] = '11';
-        $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
         $this->harvestAnswersTheAnalysis($client);
         $fetcher->calls = [];
 
-        $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
 
         $this->assertSame(['office'], $fetcher->calls);
         $this->assertTrue($this->harvestPlansAnalysis($client, $db, $fetcher));
@@ -600,11 +590,11 @@ final class GproSyncServiceTest extends TestCase
         $fetcher->office['raceNb'] = 1;
         $fetcher->analysis['selSeasonNb'] = '106';
         $fetcher->analysis['selRaceNb'] = '16';
-        $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
         $this->harvestAnswersTheAnalysis($client);
         $fetcher->calls = [];
 
-        $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
 
         $this->assertSame(['office'], $fetcher->calls);
         $this->assertFalse($this->harvestPlansAnalysis($client, $db, $fetcher));
@@ -619,14 +609,14 @@ final class GproSyncServiceTest extends TestCase
     public function testPageLevelOfficeFetchBetweenSyncsDoesNotSwallowADoneFlagFlip(): void
     {
         [$svc, $fetcher, $db] = $this->scripted();
-        $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
 
         // A page render re-fetched the office after the flip and archived it.
         $fetcher->office['doneRaceSetup'] = true;
         $this->pageOfficeRow($db, $fetcher->office);
         $fetcher->calls = [];
 
-        $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
 
         $this->assertSame(['office', 'RaceSetup'], $fetcher->calls);
     }
@@ -634,12 +624,12 @@ final class GproSyncServiceTest extends TestCase
     public function testFirstSyncAfterDeployFallsBackToThePlainOfficeRow(): void
     {
         [$svc, $fetcher, $db] = $this->scripted();
-        $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
         $db->exec("DELETE FROM user_api_archive WHERE endpoint = 'office' AND params = 'sync'");
         $fetcher->office['doneRaceSetup'] = true;
         $fetcher->calls = [];
 
-        $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
 
         $this->assertSame(['office', 'RaceSetup'], $fetcher->calls);
     }
@@ -649,7 +639,7 @@ final class GproSyncServiceTest extends TestCase
         [$svc, $fetcher, $db] = $this->scripted();
         $fetcher->remaining = 15;
 
-        $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
 
         $this->assertSame(
             0,
@@ -687,11 +677,11 @@ final class GproSyncServiceTest extends TestCase
         $this->withRaceDays(function () use ($day, $fetchedAtUtc, $configure, &$asked): void {
             [$svc, $fetcher, $db, $client] = $this->scripted(null, $this->atParis($day . ' 21:30'));
             $configure($fetcher);
-            $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+            $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
             $this->harvestAnswersTheAnalysis($client);
             $db->exec("UPDATE user_api_archive SET fetched_at = '{$fetchedAtUtc}' WHERE endpoint = 'RaceAnalysis'");
             $fetcher->calls = [];
-            $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+            $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
             $this->assertSame(['office'], $fetcher->calls);
             $asked = $this->harvestPlansAnalysis($client, $db, $fetcher);
         });
@@ -747,7 +737,7 @@ final class GproSyncServiceTest extends TestCase
         $priorLog = ini_set('error_log', $log);
 
         try {
-            $outcome = $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+            $outcome = $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
         } finally {
             ini_set('error_log', (string) $priorLog);
         }
@@ -778,10 +768,10 @@ final class GproSyncServiceTest extends TestCase
     public function testCompletePlanRecordsTheSyncOffice(): void
     {
         [$svc, $fetcher, $db] = $this->scripted();
-        $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
         $fetcher->office['doneRaceSetup'] = true;
 
-        $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
 
         $this->assertTrue($this->syncRowDoneRaceSetup($db));
     }
@@ -789,18 +779,18 @@ final class GproSyncServiceTest extends TestCase
     public function testFailedPlannedFetchLeavesTheSyncOfficeAndTheNextSyncPlansItAgain(): void
     {
         [$svc, $fetcher, $db] = $this->scripted();
-        $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
         $fetcher->office['doneRaceSetup'] = true;
         $fetcher->failing = ['RaceSetup'];
 
-        $failed = $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $failed = $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
 
         $this->assertSame('synced', $failed->status);
         $this->assertFalse($this->syncRowDoneRaceSetup($db), 'previous sync row is left alone');
 
         $fetcher->failing = [];
         $fetcher->calls = [];
-        $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
 
         $this->assertSame(['office', 'RaceSetup'], $fetcher->calls);
         $this->assertTrue($this->syncRowDoneRaceSetup($db));
@@ -809,18 +799,18 @@ final class GproSyncServiceTest extends TestCase
     public function testNewRaceWithAFailingEndpointThatHasNoRowThisRaceAdvancesTheSyncRowAndHealsOnlyThatEndpoint(): void
     {
         [$svc, $fetcher, $db] = $this->scripted();
-        $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
         $fetcher->office['raceNb'] = 15;
         $fetcher->analysis['selRaceNb'] = '14';
         $fetcher->failing = ['Testing'];
 
-        $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
 
         $this->assertSame(15, $this->syncRowRace($db), 'the sync row moved to the new race');
 
         $fetcher->failing = [];
         $fetcher->calls = [];
-        $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
 
         $this->assertSame(['office', 'Testing'], $fetcher->calls, 'only the endpoint with no row this race');
     }
@@ -828,14 +818,14 @@ final class GproSyncServiceTest extends TestCase
     public function testDoneFlagFlipWhoseFetchFailsWhileTheEndpointAlreadyHasARowThisRaceHoldsTheSyncRow(): void
     {
         [$svc, $fetcher, $db] = $this->scripted();
-        $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
         $fetcher->office['doneRaceSetup'] = true;
         $fetcher->failing = ['RaceSetup'];
-        $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
         $fetcher->failing = [];
         $fetcher->calls = [];
 
-        $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
 
         $this->assertSame(['office', 'RaceSetup'], $fetcher->calls);
     }
@@ -845,7 +835,7 @@ final class GproSyncServiceTest extends TestCase
         [$svc, $fetcher, $db] = $this->scripted();
         $fetcher->remaining = 55;
 
-        $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
 
         $this->assertFalse($this->syncRowDoneRaceSetup($db), 'the sync row advanced; healing owns the cut endpoints');
     }
@@ -853,17 +843,17 @@ final class GproSyncServiceTest extends TestCase
     public function testTrimmedEndpointThatAlreadyHasARowThisRaceHoldsTheSyncRow(): void
     {
         [$svc, $fetcher, $db] = $this->scripted();
-        $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
         $fetcher->office['doneRaceSetup'] = true;
         $fetcher->remaining = 50;
 
-        $outcome = $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $outcome = $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
 
         $this->assertSame('deferred_low_budget', $outcome->status);
         $this->assertFalse($this->syncRowDoneRaceSetup($db), 'RaceSetup has a row this race, healing cannot see the flip');
         $fetcher->remaining = 90;
         $fetcher->calls = [];
-        $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
         $this->assertSame(['office', 'RaceSetup'], $fetcher->calls);
     }
 
@@ -872,13 +862,137 @@ final class GproSyncServiceTest extends TestCase
         [$svc, $fetcher, $db] = $this->scripted();
         $fetcher->office['updateInProgress'] = true;
 
-        $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
 
         $this->assertNull($this->syncRowDoneRaceSetup($db));
         $fetcher->office['updateInProgress'] = false;
         $fetcher->calls = [];
-        $this->fetching(static fn (): mixed => $svc->sync(self::USER, SyncPlanner::MODE_LOGIN));
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
         $this->assertNotNull($this->syncRowDoneRaceSetup($db), 'written once GPRO has finished updating');
+    }
+
+    public function testASyncFetchesThroughTheGate(): void
+    {
+        [$svc, $fetcher, , $client] = $this->scripted();
+
+        $outcome = $svc->sync(self::USER, SyncPlanner::MODE_MANUAL);
+
+        $this->assertSame('synced', $outcome->status);
+        $this->assertContains('office', $fetcher->calls, 'the service opened the gate for its plan');
+        $this->assertContains('UpdateCar', $fetcher->calls);
+        $fetcher->calls = [];
+
+        $this->assertSame([], $client->getStandings(), 'a miss after the sync is not a fetch');
+        $this->assertSame([], $fetcher->calls, 'the gate is closed again once the sync is over');
+    }
+
+    public function testAnEmptyOfficeNeverRecordsASync(): void
+    {
+        $users = $this->createMock(UserRepository::class);
+        $statuses = [];
+        $users->method('updateSyncStatus')
+            ->willReturnCallback(function (int $id, string $status) use (&$statuses): void {
+                $statuses[] = $status;
+            });
+        $users->expects($this->never())->method('markSynced');
+        $db = $this->sink();
+        $empty = new class implements \App\Service\GproFetcher {
+            /** @var list<string> */
+            public array $calls = [];
+
+            public function setToken(string $token): void
+            {
+            }
+
+            public function fetchJson(string $endpoint): array
+            {
+                $this->calls[] = $endpoint;
+
+                return [];
+            }
+
+            public function fetchMarketFile(string $market): array
+            {
+                return [];
+            }
+        };
+        $client = new GproApiClient($empty, $this->cache, new ApiArchiveRepository($db, new ArchiveSanitizer()));
+        $svc = $this->service($users, $client, $db);
+
+        $outcome = $svc->sync(self::USER, SyncPlanner::MODE_MANUAL);
+
+        $this->assertSame('failed', $outcome->status);
+        $this->assertCount(1, $empty->calls, 'nothing is planned against an empty office');
+        $this->assertSame(['running', 'failed'], $statuses);
+        $this->assertNull($this->syncRowRace($db), 'no office is recorded for the next sync to diff against');
+        $this->assertFalse($this->cache->has('sync_lock_7'));
+        $this->assertFalse($client->hasAnalysisAttempt());
+        $this->assertFalse($client->hasHarvestFailed(Endpoint::ANALYSIS, ''));
+    }
+
+    public function testTheSharedTrackListIsFetchedOncePerSeasonAndServedFromTheCallersArchive(): void
+    {
+        [$svc, $fetcher, $db, $client] = $this->scripted();
+        $fetcher->responses['Tracks'] = ['tracks' => [['id' => 1, 'name' => 'Monza']]];
+
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+
+        $this->assertContains('Tracks', $fetcher->calls);
+        $row = $db->query("SELECT user_id, season FROM user_api_archive WHERE endpoint = 'Tracks'")
+            ->fetch(\PDO::FETCH_ASSOC);
+        $this->assertSame(['user_id' => 7, 'season' => 107], $row, 'filed under the caller for the season');
+
+        $fetcher->calls = [];
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+        $this->assertSame(['office'], $fetcher->calls, 'asked once per season, then archived');
+
+        $this->cache->delete('all_tracks_preview');
+        $this->assertSame('Monza', $client->getAllTracksPreview()['tracks'][0]['name'] ?? null, 'a rotated cache reads the archived row');
+        $this->assertSame(['office'], $fetcher->calls);
+    }
+
+    public function testASyncFetchesTheProfileOfEachOngoingNegotiationNotYetStored(): void
+    {
+        [$svc, $fetcher, $db, $client] = $this->scripted();
+        $fetcher->responses['NegOverview'] = ['ongNegs' => [['sponsorId' => 5], ['sponsorId' => 6], ['sponsorId' => 0]]];
+        (new ApiArchiveRepository($db, new ArchiveSanitizer()))
+            ->put(7, GproApiClient::scopeFor('tok'), 'NegotiateSponsor', 'id=6', '', 107, 14, ['name' => 'Stored']);
+
+        $outcome = $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+
+        $this->assertSame('synced', $outcome->status);
+        $this->assertSame(['NegotiateSponsor?id=5'], array_values(array_filter(
+            $fetcher->requests,
+            static fn (string $r): bool => str_starts_with($r, 'NegotiateSponsor'),
+        )));
+        $this->assertSame(count($fetcher->calls), $outcome->calls, 'the profile call is counted');
+        $fetcher->calls = [];
+        $fetcher->requests = [];
+
+        $this->assertSame('NegotiateSponsor', $client->getSponsorProfile(5)['endpoint'] ?? null, 'served without a call');
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+        $this->assertSame(['office'], $fetcher->calls, 'stored profiles are not asked for again');
+    }
+
+    public function testSponsorProfilesSpendOnlyWhatTheFloorLeaves(): void
+    {
+        [$svc, $fetcher] = $this->scripted();
+        $fetcher->responses['NegOverview'] = ['ongNegs' => [['sponsorId' => 5], ['sponsorId' => 6]]];
+        // A first login plans 13 calls after the office; the login floor is 50.
+        $fetcher->remaining = 63;
+
+        $this->assertSame('synced', $svc->sync(self::USER, SyncPlanner::MODE_LOGIN)->status);
+        $this->assertNotContains('NegotiateSponsor', $fetcher->calls, '63 - 13 leaves nothing above the floor');
+
+        $fetcher->calls = [];
+        $fetcher->remaining = 21;
+        $this->assertSame('deferred_low_budget', $svc->sync(self::USER, SyncPlanner::MODE_MANUAL)->status);
+        $this->assertSame(['office', 'UpdateCar'], $fetcher->calls, 'the manual floor trims the plan; no profile is paid');
+
+        $fetcher->calls = [];
+        $fetcher->remaining = 23;
+        $svc->sync(self::USER, SyncPlanner::MODE_MANUAL);
+        $this->assertSame(['office', 'UpdateCar', 'RaceSetup', 'NegotiateSponsor'], $fetcher->calls, '23 - 2 - 20 leaves one call');
     }
 
     private function syncRowRace(\PDO $db): ?int

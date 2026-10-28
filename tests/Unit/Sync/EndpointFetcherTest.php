@@ -34,6 +34,7 @@ final class EndpointFetcherTest extends TestCase
         return [
             'money' => [Endpoint::MONEY, '', 'MoneyLevels'],
             'tyres' => [Endpoint::TYRES, '', 'TyreSuppliers'],
+            'tracks' => [Endpoint::TRACKS, '', 'Tracks'],
             'latest analysis' => [Endpoint::ANALYSIS, '', 'RaceAnalysis'],
             'named analysis' => [Endpoint::ANALYSIS, 'SR=107,5', 'RaceAnalysis?SR=107,5'],
             'standings' => [Endpoint::STANDINGS, '', 'Standings'],
@@ -47,7 +48,8 @@ final class EndpointFetcherTest extends TestCase
     #[DataProvider('requests')]
     public function testFetchesTheMatchingEndpointFresh(string $endpoint, string $params, string $expected): void
     {
-        // The sync that drives the fetcher opens the client's gate (Task B2 moves that into the service).
+        // The fetcher sits below the sync and the harvest, which open the client's
+        // gate around it; driven directly here, the test opens it.
         $this->client->withFetching(function () use ($endpoint, $params): void {
             $this->fetcher->fetch($endpoint, $params);
             $this->fetcher->fetch($endpoint, $params);

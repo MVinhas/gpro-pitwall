@@ -53,7 +53,8 @@ final class GproSyncService
     /**
      * Runs phase 1 of the planner: the office is always fetched fresh as the
      * change detector, then only the endpoints the plan names are spent on.
-     * NEVER throws — status is persisted instead.
+     * The client's fetch gate is open for those fetches only, so nothing else
+     * this run reads can spend a call. NEVER throws — status is persisted instead.
      *
      * Coalesces concurrent syncs: if one is already in flight for this user
      * (e.g. a tab change fires a second request while the first is running),
@@ -101,7 +102,11 @@ final class GproSyncService
 
             $calls++;
             try {
-                $office = $this->apiClient->getOfficeData(true);
+                $office = $this->apiClient->withFetching(fn (): array => $this->apiClient->getOfficeData(true));
+                // Nothing to plan against, and nothing a sync may be recorded on.
+                if ($office === []) {
+                    throw new UnexpectedValueException('empty payload');
+                }
             } catch (Throwable $e) {
                 error_log('[GproSync] user ' . $userId . ': ' . Endpoint::OFFICE . ' failed: ' . $e::class);
                 $this->users->updateSyncStatus($userId, 'failed');
@@ -131,7 +136,7 @@ final class GproSyncService
                 $names[] = $endpoint;
                 $calls++;
                 try {
-                    $payload = $this->fetcher->fetch($endpoint);
+                    $payload = $this->apiClient->withFetching(fn (): array => $this->fetcher->fetch($endpoint));
                     // The TD getter swallows its own failure into [].
                     if ($payload === [] && $endpoint === Endpoint::TD) {
                         throw new UnexpectedValueException('empty payload');
@@ -142,6 +147,7 @@ final class GproSyncService
                     $unpaid[] = $endpoint;
                 }
             }
+            $calls += $this->fetchSponsorProfiles($userId, $this->planner->spareCalls($ctx, count($plan->phase1)));
             error_log(sprintf(
                 '[GproSync] user %d mode %s plan: %d calls (%s) in %d ms',
                 $userId,
@@ -177,6 +183,40 @@ final class GproSyncService
         } finally {
             $this->cache->delete($lockKey);
         }
+    }
+
+    /**
+     * The Cockpit's sponsor advice reads one profile per ongoing negotiation,
+     * and pages never fetch: each one not stored yet is fetched here, within
+     * the calls the plan's floor leaves. Returns the calls made.
+     */
+    private function fetchSponsorProfiles(int $userId, int $spare): int
+    {
+        $ongoing = $spare > 0 ? $this->apiClient->getSponsorNegotiations()['ongNegs'] ?? [] : [];
+        if (!is_array($ongoing)) {
+            return 0;
+        }
+
+        $calls = 0;
+        foreach ($ongoing as $negotiation) {
+            if ($calls >= $spare) {
+                break;
+            }
+            $sponsorId = is_array($negotiation) && is_numeric($negotiation['sponsorId'] ?? null)
+                ? (int) $negotiation['sponsorId']
+                : 0;
+            if ($sponsorId <= 0 || $this->apiClient->getSponsorProfile($sponsorId) !== []) {
+                continue;
+            }
+            $calls++;
+            try {
+                $this->apiClient->withFetching(fn (): array => $this->apiClient->getSponsorProfile($sponsorId, true));
+            } catch (Throwable $e) {
+                error_log('[GproSync] user ' . $userId . ': sponsor profile failed: ' . $e::class);
+            }
+        }
+
+        return $calls;
     }
 
     /**

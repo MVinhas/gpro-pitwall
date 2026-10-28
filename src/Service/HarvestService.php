@@ -23,6 +23,8 @@ use UnexpectedValueException;
  * calls, then a few projections out of the archive. It never touches the office
  * endpoint (the page-critical sync owns that) and plans against the office the
  * last sync archived, so every row it files is stamped with that sync's race.
+ * The calls are made only when the caller says a successful sync owed them ($mayFetch);
+ * otherwise a slice only projects.
  */
 class HarvestService
 {
@@ -53,16 +55,15 @@ class HarvestService
 
     /**
      * Whether a slice has anything to do. Reads the cache and the archive only.
+     * API work counts only when the slice would be allowed to fetch it.
      *
      * @param array<string, mixed> $user
      */
-    public function isDue(array $user): bool
+    public function isDue(array $user, bool $mayFetch): bool
     {
         $userId = (int) $user['id'];
-        if ($this->bindToken($user)) {
-            if ($this->plannedWork($userId) !== []) {
-                return true;
-            }
+        if ($mayFetch && $this->bindToken($user) && $this->plannedWork($userId) !== []) {
+            return true;
         }
 
         return $this->projector->pendingRaces($userId, 1) !== [];
@@ -74,10 +75,10 @@ class HarvestService
      *
      * @param array<string, mixed> $user
      */
-    public function isDueSafely(array $user): bool
+    public function isDueSafely(array $user, bool $mayFetch): bool
     {
         try {
-            return $this->isDue($user);
+            return $this->isDue($user, $mayFetch);
         } catch (Throwable $e) {
             error_log('[Harvest] isDue failed: ' . $e::class);
 
@@ -92,7 +93,7 @@ class HarvestService
      *
      * @param array<string, mixed> $user
      */
-    public function runSlice(array $user): HarvestResult
+    public function runSlice(array $user, bool $mayFetch): HarvestResult
     {
         $userId = (int) $user['id'];
         $started = hrtime(true);
@@ -110,7 +111,7 @@ class HarvestService
         $calls = 0;
         $projected = 0;
         try {
-            $entries = $this->plannedWork($userId);
+            $entries = $mayFetch ? $this->plannedWork($userId) : [];
             $busy = false;
             $attempted = 0;
             $ingested = false;
@@ -284,7 +285,7 @@ class HarvestService
     {
         $backfill = $endpoint === Endpoint::ANALYSIS && $params !== '';
         try {
-            $payload = $this->fetcher->fetch($endpoint, $params);
+            $payload = $this->apiClient->withFetching(fn (): array => $this->fetcher->fetch($endpoint, $params));
         } catch (Throwable $e) {
             error_log('[Harvest] user ' . $userId . ': ' . $endpoint . ' failed: ' . $e::class);
             $this->apiClient->markHarvestFailed($endpoint, $params, self::FAILED_RETRY_SECONDS);
