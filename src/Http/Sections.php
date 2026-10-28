@@ -49,6 +49,7 @@ final class Sections
         'Training'    => 'Training Planner',
         'Recruitment' => 'Recruitment Analyzer',
         'Car Wear'    => 'Car Wear Planner',
+        'Engineer'    => 'Race Engineer',
     ];
 
     /** The screen a bare '/' means for a signed-in manager. */
