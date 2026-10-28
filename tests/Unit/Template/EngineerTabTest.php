@@ -59,7 +59,7 @@ final class EngineerTabTest extends TestCase
     {
         $html = $this->html([]);
 
-        $this->assertStringContainsString('No synced data yet', $html);
+        $this->assertStringContainsString('No data yet', $html);
         $this->assertStringNotContainsString("Couldn't build the advice.", $html);
     }
 

@@ -54,6 +54,11 @@ class PageController
         'division_tab', 'track', 'page', 'sort', 'order',
     ];
 
+    /** Screens built from the manager's own synced payloads, with nothing to show without them. */
+    private const array TEAM_SECTIONS = [
+        'Cockpit', 'Race Engineer', 'Race Strategy', 'Testing', 'Car Wear Planner',
+    ];
+
     /** @param array<string, mixed> $config */
     public function __construct(
         private readonly IdealPilotService $idealPilotService,
@@ -116,6 +121,19 @@ class PageController
 
             return null;
         }
+    }
+
+    /**
+     * Nothing stored for this token yet (never synced, or a new token): a team
+     * screen would otherwise read the empty office as "no driver" or "no tyre
+     * supplier". Training takes typed-in stats and Recruitment reads the shared
+     * market, so both work without it.
+     *
+     * @param array<string, mixed> $office the stored office payload
+     */
+    public static function lacksTeamData(string $section, array $office): bool
+    {
+        return $office === [] && in_array($section, self::TEAM_SECTIONS, true);
     }
 
     public function index(Request $request): void
@@ -320,7 +338,13 @@ class PageController
             }
         }
 
-        switch ($activeMainTab) {
+        $noData = self::lacksTeamData($activeMainTab, $office);
+        if ($noData) {
+            $viewData['no_data'] = true;
+        }
+
+        // A screen without its team data builds nothing; the template shows how to load it.
+        switch ($noData ? null : $activeMainTab) {
             case 'Race Engineer':
             case 'Cockpit':
                 $cockpitRisk = RaceSettings::resolve($_SESSION, RaceSettings::CTR, $request->get('cockpit_risk'), 100);
