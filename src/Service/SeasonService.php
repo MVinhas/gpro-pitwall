@@ -267,7 +267,8 @@ class SeasonService
     }
 
     /**
-     * Null for a plan saved before the ranking existed; an empty list is a ranking that found nothing worth buying.
+     * Null for a plan saved before the ranking existed, or whose ranking has a malformed row (that costs only
+     * the Upgrades card, never the budget); an empty list is a ranking that found nothing worth buying.
      *
      * @param Plan $plan
      *
@@ -279,14 +280,38 @@ class SeasonService
             return null;
         }
 
-        return array_map(static fn (array $u): array => [
-            'part' => $u['part'],
-            'level' => 'L' . $u['from'] . ' → L' . $u['to'],
-            'gain' => number_format($u['gain'], 1),
-            'price' => Dollars::short($u['price']),
-            'net' => $u['net_cost'] > 0 ? Dollars::short($u['net_cost']) : 'no extra cost',
-            'fits' => $u['affordable'],
-        ], $plan['upgrades']);
+        try {
+            foreach ($plan['upgrades'] as $u) {
+                if (!self::isUpgrade($u)) {
+                    throw new \UnexpectedValueException('Saved upgrade ranking has an unexpected row.');
+                }
+            }
+
+            return array_map(static fn (array $u): array => [
+                'part' => $u['part'],
+                'level' => 'L' . $u['from'] . ' → L' . $u['to'],
+                'gain' => number_format($u['gain'], 1),
+                'price' => Dollars::short($u['price']),
+                'net' => $u['net_cost'] > 0 ? Dollars::short($u['net_cost']) : 'no extra cost',
+                'fits' => $u['affordable'],
+            ], $plan['upgrades']);
+        } catch (\Throwable $e) {
+            error_log('[Season] ' . $e::class);
+
+            return null;
+        }
+    }
+
+    private static function isUpgrade(mixed $u): bool
+    {
+        return is_array($u)
+            && is_string($u['part'] ?? null)
+            && is_int($u['from'] ?? null)
+            && is_int($u['to'] ?? null)
+            && is_int($u['price'] ?? null)
+            && is_int($u['net_cost'] ?? null)
+            && (is_int($u['gain'] ?? null) || is_float($u['gain'] ?? null))
+            && is_bool($u['affordable'] ?? null);
     }
 
     /**

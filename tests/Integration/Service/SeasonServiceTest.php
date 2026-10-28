@@ -226,6 +226,31 @@ final class SeasonServiceTest extends TestCase
         $this->assertSame([], $this->service->build(1, null)['budget']['view']['upgrades'] ?? null);
     }
 
+    public function testAMalformedUpgradeRowHidesOnlyTheUpgradesCard(): void
+    {
+        $this->race(1);
+        $this->budgets->save(1, 107, 9, $this->plan(['upgrades' => [
+            ['part' => 'Engine', 'from' => 4, 'to' => 5, 'price' => 1_250_000, 'gain' => 3.46, 'affordable' => true],
+        ]]));
+        $log = tempnam(sys_get_temp_dir(), 'season-log');
+        $this->assertIsString($log);
+        $previous = ini_set('error_log', $log);
+
+        try {
+            $budget = $this->service->build(1, null)['budget'];
+        } finally {
+            ini_set('error_log', (string) $previous);
+        }
+
+        $logged = (string) file_get_contents($log);
+        unlink($log);
+        $this->assertNotNull($budget);
+        $this->assertSame('$1.2M', $budget['view']['spend']['value']);
+        $this->assertNull($budget['view']['upgrades']);
+        $this->assertMatchesRegularExpression('/\[Season\] [A-Za-z\\\\]+$/m', $logged);
+        $this->assertStringNotContainsString('Engine', $logged);
+    }
+
     public function testBudgetOnlyForTheLatestSeason(): void
     {
         $this->race(1, season: 106);
