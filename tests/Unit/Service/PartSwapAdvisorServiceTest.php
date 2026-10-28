@@ -1015,11 +1015,46 @@ final class PartSwapAdvisorServiceTest extends TestCase
             $this->aSeason(),
         );
 
-        $this->assertSame(['Gearbox', 'Engine', 'Electronics'], array_column((array) $calls, 'part'));
-        $this->assertSame([10_000_000, 10_000_000, 9_600_000], array_column((array) $calls, 'cash'));
+        $this->assertSame(['Engine', 'Gearbox', 'Electronics'], array_column((array) $calls, 'part'));
+        $this->assertSame([10_000_000, 9_600_000, 9_600_000], array_column((array) $calls, 'cash'));
         $this->assertSame(400_000, $out['Engine']['season_pick']['net_cost'] ?? null);
         $this->assertSame('most_pha', $out['Engine']['season_pick']['reason'] ?? null);
         $this->assertNull($out['Electronics']['season_pick']);
+    }
+
+    public function testForcedPartsAreJudgedMostWornFirstWhateverOrderTheCallerPasses(): void
+    {
+        // The Cockpit passes only the parts that break; the Engineer also passes the ones past a lower limit.
+        // Judging the most worn first gives the breaking parts the same commitments on both screens.
+        $options = [$this->rawOption(6, 900_000, 6), $this->rawOption(7, 1_500_000, 7)];
+        $wearParts = [];
+        foreach (['Brakes', 'Engine', 'Gearbox'] as $label) {
+            $wearParts[$label] = ['level' => 6, 'start' => 60, 'est' => 5.0, 'end' => 65.0, 'track_base' => 5.0];
+        }
+        $order = function (array $flagged) use ($options, $wearParts): array {
+            $calls = new ArrayObject();
+            $this->advisorWith($this->spyPicker($calls))->advise(
+                $flagged,
+                ['engineOptions' => $options, 'gearOptions' => $options, 'brakesOptions' => $options],
+                $wearParts,
+                [],
+                ['power' => 10, 'handling' => 10, 'acceleration' => 10],
+                ['power' => 90, 'handling' => 80, 'acceleration' => 85],
+                0,
+                [],
+                10_000_000,
+                [],
+                $this->aSeason(),
+            );
+
+            return array_column((array) $calls, 'part');
+        };
+        $brakes = ['part' => 'Brakes', 'level' => 6, 'start' => 60, 'est' => 32.0, 'end' => 92.0];
+        $engine = ['part' => 'Engine', 'level' => 6, 'start' => 95, 'est' => 10.0, 'end' => 105.0];
+        $gearbox = ['part' => 'Gearbox', 'level' => 6, 'start' => 95, 'est' => 10.0, 'end' => 105.0];
+
+        $this->assertSame(['Engine', 'Gearbox', 'Brakes'], $order([$brakes, $gearbox, $engine]));
+        $this->assertSame(['Engine', 'Gearbox', 'Brakes'], $order([$engine, $brakes, $gearbox]));
     }
 
     public function testTwoForcedUpgradesThatEachFitAloneButNotTogetherLeaveTheSecondAtItsLevel(): void

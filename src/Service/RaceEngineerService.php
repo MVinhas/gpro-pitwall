@@ -283,7 +283,7 @@ class RaceEngineerService
         $optional = array_column(RaceEngineer::offeredOptionals($inputs->withSwapPicks($forced)), 'part');
         $committed = array_sum(array_map(static fn (array $pick): int => max(0, $pick['net_cost']), $forced));
 
-        return [...$forced, ...$this->picksAt(
+        $picks = [...$forced, ...$this->picksAt(
             self::flagged($optional, $adviseParts),
             $adviseParts,
             $season->committing($committed),
@@ -291,6 +291,8 @@ class RaceEngineerService
             $carPha,
             $c,
         )];
+
+        return RaceEngineer::shownPicks($inputs->withSwapPicks($picks));
     }
 
     /**

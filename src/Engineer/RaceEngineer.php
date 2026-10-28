@@ -9,6 +9,7 @@ use App\Support\Ordinal;
 /**
  * @phpstan-import-type Plan from CtrPlanner
  * @phpstan-import-type Upgrade from UpgradeRanker
+ * @phpstan-import-type SwapPick from EngineerInputs
  * @phpstan-type Line array{
  *     key: string,
  *     answer: string,
@@ -721,6 +722,24 @@ final class RaceEngineer
         }
 
         return ($in->plan['envelope'] ?? 0) - self::forcedPickSpend($in) - $extra;
+    }
+
+    /**
+     * The season picks worth keeping: an optional part's pick goes when the money no longer covers that swap
+     * at its picked cost, so nothing is saved, or kept out of the upgrade ranking, for a swap the line drops.
+     *
+     * @return list<SwapPick>
+     */
+    public static function shownPicks(EngineerInputs $in): array
+    {
+        $optional = array_diff(array_column($in->optionalSwaps, 'part'), self::planned($in));
+        $offered = array_column(self::offered($in), 'part');
+
+        return array_values(array_filter(
+            $in->swapPicks,
+            static fn (array $pick): bool => !in_array($pick['part'], $optional, true)
+                || in_array($pick['part'], $offered, true),
+        ));
     }
 
     /**

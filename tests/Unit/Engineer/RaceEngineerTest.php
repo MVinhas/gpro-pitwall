@@ -1264,6 +1264,20 @@ final class RaceEngineerTest extends TestCase
         $this->assertSame('$250k', $line['figure']);
     }
 
+    public function testAnOptionalPickTheBudgetCannotCoverIsNotKept(): void
+    {
+        $promote = [
+            'objective' => $this->objective(SeasonObjective::PROMOTE),
+            'optionalSwaps' => [['part' => 'Gearbox', 'cost' => 150_000]],
+        ];
+        $cooling = $this->pick('Cooling', 7, 'upgrade', 900_000, net: 0);
+        $fits = $this->withPicks([$cooling, $this->pick('Gearbox', 7, 'upgrade', 700_000, net: 600_000)], $promote);
+        $over = $this->withPicks([$cooling, $this->pick('Gearbox', 7, 'upgrade', 800_000, net: 650_000)], $promote);
+
+        $this->assertSame(['Cooling', 'Gearbox'], array_column(RaceEngineer::shownPicks($fits), 'part'));
+        $this->assertSame(['Cooling'], array_column(RaceEngineer::shownPicks($over), 'part'));
+    }
+
     public function testABudgetShortPickSaysSo(): void
     {
         $line = $this->line($this->withPicks([

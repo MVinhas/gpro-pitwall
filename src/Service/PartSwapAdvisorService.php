@@ -108,7 +108,7 @@ final class PartSwapAdvisorService
     }
 
     /**
-     * Parts are judged forced first, then the optional ones, each group in the order given. Under a season,
+     * Parts are judged forced first, then the optional ones, each group most worn first. Under a season,
      * each pick's net cost is committed before the next part is judged, so the picks are affordable together.
      *
      * @param list<array{part: string, level: int, start: int, est: float, end: float, optional?: bool}> $flaggedParts
@@ -163,10 +163,14 @@ final class PartSwapAdvisorService
         $currentFit   = $this->pha->alignmentScore($track, $currentPha);
         $currentMatch = $this->pha->matchLevel($track, $currentPha);
         $out = [];
-        $ordered = [
-            ...array_filter($flaggedParts, static fn(array $f): bool => !($f['optional'] ?? false)),
-            ...array_filter($flaggedParts, static fn(array $f): bool => $f['optional'] ?? false),
-        ];
+        // Most worn first, then by name: the order can't depend on the caller, so the parts the Cockpit
+        // shows get the same commitments the Engineer gives them.
+        $byWear = static fn(array $a, array $b): int => [$b['end'], $a['part']] <=> [$a['end'], $b['part']];
+        $forced = array_values(array_filter($flaggedParts, static fn(array $f): bool => !($f['optional'] ?? false)));
+        $optional = array_values(array_filter($flaggedParts, static fn(array $f): bool => $f['optional'] ?? false));
+        usort($forced, $byWear);
+        usort($optional, $byWear);
+        $ordered = [...$forced, ...$optional];
 
         foreach ($ordered as $flagged) {
             $part = $flagged['part'];
