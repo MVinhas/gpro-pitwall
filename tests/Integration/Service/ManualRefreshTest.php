@@ -161,7 +161,9 @@ final class ManualRefreshTest extends TestCase
             . "VALUES (1, 'alice', 'enc', 'hash', 1)"
         );
         $this->users()->updateApiToken(self::USER_ID, self::TOKEN);
-        // The seeder lists every track by name; give Monza the figures the calculators read.
+        // data/tracks.csv is gitignored, so CI seeds no tracks: add Monza, then
+        // give it the figures the calculators read.
+        $this->db->exec("INSERT OR IGNORE INTO tracks (name) VALUES ('Monza')");
         $this->db->exec(
             "UPDATE tracks SET lap_length = 5.8, laps = 53, distance = 307.0, avg_speed = 240.0, corners = 11,
                 pit_time = 22.0, base_wings = 100, base_engine = 200, base_brakes = 300, base_gear = 400,
