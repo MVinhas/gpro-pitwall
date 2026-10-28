@@ -276,7 +276,7 @@ final class RaceEngineerTest extends TestCase
         $this->assertSame(['label' => 'Use 45', 'href' => '/cockpit?cockpit_risk=45'], $line['action']);
         $this->assertStringContainsString('Push', $line['reason']);
         $this->assertStringContainsString('no part breaks', $line['reason']);
-        $this->assertSame('#cockpit-wear', $line['anchor']);
+        $this->assertSame('/cockpit#cockpit-wear', $line['anchor']);
     }
 
     public function testPromoteOnANormalRaceAdvisesTheCeilingNotTheCurrentCtr(): void
@@ -386,7 +386,7 @@ final class RaceEngineerTest extends TestCase
 
         $this->assertSame('Nothing to swap', $line['answer']);
         $this->assertSame('ink', $line['tone']);
-        $this->assertSame('#cockpit-wear', $line['anchor']);
+        $this->assertSame('/cockpit#cockpit-wear', $line['anchor']);
     }
 
     public function testForcedSwapAmberAndRedWhenUnaffordable(): void
@@ -491,7 +491,7 @@ final class RaceEngineerTest extends TestCase
 
         $this->assertSame('Train Talent course', $line['answer']);
         $this->assertSame('$85k', $line['figure']);
-        $this->assertSame('#cockpit-training', $line['anchor']);
+        $this->assertSame('/cockpit#cockpit-training', $line['anchor']);
     }
 
     public function testNoTrainingPickIsNothingToDo(): void
@@ -601,7 +601,7 @@ final class RaceEngineerTest extends TestCase
         $this->assertSame('Test at Silverstone', $line['answer']);
         $this->assertSame('Free cash covers it; tunes for Monza (race 10)', $line['reason']);
         $this->assertSame('$300k', $line['figure']);
-        $this->assertSame('#cockpit-testing', $line['anchor']);
+        $this->assertSame('/cockpit#cockpit-testing', $line['anchor']);
     }
 
     public function testTestingFallsBackWhenTheTrackIsUnknown(): void
@@ -798,6 +798,20 @@ final class RaceEngineerTest extends TestCase
         $this->assertSame('$5M', $line['figure']);
     }
 
+    public function testCardAnchorsPointAtTheCockpit(): void
+    {
+        $lines = RaceEngineer::brief($this->planned());
+        $anchors = [];
+        foreach ($lines as $line) {
+            if ($line['anchor'] === null) {
+                continue;
+            }
+            $anchors[$line['key']] = $line['anchor'];
+            $this->assertStringStartsWith('/', $line['anchor']);
+        }
+        $this->assertSame('/cockpit#cockpit-wear', $anchors['parts'] ?? null);
+    }
+
     public function testCtrAnswersWithThePlanCtr(): void
     {
         $line = $this->line($this->planned(['ctr' => 52, 'safety' => 40]), 'ctr');
@@ -805,7 +819,7 @@ final class RaceEngineerTest extends TestCase
         $this->assertSame('CTR 52', $line['answer']);
         $this->assertSame('On 30 now', $line['figure']);
         $this->assertSame(['label' => 'Use 52', 'href' => '/cockpit?cockpit_risk=52'], $line['action']);
-        $this->assertSame('#cockpit-wear', $line['anchor']);
+        $this->assertSame('/cockpit#cockpit-wear', $line['anchor']);
     }
 
     public function testCtrHasNoActionWhenItAlreadyMatches(): void

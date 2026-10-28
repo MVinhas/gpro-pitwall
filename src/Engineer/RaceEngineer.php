@@ -227,7 +227,7 @@ final class RaceEngineer
             'ctr',
             'CTR ' . $target,
             $reason,
-            '#cockpit-wear',
+            '/cockpit#cockpit-wear',
             'On ' . $in->currentCtr . ' now',
             action: $target === $in->currentCtr
                 ? null
@@ -259,7 +259,7 @@ final class RaceEngineer
                 'parts',
                 'Swap ' . implode(', ', $forced),
                 'Lets you push to CTR ' . $plan['ctr'],
-                '#cockpit-wear',
+                '/cockpit#cockpit-wear',
                 Money::short($forcedSwapCost ?? 0),
             );
         }
@@ -267,7 +267,7 @@ final class RaceEngineer
         $optional = self::offeredOptionals($in);
 
         if ($forced === [] && $optional === []) {
-            return self::line('parts', 'Nothing to swap', 'No forced swap this race', '#cockpit-wear');
+            return self::line('parts', 'Nothing to swap', 'No forced swap this race', '/cockpit#cockpit-wear');
         }
 
         $forcedCost = $forcedSwapCost ?? 0;
@@ -280,7 +280,7 @@ final class RaceEngineer
                 'parts',
                 'Swap ' . $optionalNames . ' (optional)',
                 'In the red zone, and ' . self::affordClause($in, 'it'),
-                '#cockpit-wear',
+                '/cockpit#cockpit-wear',
                 $figure,
             );
         }
@@ -292,7 +292,7 @@ final class RaceEngineer
             : 'Forced swaps break this race; the optional ones are in the red and '
                 . self::affordClause($in, 'them');
 
-        return self::line('parts', $answer, $reason, '#cockpit-wear', $figure, $tone);
+        return self::line('parts', $answer, $reason, '/cockpit#cockpit-wear', $figure, $tone);
     }
 
     /**
@@ -321,7 +321,12 @@ final class RaceEngineer
     {
         $pick = $in->trainingPick;
         if ($pick === null) {
-            return self::line('training', self::NOTHING, 'No course is worth the money right now', '#cockpit-training');
+            return self::line(
+                'training',
+                self::NOTHING,
+                'No course is worth the money right now',
+                '/cockpit#cockpit-training',
+            );
         }
 
         if (!self::affords($in, $pick['cost'], self::STAGE_TRAINING)) {
@@ -329,7 +334,7 @@ final class RaceEngineer
                 'training',
                 'Skip ' . $pick['name'] . ' training',
                 self::skipReason($in, self::STAGE_TRAINING),
-                '#cockpit-training',
+                '/cockpit#cockpit-training',
                 Money::short($pick['cost']),
             );
         }
@@ -338,7 +343,7 @@ final class RaceEngineer
             'training',
             'Train ' . $pick['name'],
             self::affordReason($in),
-            '#cockpit-training',
+            '/cockpit#cockpit-training',
             Money::short($pick['cost']),
         );
     }
@@ -350,10 +355,10 @@ final class RaceEngineer
     {
         $target = $in->testingTarget;
         if (!$in->testingOpen || $target === null) {
-            return self::line('testing', self::NOTHING, 'No testing session is open', '#cockpit-testing');
+            return self::line('testing', self::NOTHING, 'No testing session is open', '/cockpit#cockpit-testing');
         }
 
-        $anchor = '#cockpit-testing';
+        $anchor = '/cockpit#cockpit-testing';
         $where = $in->testingTrack === null ? 'Test this week' : 'Test at ' . $in->testingTrack;
         $skip = $in->testingTrack === null ? 'Skip testing this week' : 'Skip testing at ' . $in->testingTrack;
         $tunes = 'tunes for ' . ($target['track_name'] ?? 'race ' . $target['race'])

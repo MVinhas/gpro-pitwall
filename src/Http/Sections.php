@@ -32,6 +32,7 @@ final class Sections
         'Training Planner'     => '/training',
         'Car Wear Planner'     => '/car-wear',
         'Recruitment Analyzer' => '/recruitment',
+        'Race Engineer'        => '/engineer',
         'Debrief'              => '/debrief',
         'Season'               => '/season',
         'Division Baseline'    => '/divisions/baseline',

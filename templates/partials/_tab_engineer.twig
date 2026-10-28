@@ -1,0 +1,16 @@
+<div class="space-y-6">
+    {% if cockpit_error == no_pilot_message %}
+        {% include 'partials/_no_pilot_notice.twig' %}
+    {% elseif cockpit_error %}
+        <div class="notice notice-error">
+            <p class="font-bold">Couldn't load the race engineer.</p>
+            <p class="mt-1">{{ cockpit_error }}</p>
+        </div>
+    {% elseif pha is not defined %}
+        {% include 'partials/_empty.twig' with { title: 'No synced data yet', body: 'Add your GPRO API token and re-sync to brief the engineer.' } only %}
+    {% elseif engineer is not defined %}
+        {% include 'partials/_empty.twig' with { title: 'No advice yet', body: "Re-sync to load this weekend's data." } only %}
+    {% else %}
+        {% include 'partials/_engineer_card.twig' %}
+    {% endif %}
+</div>

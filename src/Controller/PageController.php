@@ -166,7 +166,7 @@ class PageController
                 $mainSections,
                 fn (string $section): bool => !in_array(
                     $section,
-                    ['Debrief', 'Season', 'Division Baseline', 'Division Differences'],
+                    ['Race Engineer', 'Debrief', 'Season', 'Division Baseline', 'Division Differences'],
                     true,
                 ),
             );
@@ -319,6 +319,7 @@ class PageController
         }
 
         switch ($activeMainTab) {
+            case 'Race Engineer':
             case 'Cockpit':
                 $cockpitRisk = RaceSettings::resolve($_SESSION, RaceSettings::CTR, $request->get('cockpit_risk'), 100);
                 $cockpitTrainingLaps = RaceSettings::resolve(
@@ -598,7 +599,9 @@ class PageController
                         }
                     }
 
-                    if ($isAdmin && (string) $request->get('fragment', '') === '') {
+                    $isEngineerRequest = $isAdmin && $activeMainTab === 'Race Engineer'
+                        && (string) $request->get('fragment', '') === '';
+                    if ($isEngineerRequest) {
                         $engineer = self::buildEngineer($this->raceEngineer, (int) $user['id'], [
                             'office'           => $office,
                             'menu'             => $menu,

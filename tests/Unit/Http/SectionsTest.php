@@ -25,6 +25,12 @@ final class SectionsTest extends TestCase
         }
     }
 
+    public function testRaceEngineerHasItsOwnPath(): void
+    {
+        $this->assertSame('/engineer', Sections::pathFor('Race Engineer'));
+        $this->assertSame('Race Engineer', Sections::sectionFor('/engineer'));
+    }
+
     public function testPathsAndSectionsRoundTrip(): void
     {
         foreach (Sections::all() as $section => $path) {

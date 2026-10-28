@@ -30,6 +30,7 @@ final class DeferredRender
         'Testing',
         'Training Planner',
         'Recruitment Analyzer',
+        'Race Engineer',
     ];
 
     /**
