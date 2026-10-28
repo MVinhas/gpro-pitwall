@@ -466,10 +466,16 @@ $container['service.upgrade_advisor'] = new \App\Service\PartUpgradeAdvisorServi
     $container['service.pha_match'],
     $container['config']['secrets']['part_pha_contribution'] ?? [],
 );
+$container['service.swap_level_picker'] = new \App\Engineer\SwapLevelPicker(
+    new \App\Engineer\SeasonBudget($container['service.car_wear']),
+    $container['config']['secrets']['part_pha_contribution'] ?? [],
+);
+
 $container['service.swap_advisor'] = new \App\Service\PartSwapAdvisorService(
     $container['service.car_wear'],
     $container['service.pha_match'],
     $container['service.upgrade_advisor'],
+    $container['service.swap_level_picker'],
 );
 $container['service.training_advisor'] = new \App\Service\TrainingAdvisorService(
     $container['config']['secrets']['pilot_recruitment_factors'] ?? [],
@@ -509,10 +515,6 @@ $container['repository.season_objective'] = new \App\Repository\SeasonObjectiveR
 $container['repository.season_budget'] = new \App\Repository\SeasonBudgetRepository($container['db']);
 
 $ctrCeiling = new \App\Engineer\CtrCeiling($container['service.car_wear']);
-$container['service.swap_level_picker'] = new \App\Engineer\SwapLevelPicker(
-    new \App\Engineer\SeasonBudget($container['service.car_wear']),
-    $container['config']['secrets']['part_pha_contribution'] ?? [],
-);
 
 $container['service.race_engineer'] = new \App\Service\RaceEngineerService(
     $container['repository.season_objective'],

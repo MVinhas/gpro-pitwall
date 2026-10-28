@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Tests\Unit\Service;
 
+use App\Engineer\StrengthFloor;
+use App\Engineer\SwapLevelPicker;
+use App\Engineer\SwapSeason;
 use App\Service\CarWearService;
 use App\Service\PartSwapAdvisorService;
 use App\Service\PartUpgradeAdvisorService;
@@ -95,23 +98,23 @@ final class PartSwapAdvisorServiceTest extends TestCase
         self::fail('No replacement option at level ' . $level);
     }
 
-    public function testOnlyOneLevelEitherSideOfTheCurrentLevelIsOffered(): void
+    public function testOneLevelDownAndEveryOfferedLevelUpAreOffered(): void
     {
         $track = ['power' => 10, 'handling' => 10, 'acceleration' => 10];
         $car   = ['power' => 90, 'handling' => 80, 'acceleration' => 85];
 
         $carData = $this->carData([
             ['level' => 3, 'wear' => 0, 'cost' => 200_000,   'action' => 3],
+            ['level' => 4, 'wear' => 0, 'cost' => 400_000,   'action' => 4],
             ['level' => 5, 'wear' => 0, 'cost' => 700_000,   'action' => 5],
             ['level' => 6, 'wear' => 0, 'cost' => 900_000,   'action' => 6],
             ['level' => 7, 'wear' => 0, 'cost' => 1_500_000, 'action' => 7],
-            ['level' => 9, 'wear' => 0, 'cost' => 2_500_000, 'action' => 9],
         ]);
 
         $out = $this->svc->advise(
-            $this->flaggedEngine(),
+            $this->flaggedEngine(level: 5),
             $carData,
-            $this->wearParts(),
+            $this->wearParts(level: 5),
             [],
             $track,
             $car,
@@ -122,7 +125,194 @@ final class PartSwapAdvisorServiceTest extends TestCase
 
         $levels = $this->levels($out['Engine']['options']);
         sort($levels);
-        $this->assertSame([5, 6, 7], $levels);
+        $this->assertSame([4, 5, 6, 7], $levels);
+    }
+
+    public function testEveryOptionNamesItsKind(): void
+    {
+        $track = ['power' => 10, 'handling' => 10, 'acceleration' => 10];
+        $car   = ['power' => 90, 'handling' => 80, 'acceleration' => 85];
+
+        $out = $this->svc->advise(
+            $this->flaggedEngine(),
+            $this->carData([
+                ['level' => 5, 'wear' => 20, 'cost' => 0,         'action' => -1],
+                ['level' => 6, 'wear' => 0,  'cost' => 900_000,   'action' => 6],
+                ['level' => 8, 'wear' => 0,  'cost' => 2_000_000, 'action' => 8],
+            ]),
+            $this->wearParts(),
+            [],
+            $track,
+            $car,
+            0,
+            [],
+            10_000_000,
+        );
+        $byLevel = array_column($out['Engine']['options'], null, 'level');
+        $this->assertSame('free_downgrade', $byLevel[5]['kind']);
+        $this->assertSame('sidegrade', $byLevel[6]['kind']);
+        $this->assertSame('upgrade', $byLevel[8]['kind']);
+
+        $paid = $this->svc->advise(
+            $this->flaggedEngine(),
+            $this->carData([['level' => 5, 'wear' => 0, 'cost' => 700_000, 'action' => 5]]),
+            $this->wearParts(),
+            [],
+            $track,
+            $car,
+            0,
+            [],
+            10_000_000,
+        );
+        $this->assertSame('downgrade', $paid['Engine']['options'][0]['kind']);
+    }
+
+    /**
+     * @return array{array<string, mixed>, array<string, mixed>, list<array<string, mixed>>}
+     */
+    private function seasonScenario(): array
+    {
+        return [
+            ['power' => 10, 'handling' => 10, 'acceleration' => 10],
+            ['power' => 90, 'handling' => 80, 'acceleration' => 85],
+            $this->carData([
+                ['level' => 5, 'wear' => 0, 'cost' => 700_000,   'action' => 5],
+                ['level' => 6, 'wear' => 0, 'cost' => 900_000,   'action' => 6],
+                ['level' => 7, 'wear' => 0, 'cost' => 1_500_000, 'action' => 7],
+            ]),
+        ];
+    }
+
+    private function aSeason(): SwapSeason
+    {
+        return new SwapSeason(
+            'survive',
+            ['v' => 1, 'ctr' => 0, 'mode' => 'nurse', 'safety' => 0, 'swaps' => [], 'refused_swap_cost' => null,
+                'target' => 0, 'target_kind' => 'cushion', 'cushion' => 0, 'season_start' => null, 'envelope' => 0,
+                'shortfall' => null, 'rows' => [], 'partial' => [], 'race' => 1],
+            [],
+            [],
+            [],
+            [],
+            1.0,
+            10_000_000,
+            0,
+            0,
+            new StrengthFloor(null, null, null),
+        );
+    }
+
+    /**
+     * @param array<string, mixed>|null $pick
+     */
+    private function withPicker(?array $pick): PartSwapAdvisorService
+    {
+        $picker = $this->createStub(SwapLevelPicker::class);
+        $picker->method('pick')->willReturn($pick);
+
+        return new PartSwapAdvisorService(
+            new CarWearService(new PDO('sqlite::memory:'), [
+                'driver_wear_factors' => ['concentration' => 1.0, 'talent' => 1.0, 'experience' => 1.0],
+                'part_level_factors'  => [
+                    1 => 1.02, 2 => 1.018, 3 => 1.016, 4 => 1.014,
+                    5 => 1.012, 6 => 1.01, 7 => 1.008, 8 => 1.006, 9 => 1.004,
+                ],
+            ]),
+            new PhaMatchService(),
+            new PartUpgradeAdvisorService(new PhaMatchService(), [
+                'Engine'  => ['power' => 6, 'handling' => 0, 'acceleration' => 2],
+                'Gearbox' => ['power' => 3, 'handling' => 1, 'acceleration' => 5],
+            ]),
+            $picker,
+        );
+    }
+
+    public function testWithASeasonThePickersChoiceIsTheRecommendation(): void
+    {
+        [$track, $car, $carData] = $this->seasonScenario();
+        $svc = $this->withPicker([
+            'level' => 7, 'kind' => 'upgrade', 'cost' => 1_500_000, 'season_pha' => 9.0, 'net_cost' => 1,
+            'affordable' => true, 'reason' => 'most_pha',
+        ]);
+
+        $out = $svc->advise(
+            $this->flaggedEngine(),
+            $carData,
+            $this->wearParts(),
+            [],
+            $track,
+            $car,
+            0,
+            [],
+            10_000_000,
+            [],
+            $this->aSeason(),
+        );
+
+        $options = $out['Engine']['options'];
+        $this->assertSame(7, $options[0]['level']);
+        $this->assertSame([7], array_column(array_filter($options, static fn(array $o): bool => $o['recommended']), 'level'));
+        $this->assertSame('season', $options[0]['recommend_reason']);
+        $this->assertTrue($out['Engine']['season']);
+        $this->assertSame('Most PHA the season budget allows', $out['Engine']['season_reason']);
+
+        $rest = $this->levels(array_slice($options, 1));
+        $plain = $this->levels($this->svc->advise(
+            $this->flaggedEngine(),
+            $carData,
+            $this->wearParts(),
+            [],
+            $track,
+            $car,
+            0,
+            [],
+            10_000_000,
+        )['Engine']['options']);
+        $this->assertSame(array_values(array_diff($plain, [7])), $rest);
+
+        $summary = $svc->summarise($out, $track, $car);
+        $this->assertSame(1_500_000, $summary['cost']);
+    }
+
+    public function testWithoutASeasonTodaysTrackFitRankingStands(): void
+    {
+        [$track, $car, $carData] = $this->seasonScenario();
+        $svc = $this->withPicker([
+            'level' => 7, 'kind' => 'upgrade', 'cost' => 1_500_000, 'season_pha' => 9.0, 'net_cost' => 1,
+            'affordable' => true, 'reason' => 'most_pha',
+        ]);
+
+        $out = $svc->advise($this->flaggedEngine(), $carData, $this->wearParts(), [], $track, $car, 0, [], 10_000_000);
+        $plain = $this->svc->advise($this->flaggedEngine(), $carData, $this->wearParts(), [], $track, $car, 0, [], 10_000_000);
+
+        $this->assertFalse($out['Engine']['season']);
+        $this->assertNull($out['Engine']['season_reason']);
+        $this->assertSame($plain['Engine']['options'], $out['Engine']['options']);
+    }
+
+    public function testWhenThePickerFindsNothingTheTrackFitRankingStands(): void
+    {
+        [$track, $car, $carData] = $this->seasonScenario();
+        $svc = $this->withPicker(null);
+
+        $out = $svc->advise(
+            $this->flaggedEngine(),
+            $carData,
+            $this->wearParts(),
+            [],
+            $track,
+            $car,
+            0,
+            [],
+            10_000_000,
+            [],
+            $this->aSeason(),
+        );
+        $plain = $this->svc->advise($this->flaggedEngine(), $carData, $this->wearParts(), [], $track, $car, 0, [], 10_000_000);
+
+        $this->assertFalse($out['Engine']['season']);
+        $this->assertNull($out['Engine']['season_reason']);
+        $this->assertSame($plain['Engine']['options'], $out['Engine']['options']);
     }
 
     public function testEachLevelYieldsExactlyOneOptionAndAFreeSpareBeatsAPaidPart(): void
