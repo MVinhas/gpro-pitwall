@@ -7,6 +7,7 @@ namespace App\Engineer;
 /**
  * @phpstan-import-type Plan from CtrPlanner
  * @phpstan-import-type Round from SeasonBudget
+ * @phpstan-import-type BudgetRow from SeasonBudget
  * @phpstan-type Upgrade array{part: string, from: int, to: int, price: int, net_cost: int, gain: float,
  *   affordable: bool}
  * @phpstan-type Demand array{power: int|float, handling: int|float, acceleration: int|float}
@@ -26,7 +27,8 @@ readonly class UpgradeRanker
      * Every part's best affordable upgrade (its best one when none fits), ranked: free or cheaper ones first
      * by gain, the rest by gain per net dollar. Net cost is the new part's price plus the repairs its wear
      * adds to the season, less the repairs the plan already charges; a candidate whose forecast is infeasible
-     * is dropped, as is one that adds no PHA on the tracks with a known demand.
+     * is dropped, as is one that adds no PHA on the tracks with a known demand. Affordable means the upgraded
+     * season stays on the plan's targets with the price and $spent paid now.
      *
      * @param Plan $plan
      * @param list<Round> $rounds the remaining races the plan was built from
@@ -34,7 +36,7 @@ readonly class UpgradeRanker
      * @param array<string, array{level: int, start: int|float, training?: int|float}> $parts
      * @param array<string, ?int> $prices
      * @param array<string, list<array{level: int, price: int}>> $options
-     * @param int $budget envelope left for upgrades
+     * @param int $spent what the plan's optional swaps, training and testing take before the first race
      * @return list<Upgrade>
      */
     public function rank(
@@ -49,7 +51,7 @@ readonly class UpgradeRanker
         int $cash,
         int $committed,
         int $income,
-        int $budget,
+        int $spent,
     ): array {
         $limit = CtrPlanner::limit($objective);
         $planned = array_sum(array_column($plan['rows'], 'repairs'));
@@ -90,7 +92,7 @@ readonly class UpgradeRanker
                     'price' => $option['price'],
                     'net_cost' => $net,
                     'gain' => $gain,
-                    'affordable' => $net <= $budget,
+                    'affordable' => self::paysUpFront($plan, $forecast['rows'], $option['price'] + $spent),
                 ];
             }
         }
@@ -113,6 +115,24 @@ readonly class UpgradeRanker
 
             return $upgrade;
         }, $out);
+    }
+
+    /**
+     * Whether the upgraded season, with $now paid before the first race, still keeps every row on the plan's
+     * own targets: the price is paid now, while any repair it saves only lands later.
+     *
+     * @param Plan $plan
+     * @param list<BudgetRow> $rows
+     */
+    private static function paysUpFront(array $plan, array $rows, int $now): bool
+    {
+        $paid = array_map(static function (array $row) use ($now): array {
+            $row['balance'] -= $now;
+
+            return $row;
+        }, $rows);
+
+        return CtrPlanner::headroom($paid, $plan['cushion'], $plan['target']) >= 0;
     }
 
     /**

@@ -686,7 +686,7 @@ final class RaceEngineerServiceTest extends TestCase
                 int $cash,
                 int $committed,
                 int $income,
-                int $budget,
+                int $spent,
             ): array {
                 throw new \RuntimeException('secret detail');
             }

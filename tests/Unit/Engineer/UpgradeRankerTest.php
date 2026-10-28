@@ -71,18 +71,28 @@ final class UpgradeRankerTest extends TestCase
     }
 
     /**
-     * The plan the ranker compares against: the season forecast of the parts as they are.
+     * The plan the ranker compares against: the season forecast of the parts as they are, with its cushion
+     * and end target set so that $budget is the most it can spend up front.
      *
      * @param list<array{race: int, track_name: ?string, base: ?array<string, float>}> $rounds
      * @param array<string, array{level: int, start: int|float}> $parts
      * @param array<string, ?int> $prices
+     * @param array<string, int> $o
      * @return array<string, mixed>
      */
-    private function plan(array $rounds, array $parts, array $prices, int $ctr = 0): array
-    {
-        $forecast = $this->budget->forecast($rounds, $parts, $prices, 1.0, $ctr, 100, 10_000_000, 0, 0);
+    private function plan(
+        array $rounds,
+        array $parts,
+        array $prices,
+        int $ctr = 0,
+        int $budget = 0,
+        int $income = 0,
+        array $o = [],
+    ): array {
+        $forecast = $this->budget->forecast($rounds, $parts, $prices, 1.0, $ctr, 100, 10_000_000, 0, $income);
+        $target = min(array_column($forecast['rows'], 'balance')) - $budget;
 
-        return ['ctr' => $ctr, 'rows' => $forecast['rows']];
+        return $o + ['ctr' => $ctr, 'rows' => $forecast['rows'], 'cushion' => $target, 'target' => $target];
     }
 
     /**
@@ -102,7 +112,8 @@ final class UpgradeRankerTest extends TestCase
         array $parts,
         array $prices,
         array $options,
-        int $budget = 0,
+        int $spent = 0,
+        int $income = 0,
     ): array {
         return $ranker->rank(
             $plan,
@@ -115,8 +126,8 @@ final class UpgradeRankerTest extends TestCase
             1.0,
             10_000_000,
             0,
-            0,
-            $budget,
+            $income,
+            $spent,
         );
     }
 
@@ -316,13 +327,12 @@ final class UpgradeRankerTest extends TestCase
         // L3 scores better (3.0 for 400k against 1.5 for 300k) but only L2 fits 350k.
         $out = $this->rank(
             $this->ranker($this->engineOnly()),
-            $this->plan($rounds, $parts, $prices),
+            $this->plan($rounds, $parts, $prices, budget: 350_000),
             $rounds,
             $this->evenDemand(),
             $parts,
             $prices,
             ['Engine' => [['level' => 2, 'price' => 300_000], ['level' => 3, 'price' => 400_000]]],
-            350_000,
         );
 
         $this->assertCount(1, $out);
@@ -368,21 +378,87 @@ final class UpgradeRankerTest extends TestCase
         $this->assertSame([], $out);
     }
 
-    public function testAffordableComparesNetCostWithTheBudget(): void
+    public function testAffordableWhenPayingThePriceNowKeepsEveryRowOnTarget(): void
     {
         $rounds = $this->rounds();
         $parts = $this->parts();
         $prices = ['Engine' => 100_000, 'Chassis' => 100_000];
-        $plan = $this->plan($rounds, $parts, $prices);
         $options = ['Engine' => [['level' => 2, 'price' => 400_000]]];
         $ranker = $this->ranker($this->engineOnly());
+        $demand = $this->evenDemand();
 
-        $exact = $this->rank($ranker, $plan, $rounds, $this->evenDemand(), $parts, $prices, $options, 400_000);
+        $exact = $this->rank($ranker, $this->plan($rounds, $parts, $prices, budget: 400_000), $rounds, $demand, $parts, $prices, $options);
         $this->assertSame(400_000, $exact[0]['net_cost']);
         $this->assertTrue($exact[0]['affordable']);
 
-        $short = $this->rank($ranker, $plan, $rounds, $this->evenDemand(), $parts, $prices, $options, 399_999);
+        $short = $this->rank($ranker, $this->plan($rounds, $parts, $prices, budget: 399_999), $rounds, $demand, $parts, $prices, $options);
         $this->assertFalse($short[0]['affordable']);
+    }
+
+    public function testTheSpendAlreadyTakenNowCountsAgainstTheUpgrade(): void
+    {
+        $rounds = $this->rounds();
+        $parts = $this->parts();
+        $prices = ['Engine' => 100_000, 'Chassis' => 100_000];
+        $plan = $this->plan($rounds, $parts, $prices, budget: 400_000);
+        $options = ['Engine' => [['level' => 2, 'price' => 300_000]]];
+        $ranker = $this->ranker($this->engineOnly());
+
+        $fits = $this->rank($ranker, $plan, $rounds, $this->evenDemand(), $parts, $prices, $options, spent: 100_000);
+        $this->assertTrue($fits[0]['affordable']);
+
+        $over = $this->rank($ranker, $plan, $rounds, $this->evenDemand(), $parts, $prices, $options, spent: 100_001);
+        $this->assertFalse($over[0]['affordable']);
+    }
+
+    public function testANetThatFitsIsNotAffordableWhenThePriceUpFrontBreaksAnEarlyRow(): void
+    {
+        // The engine (75%) is replaced for 1M in race 3; a fresh L2 for 1.3M avoids that: net 300k. Income
+        // lifts every balance, so race 1 is the tightest row and the 1.3M is paid before the 1M is saved.
+        $rounds = $this->rounds(10.0, 3);
+        $parts = $this->parts(75);
+        $prices = ['Engine' => 1_000_000, 'Chassis' => 100_000];
+        $options = ['Engine' => [['level' => 2, 'price' => 1_300_000]]];
+        $ranker = $this->ranker($this->engineOnly());
+        $demand = $this->evenDemand();
+        $plan = $this->plan($rounds, $parts, $prices, budget: 500_000, income: 1_000_000);
+        $this->assertSame([11_000_000, 12_000_000, 12_000_000], array_column($plan['rows'], 'balance'));
+
+        $out = $this->rank($ranker, $plan, $rounds, $demand, $parts, $prices, $options, income: 1_000_000);
+
+        $this->assertSame(300_000, $out[0]['net_cost']);
+        $this->assertFalse($out[0]['affordable']);
+    }
+
+    public function testAnUpgradeThatKeepsEveryRowAboveTheCushionIsAffordable(): void
+    {
+        $rounds = $this->rounds(10.0, 3);
+        $parts = $this->parts(75);
+        $prices = ['Engine' => 1_000_000, 'Chassis' => 100_000];
+        $options = ['Engine' => [['level' => 2, 'price' => 1_300_000]]];
+        $plan = $this->plan($rounds, $parts, $prices, budget: 1_300_000, income: 1_000_000);
+
+        $out = $this->rank($this->ranker($this->engineOnly()), $plan, $rounds, $this->evenDemand(), $parts, $prices, $options, income: 1_000_000);
+
+        $this->assertSame(300_000, $out[0]['net_cost']);
+        $this->assertTrue($out[0]['affordable']);
+    }
+
+    public function testTheLastRowMustReachThePlansEndTarget(): void
+    {
+        // Balances 10M, 10M, 9M; the upgraded season ends on 10M − 1.3M = 8.7M with no repairs.
+        $rounds = $this->rounds(10.0, 3);
+        $parts = $this->parts(75);
+        $prices = ['Engine' => 1_000_000, 'Chassis' => 100_000];
+        $options = ['Engine' => [['level' => 2, 'price' => 1_300_000]]];
+        $ranker = $this->ranker($this->engineOnly());
+        $demand = $this->evenDemand();
+
+        $met = $this->plan($rounds, $parts, $prices, o: ['cushion' => 8_000_000, 'target' => 8_700_000]);
+        $this->assertTrue($this->rank($ranker, $met, $rounds, $demand, $parts, $prices, $options)[0]['affordable']);
+
+        $missed = $this->plan($rounds, $parts, $prices, o: ['cushion' => 8_000_000, 'target' => 8_700_001]);
+        $this->assertFalse($this->rank($ranker, $missed, $rounds, $demand, $parts, $prices, $options)[0]['affordable']);
     }
 
     public function testInfeasibleForecastDropsTheCandidate(): void
@@ -391,7 +467,7 @@ final class UpgradeRankerTest extends TestCase
         $rounds = $this->rounds(110.0, 2);
         $parts = $this->parts();
         $prices = ['Engine' => 100_000, 'Chassis' => 100_000];
-        $plan = ['ctr' => 0, 'rows' => $this->plan($this->rounds(), $parts, $prices)['rows']];
+        $plan = $this->plan($this->rounds(), $parts, $prices);
 
         $out = $this->rank(
             $this->ranker($this->engineOnly()),

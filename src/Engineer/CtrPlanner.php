@@ -195,7 +195,7 @@ final readonly class CtrPlanner
      *
      * @param list<BudgetRow> $rows
      */
-    private static function headroom(array $rows, int $cushion, int $endTarget): int
+    public static function headroom(array $rows, int $cushion, int $endTarget): int
     {
         $last = array_key_last($rows);
         $headroom = PHP_INT_MAX;

@@ -1179,6 +1179,16 @@ final class RaceEngineerTest extends TestCase
         $this->assertSame('/season#season-upgrades', $line['anchor']);
     }
 
+    public function testANetThatFitsButAPriceThatDoesNotNamesThePriceUpFront(): void
+    {
+        $best = ['price' => 1_300_000] + $this->upgrade('Gearbox', 3, 300_000, false);
+        $in = $this->withUpgrades([$best], plan: ['envelope' => 900_000]);
+        $line = $this->line($in, 'upgrades');
+
+        $this->assertSame('No upgrade fits the budget', $line['answer']);
+        $this->assertSame('Best: Gearbox L3 needs $1.3M up front; $515k left', $line['reason']);
+    }
+
     public function testNoUpgradeFitsAnEmptyBudget(): void
     {
         $in = $this->withUpgrades([$this->upgrade('Gearbox', 3, 1_200_000, false)], plan: ['envelope' => 0]);

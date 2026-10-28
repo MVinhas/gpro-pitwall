@@ -369,8 +369,9 @@ class RaceEngineerService
     }
 
     /**
-     * The plan with its upgrade ranking, ranked against what the card says is left for upgrades ($inputs
-     * carries the plan). A failing ranking costs the card only its upgrades line.
+     * The plan with its upgrade ranking. What the card's optional swaps, training and testing take out of the
+     * envelope ($inputs carries the plan) is paid before any upgrade. A failing ranking costs the card only its
+     * upgrades line.
      *
      * @param Plan $plan
      * @param InForce $objective
@@ -401,7 +402,7 @@ class RaceEngineerService
                 $cash,
                 (int) $outlook['committed'],
                 (int) $outlook['income'],
-                RaceEngineer::upgradeBudget($inputs),
+                $plan['envelope'] - RaceEngineer::upgradeBudget($inputs),
             );
         } catch (\Throwable $e) {
             error_log('[Engineer] ' . $e::class);

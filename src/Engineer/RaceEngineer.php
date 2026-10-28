@@ -440,11 +440,15 @@ final class RaceEngineer
 
         $best = $upgrades[0];
         $budget = self::upgradeBudget($in);
+        // A net that fits was refused for its price: paid now, while the repair it saves lands later.
+        $cost = $best['net_cost'] <= $budget
+            ? ' needs ' . Money::short($best['price']) . ' up front'
+            : ' for a net ' . Money::short($best['net_cost']);
 
         return self::line(
             'upgrades',
             'No upgrade fits the budget',
-            'Best: ' . $best['part'] . ' L' . $best['to'] . ' for a net ' . Money::short($best['net_cost'])
+            'Best: ' . $best['part'] . ' L' . $best['to'] . $cost
                 . ($budget > 0 ? '; ' . Money::short($budget) . ' left' : '; nothing left'),
             self::UPGRADES_ANCHOR,
         );
