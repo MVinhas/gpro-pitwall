@@ -52,7 +52,7 @@ use App\Support\Sparkline;
  *     season: int, race: int, computed_at: string, plan: Plan,
  *     view: array{
  *         as_of: string, target: string, spend: array{value: string, tone: 'ink'|'amber'|'red'},
- *         rows: list<BudgetRowView>, partial: string, upgrades: list<UpgradeRowView>|null
+ *         rows: list<BudgetRowView>, partial: string, upgrades: list<UpgradeRowView>|null, upgrades_short: bool
  *     }
  * }
  */
@@ -169,6 +169,7 @@ class SeasonService
                     'rows' => $this->budgetRows($plan),
                     'partial' => implode(', ', $plan['partial']),
                     'upgrades' => $this->upgradeRows($plan),
+                    'upgrades_short' => $plan['infeasible'] ?? false,
                 ],
             ], false];
         } catch (\Throwable $e) {

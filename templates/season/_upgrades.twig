@@ -6,7 +6,12 @@
             <p class="t-caption mt-1">{{ budget.view.as_of }}</p>
         </div>
         <div class="card-bd space-y-4">
-            {% if budget.view.upgrades is empty %}
+            {% if budget.view.upgrades is empty and budget.view.upgrades_short %}
+                {% include 'partials/_empty.twig' with {
+                    title: 'No upgrade fits the budget',
+                    body: 'The season plan already runs short.'
+                } only %}
+            {% elseif budget.view.upgrades is empty %}
                 {% include 'partials/_empty.twig' with {
                     title: 'No upgrade adds PHA',
                     body: 'No level above yours adds PHA for the remaining tracks.'

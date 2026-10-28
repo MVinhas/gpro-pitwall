@@ -224,6 +224,15 @@ final class SeasonServiceTest extends TestCase
         $this->budgets->save(1, 107, 9, $this->plan(['upgrades' => []]));
 
         $this->assertSame([], $this->service->build(1, null)['budget']['view']['upgrades'] ?? null);
+        $this->assertFalse($this->service->build(1, null)['budget']['view']['upgrades_short'] ?? null);
+    }
+
+    public function testAnInfeasiblePlanMarksTheRankingShort(): void
+    {
+        $this->race(1);
+        $this->budgets->save(1, 107, 9, $this->plan(['upgrades' => [], 'infeasible' => true]));
+
+        $this->assertTrue($this->service->build(1, null)['budget']['view']['upgrades_short'] ?? null);
     }
 
     public function testAMalformedUpgradeRowHidesOnlyTheUpgradesCard(): void
