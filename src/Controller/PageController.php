@@ -81,19 +81,35 @@ class PageController
         private readonly GproSyncService $syncService,
         private readonly HarvestService $harvest,
         private readonly RaceEngineerService $raceEngineer,
+        private readonly bool $syncStale,
         private readonly Environment $twig,
         private array $config
     ) {
     }
 
     /**
+     * An inline sync earlier in the request writes the fresh flag into the view data; without one the
+     * engineer uses the flag computed at bootstrap, the same one the strip shows.
+     *
+     * @param array<string, mixed> $viewData
+     */
+    public static function engineerStale(array $viewData, bool $bootstrapStale): bool
+    {
+        return (bool) ($viewData['sync_stale'] ?? $bootstrapStale);
+    }
+
+    /**
      * @param array<string, mixed> $cockpit
      * @return ?array<string, mixed>
      */
-    public static function buildEngineer(RaceEngineerService $service, int $userId, array $cockpit): ?array
-    {
+    public static function buildEngineer(
+        RaceEngineerService $service,
+        int $userId,
+        array $cockpit,
+        bool $stale = false,
+    ): ?array {
         try {
-            return $service->forCockpit($userId, $cockpit);
+            return $service->forCockpit($userId, $cockpit, $stale);
         } catch (\Throwable $e) {
             error_log('[Engineer] ' . $e::class);
 
@@ -166,7 +182,7 @@ class PageController
                 $mainSections,
                 fn (string $section): bool => !in_array(
                     $section,
-                    ['Debrief', 'Season', 'Division Baseline', 'Division Differences'],
+                    ['Race Engineer', 'Debrief', 'Season', 'Division Baseline', 'Division Differences'],
                     true,
                 ),
             );
@@ -319,6 +335,7 @@ class PageController
         }
 
         switch ($activeMainTab) {
+            case 'Race Engineer':
             case 'Cockpit':
                 $cockpitRisk = RaceSettings::resolve($_SESSION, RaceSettings::CTR, $request->get('cockpit_risk'), 100);
                 $cockpitTrainingLaps = RaceSettings::resolve(
@@ -329,6 +346,7 @@ class PageController
                 );
                 $viewData['cockpit_risk'] = $cockpitRisk;
                 $viewData['cockpit_training_laps'] = $cockpitTrainingLaps;
+                $isCockpit = $activeMainTab === 'Cockpit';
                 try {
                     // No driver under contract: surface the friendly "hire a
                     // pilot" notice (with a Recruitment Analyzer link) instead of
@@ -383,17 +401,20 @@ class PageController
                         (int) ($raceSetup['trackId'] ?? 0),
                     );
                     $viewData['cockpit_setup_stale'] = $setupStale;
+                    $viewData['cockpit_data_loaded'] = true;
 
-                    $viewData['pha'] = $this->phaMatch->evaluate(
-                        $trackPha,
-                        [
-                            'power'        => $carData['carPower'] ?? 0,
-                            'handling'     => $carData['carHandl'] ?? 0,
-                            'acceleration' => $carData['carAccel'] ?? 0,
-                        ],
-                        $this->isFavouriteTrack($pilot, $trackId),
-                    );
-                    $viewData['pha_track_name'] = $trackName;
+                    if ($isCockpit) {
+                        $viewData['pha'] = $this->phaMatch->evaluate(
+                            $trackPha,
+                            [
+                                'power'        => $carData['carPower'] ?? 0,
+                                'handling'     => $carData['carHandl'] ?? 0,
+                                'acceleration' => $carData['carAccel'] ?? 0,
+                            ],
+                            $this->isFavouriteTrack($pilot, $trackId),
+                        );
+                        $viewData['pha_track_name'] = $trackName;
+                    }
 
                     // Weather lives only on RaceSetup. While stale it's the
                     // previous race's forecast, so withhold it rather than
@@ -451,13 +472,15 @@ class PageController
                     $division = $this->divisionFromMenu($menu);
                     $cash = (int) ($menu['cash'] ?? 0);
 
-                    $lastSynced = $user['last_synced_at'] ?? null;
-                    $viewData['quali_bonus'] = $this->earlyQualiBonus->assess(
-                        $office,
-                        $division,
-                        new \DateTimeImmutable('now'),
-                        is_string($lastSynced) ? $lastSynced : null,
-                    );
+                    if ($isCockpit) {
+                        $lastSynced = $user['last_synced_at'] ?? null;
+                        $viewData['quali_bonus'] = $this->earlyQualiBonus->assess(
+                            $office,
+                            $division,
+                            new \DateTimeImmutable('now'),
+                            is_string($lastSynced) ? $lastSynced : null,
+                        );
+                    }
 
                     $moneyLevels = $this->apiClient->getMoneyLevels();
                     $groupCarLevels = array_values(array_filter(array_map(
@@ -465,11 +488,13 @@ class PageController
                         $moneyLevels['managers'] ?? [],
                     ), static fn(int $lvl): bool => $lvl > 0));
 
-                    $viewData['testing_projection'] = $this->testingProjection->project([
-                        'power'        => $carData['carPower'] ?? 0,
-                        'handling'     => $carData['carHandl'] ?? 0,
-                        'acceleration' => $carData['carAccel'] ?? 0,
-                    ]);
+                    if ($isCockpit) {
+                        $viewData['testing_projection'] = $this->testingProjection->project([
+                            'power'        => $carData['carPower'] ?? 0,
+                            'handling'     => $carData['carHandl'] ?? 0,
+                            'acceleration' => $carData['carAccel'] ?? 0,
+                        ]);
+                    }
 
                     $currentRace = (int) ($office['raceNb'] ?? 0);
                     if ($currentRace > 0) {
@@ -492,34 +517,36 @@ class PageController
                         $viewData['testing_targets'] = $targets;
                     }
 
-                    $negotiations = $this->apiClient->getSponsorNegotiations();
-                    $ongoing = [];
-                    foreach ($negotiations['ongNegs'] ?? [] as $neg) {
-                        $sponsorId = (int) ($neg['sponsorId'] ?? 0);
-                        if ($sponsorId <= 0) {
-                            continue;
+                    if ($isCockpit) {
+                        $negotiations = $this->apiClient->getSponsorNegotiations();
+                        $ongoing = [];
+                        foreach ($negotiations['ongNegs'] ?? [] as $neg) {
+                            $sponsorId = (int) ($neg['sponsorId'] ?? 0);
+                            if ($sponsorId <= 0) {
+                                continue;
+                            }
+                            try {
+                                $profile = $this->apiClient->getSponsorProfile($sponsorId);
+                            } catch (\Throwable) {
+                                continue;
+                            }
+                            $advice = $this->sponsorAdvisor->adviseFor($profile);
+                            $ongoing[] = [
+                                'name'             => (string) ($neg['name'] ?? $profile['name'] ?? 'Unknown'),
+                                'progress'         => (string) ($neg['progress'] ?? '0'),
+                                'priority'         => (string) ($neg['priority'] ?? ''),
+                                'contested'        => (string) ($neg['contested'] ?? ''),
+                                'attention'        => (int) ($neg['attention'] ?? 0),
+                                'characteristics'  => $advice['characteristics'],
+                                'answers'          => $advice['answers'],
+                            ];
                         }
-                        try {
-                            $profile = $this->apiClient->getSponsorProfile($sponsorId);
-                        } catch (\Throwable) {
-                            continue;
-                        }
-                        $advice = $this->sponsorAdvisor->adviseFor($profile);
-                        $ongoing[] = [
-                            'name'             => (string) ($neg['name'] ?? $profile['name'] ?? 'Unknown'),
-                            'progress'         => (string) ($neg['progress'] ?? '0'),
-                            'priority'         => (string) ($neg['priority'] ?? ''),
-                            'contested'        => (string) ($neg['contested'] ?? ''),
-                            'attention'        => (int) ($neg['attention'] ?? 0),
-                            'characteristics'  => $advice['characteristics'],
-                            'answers'          => $advice['answers'],
+                        $viewData['sponsor_negotiations'] = [
+                            'car_spots_taken' => (int) ($negotiations['carSpotsTaken'] ?? 0),
+                            'car_spots_total' => count($negotiations['carSpots'] ?? []),
+                            'ongoing'         => $ongoing,
                         ];
                     }
-                    $viewData['sponsor_negotiations'] = [
-                        'car_spots_taken' => (int) ($negotiations['carSpotsTaken'] ?? 0),
-                        'car_spots_total' => count($negotiations['carSpots'] ?? []),
-                        'ongoing'         => $ongoing,
-                    ];
 
                     $trainings = $this->trainingService->getAllTrainings();
                     if ($trainings !== []) {
@@ -598,7 +625,9 @@ class PageController
                         }
                     }
 
-                    if ($isAdmin && (string) $request->get('fragment', '') === '') {
+                    $isEngineerRequest = $isAdmin && $activeMainTab === 'Race Engineer'
+                        && (string) $request->get('fragment', '') === '';
+                    if ($isEngineerRequest) {
                         $engineer = self::buildEngineer($this->raceEngineer, (int) $user['id'], [
                             'office'           => $office,
                             'menu'             => $menu,
@@ -619,7 +648,7 @@ class PageController
                             'weather'          => $viewData['weather'] ?? null,
                             'setup_stale'      => $setupStale,
                             'ctr'              => $cockpitRisk,
-                        ]);
+                        ], self::engineerStale($viewData, $this->syncStale));
                         if ($engineer !== null) {
                             $viewData['engineer'] = $engineer;
                         }

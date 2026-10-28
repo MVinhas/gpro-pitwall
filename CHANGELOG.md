@@ -6,6 +6,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.19] - 2026-10-28
+
+### Changed
+- The **Race engineer** (admin) moved off the Cockpit to its own **Engineer** tab under
+  Admin, so the Cockpit is lighter and no longer computes the engineer on every visit. Its
+  links still open the matching Cockpit section, and "Use N" keeps you on the Engineer tab.
+
+### Added
+- When a race has finished since your last sync, the engineer says "New race weekend ·
+  Re-sync for this weekend's advice" instead of advising on last race's data, and saves no
+  season plan until you re-sync.
+
 ## [1.21.18] - 2026-10-28
 
 ### Added

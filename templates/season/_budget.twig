@@ -1,5 +1,5 @@
-{# The engineer's saved season plan. The Cockpit computes it; this card only shows it, so it can be as old as the
-   manager's last Cockpit visit ("As of race N"), and may belong to a season with no race history yet. #}
+{# The engineer's saved season plan. The Engineer tab computes it; this card only shows it, so it can be as old as the
+   manager's last Engineer visit ("As of race N"), and may belong to a season with no race history yet. #}
 {% set tone_class = {'ink': 'text-slate-900', 'amber': 'font-medium text-amber-700', 'red': 'font-medium text-red-700'} %}
 {% if budget %}
     <section id="season-budget" class="card scroll-mt-16" aria-labelledby="season-budget-title">
@@ -62,7 +62,7 @@
     <div id="season-budget" class="scroll-mt-16">
         {% include 'partials/_empty.twig' with {
             title: 'No budget yet',
-            body: "Open the Cockpit once the season's costs are known to build the forecast."
+            body: "Open the Engineer tab once the season's costs are known to build the forecast."
         } only %}
     </div>
 {% endif %}

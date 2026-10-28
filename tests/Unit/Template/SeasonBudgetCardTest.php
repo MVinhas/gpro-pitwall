@@ -157,7 +157,7 @@ final class SeasonBudgetCardTest extends TestCase
 
         $this->assertStringContainsString('No budget yet', $text);
         $this->assertMatchesRegularExpression('/id="season-budget" class="[^"]*scroll-mt-16/', $html);
-        $this->assertStringContainsString("Open the Cockpit once the season's costs are known to build the forecast.", $text);
+        $this->assertStringContainsString("Open the Engineer tab once the season's costs are known to build the forecast.", $text);
         $this->assertStringNotContainsString('Budget to season end', $text);
         $this->assertStringNotContainsString('<table', $html);
     }

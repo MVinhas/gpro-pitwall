@@ -35,6 +35,11 @@ final class DeferredRenderTest extends TestCase
         yield 'the follow-up request on a cold screen'  => [true, false, 'Testing', false, false];
     }
 
+    public function testTheEngineerTabDefersWhenCold(): void
+    {
+        $this->assertTrue(DeferredRender::shouldDefer(false, false, 'Race Engineer', fn () => false));
+    }
+
     #[DataProvider('cases')]
     public function testShouldDefer(bool $wait, bool $syncPending, string $section, bool $isWarm, bool $expected): void
     {

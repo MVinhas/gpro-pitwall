@@ -201,11 +201,12 @@ $container['twig']->addGlobal(
 // True when a race has finished since the last sync, so the status line can ask
 // for a re-sync before the manager plans on last race's data.
 $lastSyncedAt = $currentUser['last_synced_at'] ?? null;
-$container['twig']->addGlobal('sync_stale', \App\Support\SyncState::isStale(
+$container['sync_stale'] = \App\Support\SyncState::isStale(
     is_string($lastSyncedAt) ? $lastSyncedAt : null,
     new DateTimeImmutable('now'),
     \App\Support\RaceWindow::parseDays(Env::get('GPRO_RACE_DAYS', '2,5')),
-));
+);
+$container['twig']->addGlobal('sync_stale', $container['sync_stale']);
 
 $mailCfg = [
     'host'       => Env::get('MAIL_HOST', 'localhost'),
@@ -556,6 +557,7 @@ $container['controller.page'] = new PageController(
     $container['service.gpro_sync'],
     $container['service.harvest'],
     $container['service.race_engineer'],
+    $container['sync_stale'],
     $container['twig'],
     $container['config']
 );

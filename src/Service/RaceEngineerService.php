@@ -66,9 +66,11 @@ class RaceEngineerService
 
     /**
      * @param array<string, mixed> $c Cockpit's already-computed values
+     * @param bool $stale A race has finished since the last sync: the figures are last weekend's, so the
+     *                    engineer asks for a re-sync instead of planning (or saving a plan) on them.
      * @return array{objective: InForce, lines: list<Line>, season: int}
      */
-    public function forCockpit(int $userId, array $c): array
+    public function forCockpit(int $userId, array $c, bool $stale = false): array
     {
         $office = self::arr($c['office'] ?? null);
         $menu = self::arr($c['menu'] ?? null);
@@ -97,6 +99,10 @@ class RaceEngineerService
             ($c['division'] ?? null) === 'Elite',
         );
         $objective = SeasonObjective::inForce($proposal, $this->pins->find($userId, $season));
+
+        if ($stale) {
+            return ['objective' => $objective, 'lines' => [RaceEngineer::stale()], 'season' => $season];
+        }
 
         $rounds = $this->rounds($c);
         $basis = $this->planBasis($outlook, $raceNb, $rounds, $c);

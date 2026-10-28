@@ -26,7 +26,7 @@ final readonly class EngineerController
             $this->engineer->pin((int) $user['id'], (int) $season, $objective);
         }
 
-        header('Location: /cockpit');
+        header('Location: /engineer');
         exit;
     }
 }

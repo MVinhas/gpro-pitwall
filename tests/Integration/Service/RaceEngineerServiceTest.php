@@ -460,6 +460,56 @@ final class RaceEngineerServiceTest extends TestCase
         self::assertNull($followed['action']);
     }
 
+    public function testStaleDataGivesOneLineAndSavesNothing(): void
+    {
+        $this->seedPromotionFixture();
+        $this->service->forCockpit(self::USER, $this->cockpit());
+        $before = $this->budgets->latest(self::USER);
+        self::assertNotNull($before);
+        $this->pins->save(self::USER, self::SEASON, 'hold');
+
+        $log = tempnam(sys_get_temp_dir(), 'engineer-log');
+        self::assertIsString($log);
+        $prior = ini_set('error_log', $log);
+        try {
+            $card = $this->service->forCockpit(
+                self::USER,
+                $this->cockpit(['office' => ['seasonNb' => self::SEASON, 'raceNb' => 11]]),
+                stale: true,
+            );
+            $logged = (string) file_get_contents($log);
+        } finally {
+            ini_set('error_log', (string) $prior);
+            unlink($log);
+        }
+
+        self::assertSame([[
+            'key' => 'stale',
+            'answer' => 'New race weekend',
+            'figure' => null,
+            'reason' => "Re-sync for this weekend's advice",
+            'anchor' => null,
+            'tone' => 'amber',
+            'action' => null,
+        ]], $card['lines']);
+        self::assertSame(self::SEASON, $card['season']);
+        self::assertSame($before, $this->budgets->latest(self::USER));
+        self::assertSame('hold', $this->pins->find(self::USER, self::SEASON));
+        self::assertStringNotContainsString('[Engineer]', $logged);
+    }
+
+    public function testFreshDataStillAdvises(): void
+    {
+        $this->seedPromotionFixture();
+
+        $card = $this->service->forCockpit(self::USER, $this->cockpit(), stale: false);
+
+        self::assertSame(
+            ['objective', 'cash', 'ctr', 'parts', 'training', 'testing', 'upgrades', 'risk', 'boost'],
+            array_column($card['lines'], 'key'),
+        );
+    }
+
     public function testPlanIsSavedForTheSeason(): void
     {
         $this->seedPromotionFixture();

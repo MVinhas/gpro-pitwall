@@ -32,6 +32,7 @@ final class Sections
         'Training Planner'     => '/training',
         'Car Wear Planner'     => '/car-wear',
         'Recruitment Analyzer' => '/recruitment',
+        'Race Engineer'        => '/engineer',
         'Debrief'              => '/debrief',
         'Season'               => '/season',
         'Division Baseline'    => '/divisions/baseline',
@@ -48,6 +49,7 @@ final class Sections
         'Training'    => 'Training Planner',
         'Recruitment' => 'Recruitment Analyzer',
         'Car Wear'    => 'Car Wear Planner',
+        'Engineer'    => 'Race Engineer',
     ];
 
     /** The screen a bare '/' means for a signed-in manager. */

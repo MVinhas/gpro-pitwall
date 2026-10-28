@@ -25,6 +25,12 @@ final class SectionsTest extends TestCase
         }
     }
 
+    public function testRaceEngineerHasItsOwnPath(): void
+    {
+        $this->assertSame('/engineer', Sections::pathFor('Race Engineer'));
+        $this->assertSame('Race Engineer', Sections::sectionFor('/engineer'));
+    }
+
     public function testPathsAndSectionsRoundTrip(): void
     {
         foreach (Sections::all() as $section => $path) {
@@ -56,6 +62,7 @@ final class SectionsTest extends TestCase
             ['Recruitment', 'Recruitment Analyzer'],
             // The nav label of the planner tab (1.20.0).
             ['Car Wear', 'Car Wear Planner'],
+            ['Engineer', 'Race Engineer'],
             // A canonical name is already canonical.
             ['Cockpit', 'Cockpit'],
             ['Division Baseline', 'Division Baseline'],
@@ -66,6 +73,7 @@ final class SectionsTest extends TestCase
     {
         $this->assertSame('/strategy', Sections::pathFor('Strategy'));
         $this->assertSame('/car-wear', Sections::pathFor('Car Wear'));
+        $this->assertSame('/engineer', Sections::pathFor('Engineer'));
     }
 
     public function testAnUnknownNameHasNoPath(): void
