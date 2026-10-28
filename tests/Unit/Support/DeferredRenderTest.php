@@ -19,12 +19,16 @@ final class DeferredRenderTest extends TestCase
     {
         // wait, syncPending, section, isWarm => defer
         yield 'warm cockpit renders in one go'          => [false, false, 'Cockpit', true, false];
-        yield 'cold cockpit shows the skeleton first'   => [false, false, 'Cockpit', false, true];
-        yield 'cold strategy shows the skeleton first'  => [false, false, 'Race Strategy', false, true];
-        yield 'cold car wear shows the skeleton first'  => [false, false, 'Car Wear Planner', false, true];
-        yield 'cold testing shows the skeleton first'   => [false, false, 'Testing', false, true];
-        yield 'cold training shows the skeleton first'  => [false, false, 'Training Planner', false, true];
+        // A page never fetches, so the follow-up would have nothing more to
+        // show: a cold screen renders what is stored (or its empty state).
+        yield 'cold cockpit renders what is stored'     => [false, false, 'Cockpit', false, false];
+        yield 'cold strategy renders what is stored'    => [false, false, 'Race Strategy', false, false];
+        yield 'cold car wear renders what is stored'    => [false, false, 'Car Wear Planner', false, false];
+        yield 'cold testing renders what is stored'     => [false, false, 'Testing', false, false];
+        yield 'cold training renders what is stored'    => [false, false, 'Training Planner', false, false];
+        yield 'cold engineer renders what is stored'    => [false, false, 'Race Engineer', false, false];
         yield 'a screen with no GPRO data never waits'  => [false, false, 'Division Baseline', false, false];
+        // The driver market is still downloaded on a miss (no manager budget).
         yield 'cold recruitment shows the skeleton first' => [false, false, 'Recruitment Analyzer', false, true];
         yield 'warm recruitment renders in one go'      => [false, false, 'Recruitment Analyzer', true, false];
         yield 'a pending sync on a warm screen renders now' => [false, true, 'Cockpit', true, false];
@@ -33,11 +37,6 @@ final class DeferredRenderTest extends TestCase
         yield 'a pending sync on a warm baseline renders now' => [false, true, 'Division Baseline', true, false];
         yield 'the follow-up request always renders'    => [true, true, 'Cockpit', false, false];
         yield 'the follow-up request on a cold screen'  => [true, false, 'Testing', false, false];
-    }
-
-    public function testTheEngineerTabDefersWhenCold(): void
-    {
-        $this->assertTrue(DeferredRender::shouldDefer(false, false, 'Race Engineer', fn () => false));
     }
 
     #[DataProvider('cases')]
@@ -57,6 +56,7 @@ final class DeferredRenderTest extends TestCase
 
         $this->assertFalse(DeferredRender::shouldDefer(true, false, 'Cockpit', $probe));
         $this->assertFalse(DeferredRender::shouldDefer(false, false, 'Division Baseline', $probe));
+        $this->assertFalse(DeferredRender::shouldDefer(false, false, 'Cockpit', $probe));
     }
 
     public function testWarmPendingRendersNow(): void

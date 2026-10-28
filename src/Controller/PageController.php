@@ -215,10 +215,10 @@ class PageController
             $activeMainTab = $defaultTab;
         }
 
-        // A cold screen (or a first sync still owed on cold data) is sent as a
-        // skeleton first; its follow-up request (wait=1) does the GPRO work.
+        // A first sync still owed on cold data (or a cold driver market) is sent
+        // as a skeleton first; its follow-up request (wait=1) does that work.
         // Only a never-synced account owes a sync here; every other refresh is
-        // the manager's Re-sync click.
+        // the manager's Re-sync click, so other screens render what is stored.
         $syncPending = !empty($_SESSION[AuthService::SYNC_PENDING]);
         $wait = (string) $request->get(DeferredRender::WAIT_PARAM, '') === '1';
         $warm = null;
