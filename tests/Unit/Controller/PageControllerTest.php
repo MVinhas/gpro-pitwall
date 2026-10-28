@@ -147,6 +147,16 @@ final class PageControllerTest extends TestCase
         self::assertStringNotContainsString($sessionPin, $source);
     }
 
+    public function testEngineerReceivesTheStaleFlagItIsGiven(): void
+    {
+        $service = $this->createMock(RaceEngineerService::class);
+        $service->expects($this->once())->method('forCockpit')->with(7, [], true)->willReturn([
+            'objective' => [], 'lines' => [], 'season' => 1,
+        ]);
+
+        $this->assertNotNull(PageController::buildEngineer($service, 7, [], true));
+    }
+
     public function testEngineerFailureYieldsNullInsteadOfBreakingTheCockpit(): void
     {
         $service = $this->createStub(RaceEngineerService::class);

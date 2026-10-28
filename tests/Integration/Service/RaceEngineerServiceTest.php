@@ -466,6 +466,7 @@ final class RaceEngineerServiceTest extends TestCase
         $this->service->forCockpit(self::USER, $this->cockpit());
         $before = $this->budgets->latest(self::USER);
         self::assertNotNull($before);
+        $this->pins->save(self::USER, self::SEASON, 'hold');
 
         $log = tempnam(sys_get_temp_dir(), 'engineer-log');
         self::assertIsString($log);
@@ -493,6 +494,7 @@ final class RaceEngineerServiceTest extends TestCase
         ]], $card['lines']);
         self::assertSame(self::SEASON, $card['season']);
         self::assertSame($before, $this->budgets->latest(self::USER));
+        self::assertSame('hold', $this->pins->find(self::USER, self::SEASON));
         self::assertStringNotContainsString('[Engineer]', $logged);
     }
 
@@ -502,8 +504,10 @@ final class RaceEngineerServiceTest extends TestCase
 
         $card = $this->service->forCockpit(self::USER, $this->cockpit(), stale: false);
 
-        self::assertSame(['objective', 'cash'], array_slice(array_column($card['lines'], 'key'), 0, 2));
-        self::assertNotContains('stale', array_column($card['lines'], 'key'));
+        self::assertSame(
+            ['objective', 'cash', 'ctr', 'parts', 'training', 'testing', 'upgrades', 'risk', 'boost'],
+            array_column($card['lines'], 'key'),
+        );
     }
 
     public function testPlanIsSavedForTheSeason(): void

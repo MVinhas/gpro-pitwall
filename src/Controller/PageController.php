@@ -627,7 +627,7 @@ class PageController
                             'weather'          => $viewData['weather'] ?? null,
                             'setup_stale'      => $setupStale,
                             'ctr'              => $cockpitRisk,
-                        ], $this->syncStale);
+                        ], (bool) ($viewData['sync_stale'] ?? $this->syncStale));
                         if ($engineer !== null) {
                             $viewData['engineer'] = $engineer;
                         }
