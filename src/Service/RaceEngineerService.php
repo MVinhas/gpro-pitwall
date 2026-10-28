@@ -109,8 +109,6 @@ class RaceEngineerService
         );
 
         if ($plan !== null) {
-            $plan = $this->withUpgrades($plan, $inputs, $objective, $ctx['outlook'], $ctx['cash'], $basis, $c);
-            $inputs = $inputs->withPlan($plan);
             try {
                 $picks = $this->swapPicks($inputs, $plan, $this->swapSeasonFrom($ctx, $plan, $basis, $c), $c);
             } catch (\Throwable $e) {
@@ -122,6 +120,8 @@ class RaceEngineerService
                 $plan['swap_picks'] = $picks;
                 $inputs = $inputs->withPlan($plan)->withSwapPicks($picks);
             }
+            $plan = $this->withUpgrades($plan, $inputs, $objective, $ctx['outlook'], $ctx['cash'], $basis, $c);
+            $inputs = $inputs->withPlan($plan);
             try {
                 $this->budgets->save($userId, $season, $ctx['raceNb'], $plan);
             } catch (\Throwable $e) {
@@ -243,8 +243,9 @@ class RaceEngineerService
     }
 
     /**
-     * The season-long level for each part the plan replaces before the next race and each optional swap the
-     * parts line offers, judged at the plan's CTR. A part the picker can't judge is left out.
+     * The season-long level for each part the plan replaces before the next race, then for each optional swap
+     * the parts line offers from what those picks leave, judged at the plan's CTR on a season already paying
+     * for the forced picks. A part the picker can't judge is left out.
      *
      * @param Plan $plan
      * @param array<string, mixed> $c
@@ -271,23 +272,45 @@ class RaceEngineerService
                 'track_base' => (float) $part['track_base'],
             ];
         }
-        $names = array_unique([
-            ...array_column($plan['rows'][0]['replaced'], 'part'),
-            ...array_column(RaceEngineer::offeredOptionals($inputs), 'part'),
-        ]);
-        $flagged = [];
-        foreach ($names as $name) {
-            $part = $adviseParts[$name] ?? null;
-            if ($part !== null) {
-                $flagged[] = [
-                    'part' => $name,
-                    'level' => $part['level'],
-                    'start' => $part['start'],
-                    'est' => $part['est'],
-                    'end' => $part['end'],
-                ];
-            }
-        }
+        $forced = $this->picksAt(
+            self::flagged(array_column($plan['rows'][0]['replaced'], 'part'), $adviseParts),
+            $adviseParts,
+            $season,
+            $trackPha,
+            $carPha,
+            $c,
+        );
+        $optional = array_column(RaceEngineer::offeredOptionals($inputs->withSwapPicks($forced)), 'part');
+        $committed = array_sum(array_map(static fn (array $pick): int => max(0, $pick['net_cost']), $forced));
+
+        return [...$forced, ...$this->picksAt(
+            self::flagged($optional, $adviseParts),
+            $adviseParts,
+            $season->committing($committed),
+            $trackPha,
+            $carPha,
+            $c,
+        )];
+    }
+
+    /**
+     * The swap advisor's season picks for $flagged, judged at the plan's CTR over $season.
+     *
+     * @param list<array{part: string, level: int, start: int, est: float, end: float}> $flagged
+     * @param array<string, array{level: int, start: int, est: float, end: float, track_base: float}> $adviseParts
+     * @param array{power: float, handling: float, acceleration: float} $trackPha
+     * @param array{power: float, handling: float, acceleration: float} $carPha
+     * @param array<string, mixed> $c
+     * @return list<SwapPick>
+     */
+    private function picksAt(
+        array $flagged,
+        array $adviseParts,
+        SwapSeason $season,
+        array $trackPha,
+        array $carPha,
+        array $c,
+    ): array {
         if ($flagged === []) {
             return [];
         }
@@ -299,7 +322,7 @@ class RaceEngineerService
             self::arr($c['driver'] ?? null),
             $trackPha,
             $carPha,
-            $plan['ctr'],
+            $season->plan['ctr'],
             self::ints($c['group_car_levels'] ?? null),
             $season->cash,
             self::floats($c['training_wear'] ?? null),
@@ -308,20 +331,44 @@ class RaceEngineerService
 
         $picks = [];
         foreach ($advice as $label => $entry) {
-            $option = $entry['options'][0] ?? null;
-            if (!$entry['season'] || $option === null) {
-                continue;
+            $pick = $entry['season_pick'];
+            if ($pick !== null) {
+                $picks[] = [
+                    'part' => (string) $label,
+                    'level' => $pick['level'],
+                    'kind' => $pick['kind'],
+                    'cost' => $pick['cost'],
+                    'net_cost' => $pick['net_cost'],
+                    'reason' => $pick['reason'],
+                ];
             }
-            $picks[] = [
-                'part' => (string) $label,
-                'level' => $option['level'],
-                'kind' => $option['kind'],
-                'cost' => $option['cost'],
-                'reason' => (string) $entry['season_reason'],
-            ];
         }
 
         return $picks;
+    }
+
+    /**
+     * @param list<string> $names
+     * @param array<string, array{level: int, start: int, est: float, end: float, track_base: float}> $parts
+     * @return list<array{part: string, level: int, start: int, est: float, end: float}>
+     */
+    private static function flagged(array $names, array $parts): array
+    {
+        $flagged = [];
+        foreach ($names as $name) {
+            $part = $parts[$name] ?? null;
+            if ($part !== null) {
+                $flagged[] = [
+                    'part' => $name,
+                    'level' => $part['level'],
+                    'start' => $part['start'],
+                    'est' => $part['est'],
+                    'end' => $part['end'],
+                ];
+            }
+        }
+
+        return $flagged;
     }
 
     /**
@@ -549,9 +596,9 @@ class RaceEngineerService
     }
 
     /**
-     * The plan with its upgrade ranking. What the card's optional swaps, training and testing take out of the
-     * envelope ($inputs carries the plan) is paid before any upgrade. A failing ranking costs the card only its
-     * upgrades line.
+     * The plan with its upgrade ranking. What the card's season picks, optional swaps, training and testing take
+     * out of the envelope ($inputs carries the plan and the picks) is paid before any upgrade, and a part with
+     * a pick is not ranked. A failing ranking costs the card only its upgrades line.
      *
      * @param Plan $plan
      * @param InForce $objective
@@ -577,7 +624,10 @@ class RaceEngineerService
                 $this->demands($c),
                 $basis['parts'],
                 $basis['prices'],
-                $this->planner->upgradeOptions(self::arr($c['car'] ?? null)),
+                array_diff_key(
+                    $this->planner->upgradeOptions(self::arr($c['car'] ?? null)),
+                    array_flip(array_column($inputs->swapPicks, 'part')),
+                ),
                 $basis['driverFactor'],
                 $cash,
                 (int) $outlook['committed'],

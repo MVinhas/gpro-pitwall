@@ -35,4 +35,18 @@ final readonly class SwapSeason
         public StrengthFloor $floor,
     ) {
     }
+
+    /**
+     * The same season with $amount already spent before the first race: the cash and every balance the plan
+     * forecasts are that much lower.
+     */
+    public function committing(int $amount): self
+    {
+        $plan = $this->plan;
+        foreach ($plan['rows'] as $i => $row) {
+            $plan['rows'][$i]['balance'] = $row['balance'] - $amount;
+        }
+
+        return clone($this, ['cash' => $this->cash - $amount, 'plan' => $plan]);
+    }
 }

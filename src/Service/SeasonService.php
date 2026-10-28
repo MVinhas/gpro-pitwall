@@ -207,6 +207,7 @@ class SeasonService
             'reserve' => 'End above ' . Dollars::short($plan['target']) . ' (half your season start)',
             'start_out_of_reach' => 'Keep one race of costs in hand (your '
                 . Dollars::short($plan['season_start'] ?? $plan['target']) . ' start is out of reach)',
+            'reserve_out_of_reach' => 'Keep one race of costs in hand (half your season start is out of reach)',
             default => 'Keep one race of costs in hand',
         };
     }

@@ -372,6 +372,21 @@ final class SwapLevelPickerTest extends TestCase
         $this->assertNull($this->pick($season, [$this->freeDowngrade(85.0), $this->paid(3)]));
     }
 
+    public function testACandidateThatEndsThisRacePastThePlansLimitIsNotPicked(): void
+    {
+        // Survive swaps at 90%: a free spare 85% worn ends race 8 at 95, one 70% worn at 80.
+        $season = $this->season(SeasonObjective::SURVIVE, new StrengthFloor(5, 40, 26), 250_000);
+
+        $past = $this->pick($season, [$this->paid(3), $this->freeDowngrade(85.0)]);
+        $this->assertNotNull($past);
+        $this->assertSame('sidegrade', $past['kind']);
+        $this->assertSame('budget_short', $past['reason']);
+
+        $within = $this->pick($season, [$this->paid(3), $this->freeDowngrade(70.0)]);
+        $this->assertNotNull($within);
+        $this->assertSame('free_downgrade', $within['kind']);
+    }
+
     public function testOneRaceLeftStillPicks(): void
     {
         $pick = $this->pick(
@@ -386,17 +401,33 @@ final class SwapLevelPickerTest extends TestCase
 
     public function testBudgetShortTakesTheFreeOptionFirst(): void
     {
-        // Nothing fits: the targets sit 50k above cash. The free downgrade (95% worn) is replaced for 200k in
-        // race 8, the same 250k short as buying the paid downgrade now; free still goes first.
+        // Nothing fits: the targets sit 50k above cash. The free downgrade (85% worn) is replaced for 200k in
+        // race 9, the same 250k short as buying the paid downgrade now; free still goes first.
         $pick = $this->pick(
             $this->season(SeasonObjective::HOLD, new StrengthFloor(5, 40, 26), -50_000),
-            [$this->paid(4), $this->paid(2), $this->paid(3), $this->freeDowngrade(95.0)],
+            [$this->paid(4), $this->paid(2), $this->paid(3), $this->freeDowngrade(85.0)],
         );
 
         $this->assertNotNull($pick);
         $this->assertSame('free_downgrade', $pick['kind']);
         $this->assertFalse($pick['affordable']);
         $this->assertSame('budget_short', $pick['reason']);
+    }
+
+    public function testCommittingLowersTheCashAndEveryPlannedBalance(): void
+    {
+        $season = $this->season(SeasonObjective::HOLD, new StrengthFloor(5, 40, 26), 450_000);
+
+        $committed = $season->committing(200_000);
+
+        $this->assertSame(self::CASH - 200_000, $committed->cash);
+        $this->assertSame(
+            array_map(static fn (int $b): int => $b - 200_000, array_column($season->plan['rows'], 'balance')),
+            array_column($committed->plan['rows'], 'balance'),
+        );
+        $this->assertSame(self::CASH, $season->cash);
+        $this->assertSame('sidegrade', $this->pick($committed, [$this->paid(3), $this->paid(4)])['kind'] ?? null);
+        $this->assertSame('upgrade', $this->pick($season, [$this->paid(3), $this->paid(4)])['kind'] ?? null);
     }
 
     public function testEveryReasonHasItsWording(): void

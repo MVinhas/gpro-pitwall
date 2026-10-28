@@ -54,6 +54,7 @@ use App\Engineer\SwapSeason;
  * next race. Its choice moves to `options[0]`; the rest keep their track-fit
  * order. When it finds nothing, the track-fit ranking stands.
  *
+ * @phpstan-import-type Pick from SwapLevelPicker
  * @phpstan-type Pha array{power: float, handling: float, acceleration: float}
  * @phpstan-type SwapOption array{
  *     level: int,
@@ -107,7 +108,11 @@ final class PartSwapAdvisorService
     }
 
     /**
-     * @param list<array{part: string, level: int, start: int, est: float, end: float}> $flaggedParts
+     * Parts are judged forced first, then the optional ones, each group in the order given. Under a season,
+     * each pick's net cost is committed before the next part is judged, so the picks are affordable together.
+     *
+     * @param list<array{part: string, level: int, start: int, est: float, end: float, optional?: bool}> $flaggedParts
+     *     an `optional` part is one the manager may keep; every other part is forced
      * @param array<string, mixed> $carData full GetCar payload (with *Options arrays)
      * @param array<string, array{
      *     level: int, start: int, est: float, end: float, track_base: float
@@ -131,7 +136,8 @@ final class PartSwapAdvisorService
      *     },
      *     options: list<SwapOption>,
      *     season: bool,
-     *     season_reason: ?string
+     *     season_reason: ?string,
+     *     season_pick: ?Pick
      * }>
      */
     public function advise(
@@ -157,8 +163,12 @@ final class PartSwapAdvisorService
         $currentFit   = $this->pha->alignmentScore($track, $currentPha);
         $currentMatch = $this->pha->matchLevel($track, $currentPha);
         $out = [];
+        $ordered = [
+            ...array_filter($flaggedParts, static fn(array $f): bool => !($f['optional'] ?? false)),
+            ...array_filter($flaggedParts, static fn(array $f): bool => $f['optional'] ?? false),
+        ];
 
-        foreach ($flaggedParts as $flagged) {
+        foreach ($ordered as $flagged) {
             $part = $flagged['part'];
             if (!isset(CarWearService::PARTS_MAP[$part], $wearParts[$part])) {
                 continue;
@@ -203,6 +213,7 @@ final class PartSwapAdvisorService
                 : null;
             if ($pick !== null) {
                 $options = $this->withPick($options, $pick['level'], 'season');
+                $season = $season->committing(max(0, $pick['net_cost']));
             }
 
             $out[$part] = [
@@ -221,6 +232,7 @@ final class PartSwapAdvisorService
                     $season !== null && $this->picker !== null => 'No season pick for this part: ranked for this race',
                     default => null,
                 },
+                'season_pick'   => $pick,
             ];
         }
 

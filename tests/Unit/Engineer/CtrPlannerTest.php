@@ -233,6 +233,16 @@ final class CtrPlannerTest extends TestCase
         $this->assertSame(50_000 + 33_333, $plan['cushion']);
     }
 
+    public function testPromoteFallsBackToTheCushionWhenHalfTheStartIsOutOfReach(): void
+    {
+        $plan = $this->plan(SeasonObjective::PROMOTE, 1_000_000, 50_000, 0, 10_000_000);
+
+        $this->assertSame('reserve_out_of_reach', $plan['target_kind']);
+        $this->assertSame($plan['cushion'], $plan['target']);
+        $this->assertSame(10_000_000, $plan['season_start']);
+        $this->assertNotSame('short', $plan['mode']);
+    }
+
     public function testPromoteWithoutASeasonStartKeepsTheCushion(): void
     {
         $plan = $this->plan(SeasonObjective::PROMOTE, 1_000_000, 50_000);

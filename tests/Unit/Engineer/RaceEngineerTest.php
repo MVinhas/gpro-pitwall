@@ -766,6 +766,15 @@ final class RaceEngineerTest extends TestCase
         $this->assertSame('Keeps one race of costs in hand (your $12.5M start is out of reach)', $line['reason']);
     }
 
+    public function testCashReserveOutOfReachNamesTheStart(): void
+    {
+        $line = $this->line($this->planned([
+            'target_kind' => 'reserve_out_of_reach', 'season_start' => 10_000_000,
+        ], ['objective' => $this->objective(SeasonObjective::PROMOTE)]), 'cash');
+
+        $this->assertSame('Keeps one race of costs in hand (half your $10M start is out of reach)', $line['reason']);
+    }
+
     public function testThePromoteReserveIsNamedInTheCashLine(): void
     {
         $line = $this->line($this->planned([
@@ -1141,14 +1150,83 @@ final class RaceEngineerTest extends TestCase
     }
 
     /**
-     * @return array{part: string, level: int, kind: string, cost: int, reason: string}
+     * @return array{part: string, level: int, kind: string, cost: int, net_cost: int, reason: string}
      */
-    private function pick(string $part, int $level, string $kind, int $cost, string $reason = 'most_pha'): array
-    {
+    private function pick(
+        string $part,
+        int $level,
+        string $kind,
+        int $cost,
+        string $reason = 'most_pha',
+        int $net = 0,
+    ): array {
         return [
-            'part' => $part, 'level' => $level, 'kind' => $kind, 'cost' => $cost,
-            'reason' => SwapLevelPicker::REASONS[$reason],
+            'part' => $part, 'level' => $level, 'kind' => $kind, 'cost' => $cost, 'net_cost' => $net,
+            'reason' => $reason,
         ];
+    }
+
+    public function testAForcedPickTakesItsNetCostOutOfEveryLineThatSpends(): void
+    {
+        // A 600k envelope; the Cooling upgrade nets 500k over the same-level part the plan already pays for.
+        $in = $this->withPicks([$this->pick('Cooling', 7, 'upgrade', 900_000, net: 500_000)], [
+            'objective' => $this->objective(SeasonObjective::PROMOTE),
+            'optionalSwaps' => [['part' => 'Gearbox', 'cost' => 150_000]],
+        ]);
+
+        $this->assertSame('$100k', $this->line($in, 'cash')['figure']);
+        $this->assertSame('Swap Brakes, Cooling → L7 (upgrade)', $this->line($in, 'parts')['answer']);
+        $this->assertSame('Train Talent course', $this->line($in, 'training')['answer']);
+        $this->assertSame('Only $15k left in the budget', $this->line($in, 'testing')['reason']);
+        $this->assertSame(15_000, RaceEngineer::upgradeBudget($in));
+    }
+
+    public function testAPickThatSavesMoneyAddsNothingToTheEnvelope(): void
+    {
+        $in = $this->withPicks([$this->pick('Cooling', 5, 'sidegrade', 200_000, net: -300_000)]);
+
+        $this->assertSame('$600k', $this->line($in, 'cash')['figure']);
+    }
+
+    public function testAnOptionalPickChargesOnlyWhatItsSameLevelPriceDoesNotCover(): void
+    {
+        $promote = [
+            'objective' => $this->objective(SeasonObjective::PROMOTE),
+            'optionalSwaps' => [['part' => 'Gearbox', 'cost' => 150_000]],
+        ];
+        $dear = $this->withPicks([$this->pick('Gearbox', 7, 'upgrade', 400_000, net: 250_000)], $promote);
+        $cheap = $this->withPicks([$this->pick('Gearbox', 6, 'sidegrade', 150_000, net: 100_000)], $promote);
+
+        $this->assertSame('$500k', $this->line($dear, 'cash')['figure']);
+        $this->assertSame('Only $265k left in the budget', $this->line($dear, 'testing')['reason']);
+        $this->assertSame('$600k', $this->line($cheap, 'cash')['figure']);
+        $this->assertSame(600_000 - 150_000 - 85_000 - 300_000, RaceEngineer::upgradeBudget($cheap));
+    }
+
+    public function testOptionalSwapsAreOfferedOnlyFromWhatTheForcedPicksLeave(): void
+    {
+        $in = $this->withPicks([$this->pick('Cooling', 7, 'upgrade', 900_000, net: 500_000)], [
+            'objective' => $this->objective(SeasonObjective::PROMOTE),
+            'optionalSwaps' => [['part' => 'Gearbox', 'cost' => 150_000], ['part' => 'Engine', 'cost' => 90_000]],
+        ]);
+
+        $this->assertSame([['part' => 'Engine', 'cost' => 90_000]], RaceEngineer::offeredOptionals($in));
+    }
+
+    public function testTheBudgetCoversAnOptionalAtItsPickedCost(): void
+    {
+        $promote = [
+            'objective' => $this->objective(SeasonObjective::PROMOTE),
+            'optionalSwaps' => [['part' => 'Gearbox', 'cost' => 150_000]],
+        ];
+        $fits = $this->withPicks([$this->pick('Gearbox', 7, 'upgrade', 700_000, net: 600_000)], $promote);
+        $over = $this->withPicks([$this->pick('Gearbox', 7, 'upgrade', 800_000, net: 650_000)], $promote);
+
+        $this->assertSame([['part' => 'Gearbox', 'cost' => 150_000]], RaceEngineer::offeredOptionals($fits));
+        $this->assertStringContainsString('the budget covers them', $this->line($fits, 'parts')['reason']);
+        $this->assertSame([], RaceEngineer::offeredOptionals($over));
+        $this->assertSame('Swap Brakes, Cooling', $this->line($over, 'parts')['answer']);
+        $this->assertSame('$600k', $this->line($over, 'cash')['figure']);
     }
 
     /**

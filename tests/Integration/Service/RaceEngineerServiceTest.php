@@ -1049,11 +1049,62 @@ final class RaceEngineerServiceTest extends TestCase
         $saved = $this->budgets->find(self::USER, self::SEASON);
         self::assertNotNull($saved);
         self::assertSame(
-            [['part' => 'Engine', 'level' => 1, 'kind' => 'sidegrade', 'cost' => 100_000,
-                'reason' => 'Most PHA the season budget allows']],
+            [['part' => 'Engine', 'level' => 1, 'kind' => 'sidegrade', 'cost' => 100_000, 'net_cost' => 0,
+                'reason' => 'most_pha']],
             $saved['plan']['swap_picks'] ?? null,
         );
         self::assertSame('Swap Engine → L1 (same level)', array_column($lines, null, 'key')['parts']['answer']);
+    }
+
+    public function testTheUpgradeRankingSkipsAPartThatHasASwapPick(): void
+    {
+        $this->seedPromotionFixture();
+        $this->seedWearTracks();
+        $this->service->pin(self::USER, self::SEASON, 'survive');
+        $parts = [
+            'Engine' => ['level' => 1, 'start' => 85, 'est' => 0.0, 'end' => 0.0, 'track_base' => 8.0],
+            'Brakes' => ['level' => 1, 'start' => 10, 'est' => 0.0, 'end' => 0.0, 'track_base' => 8.0],
+        ];
+        $cockpit = $this->swapCockpit($parts);
+        $car = $cockpit['car'];
+        $car['engineOptions'][] = ['value' => ['value' => 2, 'cost' => 150_000], 'newLvl' => '2'];
+        $car['brakesOptions'][] = ['value' => ['value' => 2, 'cost' => 150_000], 'newLvl' => '2'];
+        $cockpit['car'] = $car;
+        $ranked = new \ArrayObject();
+        $wear = $this->wearService();
+        $ranker = new readonly class ($wear, $ranked) extends UpgradeRanker {
+            /** @param \ArrayObject<int, list<string>> $ranked */
+            public function __construct(CarWearService $wear, private \ArrayObject $ranked)
+            {
+                parent::__construct(new SeasonBudget($wear), []);
+            }
+
+            public function rank(
+                array $plan,
+                string $objective,
+                array $rounds,
+                array $demands,
+                array $parts,
+                array $prices,
+                array $options,
+                float $driverFactor,
+                int $cash,
+                int $committed,
+                int $income,
+                int $spent,
+            ): array {
+                $this->ranked->append(array_keys($options));
+
+                return [];
+            }
+        };
+
+        $this->engineer(ranker: $ranker)->forCockpit(self::USER, $this->cockpit($cockpit));
+
+        $saved = $this->budgets->find(self::USER, self::SEASON);
+        self::assertSame(['Engine'], array_column($saved['plan']['swap_picks'] ?? [], 'part'));
+        self::assertCount(1, $ranked);
+        self::assertSame(['Brakes'], $ranked[0]);
     }
 
     public function testAFailingSwapPickIsLoggedAndThePartsLineKeepsTodaysWording(): void

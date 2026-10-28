@@ -11,7 +11,8 @@ namespace App\Engineer;
  * @phpstan-import-type CarStanding from GroupStanding
  * @phpstan-type Outlook array{known: bool, committed: ?int, income: ?int, free_cash: ?int, end_committed: ?int}
  * @phpstan-type PartAdvice array{part: string, level: int, start: int, est: float, end: float}
- * @phpstan-type SwapPick array{part: string, level: int, kind: string, cost: int, reason: string}
+ * @phpstan-import-type PickReason from SwapLevelPicker
+ * @phpstan-type SwapPick array{part: string, level: int, kind: string, cost: int, net_cost: int, reason: PickReason}
  * @phpstan-type WearAdvice array{
  *     swap: list<PartAdvice>,
  *     risky: list<PartAdvice>,

@@ -13,7 +13,8 @@ use InvalidArgumentException;
  * @phpstan-type Plan array{
  *   v: int, ctr: int, mode: 'nurse'|'push'|'short', safety: int,
  *   swaps: list<array{part: string, cost: int}>, refused_swap_cost: ?int,
- *   target: int, target_kind: 'cushion'|'start'|'start_out_of_reach'|'reserve', cushion: int, season_start: ?int,
+ *   target: int, target_kind: 'cushion'|'start'|'start_out_of_reach'|'reserve'|'reserve_out_of_reach',
+ *   cushion: int, season_start: ?int,
  *   envelope: int, shortfall: ?int, rows: list<BudgetRow>, partial: list<string>, race: int, infeasible?: bool,
  *   upgrades?: list<Upgrade>}
  */
@@ -93,6 +94,10 @@ final readonly class CtrPlanner
             if ($reserve > $cushion) {
                 $target = $reserve;
                 $targetKind = 'reserve';
+                if (self::headroom($forecastAt(0)['rows'], $cushion, $reserve) < 0) {
+                    $target = $cushion;
+                    $targetKind = 'reserve_out_of_reach';
+                }
             }
         } elseif ($seasonStart !== null && $seasonStart > $cushion) {
             $target = $seasonStart;
@@ -231,7 +236,7 @@ final readonly class CtrPlanner
     /**
      * @param 'nurse'|'push'|'short' $mode
      * @param list<array{part: string, cost: int}> $swaps
-     * @param 'cushion'|'start'|'start_out_of_reach'|'reserve' $targetKind
+     * @param 'cushion'|'start'|'start_out_of_reach'|'reserve'|'reserve_out_of_reach' $targetKind
      * @param array{rows: list<BudgetRow>, partial: list<string>, infeasible: bool} $forecast
      * @param non-empty-list<array{race: int, track_name: ?string, base: ?array<string, float>}> $rounds
      * @return Plan

@@ -390,6 +390,17 @@ final class SeasonServiceTest extends TestCase
         );
     }
 
+    public function testAPromoteReserveOutOfReachIsNamedInTheTarget(): void
+    {
+        $this->race(1);
+        $this->budgets->save(1, 107, 9, $this->plan(['target_kind' => 'reserve_out_of_reach', 'target' => 300_000]));
+
+        $this->assertSame(
+            'Keep one race of costs in hand (half your season start is out of reach)',
+            $this->service->build(1, null)['budget']['view']['target'] ?? null,
+        );
+    }
+
     public function testAPromoteReserveIsNamedInTheTarget(): void
     {
         $this->race(1);

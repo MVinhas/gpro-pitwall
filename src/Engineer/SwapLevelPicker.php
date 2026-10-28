@@ -38,9 +38,10 @@ readonly class SwapLevelPicker
     /**
      * The level to fit when $part is swapped, judged over the remaining season. Each candidate is forecast with
      * the part at its level and start wear, future replacements at that level's paid price; one with no known
-     * paid price, or whose forecast is infeasible, is dropped. The objective and the car's group rank decide
-     * which downgrades may be taken; among the affordable rest the most season PHA wins. With nothing
-     * affordable, the free option goes first, then the smallest shortfall. Null when no candidate is left.
+     * paid price, whose forecast is infeasible, or that would reach the plan's wear limit in this race, is
+     * dropped. The objective and the car's group rank decide which downgrades may be taken; among the
+     * affordable rest the most season PHA wins. With nothing affordable, the free option goes first, then the
+     * smallest shortfall. Null when no candidate is left.
      *
      * @param list<Candidate> $candidates
      * @param array<int, ?int> $paidPrice level → price of a new part at that level
@@ -71,7 +72,8 @@ readonly class SwapLevelPicker
                 $s->committed,
                 $s->income,
             );
-            if ($forecast['infeasible']) {
+            $replacedNow = array_column($forecast['rows'][0]['replaced'] ?? [], 'part');
+            if ($forecast['infeasible'] || in_array($part, $replacedNow, true)) {
                 continue;
             }
 

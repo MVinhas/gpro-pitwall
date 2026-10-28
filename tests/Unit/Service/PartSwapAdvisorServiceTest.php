@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Tests\Unit\Service;
 
+use App\Engineer\SeasonBudget;
+use App\Engineer\SeasonObjective;
 use App\Engineer\StrengthFloor;
 use App\Engineer\SwapLevelPicker;
 use App\Engineer\SwapSeason;
@@ -11,6 +13,7 @@ use App\Service\CarWearService;
 use App\Service\PartSwapAdvisorService;
 use App\Service\PartUpgradeAdvisorService;
 use App\Service\PhaMatchService;
+use ArrayObject;
 use PDO;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -861,5 +864,226 @@ final class PartSwapAdvisorServiceTest extends TestCase
             ['power' => 15.0, 'handling' => 5.0, 'acceleration' => 5.0],
             $summary['track'],
         );
+    }
+
+    private function wear(): CarWearService
+    {
+        return new CarWearService(new PDO('sqlite::memory:'), [
+            'driver_wear_factors' => ['concentration' => 1.0, 'talent' => 1.0, 'experience' => 1.0],
+            'part_level_factors'  => [
+                1 => 1.02, 2 => 1.018, 3 => 1.016, 4 => 1.014,
+                5 => 1.012, 6 => 1.01, 7 => 1.008, 8 => 1.006, 9 => 1.004,
+            ],
+        ]);
+    }
+
+    /**
+     * A picker that records what it is asked and answers each part from $picks (null when absent).
+     *
+     * @param ArrayObject<int, array{part: string, cash: int, candidates: list<array<string, mixed>>,
+     *   paidPrice: array<int, ?int>}> $calls
+     * @param array<string, array<string, mixed>> $picks
+     */
+    private function spyPicker(ArrayObject $calls, array $picks = []): SwapLevelPicker
+    {
+        return new readonly class ($this->wear(), $calls, $picks) extends SwapLevelPicker {
+            /**
+             * @param ArrayObject<int, array<string, mixed>> $calls
+             * @param array<string, array<string, mixed>> $picks
+             */
+            public function __construct(CarWearService $wear, private ArrayObject $calls, private array $picks)
+            {
+                parent::__construct(new SeasonBudget($wear), []);
+            }
+
+            public function pick(SwapSeason $s, string $part, int $currentLevel, array $candidates, array $paidPrice): ?array
+            {
+                $this->calls->append([
+                    'part' => $part, 'cash' => $s->cash, 'candidates' => $candidates, 'paidPrice' => $paidPrice,
+                ]);
+
+                /** @var ?array{level: int, kind: 'free_downgrade'|'downgrade'|'sidegrade'|'upgrade', cost: int,
+                 *   season_pha: float, net_cost: int, affordable: bool,
+                 *   reason: 'most_pha'|'top3_keep'|'top3_pays'|'budget_short'} $pick */
+                $pick = $this->picks[$part] ?? null;
+
+                return $pick;
+            }
+        };
+    }
+
+    private function advisorWith(SwapLevelPicker $picker): PartSwapAdvisorService
+    {
+        $pha = new PhaMatchService();
+
+        return new PartSwapAdvisorService(
+            $this->wear(),
+            $pha,
+            new PartUpgradeAdvisorService($pha, [
+                'Engine'  => ['power' => 6, 'handling' => 0, 'acceleration' => 2],
+                'Gearbox' => ['power' => 3, 'handling' => 1, 'acceleration' => 5],
+            ]),
+            $picker,
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $overrides
+     * @return array<string, mixed>
+     */
+    private function rawOption(int $level, int $cost, int $action, int $wear = 0, array $overrides = []): array
+    {
+        return array_merge([
+            'value'    => ['value' => $action, 'cost' => $cost],
+            'newLvl'   => (string) $level,
+            'newWear'  => (string) $wear,
+            'disabled' => 'false',
+            'text'     => '',
+        ], $overrides);
+    }
+
+    public function testThePickerIsHandedTheSurvivorsAndTheCheapestPaidPricePerLevel(): void
+    {
+        $calls = new ArrayObject();
+        $svc = $this->advisorWith($this->spyPicker($calls));
+        $carData = ['engineOptions' => [
+            $this->rawOption(5, 0, -1, wear: 98),
+            $this->rawOption(5, 700_000, 5),
+            $this->rawOption(6, 900_000, 6),
+            $this->rawOption(6, 800_000, 6),
+            $this->rawOption(6, 0, -1, wear: 20),
+            $this->rawOption(7, 1_500_000, 7, overrides: ['disabled' => 'true']),
+            $this->rawOption(7, 1_600_000, 7),
+        ]];
+
+        $svc->advise(
+            $this->flaggedEngine(),
+            $carData,
+            $this->wearParts(),
+            [],
+            ['power' => 10, 'handling' => 10, 'acceleration' => 10],
+            ['power' => 90, 'handling' => 80, 'acceleration' => 85],
+            0,
+            [],
+            10_000_000,
+            [],
+            $this->aSeason(),
+        );
+
+        $this->assertCount(1, $calls);
+        $candidates = array_column($calls[0]['candidates'], null, 'level');
+        ksort($candidates);
+        $this->assertSame([5, 6, 7], array_keys($candidates));
+        $this->assertSame([700_000, false, 0.0], [$candidates[5]['cost'], $candidates[5]['is_free'], $candidates[5]['start']]);
+        $this->assertSame([0, true, 20.0], [$candidates[6]['cost'], $candidates[6]['is_free'], $candidates[6]['start']]);
+        $this->assertSame(1_600_000, $candidates[7]['cost']);
+        $paid = $calls[0]['paidPrice'];
+        ksort($paid);
+        $this->assertSame([5 => 700_000, 6 => 800_000, 7 => 1_600_000], $paid);
+    }
+
+    public function testForcedPartsAreJudgedFirstAndEachPickIsCommittedBeforeTheNext(): void
+    {
+        $calls = new ArrayObject();
+        $pick = static fn (int $net): array => [
+            'level' => 7, 'kind' => 'upgrade', 'cost' => 1_500_000, 'season_pha' => 2.0, 'net_cost' => $net,
+            'affordable' => true, 'reason' => 'most_pha',
+        ];
+        $svc = $this->advisorWith($this->spyPicker($calls, ['Engine' => $pick(400_000), 'Gearbox' => $pick(-50_000)]));
+        $options = [$this->rawOption(6, 900_000, 6), $this->rawOption(7, 1_500_000, 7)];
+        $flagged = [
+            ['part' => 'Electronics', 'level' => 6, 'start' => 60, 'est' => 30.0, 'end' => 90.0, 'optional' => true],
+            ['part' => 'Gearbox', 'level' => 6, 'start' => 95, 'est' => 5.0, 'end' => 100.0],
+            ['part' => 'Engine', 'level' => 6, 'start' => 95, 'est' => 5.0, 'end' => 100.0],
+        ];
+        $wearParts = [];
+        foreach (['Electronics', 'Gearbox', 'Engine'] as $label) {
+            $wearParts[$label] = ['level' => 6, 'start' => 60, 'est' => 5.0, 'end' => 65.0, 'track_base' => 5.0];
+        }
+
+        $out = $svc->advise(
+            $flagged,
+            ['engineOptions' => $options, 'gearOptions' => $options, 'electronicsOptions' => $options],
+            $wearParts,
+            [],
+            ['power' => 10, 'handling' => 10, 'acceleration' => 10],
+            ['power' => 90, 'handling' => 80, 'acceleration' => 85],
+            0,
+            [],
+            10_000_000,
+            [],
+            $this->aSeason(),
+        );
+
+        $this->assertSame(['Gearbox', 'Engine', 'Electronics'], array_column((array) $calls, 'part'));
+        $this->assertSame([10_000_000, 10_000_000, 9_600_000], array_column((array) $calls, 'cash'));
+        $this->assertSame(400_000, $out['Engine']['season_pick']['net_cost'] ?? null);
+        $this->assertSame('most_pha', $out['Engine']['season_pick']['reason'] ?? null);
+        $this->assertNull($out['Electronics']['season_pick']);
+    }
+
+    public function testTwoForcedUpgradesThatEachFitAloneButNotTogetherLeaveTheSecondAtItsLevel(): void
+    {
+        // Both parts break in race 8 and the plan replaces each for 900k. An L7 is 1.5M: each part's upgrade
+        // nets 600k and fits on its own, but the budget leaves room for only one of them.
+        $wear = $this->wear();
+        $budget = new SeasonBudget($wear);
+        $rounds = [
+            ['race' => 8, 'track_name' => null, 'base' => ['Engine' => 10.0, 'Gearbox' => 10.0]],
+            ['race' => 9, 'track_name' => null, 'base' => ['Engine' => 10.0, 'Gearbox' => 10.0]],
+        ];
+        $parts = ['Engine' => ['level' => 6, 'start' => 95], 'Gearbox' => ['level' => 6, 'start' => 95]];
+        $prices = ['Engine' => 900_000, 'Gearbox' => 900_000];
+        $rows = $budget->forecast($rounds, $parts, $prices, 1.0, 0, 100, 10_000_000, 0, 0)['rows'];
+        $this->assertSame(1_800_000, $rows[0]['repairs']);
+        $season = new SwapSeason(
+            SeasonObjective::HOLD,
+            ['v' => 1, 'ctr' => 0, 'mode' => 'nurse', 'safety' => 0, 'swaps' => [], 'refused_swap_cost' => null,
+                'target' => 7_400_000, 'target_kind' => 'cushion', 'cushion' => 7_400_000, 'season_start' => null,
+                'envelope' => 800_000, 'shortfall' => null, 'rows' => $rows, 'partial' => [], 'race' => 8],
+            $rounds,
+            [8 => ['power' => 10, 'handling' => 10, 'acceleration' => 10],
+                9 => ['power' => 10, 'handling' => 10, 'acceleration' => 10]],
+            $parts,
+            $prices,
+            1.0,
+            10_000_000,
+            0,
+            0,
+            new StrengthFloor(5, 40, 26),
+        );
+        $svc = $this->advisorWith(new SwapLevelPicker($budget, [
+            'Engine'  => ['power' => 6, 'handling' => 0, 'acceleration' => 2],
+            'Gearbox' => ['power' => 3, 'handling' => 1, 'acceleration' => 5],
+        ]));
+        $options = [$this->rawOption(6, 900_000, 6), $this->rawOption(7, 1_500_000, 7)];
+        $wearParts = [];
+        foreach (['Engine', 'Gearbox'] as $label) {
+            $wearParts[$label] = ['level' => 6, 'start' => 95, 'est' => 10.0, 'end' => 105.0, 'track_base' => 5.0];
+        }
+        $advise = fn (array $flagged): array => $svc->advise(
+            $flagged,
+            ['engineOptions' => $options, 'gearOptions' => $options],
+            $wearParts,
+            [],
+            ['power' => 10, 'handling' => 10, 'acceleration' => 10],
+            ['power' => 90, 'handling' => 80, 'acceleration' => 85],
+            0,
+            [],
+            10_000_000,
+            [],
+            $season,
+        );
+        $engine = ['part' => 'Engine', 'level' => 6, 'start' => 95, 'est' => 10.0, 'end' => 105.0];
+        $gearbox = ['part' => 'Gearbox', 'level' => 6, 'start' => 95, 'est' => 10.0, 'end' => 105.0];
+
+        $alone = $advise([$gearbox]);
+        $this->assertSame(7, $alone['Gearbox']['season_pick']['level'] ?? null);
+
+        $both = $advise([$engine, $gearbox]);
+        $this->assertSame(7, $both['Engine']['season_pick']['level'] ?? null);
+        $this->assertSame(600_000, $both['Engine']['season_pick']['net_cost'] ?? null);
+        $this->assertSame(6, $both['Gearbox']['season_pick']['level'] ?? null);
+        $this->assertSame(6, $both['Gearbox']['options'][0]['level']);
     }
 }
