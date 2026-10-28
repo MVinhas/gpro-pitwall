@@ -170,28 +170,19 @@
     <script>
     // Fetch a screen from the server and swap it, and the status line (a sync
     // may have just changed both), into this page. Used by the skeleton fill.
-    // Resolves 'swapped', or:
-    //  - 'held' when allow() vetoed replacing the content (checked right before
-    //    the swap, after the fetch; the status line is still updated);
-    //  - 'invalid' when the response is not a screen (auth lapsed, token lost)
-    //    and redirect is false; with the default redirect it is followed and
-    //    'redirected' comes back.
-    window.swapScreen = async (url, { content = true, allow = null, redirect = true } = {}) => {
+    // Resolves 'swapped', or 'redirected' when the response is not a screen
+    // (auth lapsed, token lost) and the browser is sent where it pointed.
+    window.swapScreen = async (url, { content = true } = {}) => {
         const res = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
         const next = doc.getElementById('main-content-tabs');
         if (!next || next.hasAttribute('data-deferred')) {
-            if (!redirect) return 'invalid';
             window.location.assign(res.redirected ? res.url : window.location.href);
             return 'redirected';
         }
         const status = doc.getElementById('statusLine');
         if (status) document.getElementById('statusLine')?.replaceWith(status);
-        if (content && allow && !allow()) {
-            window.localizeTimes?.(document);
-            return 'held';
-        }
         if (content) {
             [...next.children].forEach((el, i) => {
                 el.classList.add('reveal');
