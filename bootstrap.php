@@ -86,6 +86,7 @@ $container['twig']->addGlobal(
 );
 $container['twig']->addGlobal('no_pilot_message', \App\Controller\StrategyController::NO_PILOT_MESSAGE);
 $container['twig']->addGlobal('generic_error_message', \App\Controller\StrategyController::GENERIC_ERROR_MESSAGE);
+$container['twig']->addGlobal('no_data_message', \App\Controller\StrategyController::NO_DATA_MESSAGE);
 
 use App\Repository\PilotRepository;
 use App\Repository\DivisionMetadataRepository;

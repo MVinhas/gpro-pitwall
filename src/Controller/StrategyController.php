@@ -33,6 +33,9 @@ class StrategyController
     public const string GENERIC_ERROR_MESSAGE =
         'Something went wrong loading this data. Please try refreshing or re-syncing.';
 
+    /** Nothing stored to plan on yet; the screens render it as the "No data yet" empty state. */
+    public const string NO_DATA_MESSAGE = "Re-sync to load your team's data.";
+
     public function __construct(
         private readonly StrategyService $strategyService,
         private readonly GproApiClient $api,
@@ -124,6 +127,11 @@ class StrategyController
             $staffRaw = $this->api->getStaffAndFacilities();
             $tdRaw    = $this->api->getTechnicalDirector();
             $weatherData = $this->api->getRaceSetup();
+            // The forecast lives only on RaceSetup. Without a stored one there
+            // is nothing to plan on, and a page cannot fetch it.
+            if (!is_array($weatherData['weather'] ?? null)) {
+                return ['error' => self::NO_DATA_MESSAGE];
+            }
 
             // The TyreSuppliers feed is the single source of truth for supplier
             // name + durability — GPRO can re-tune both per season, so neither
@@ -231,7 +239,7 @@ class StrategyController
                 $td['pitCoordination'] = (float)$request->post('td_pit');
             }
 
-            $w = $weatherData['weather'] ?? [];
+            $w = $weatherData['weather'];
             $rain = $this->weather->assess($w);
 
             $defQ1W = $rain['q1_wet'] ? 'Wet' : 'Dry';
@@ -239,8 +247,8 @@ class StrategyController
             $defRaceW = $rain['race_start_wet'] ? 'Wet' : 'Dry';
 
             $avgTemp = $this->calculateAvgWeather($weatherData, 'Temp');
-            $q1Temp = $w['q1Temp'];
-            $q2Temp = $w['q2Temp'];
+            $q1Temp = $w['q1Temp'] ?? null;
+            $q2Temp = $w['q2Temp'] ?? null;
 
             $finalRaceTemp = $has('temp') ? (float)$request->post('temp') : $avgTemp;
 

@@ -32,6 +32,7 @@ final class ResultStatesTest extends TestCase
         $this->twig = new Environment(new FilesystemLoader(dirname(__DIR__, 3) . '/templates'));
         $this->twig->addGlobal('no_pilot_message', StrategyController::NO_PILOT_MESSAGE);
         $this->twig->addGlobal('generic_error_message', StrategyController::GENERIC_ERROR_MESSAGE);
+        $this->twig->addGlobal('no_data_message', StrategyController::NO_DATA_MESSAGE);
     }
 
     /**
@@ -45,6 +46,7 @@ final class ResultStatesTest extends TestCase
         yield 'failed'              => [['strategy_error' => StrategyController::GENERIC_ERROR_MESSAGE], 'failed'];
         yield 'season over'         => [['strategy_error' => StrategyController::END_OF_SEASON_MESSAGE], 'unavailable'];
         yield 'no supplier'         => [['strategy_error' => StrategyController::NO_SUPPLIER_MESSAGE], 'unavailable'];
+        yield 'no data'             => [['strategy_error' => StrategyController::NO_DATA_MESSAGE], 'no-data'];
         yield 'results'             => [['strategy_results' => $results], 'results'];
         yield 'empty'               => [[], 'empty'];
         // A failed recalculation must not sit on top of the previous success.
@@ -82,6 +84,18 @@ final class ResultStatesTest extends TestCase
         $this->assertStringContainsString('notice-error', $failed);
         $this->assertStringNotContainsString('notice-error', $seasonOver);
         $this->assertStringNotContainsString('failed', strtolower(strip_tags($seasonOver)));
+    }
+
+    public function testMissingDataIsTheQuietEmptyStateNotANotice(): void
+    {
+        $html = $this->twig->render('partials/_strategy_results.twig', [
+            'strategy_error' => StrategyController::NO_DATA_MESSAGE,
+        ]);
+
+        $this->assertStringContainsString('No data yet', $html);
+        $this->assertStringContainsString('Re-sync to load your team&#039;s data.', $html);
+        $this->assertStringNotContainsString('notice', $html);
+        $this->assertStringNotContainsString('Strategy unavailable', $html);
     }
 
     public function testTestingUsesTheSameToneSplit(): void

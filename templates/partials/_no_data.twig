@@ -1,0 +1,3 @@
+{# Nothing stored for this manager yet (never synced, or a payload the last sync
+   did not bring). Pages never fetch, so the answer is always a re-sync. #}
+{% include 'partials/_empty.twig' with { title: 'No data yet', body: 'Re-sync to load your team\'s data.', state: state|default('') } only %}
