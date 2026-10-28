@@ -433,7 +433,7 @@ final class RaceEngineer
                     'Most PHA per $ over the ' . $races . ($races === 1 ? ' race' : ' races') . ' left'
                         . self::carClause($in),
                     self::UPGRADES_ANCHOR,
-                    $upgrade['net_cost'] > 0 ? Money::short($upgrade['net_cost']) : 'no extra cost',
+                    $upgrade['net_cost'] > 0 ? Money::short($upgrade['net_cost']) . ' net' : 'no extra cost',
                 );
             }
         }

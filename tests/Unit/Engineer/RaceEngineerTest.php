@@ -1144,7 +1144,7 @@ final class RaceEngineerTest extends TestCase
         $line = $this->line($in, 'upgrades');
 
         $this->assertSame('Upgrade Engine to L4', $line['answer']);
-        $this->assertSame('$800k', $line['figure']);
+        $this->assertSame('$800k net', $line['figure']);
         $this->assertSame('Most PHA per $ over the 3 races left', $line['reason']);
         $this->assertSame('/season#season-upgrades', $line['anchor']);
         $this->assertSame('ink', $line['tone']);
