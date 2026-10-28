@@ -114,6 +114,21 @@ final class RaceEngineerServiceTest extends TestCase
         self::assertNotNull($cash['figure']);
     }
 
+    public function testOfficeCashWinsOverTheMenus(): void
+    {
+        $this->seedPromotionFixture();
+        $cashLine = fn (array $overrides): array
+            => array_column($this->service->forCockpit(self::USER, $this->cockpit($overrides))['lines'], null, 'key')['cash'];
+
+        $fromOffice = $cashLine([
+            'office' => ['seasonNb' => self::SEASON, 'raceNb' => 10, 'cash' => 9_000_000],
+            'menu' => ['IDM' => 7, 'cash' => 5_000_000],
+        ]);
+
+        self::assertSame($cashLine(['menu' => ['IDM' => 7, 'cash' => 9_000_000]]), $fromOffice);
+        self::assertNotSame($cashLine(['menu' => ['IDM' => 7, 'cash' => 5_000_000]]), $fromOffice);
+    }
+
     public function testUsesTheLatestStandingsRowNotAfterTheNextRace(): void
     {
         $this->seedPromotionFixture();

@@ -8,6 +8,7 @@ use App\Archive\ArchiveSanitizer;
 use App\Cache\Adapter\FilesystemCache;
 use App\Repository\ApiArchiveRepository;
 use App\Repository\UserRepository;
+use App\Service\BillboardService;
 use App\Service\GproApiClient;
 use App\Service\GproSyncService;
 use App\Sync\Endpoint;
@@ -315,6 +316,23 @@ final class GproSyncServiceTest extends TestCase
         $this->assertSame('synced', $outcome->status);
         $this->assertSame(['OFFICE'], $outcome->fetched);
         $this->assertSame(1, $outcome->calls);
+    }
+
+    public function testASecondSyncInTheSameSeasonMovesTheCashShown(): void
+    {
+        [$svc, $fetcher, , $client] = $this->scripted();
+        $fetcher->responses['Menu'] = ['cash' => 1_000_000, 'group' => 'Amateur - 4'];
+        $fetcher->office['cash'] = 1_000_000;
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+        $fetcher->calls = [];
+        $fetcher->office['cash'] = 3_250_000;
+
+        $svc->sync(self::USER, SyncPlanner::MODE_MANUAL);
+
+        $this->assertNotContains('Menu', $fetcher->calls, 'the menu is fetched once a season');
+        $strip = (new BillboardService($client, ['Rookie', 'Amateur', 'Pro', 'Master', 'Elite']))
+            ->forToken(self::USER['api_token']);
+        $this->assertSame(3_250_000, $strip['cash'] ?? null);
     }
 
     public function testWarmSharedTyreFeedDoesNotStopANewUserFetchingAndArchivingItOnce(): void

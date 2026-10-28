@@ -480,7 +480,8 @@ class PageController
                         );
                     $menu = $this->apiClient->getMenu();
                     $division = $this->divisionFromMenu($menu);
-                    $cash = (int) ($menu['cash'] ?? 0);
+                    // Every sync fetches the office; the menu only once a season.
+                    $cash = (int) ($office['cash'] ?? $menu['cash'] ?? 0);
 
                     if ($isCockpit) {
                         $lastSynced = $user['last_synced_at'] ?? null;

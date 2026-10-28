@@ -283,6 +283,25 @@ final class ManualRefreshTest extends TestCase
         $this->assertSame([], $this->fetcher->calls);
     }
 
+    /**
+     * The menu is fetched once a season, the office on every sync: cash comes
+     * from the office, in the header on every screen and in the cockpit's plan.
+     */
+    public function testCashIsTheOfficesNotTheSeasonOldMenus(): void
+    {
+        $this->synced();
+        $this->archivePreviousWindow(['cash' => 7_654_321], ['usaEngine' => 90]);
+        $this->archiveRow('Menu', ['cash' => 1_000, 'group' => 'Amateur - 3', 'IDM' => 7]);
+
+        foreach (['/testing', '/training', '/car-wear'] as $path) {
+            $this->assertStringContainsString('$7,654,321', $this->render($path), $path . ' header cash');
+        }
+        $cockpit = $this->render('/cockpit');
+        $this->assertStringContainsString('data-cash="7654321"', $cockpit);
+        $this->assertStringNotContainsString('$1,000<', $cockpit);
+        $this->assertSame([], $this->fetcher->calls);
+    }
+
     #[DataProvider('screens')]
     public function testANeverSyncedAccountRendersWithZeroCalls(string $path): void
     {
@@ -307,16 +326,16 @@ final class ManualRefreshTest extends TestCase
         );
     }
 
-    /** The payloads the last sync filed, a race window ago. */
-    private function archivePreviousWindow(): void
+    /**
+     * The payloads the last sync filed, a race window ago.
+     *
+     * @param array<string, mixed> $office merged into the archived office
+     * @param array<string, mixed> $car merged into the archived car
+     */
+    private function archivePreviousWindow(array $office = [], array $car = []): void
     {
-        $window = RaceWindow::raceStartIdFor(
-            new DateTimeImmutable('-8 days'),
-            RaceWindow::parseDays('2,5'),
-        );
-        $scope = GproApiClient::scopeFor(self::TOKEN);
         $rows = [
-            ['office', '', [
+            ['office', '', $office + [
                 'name' => 'Alice', 'driId' => '77', 'tdId' => '', 'seasonNb' => 99, 'raceNb' => 4,
                 'trackId' => 11, 'trackName' => 'Monza', 'tyreSupplierId' => 1, 'endOfSeason' => 0,
             ]],
@@ -324,7 +343,7 @@ final class ManualRefreshTest extends TestCase
                 ['eventType' => 'R', 'idx' => 4, 'trackId' => 11, 'trackName' => 'Monza'],
                 ['eventType' => 'R', 'idx' => 5, 'trackId' => 4, 'trackName' => 'Monte Carlo'],
             ]]],
-            ['UpdateCar', '', [
+            ['UpdateCar', '', $car + [
                 'carPower' => 40, 'carHandl' => 40, 'carAccel' => 40,
                 'lvlEngine' => 3, 'lvlChassis' => 3, 'wearEngine' => 20, 'wearChassis' => 20,
             ]],
@@ -346,8 +365,19 @@ final class ManualRefreshTest extends TestCase
             ]],
         ];
         foreach ($rows as [$endpoint, $params, $payload]) {
-            $this->archive->put(self::USER_ID, $scope, $endpoint, $params, $window, 99, 4, $payload);
+            $this->archiveRow($endpoint, $payload, $params);
         }
+    }
+
+    /** @param array<string, mixed> $payload */
+    private function archiveRow(string $endpoint, array $payload, string $params = ''): void
+    {
+        $window = RaceWindow::raceStartIdFor(
+            new DateTimeImmutable('-8 days'),
+            RaceWindow::parseDays('2,5'),
+        );
+        $scope = GproApiClient::scopeFor(self::TOKEN);
+        $this->archive->put(self::USER_ID, $scope, $endpoint, $params, $window, 99, 4, $payload);
     }
 
     private function wipeCache(): void
