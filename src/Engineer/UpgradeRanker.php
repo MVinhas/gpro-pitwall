@@ -23,10 +23,10 @@ readonly class UpgradeRanker
     }
 
     /**
-     * Every part's best affordable-or-not upgrade, ranked: free or cheaper ones first by gain, the rest by
-     * gain per net dollar. Net cost is the new part's price plus the repairs its wear adds to the season,
-     * less the repairs the plan already charges; a candidate whose forecast is infeasible is dropped, as is
-     * one that adds no PHA on the tracks with a known demand.
+     * Every part's best affordable upgrade (its best one when none fits), ranked: free or cheaper ones first
+     * by gain, the rest by gain per net dollar. Net cost is the new part's price plus the repairs its wear
+     * adds to the season, less the repairs the plan already charges; a candidate whose forecast is infeasible
+     * is dropped, as is one that adds no PHA on the tracks with a known demand.
      *
      * @param Plan $plan
      * @param list<Round> $rounds the remaining races the plan was built from
@@ -95,30 +95,45 @@ readonly class UpgradeRanker
             }
         }
 
-        usort($candidates, static function (array $a, array $b): int {
-            $aFree = $a['net_cost'] <= 0;
-            $bFree = $b['net_cost'] <= 0;
-            if ($aFree !== $bFree) {
-                return $aFree ? -1 : 1;
-            }
+        usort($candidates, self::byScore(...));
 
-            $order = $aFree
-                ? $b['gain'] <=> $a['gain']
-                : $b['gain'] / $b['net_cost'] <=> $a['gain'] / $a['net_cost'];
-
-            return $order ?: ($a['part'] <=> $b['part'] ?: $a['to'] <=> $b['to']);
-        });
-
-        $out = [];
+        // Per part, a level the budget pays for beats a better-scoring one it can't.
+        $best = [];
         foreach ($candidates as $candidate) {
-            if (isset($out[$candidate['part']])) {
-                continue;
+            $kept = $best[$candidate['part']] ?? null;
+            if ($kept === null || ($candidate['affordable'] && !$kept['affordable'])) {
+                $best[$candidate['part']] = $candidate;
             }
-            $candidate['gain'] = round($candidate['gain'], 1);
-            $out[$candidate['part']] = $candidate;
+        }
+        $out = array_values($best);
+        usort($out, self::byScore(...));
+
+        return array_map(static function (array $upgrade): array {
+            $upgrade['gain'] = round($upgrade['gain'], 1);
+
+            return $upgrade;
+        }, $out);
+    }
+
+    /**
+     * Free or cheaper first by gain, the rest by gain per net dollar; ties by part label, then level.
+     *
+     * @param Upgrade $a
+     * @param Upgrade $b
+     */
+    private static function byScore(array $a, array $b): int
+    {
+        $aFree = $a['net_cost'] <= 0;
+        $bFree = $b['net_cost'] <= 0;
+        if ($aFree !== $bFree) {
+            return $aFree ? -1 : 1;
         }
 
-        return array_values($out);
+        $order = $aFree
+            ? $b['gain'] <=> $a['gain']
+            : $b['gain'] / $b['net_cost'] <=> $a['gain'] / $a['net_cost'];
+
+        return $order ?: ($a['part'] <=> $b['part'] ?: $a['to'] <=> $b['to']);
     }
 
     /**

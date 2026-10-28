@@ -307,6 +307,29 @@ final class UpgradeRankerTest extends TestCase
         $this->assertSame(2, $out[0]['to']);
     }
 
+    public function testAnAffordableLevelBeatsABetterOneTheBudgetCannotPay(): void
+    {
+        $rounds = $this->rounds();
+        $parts = $this->parts();
+        $prices = ['Engine' => 100_000, 'Chassis' => 100_000];
+
+        // L3 scores better (3.0 for 400k against 1.5 for 300k) but only L2 fits 350k.
+        $out = $this->rank(
+            $this->ranker($this->engineOnly()),
+            $this->plan($rounds, $parts, $prices),
+            $rounds,
+            $this->evenDemand(),
+            $parts,
+            $prices,
+            ['Engine' => [['level' => 2, 'price' => 300_000], ['level' => 3, 'price' => 400_000]]],
+            350_000,
+        );
+
+        $this->assertCount(1, $out);
+        $this->assertSame(2, $out[0]['to']);
+        $this->assertTrue($out[0]['affordable']);
+    }
+
     public function testPartWithoutContributionIsNeverListed(): void
     {
         $rounds = $this->rounds();
