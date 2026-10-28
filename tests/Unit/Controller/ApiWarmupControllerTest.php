@@ -30,6 +30,8 @@ final class ApiWarmupControllerTest extends TestCase
     private string $cacheDir;
     private FilesystemCache $cache;
     private mixed $priorRaceDays = null;
+    /** The client of the last controller built, whose fetch gate idle() opens. */
+    private ?GproApiClient $client = null;
 
     /** @var array<string, mixed> */
     private array $priorSession = [];
@@ -80,6 +82,7 @@ final class ApiWarmupControllerTest extends TestCase
         $archive = new ApiArchiveRepository($db, new ArchiveSanitizer());
 
         $client = new GproApiClient($fetcher, $this->cache, $archive);
+        $this->client = $client;
         $sync = new GproSyncService(
             $client,
             $users,
@@ -96,7 +99,10 @@ final class ApiWarmupControllerTest extends TestCase
     {
         ob_start();
         try {
-            @$controller->idle(new Request([], [], [], []));
+            // GproSyncService does not open the client's fetch gate itself yet
+            // (Task B2), so the idle run is given an open gate here.
+            $this->assertNotNull($this->client);
+            $this->client->withFetching(static fn (): mixed => @$controller->idle(new Request([], [], [], [])));
         } finally {
             $body = (string) ob_get_clean();
         }

@@ -19,8 +19,6 @@ use App\Service\PhaMatchService;
 use App\Service\CarWearService;
 use App\Service\SetupCalculatorService;
 use App\Service\StrategyService;
-use App\Support\RaceWindow;
-use DateTimeImmutable;
 use PDO;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -46,6 +44,7 @@ final class StrategyControllerTest extends TestCase
 
     private string $cacheDir;
     private FilesystemCache $cache;
+    private ?GproApiClient $api = null;
 
     protected function setUp(): void
     {
@@ -61,18 +60,10 @@ final class StrategyControllerTest extends TestCase
         @rmdir($this->cacheDir);
     }
 
-    /** Cache keys the client namespaces by race window — must match here. */
-    private const array RACE_WINDOWED = ['next_race_profile', 'car_data', 'race_setup'];
-
     /** @param array<string, mixed> $value */
     private function seed(string $key, array $value): void
     {
-        $cacheKey = 'u' . GproApiClient::scopeFor(self::TOKEN) . ':' . $key;
-        if (in_array($key, self::RACE_WINDOWED, true)) {
-            $window = RaceWindow::idFor(new DateTimeImmutable('now'), [2, 5], 0, 'Europe/London');
-            $cacheKey .= ':w' . $window;
-        }
-        $this->cache->set($cacheKey, $value, 3600);
+        $this->cache->set('u' . GproApiClient::scopeFor(self::TOKEN) . ':' . $key, $value, 3600);
     }
 
     private function controller(): StrategyController
@@ -83,6 +74,7 @@ final class StrategyControllerTest extends TestCase
             $this->cache,
         );
         $api->setToken(self::TOKEN);
+        $this->api = $api;
 
         $db = new PDO('sqlite::memory:');
 
@@ -336,7 +328,8 @@ final class StrategyControllerTest extends TestCase
         // Past the curated early-exits (season/supplier/pilot all present), the
         // driver-profile fetch isn't seeded so it hits the unreachable host and
         // GproApiFetcher throws RuntimeException(curl error) — internal detail
-        // (connection info) that must never reach the page (A2).
+        // (connection info) that must never reach the page (A2). Pages never
+        // fetch, so the gate is opened to make that failure reachable.
         $this->seed('office_data', [
             'endOfSeason'    => 0,
             'raceNb'         => 5,
@@ -349,7 +342,11 @@ final class StrategyControllerTest extends TestCase
             'laps'              => 50,
         ]);
 
-        $result = $this->controller()->runCalc(new Request([], [], [], []));
+        $controller = $this->controller();
+        $this->assertNotNull($this->api);
+        $result = $this->api->withFetching(
+            static fn (): array => $controller->runCalc(new Request([], [], [], [])),
+        );
 
         $this->assertSame(StrategyController::GENERIC_ERROR_MESSAGE, $result['error'] ?? null);
     }

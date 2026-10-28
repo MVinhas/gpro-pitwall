@@ -18,12 +18,14 @@ use PHPUnit\Framework\TestCase;
 final class EndpointFetcherTest extends TestCase
 {
     private ScriptedGproFetcher $gpro;
+    private GproApiClient $client;
     private EndpointFetcher $fetcher;
 
     protected function setUp(): void
     {
         $this->gpro = new ScriptedGproFetcher();
-        $this->fetcher = new EndpointFetcher(new GproApiClient($this->gpro, new ArrayCache()));
+        $this->client = new GproApiClient($this->gpro, new ArrayCache());
+        $this->fetcher = new EndpointFetcher($this->client);
     }
 
     /** @return array<string, array{string, string, string}> */
@@ -45,8 +47,11 @@ final class EndpointFetcherTest extends TestCase
     #[DataProvider('requests')]
     public function testFetchesTheMatchingEndpointFresh(string $endpoint, string $params, string $expected): void
     {
-        $this->fetcher->fetch($endpoint, $params);
-        $this->fetcher->fetch($endpoint, $params);
+        // The sync that drives the fetcher opens the client's gate (Task B2 moves that into the service).
+        $this->client->withFetching(function () use ($endpoint, $params): void {
+            $this->fetcher->fetch($endpoint, $params);
+            $this->fetcher->fetch($endpoint, $params);
+        });
 
         $this->assertSame([$expected, $expected], $this->gpro->requests);
     }
@@ -69,7 +74,7 @@ final class EndpointFetcherTest extends TestCase
         $this->expectException(LogicException::class);
 
         try {
-            $this->fetcher->fetch($endpoint, $params);
+            $this->client->withFetching(fn (): array => $this->fetcher->fetch($endpoint, $params));
         } finally {
             $this->assertSame([], $this->gpro->requests);
         }

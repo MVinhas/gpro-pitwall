@@ -33,6 +33,7 @@ final class GproApiClientArchiveTest extends TestCase
     private string $logFile = '';
     private ?string $priorErrorLog = null;
     private mixed $priorRaceDays = null;
+    private ?DateTimeImmutable $now = null;
 
     protected function setUp(): void
     {
@@ -80,10 +81,25 @@ final class GproApiClientArchiveTest extends TestCase
 
     private function client(?int $userId = 1, ?ApiArchiveRepository $archive = null): GproApiClient
     {
-        $client = new GproApiClient($this->fetcher, $this->cache, $archive ?? $this->archive);
+        $client = new GproApiClient(
+            $this->fetcher,
+            $this->cache,
+            $archive ?? $this->archive,
+            fn (): DateTimeImmutable => $this->now ?? new DateTimeImmutable('now'),
+        );
         $client->setToken(self::TOKEN, $userId);
 
         return $client;
+    }
+
+    /** Runs the named reads inside a sync run, the only place the client may call GPRO. */
+    private function sync(GproApiClient $client, string ...$reads): void
+    {
+        $client->withFetching(static function () use ($client, $reads): void {
+            foreach ($reads as $read) {
+                $client->{$read}();
+            }
+        });
     }
 
     private static function scope(): string
@@ -96,13 +112,98 @@ final class GproApiClientArchiveTest extends TestCase
         $this->cache->clear();
     }
 
+    public function testAClosedGateNeverFetches(): void
+    {
+        $client = $this->client();
+
+        $this->assertSame([], $client->getCarData());
+        $this->assertSame([], $client->getSfHistory(106));
+
+        $this->assertSame([], $this->fetcher->calls);
+        $this->assertSame(0, (int) $this->db->query('SELECT COUNT(*) FROM user_api_archive')->fetchColumn());
+        $this->assertNull($this->cache->get('u' . self::scope() . ':car_data'), 'a refused fetch caches nothing');
+    }
+
+    public function testAnOldArchiveRowIsServedWithoutFetching(): void
+    {
+        $_ENV['GPRO_RACE_DAYS'] = '2,5';
+        $client = $this->client();
+        $oldWindow = RaceWindow::raceStartIdFor(new DateTimeImmutable('-30 days'), [2, 5]);
+        $this->assertNotSame($client->archiveWindow(), $oldWindow);
+        $this->archive->put(1, self::scope(), 'UpdateCar', '', $oldWindow, 99, 1, ['kind' => 'old car']);
+        $this->ageArchive(30 * 86400);
+
+        $this->assertSame('old car', $client->getCarData()['kind'] ?? null);
+        $this->assertSame([], $this->fetcher->calls);
+    }
+
+    public function testCachedPayloadsNeverExpire(): void
+    {
+        $_ENV['GPRO_RACE_DAYS'] = '2,5';
+        $cache = new TtlRecordingCache($this->cache);
+        $client = new GproApiClient(
+            $this->fetcher,
+            $cache,
+            $this->archive,
+            fn (): DateTimeImmutable => $this->now ?? new DateTimeImmutable('now'),
+        );
+        $client->setToken(self::TOKEN, 1);
+        $client->withFetching(static fn (): array => $client->getCarData(true));
+        $window = $client->archiveWindow();
+        $key = 'u' . self::scope() . ':car_data';
+        $this->assertArrayHasKey($key, $cache->ttls);
+        $this->assertNull($cache->ttls[$key], 'written without expiry');
+        $this->db->exec('DELETE FROM user_api_archive');
+
+        $this->now = new DateTimeImmutable('+30 days');
+        $this->assertNotSame($window, $client->archiveWindow(), 'the race windows rolled on');
+
+        $this->assertSame('car', $client->getCarData()['kind'] ?? null, 'served from the cache alone');
+        $this->assertCount(1, $this->fetcher->calls);
+    }
+
+    public function testWithFetchingOpensOnlyForTheWorkAndClosesAfterAThrow(): void
+    {
+        $client = $this->client();
+
+        $car = $client->withFetching(static fn (): array => $client->getCarData());
+        $this->assertSame('car', $car['kind'] ?? null, 'the work\'s result is handed back');
+        $this->assertCount(1, $this->fetcher->calls);
+
+        $client->withFetching(static function () use ($client): void {
+            $client->withFetching(static fn (): array => $client->getOfficeData());
+            $client->getRaceSetup();
+        });
+        $this->assertCount(3, $this->fetcher->calls, 'a nested run leaves the outer one open');
+
+        try {
+            $client->withFetching(static function (): never {
+                throw new \RuntimeException('boom');
+            });
+            $this->fail('the throw must propagate');
+        } catch (\RuntimeException) {
+        }
+
+        $this->assertSame([], $client->getTesting());
+        $this->assertCount(3, $this->fetcher->calls, 'closed again after the throw');
+    }
+
+    public function testAnotherTokensArchiveIsNotServed(): void
+    {
+        $this->archive->put(1, self::scope(), 'UpdateCar', '', 'any', 99, 4, ['kind' => 'token a car']);
+        $client = $this->client();
+        $client->setToken('token-b', 1);
+
+        $this->assertSame([], $client->getCarData());
+        $this->assertSame([], $this->fetcher->calls);
+    }
+
     public function testFetchWritesArchive(): void
     {
         $client = $this->client();
         $window = $client->archiveWindow();
 
-        $client->getOfficeData();
-        $client->getMyPilotDetails();
+        $this->sync($client, 'getOfficeData', 'getMyPilotDetails');
 
         $office = $this->archive->get(1, self::scope(), 'office', '', $window);
         $this->assertNotNull($office);
@@ -116,8 +217,7 @@ final class GproApiClientArchiveTest extends TestCase
     public function testSeasonAndRaceComeFromOfficeThenFromCachedOffice(): void
     {
         $client = $this->client();
-        $client->getOfficeData();
-        $client->getCarData();
+        $this->sync($client, 'getOfficeData', 'getCarData');
 
         $rows = $this->db->query('SELECT endpoint, season, race FROM user_api_archive ORDER BY endpoint')
             ->fetchAll(PDO::FETCH_ASSOC);
@@ -133,7 +233,7 @@ final class GproApiClientArchiveTest extends TestCase
     public function testCacheKeepsApiBudgetOfFreshFetch(): void
     {
         $client = $this->client();
-        $client->getOfficeData();
+        $this->sync($client, 'getOfficeData');
 
         $this->assertSame(88, $client->lastKnownRemaining());
         $cached = $this->cache->get('u' . GproApiClient::scopeFor(self::TOKEN) . ':office_data');
@@ -144,8 +244,7 @@ final class GproApiClientArchiveTest extends TestCase
     public function testCacheMissServedFromArchiveWithoutFetch(): void
     {
         $client = $this->client();
-        $client->getOfficeData();
-        $client->getCarData();
+        $this->sync($client, 'getOfficeData', 'getCarData');
         $this->assertCount(2, $this->fetcher->calls);
 
         $this->flushCache();
@@ -172,7 +271,7 @@ final class GproApiClientArchiveTest extends TestCase
         $this->assertSame([], $client->getCachedGroupStaff());
         $this->assertSame([], $this->fetcher->calls, 'a miss must not spend a call');
 
-        $client->getGroupStaff();
+        $this->sync($client, 'getGroupStaff');
         $this->assertCount(1, $this->fetcher->calls);
 
         $this->flushCache();
@@ -186,10 +285,10 @@ final class GproApiClientArchiveTest extends TestCase
     public function testForceBypassesArchiveAndRefreshesIt(): void
     {
         $client = $this->client();
-        $client->getOfficeData();
+        $this->sync($client, 'getOfficeData');
         $this->fetcher->name = 'Bob';
 
-        $client->getOfficeData(true);
+        $client->withFetching(static fn (): array => $client->getOfficeData(true));
 
         $this->assertCount(2, $this->fetcher->calls);
         $row = $this->archive->get(1, self::scope(), 'office', '', $client->archiveWindow());
@@ -199,9 +298,9 @@ final class GproApiClientArchiveTest extends TestCase
     public function testNoArchiveWithoutUserId(): void
     {
         $client = $this->client(null);
-        $client->getOfficeData();
+        $this->sync($client, 'getOfficeData');
         $this->flushCache();
-        $client->getOfficeData();
+        $this->sync($client, 'getOfficeData');
 
         $this->assertCount(2, $this->fetcher->calls);
         $this->assertSame(0, (int) $this->db->query('SELECT COUNT(*) FROM user_api_archive')->fetchColumn());
@@ -210,12 +309,11 @@ final class GproApiClientArchiveTest extends TestCase
     public function testSharedKeysAreNotArchivedExceptTheTyreFeedWhichIsFiledUnderTheCaller(): void
     {
         $client = $this->client();
-        $client->getTyreSuppliers();
-        $client->getAllTracksPreview();
+        $this->sync($client, 'getTyreSuppliers', 'getAllTracksPreview');
         $this->flushCache();
-        $client->getTyreSuppliers();
+        $this->sync($client, 'getTyreSuppliers', 'getAllTracksPreview');
 
-        $this->assertCount(3, $this->fetcher->calls, 'shared keys refetch after a flush');
+        $this->assertCount(3, $this->fetcher->calls, 'only the tyre feed reads its archived row after a flush');
         $this->assertSame(
             [['endpoint' => 'TyreSuppliers', 'user_id' => 1]],
             $this->db->query('SELECT endpoint, user_id FROM user_api_archive')->fetchAll(PDO::FETCH_ASSOC),
@@ -225,14 +323,13 @@ final class GproApiClientArchiveTest extends TestCase
 
     public function testTyreSuppliersAreArchivedForEachUserWhoFetchesThemEvenWhenTheSharedCacheIsWarm(): void
     {
-        $this->client(1)->getOfficeData();
-        $this->client(1)->getTyreSuppliers();
+        $this->sync($this->client(1), 'getOfficeData', 'getTyreSuppliers');
         $second = $this->client(2);
-        $second->getTyreSuppliers();
+        $this->sync($second, 'getTyreSuppliers');
         $this->assertCount(2, $this->fetcher->calls, 'user 2 read the shared cache');
         $this->assertNull($this->archive->latest(2, 'TyreSuppliers'), 'a cache read archives nothing');
 
-        $second->getTyreSuppliers(true);
+        $second->withFetching(static fn (): array => $second->getTyreSuppliers(true));
 
         $this->assertNotNull($this->archive->get(2, self::scope(), 'TyreSuppliers', '', $second->archiveWindow()));
         $this->assertSame(
@@ -243,38 +340,36 @@ final class GproApiClientArchiveTest extends TestCase
         );
     }
 
-    public function testStandingsUseTheGrouplessPathAndFollowTheWindow(): void
+    public function testStandingsUseTheGrouplessPathAndAreServedFromTheArchive(): void
     {
         $client = $this->client();
-        $client->getOfficeData();
-
-        $client->getStandings();
-        $client->getStandings();
+        $this->sync($client, 'getOfficeData', 'getStandings', 'getStandings');
 
         $this->assertSame('/gb/backend/api/v2/Standings', $this->fetcher->calls[1]);
         $this->assertCount(2, $this->fetcher->calls, 'the second read is a cache hit');
         $this->assertNotNull($this->archive->get(1, self::scope(), 'Standings', '', $client->archiveWindow()));
         $this->flushCache();
         $client->getStandings();
-        $this->assertCount(2, $this->fetcher->calls, 'a cold cache is served from the window\'s archive row');
-        $client->getStandings(true);
+        $this->assertCount(2, $this->fetcher->calls, 'a cold cache is served from the archived row');
+        $client->withFetching(static fn (): array => $client->getStandings(true));
         $this->assertCount(3, $this->fetcher->calls);
     }
 
     public function testEconomyHistoryAsksForTheTablePageAndArchivesPerPage(): void
     {
         $client = $this->client();
-        $client->getOfficeData();
-
-        $client->getEconomyHistory();
-        $client->getEconomyHistory(2);
+        $client->withFetching(static function () use ($client): void {
+            $client->getOfficeData();
+            $client->getEconomyHistory();
+            $client->getEconomyHistory(2);
+        });
 
         $this->assertSame('/gb/backend/api/v2/EconomyHistory?Page=1&show=table', $this->fetcher->calls[1]);
         $this->assertSame('/gb/backend/api/v2/EconomyHistory?Page=2&show=table', $this->fetcher->calls[2]);
         $window = $client->archiveWindow();
         $this->assertNotNull($this->archive->get(1, self::scope(), 'EconomyHistory', 'Page=1&show=table', $window));
         $this->assertNotNull($this->archive->get(1, self::scope(), 'EconomyHistory', 'Page=2&show=table', $window));
-        $client->getEconomyHistory(2);
+        $client->withFetching(static fn (): array => $client->getEconomyHistory(2));
         $this->assertCount(3, $this->fetcher->calls, 'each page has its own cache entry');
     }
 
@@ -309,7 +404,7 @@ final class GproApiClientArchiveTest extends TestCase
         $_ENV['GPRO_RACE_DAYS'] = '2,5';
         $client = $this->client();
 
-        $call($client);
+        $client->withFetching(static fn (): array => $call($client));
 
         $this->assertSame('/gb/backend/api/v2/' . $endpoint . '?' . $params, $this->fetcher->calls[0]);
         $this->assertNotSame('', $client->archiveWindow());
@@ -330,12 +425,12 @@ final class GproApiClientArchiveTest extends TestCase
     ): void {
         $_ENV['GPRO_RACE_DAYS'] = '2,5';
         $client = $this->client();
-        $call($client);
+        $client->withFetching(static fn (): array => $call($client));
         $this->flushCache();
         $this->ageArchive(400 * 86400);
         $_ENV['GPRO_RACE_DAYS'] = '1,3';
 
-        $call($client);
+        $client->withFetching(static fn (): array => $call($client));
         $call($client);
 
         $this->assertCount(1, $this->fetcher->calls, 'never refetched once archived');
@@ -350,10 +445,10 @@ final class GproApiClientArchiveTest extends TestCase
     ): void {
         $_ENV['GPRO_RACE_DAYS'] = '';
         $client = $this->client();
-        $call($client);
+        $client->withFetching(static fn (): array => $call($client));
         $this->flushCache();
 
-        $call($client);
+        $client->withFetching(static fn (): array => $call($client));
 
         $this->assertCount(1, $this->fetcher->calls);
     }
@@ -366,30 +461,34 @@ final class GproApiClientArchiveTest extends TestCase
         \Closure $call,
     ): void {
         $client = $this->client();
-        $call($client);
+        $second = $this->client(2);
+        $fetching = static fn (GproApiClient $c): array => $c->withFetching(static fn (): array => $call($c));
+        $fetching($client);
         $this->flushCache();
 
-        $call($this->client(2));
+        $fetching($second);
         $this->assertCount(2, $this->fetcher->calls, 'user 2 cannot read user 1\'s row');
 
         $this->flushCache();
         $client->setToken('token-b', 1);
-        $call($client);
+        $fetching($client);
         $this->assertCount(3, $this->fetcher->calls, 'another token scope misses');
 
-        $call($client);
+        $fetching($client);
         $this->assertCount(3, $this->fetcher->calls);
         $this->flushCache();
         $client->setToken(self::TOKEN, 1);
-        $call($client);
+        $fetching($client);
         $this->assertCount(3, $this->fetcher->calls, 'the original scope\'s row is still there');
     }
 
     public function testForcedImmutableCallsGoToTheNetworkAndRefreshTheRow(): void
     {
         $client = $this->client();
-        $client->getSfHistory(106);
-        $client->getSfHistory(106, true);
+        $client->withFetching(static function () use ($client): void {
+            $client->getSfHistory(106);
+            $client->getSfHistory(106, true);
+        });
 
         $this->assertCount(2, $this->fetcher->calls);
     }
@@ -397,8 +496,10 @@ final class GproApiClientArchiveTest extends TestCase
     public function testImmutableHistoryWithoutAnArchiveOwnerStillCachesButNeverArchives(): void
     {
         $client = $this->client(null);
-        $client->getCcpHistory(106);
-        $client->getCcpHistory(106);
+        $client->withFetching(static function () use ($client): void {
+            $client->getCcpHistory(106);
+            $client->getCcpHistory(106);
+        });
 
         $this->assertCount(1, $this->fetcher->calls);
         $this->assertSame(0, (int) $this->db->query('SELECT COUNT(*) FROM user_api_archive')->fetchColumn());
@@ -407,8 +508,10 @@ final class GproApiClientArchiveTest extends TestCase
     public function testSeasonHistoryIsStampedWithTheCurrentSeasonNotTheOneItDescribes(): void
     {
         $client = $this->client();
-        $client->getOfficeData();
-        $client->getSfHistory(98);
+        $client->withFetching(static function () use ($client): void {
+            $client->getOfficeData();
+            $client->getSfHistory(98);
+        });
 
         $row = $this->db->query("SELECT season, race FROM user_api_archive WHERE endpoint = 'SFHistory'")
             ->fetch(PDO::FETCH_ASSOC);
@@ -418,8 +521,10 @@ final class GproApiClientArchiveTest extends TestCase
     public function testHistoricalRaceAnalysisIsStampedWithTheRaceItAnalyses(): void
     {
         $client = $this->client();
-        $client->getOfficeData();
-        $client->getRaceAnalysisFor(98, 3);
+        $client->withFetching(static function () use ($client): void {
+            $client->getOfficeData();
+            $client->getRaceAnalysisFor(98, 3);
+        });
 
         $row = $this->db->query("SELECT season, race FROM user_api_archive WHERE endpoint = 'RaceAnalysis'")
             ->fetch(PDO::FETCH_ASSOC);
@@ -433,10 +538,10 @@ final class GproApiClientArchiveTest extends TestCase
 
     public function testArchiveIsPerUser(): void
     {
-        $this->client(1)->getOfficeData();
+        $this->sync($this->client(1), 'getOfficeData');
         $this->flushCache();
 
-        $this->client(2)->getOfficeData();
+        $this->sync($this->client(2), 'getOfficeData');
 
         $this->assertCount(2, $this->fetcher->calls, 'user 2 cannot read user 1 archive');
     }
@@ -444,12 +549,15 @@ final class GproApiClientArchiveTest extends TestCase
     public function testIsWarmFromArchiveAfterCacheFlush(): void
     {
         $client = $this->client();
-        $client->getOfficeData();
-        $client->getCalendar();
-        $client->getCarData();
-        $client->getRaceSetup();
-        $client->getNextRaceProfile();
-        $client->getMyPilotDetails();
+        $this->sync(
+            $client,
+            'getOfficeData',
+            'getCalendar',
+            'getCarData',
+            'getRaceSetup',
+            'getNextRaceProfile',
+            'getMyPilotDetails',
+        );
         $this->assertTrue($client->isWarm());
 
         $this->flushCache();
@@ -457,34 +565,39 @@ final class GproApiClientArchiveTest extends TestCase
         $this->assertSame(6, count($this->fetcher->calls), 'isWarm never fetches');
     }
 
-    public function testIsWarmFalseWhenTheArchiveRowsAreOlderThanTheTtl(): void
+    public function testIsWarmFromArchiveRowsOfAnyAgeAndWindow(): void
     {
         $client = $this->client();
-        $client->getOfficeData();
-        $client->getCalendar();
-        $client->getCarData();
-        $client->getRaceSetup();
-        $client->getNextRaceProfile();
-        $client->getMyPilotDetails();
+        $this->sync(
+            $client,
+            'getOfficeData',
+            'getCalendar',
+            'getCarData',
+            'getRaceSetup',
+            'getNextRaceProfile',
+            'getMyPilotDetails',
+        );
 
-        $this->ageArchive(1000);
+        $this->db->exec("UPDATE user_api_archive SET race_window = 'an-old-window'");
+        $this->ageArchive(30 * 86400);
         $this->flushCache();
-        $this->assertTrue($client->isWarm(), 'a row inside its TTL still counts');
 
-        $this->ageArchive(259200);
-        $this->flushCache();
-        $this->assertFalse($client->isWarm(), 'an expired row would be fetched again, so the page is not warm');
+        $this->assertTrue($client->isWarm(), 'a stored row of any age or window is served, never refetched');
+        $this->assertCount(6, $this->fetcher->calls);
     }
 
     public function testDecidingAWarmPendingPageRendersNowAndFetchesNothing(): void
     {
         $client = $this->client();
-        $client->getOfficeData();
-        $client->getCalendar();
-        $client->getCarData();
-        $client->getRaceSetup();
-        $client->getNextRaceProfile();
-        $client->getMyPilotDetails();
+        $this->sync(
+            $client,
+            'getOfficeData',
+            'getCalendar',
+            'getCarData',
+            'getRaceSetup',
+            'getNextRaceProfile',
+            'getMyPilotDetails',
+        );
         $this->flushCache();
         $spent = count($this->fetcher->calls);
 
@@ -499,9 +612,7 @@ final class GproApiClientArchiveTest extends TestCase
     public function testIsWarmFalseWhenArchiveIncompleteAndWithoutUser(): void
     {
         $client = $this->client();
-        $client->getOfficeData();
-        $client->getCalendar();
-        $client->getCarData();
+        $this->sync($client, 'getOfficeData', 'getCalendar', 'getCarData');
         $this->flushCache();
         $this->assertFalse($client->isWarm(), 'race_setup missing from the archive');
 
@@ -517,9 +628,9 @@ final class GproApiClientArchiveTest extends TestCase
         $client = $this->client(1, $repo);
         $logged = $this->captureErrorLog();
 
-        $office = $client->getOfficeData();
+        $office = $client->withFetching(static fn (): array => $client->getOfficeData());
         $this->flushCache();
-        $again = $client->getOfficeData();
+        $again = $client->withFetching(static fn (): array => $client->getOfficeData());
 
         $this->assertSame('Alice', $office['name']);
         $this->assertSame('Alice', $again['name']);
@@ -535,30 +646,30 @@ final class GproApiClientArchiveTest extends TestCase
         $client = $this->client();
         $clone = $client->withScopeFor('token-b');
 
-        $clone->getOfficeData();
+        $this->sync($clone, 'getOfficeData');
         $this->assertSame(0, (int) $this->db->query('SELECT COUNT(*) FROM user_api_archive')->fetchColumn());
 
-        $client->getOfficeData(true);
+        $client->withFetching(static fn (): array => $client->getOfficeData(true));
         $this->flushCache();
-        $clone->getOfficeData();
+        $this->sync($clone, 'getOfficeData');
         $this->assertCount(3, $this->fetcher->calls, 'clone must not read the original user archive');
     }
 
-    public function testDisabledWindowNeverReadsArchive(): void
+    public function testDisabledWindowStillServesTheArchive(): void
     {
         $_ENV['GPRO_RACE_DAYS'] = '';
         $client = $this->client();
         $this->assertSame('', $client->archiveWindow());
 
-        $client->getOfficeData();
+        $this->sync($client, 'getOfficeData');
         $this->flushCache();
-        $client->getOfficeData();
 
-        $this->assertCount(2, $this->fetcher->calls, 'a row without a window is never current');
+        $this->assertSame('Alice', $client->getOfficeData()['name'] ?? null);
+        $this->assertCount(1, $this->fetcher->calls, 'served from the row filed under the empty window');
         $this->assertSame(1, (int) $this->db->query('SELECT COUNT(*) FROM user_api_archive')->fetchColumn());
     }
 
-    public function testIsWarmFalseWithDisabledWindowEvenWithArchiveRows(): void
+    public function testIsWarmFromTheArchiveWithDisabledWindow(): void
     {
         $_ENV['GPRO_RACE_DAYS'] = '';
         $client = $this->client();
@@ -569,53 +680,41 @@ final class GproApiClientArchiveTest extends TestCase
         }
         $this->archive->put(1, self::scope(), 'DriProfile', 'id=77', '', 99, 4, ['x' => 1]);
 
-        $this->assertFalse($client->isWarm());
+        $this->assertTrue($client->isWarm());
+        $this->assertSame([], $this->fetcher->calls);
     }
 
-    public function testArchiveHitIsRecachedForTheRowsRemainingTtl(): void
+    public function testAnArchiveHitOfAnyAgeIsRecachedWithoutExpiry(): void
     {
         $cache = new TtlRecordingCache($this->cache);
         $client = new GproApiClient($this->fetcher, $cache, $this->archive);
         $client->setToken(self::TOKEN, 1);
         $key = 'u' . self::scope() . ':office_data';
 
-        $client->getOfficeData();
-        $this->assertSame(259200, $cache->ttls[$key], 'a fresh fetch keeps the full TTL');
+        $this->sync($client, 'getOfficeData');
+        $this->assertArrayHasKey($key, $cache->ttls);
+        $this->assertNull($cache->ttls[$key], 'a fresh fetch is cached without expiry');
 
-        $this->ageArchive(1000);
+        $this->ageArchive(259200 + 1000);
         $this->flushCache();
-        $client->getOfficeData();
+        $cache->ttls = [];
+        $this->assertSame('Alice', $client->getOfficeData()['name'] ?? null);
 
-        $this->assertCount(1, $this->fetcher->calls);
-        $this->assertGreaterThanOrEqual(259200 - 1000 - 5, $cache->ttls[$key]);
-        $this->assertLessThanOrEqual(259200 - 1000, $cache->ttls[$key]);
-    }
-
-    public function testArchiveRowOlderThanTheTtlIsAMiss(): void
-    {
-        $cache = new TtlRecordingCache($this->cache);
-        $client = new GproApiClient($this->fetcher, $cache, $this->archive);
-        $client->setToken(self::TOKEN, 1);
-        $key = 'u' . self::scope() . ':office_data';
-
-        $client->getOfficeData();
-        $this->ageArchive(259200);
-        $this->flushCache();
-        $client->getOfficeData();
-
-        $this->assertCount(2, $this->fetcher->calls, 'an expired row is fetched again');
-        $this->assertSame(259200, $cache->ttls[$key]);
+        $this->assertCount(1, $this->fetcher->calls, 'a row older than the old 3-day TTL is still served');
+        $this->assertArrayHasKey($key, $cache->ttls);
+        $this->assertNull($cache->ttls[$key], 'and re-cached without expiry');
     }
 
     public function testTokenSwapMissesThePreviousAccountsArchive(): void
     {
         $client = $this->client();
-        $client->getOfficeData();
+        $this->sync($client, 'getOfficeData');
         $this->flushCache();
 
         $this->fetcher->name = 'Bob';
         $client->setToken('token-b', 1);
-        $office = $client->getOfficeData();
+        $this->assertSame([], $client->getOfficeData(), 'outside a sync the new token has nothing yet');
+        $office = $client->withFetching(static fn (): array => $client->getOfficeData());
 
         $this->assertSame('Bob', $office['name']);
         $this->assertCount(2, $this->fetcher->calls, 'the new token fetches its own data');
@@ -625,12 +724,15 @@ final class GproApiClientArchiveTest extends TestCase
     public function testIsWarmIgnoresThePreviousTokensArchive(): void
     {
         $client = $this->client();
-        $client->getOfficeData();
-        $client->getCalendar();
-        $client->getCarData();
-        $client->getRaceSetup();
-        $client->getNextRaceProfile();
-        $client->getMyPilotDetails();
+        $this->sync(
+            $client,
+            'getOfficeData',
+            'getCalendar',
+            'getCarData',
+            'getRaceSetup',
+            'getNextRaceProfile',
+            'getMyPilotDetails',
+        );
         $this->flushCache();
 
         $client->setToken('token-b', 1);
@@ -642,7 +744,7 @@ final class GproApiClientArchiveTest extends TestCase
     {
         $_ENV['GPRO_RACE_DAYS'] = '2,5';
         $client = $this->client();
-        $client->getOfficeData();
+        $this->sync($client, 'getOfficeData');
 
         $expected = RaceWindow::raceStartIdFor(new DateTimeImmutable('now'), [2, 5]);
         $this->assertSame($expected, $client->archiveWindow());
@@ -655,8 +757,7 @@ final class GproApiClientArchiveTest extends TestCase
     public function testRaceAnalysisIsStampedWithTheRaceItAnalyses(): void
     {
         $client = $this->client();
-        $client->getOfficeData();
-        $client->getRaceAnalysis();
+        $this->sync($client, 'getOfficeData', 'getRaceAnalysis');
 
         $row = $this->db->query("SELECT season, race FROM user_api_archive WHERE endpoint = 'RaceAnalysis'")
             ->fetch(PDO::FETCH_ASSOC);
@@ -681,10 +782,10 @@ final class GproApiClientArchiveTest extends TestCase
     public function testForcedPilotDetailsReadTheOfficeThroughTheCache(): void
     {
         $client = $this->client();
-        $client->getOfficeData(true);
+        $client->withFetching(static fn (): array => $client->getOfficeData(true));
         $this->fetcher->calls = [];
 
-        $client->getMyPilotDetails(true);
+        $client->withFetching(static fn (): array => $client->getMyPilotDetails(true));
 
         $this->assertCount(1, $this->fetcher->calls, 'only the DriProfile is fetched, never the office');
         $this->assertStringContainsString('DriProfile', $this->fetcher->calls[0]);
@@ -703,6 +804,11 @@ final class GproApiClientArchiveTest extends TestCase
         $this->assertSame(4, $row['race']);
         $this->assertNull($this->archive->get(1, self::scope(), 'office', '', $window));
 
-        $this->assertSame('Alice', $client->getOfficeData()['name'], 'a cold read fetches instead of serving the sync row');
+        $this->assertSame([], $client->getOfficeData(), 'a cold read never serves the sync row');
+        $this->assertSame(
+            'Alice',
+            $client->withFetching(static fn (): array => $client->getOfficeData())['name'] ?? null,
+            'a cold read inside a sync fetches instead',
+        );
     }
 }
