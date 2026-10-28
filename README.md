@@ -165,7 +165,7 @@ Source of truth is GitHub; deployment is a manual file copy to any PHP 8.5 host.
 - **Twig 3** templates; **Tailwind v4** compiled to a static asset (no CDN, no in-browser compile). Light and dark themes ship in one stylesheet: every design token is a CSS `light-dark()` pair switched by `color-scheme`, so System mode tracks the OS with zero JavaScript.
 - **SQLite** via PDO — emails and API tokens encrypted at rest (AES-256-GCM).
 - **PHPMailer 7** for SMTP; dev writes `.eml` files instead.
-- **PHPUnit 13** — 1919 tests, 5580 assertions — with **PHPStan level 8** and enforced type-declaration coverage (100% return/property/constant + `strict_types`; 99.5% param). Twig linted by a native `bin/twig_lint.php` built on Twig's own parser. CI measures statement coverage with `pcov` and enforces a floor (currently 59%, ratcheted up as coverage grows).
+- **PHPUnit 13** — 1926 tests, 5607 assertions — with **PHPStan level 8** and enforced type-declaration coverage (100% return/property/constant + `strict_types`; 99.5% param). Twig linted by a native `bin/twig_lint.php` built on Twig's own parser. CI measures statement coverage with `pcov` and enforces a floor (currently 59%, ratcheted up as coverage grows).
 - **Timestamps stored and served as UTC**, localised per visitor in the browser — no server-side timezone config.
 
 ## Architecture
@@ -179,7 +179,7 @@ Request → public/index.php → Http\Router → Controller → Service → Repo
 - `bootstrap.php` wires every dependency into a flat container — adding a service is one line.
 - Cache adapters (`filesystem` default, APCu, Redis, none) behind one interface, resolved by `CacheFactory`. Every key is namespaced by app version, so a deploy can never serve a previous release's payload shape out of a cache segment it cannot wipe.
 - **Host-wide outbound throttle** — all GPRO API calls leave from one IP, so a token bucket shared across PHP workers (a `flock`'d state file) paces real fetches under burst load; cache hits never touch it. It never throws — worst case is "slightly slower", not a failed page. Complements the per-token budget guard (`SYNC_SAFETY_MARGIN`: no sync at or below it; the planner's floors of 50 for login and background harvest work and 20 for Re-sync cap the spend above it). Background harvest slices only start a call while the shared bucket has room, so they give way to managers loading pages.
-- **Pages never spend API calls** — `GproApiClient` refuses every manager-payload fetch outside `withFetching()`, which only a sync run opens, for its planned fetches; a refused fetch returns an empty payload, never an exception, and an empty office never records a sync. Cached payloads never expire (the next sync overwrites them), and a cache miss — every release rotates the key namespace — is served from the newest archived copy under the same token, whatever its age or race window. The legacy market dump spends no manager budget and stays outside the gate.
+- **Pages never spend API calls** — `GproApiClient` refuses every manager-payload fetch outside `withFetching()`, which only a sync run and an owed harvest slice open, for their planned fetches; a refused fetch returns an empty payload, never an exception, and an empty office never records a sync. Cached payloads never expire (the next sync overwrites them), and a cache miss — every release rotates the key namespace — is served from the newest archived copy under the same token, whatever its age or race window. The legacy market dump spends no manager budget and stays outside the gate.
 
 ## Security posture
 

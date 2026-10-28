@@ -152,7 +152,7 @@ final class GproSyncService
                 '[GproSync] user %d mode %s plan: %d calls (%s) in %d ms',
                 $userId,
                 $mode,
-                count($plan->phase1),
+                $calls,
                 implode(', ', $names),
                 intdiv((int) (hrtime(true) - $started), 1_000_000),
             ));

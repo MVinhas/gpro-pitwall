@@ -11,6 +11,8 @@ final class CountingGproFetcher implements GproFetcher
     /** @var list<string> */
     public array $calls = [];
     public string $name = 'Alice';
+    /** GPRO answering `{}`. */
+    public bool $empty = false;
 
     public function setToken(string $token): void
     {
@@ -19,6 +21,9 @@ final class CountingGproFetcher implements GproFetcher
     public function fetchJson(string $endpoint): array
     {
         $this->calls[] = $endpoint;
+        if ($this->empty) {
+            return [];
+        }
 
         return match (true) {
             str_ends_with($endpoint, '/office') => [

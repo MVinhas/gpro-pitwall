@@ -112,6 +112,21 @@ final class GproApiClientArchiveTest extends TestCase
         $this->cache->clear();
     }
 
+    public function testAnEmptyFetchNeitherOverwritesTheCacheNorFilesARow(): void
+    {
+        $client = $this->client();
+        $this->sync($client, 'getOfficeData');
+        $rows = (int) $this->db->query('SELECT COUNT(*) FROM user_api_archive')->fetchColumn();
+        $this->fetcher->empty = true;
+
+        $this->assertSame([], $client->withFetching(static fn (): array => $client->getOfficeData(true)));
+
+        $this->assertCount(2, $this->fetcher->calls);
+        $this->assertSame('Alice', $this->cache->get('u' . self::scope() . ':office_data')['name'] ?? null);
+        $this->assertSame($rows, (int) $this->db->query('SELECT COUNT(*) FROM user_api_archive')->fetchColumn());
+        $this->assertSame('Alice', $client->getOfficeData()['name'] ?? null);
+    }
+
     public function testAClosedGateNeverFetches(): void
     {
         $client = $this->client();

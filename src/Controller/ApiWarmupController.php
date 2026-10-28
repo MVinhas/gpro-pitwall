@@ -9,6 +9,7 @@ use App\Security\Authorize;
 use App\Service\AuthService;
 use App\Service\GproSyncService;
 use App\Service\HarvestService;
+use App\Support\HarvestOwed;
 use App\Support\SessionBudget;
 use App\Sync\SyncPlanner;
 
@@ -78,7 +79,7 @@ final readonly class ApiWarmupController
             echo json_encode([
                 'status' => 'idle',
                 'fetched' => [],
-                'harvest_due' => $this->harvest->isDueSafely($user, !empty($_SESSION[AuthService::HARVEST_OWED])),
+                'harvest_due' => HarvestOwed::due($this->harvest, $user),
             ]);
             return;
         }
@@ -95,7 +96,7 @@ final readonly class ApiWarmupController
         echo json_encode([
             'status' => $outcome->status,
             'fetched' => $outcome->fetched,
-            'harvest_due' => $this->harvest->isDueSafely($user, !empty($_SESSION[AuthService::HARVEST_OWED])),
+            'harvest_due' => HarvestOwed::due($this->harvest, $user),
         ]);
     }
 }

@@ -10,6 +10,7 @@ use App\Repository\DivisionMetadataRepository;
 use App\Repository\UserRepository;
 use App\Support\DeferredRender;
 use App\Support\Env;
+use App\Support\HarvestOwed;
 use App\Support\RaceSettings;
 use App\Support\RaceWindow;
 use App\Support\RecruitmentQuery;
@@ -304,7 +305,7 @@ class PageController
         // answer; every other full page (not a skeleton, fragment or follow-up,
         // whose script is discarded) starts it itself.
         if (!$deferred && !$idleSync && !$wait && (string) $request->get('fragment', '') === '') {
-            $viewData['harvest_due'] = $this->harvest->isDueSafely($user, !empty($_SESSION[AuthService::HARVEST_OWED]));
+            $viewData['harvest_due'] = HarvestOwed::due($this->harvest, $user);
         }
 
         if ($freshSync) {

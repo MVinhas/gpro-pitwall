@@ -974,6 +974,26 @@ final class GproSyncServiceTest extends TestCase
         $this->assertSame(['office'], $fetcher->calls, 'stored profiles are not asked for again');
     }
 
+    public function testThePlanLogLineCountsEveryCallTheOutcomeDoes(): void
+    {
+        [$svc, $fetcher] = $this->scripted();
+        $fetcher->responses['NegOverview'] = ['ongNegs' => [['sponsorId' => 5]]];
+        $log = sys_get_temp_dir() . '/gpro_sync_log_' . bin2hex(random_bytes(4));
+        $prior = ini_set('error_log', $log);
+
+        try {
+            $outcome = $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+        } finally {
+            ini_set('error_log', (string) $prior);
+        }
+        $lines = (string) file_get_contents($log);
+        @unlink($log);
+
+        $this->assertContains('NegotiateSponsor', $fetcher->calls);
+        $this->assertSame(count($fetcher->calls), $outcome->calls);
+        $this->assertStringContainsString('mode login plan: ' . $outcome->calls . ' calls (', $lines);
+    }
+
     public function testSponsorProfilesSpendOnlyWhatTheFloorLeaves(): void
     {
         [$svc, $fetcher] = $this->scripted();

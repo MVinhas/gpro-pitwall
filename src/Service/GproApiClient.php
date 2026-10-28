@@ -607,7 +607,8 @@ final class GproApiClient
         }
 
         $data = $this->fetch($endpoint);
-        if ($data === null) {
+        // An empty answer ({}) is no payload: it must not replace the good one.
+        if ($data === null || $data === []) {
             return [];
         }
         // No expiry: the next sync overwrites the entry, and until then the

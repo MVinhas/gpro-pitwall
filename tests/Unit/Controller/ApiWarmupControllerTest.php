@@ -149,6 +149,30 @@ final class ApiWarmupControllerTest extends TestCase
         $this->assertSame([], $fetcher->calls);
     }
 
+    public function testAnOwedHarvestWithNothingDueIsSettledByTheIdleAnswer(): void
+    {
+        $users = $this->createStub(UserRepository::class);
+        $users->method('findById')->willReturn(['id' => 7, 'api_token' => 'tok']);
+        $_SESSION = ['user_id' => 7, AuthService::HARVEST_OWED => true];
+
+        $body = $this->idle($this->controller($users, new ScriptedGproFetcher(), false));
+
+        $this->assertSame('{"status":"idle","fetched":[],"harvest_due":false}', $body);
+        $this->assertArrayNotHasKey(AuthService::HARVEST_OWED, $_SESSION);
+    }
+
+    public function testAnOwedHarvestWithWorkDueStaysOwed(): void
+    {
+        $users = $this->createStub(UserRepository::class);
+        $users->method('findById')->willReturn(['id' => 7, 'api_token' => 'tok']);
+        $_SESSION = ['user_id' => 7, AuthService::HARVEST_OWED => true];
+
+        $body = $this->idle($this->controller($users, new ScriptedGproFetcher(), true));
+
+        $this->assertSame('{"status":"idle","fetched":[],"harvest_due":true}', $body);
+        $this->assertTrue($_SESSION[AuthService::HARVEST_OWED]);
+    }
+
     public function testIdleSyncWithoutATokenSpendsNothing(): void
     {
         $users = $this->createStub(UserRepository::class);
