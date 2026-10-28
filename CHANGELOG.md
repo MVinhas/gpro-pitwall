@@ -6,6 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.22] - 2026-10-28
+
+### Changed
+- Part swaps now name the level — free downgrade, downgrade, same level or upgrade — chosen over the rest of the
+  season: PHA on the remaining tracks, the season budget, your car's rank in the group and your objective. The
+  Engineer and the Cockpit show the same pick, and the picks are paid for together before training, testing and
+  upgrades get the rest.
+- Promote now keeps half the season-start balance for next season. When that is out of reach, the plan keeps one
+  race of costs in hand and says so.
+
 ## [1.21.21] - 2026-10-28
 
 ### Fixed
