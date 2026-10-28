@@ -198,6 +198,49 @@ final class GproApiClientArchiveTest extends TestCase
         $this->assertSame([], $this->fetcher->calls);
     }
 
+    public function testAnArchivedTyreFeedIsServedToItsOwnerButNeverSharedWithOthers(): void
+    {
+        $this->archive->put(1, self::scope(), 'TyreSuppliers', '', 'an-old-window', 98, 17, ['suppliers' => ['old']]);
+
+        $this->assertSame(['suppliers' => ['old']], $this->client(1)->getTyreSuppliers());
+        $this->assertNull($this->cache->get('tyre_suppliers'), 'only a real fetch writes the shared feed');
+
+        $this->assertSame([], $this->client(2)->getTyreSuppliers(), 'user 2 never reads user 1\'s row');
+        $this->archive->put(2, self::scope(), 'TyreSuppliers', '', 'an-old-window', 98, 17, ['suppliers' => ['own']]);
+        $this->assertSame(['suppliers' => ['own']], $this->client(2)->getTyreSuppliers());
+        $this->assertSame([], $this->fetcher->calls);
+    }
+
+    public function testAScopedCloneTakenInsideTheGateStaysClosed(): void
+    {
+        $client = $this->client();
+
+        $office = $client->withFetching(static function () use ($client): array {
+            return $client->withScopeFor('token-b')->getOfficeData();
+        });
+
+        $this->assertSame([], $office);
+        $this->assertSame([], $this->fetcher->calls, 'a layout-level clone never fetches');
+    }
+
+    public function testAForcedReadWithTheGateClosedWritesNothing(): void
+    {
+        $client = $this->client();
+        $this->sync($client, 'getCarData');
+        $key = 'u' . self::scope() . ':car_data';
+        $rows = $this->db->query('SELECT fetched_at, payload_gz FROM user_api_archive')->fetchAll(PDO::FETCH_ASSOC);
+
+        $this->assertSame([], $client->getCarData(true));
+
+        $this->assertCount(1, $this->fetcher->calls);
+        $this->assertSame('car', $this->cache->get($key)['kind'] ?? null, 'the cached payload is left as it was');
+        $this->assertSame(
+            $rows,
+            $this->db->query('SELECT fetched_at, payload_gz FROM user_api_archive')->fetchAll(PDO::FETCH_ASSOC),
+            'and the archive is untouched',
+        );
+    }
+
     public function testFetchWritesArchive(): void
     {
         $client = $this->client();

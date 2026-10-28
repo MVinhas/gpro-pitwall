@@ -74,6 +74,8 @@ final class GproApiClient
         $copy->scope = self::scopeFor($token);
         // The token may belong to someone other than the archive's owner.
         $copy->archiveUserId = null;
+        // A read-only copy: never let it inherit a sync run's open gate.
+        $copy->fetching = false;
 
         return $copy;
     }
@@ -572,7 +574,8 @@ final class GproApiClient
      *   payloads never leak across accounts.
      * @param bool $archiveShared A shared payload is not archived unless this
      *   is set, in which case a real fetch is filed under the calling user,
-     *   and a shared-cache miss reads that user's own row.
+     *   and a shared-cache miss serves that user's own row without writing it
+     *   to the shared key (it may be another season's; only a fetch is shared).
      * @return array<string, mixed>
      */
     private function getCached(
@@ -585,7 +588,7 @@ final class GproApiClient
         $key = $shared ? $key : $this->userKey($key);
         $archived = !$shared || $archiveShared;
         if (!$force) {
-            $stored = $this->stored($key, $archived ? $endpoint : null);
+            $stored = $this->stored($key, $archived ? $endpoint : null, recache: !$shared);
             if ($stored !== null) {
                 return $stored;
             }
@@ -656,14 +659,14 @@ final class GproApiClient
     /**
      * The newest payload already held for $key, without fetching: the cache,
      * else the newest archived row for $endpoint under this token, whatever
-     * its window or age (re-cached without expiry). A null $endpoint reads the
-     * cache only. Neither touches the remaining-calls counter: a stored
+     * its window or age (re-cached without expiry unless $recache is false).
+     * A null $endpoint reads the cache only. Neither touches the remaining-calls counter: a stored
      * payload's apiRequestsRemaining is older than the session's, and writing
      * it back would make the header badge ping-pong between tabs.
      *
      * @return array<string, mixed>|null
      */
-    private function stored(string $key, ?string $endpoint): ?array
+    private function stored(string $key, ?string $endpoint, bool $recache = true): ?array
     {
         $cached = $this->cache->get($key);
         if (is_array($cached)) {
@@ -674,7 +677,7 @@ final class GproApiClient
             return null;
         }
         $payload = $this->latestArchived(...self::splitEndpoint($endpoint));
-        if ($payload !== null) {
+        if ($payload !== null && $recache) {
             $this->cache->set($key, $payload, null);
         }
 
