@@ -57,7 +57,7 @@ wait on GPRO: one whose data isn't cached yet opens as an outline and fills in w
 - **Season** (admin) — results, cash, money by category, team changes, model
   calibration across one season, and the race engineer's budget and upgrade ranking to
   season end.
-- **Race engineer** (admin) — its own tab: a season objective
+- **Race engineer** (admin) — its own tab under Admin, so the Cockpit stays focused: a season objective
   proposed from the standings (which you can pin), a season budget with what is safe to
   spend, and this weekend's calls (Clear Track Risk planned from that budget, part swaps,
   training, testing, the part upgrade most worth buying, and a nudge when staff and
