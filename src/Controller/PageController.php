@@ -81,6 +81,7 @@ class PageController
         private readonly GproSyncService $syncService,
         private readonly HarvestService $harvest,
         private readonly RaceEngineerService $raceEngineer,
+        private readonly bool $syncStale,
         private readonly Environment $twig,
         private array $config
     ) {
@@ -90,10 +91,14 @@ class PageController
      * @param array<string, mixed> $cockpit
      * @return ?array<string, mixed>
      */
-    public static function buildEngineer(RaceEngineerService $service, int $userId, array $cockpit): ?array
-    {
+    public static function buildEngineer(
+        RaceEngineerService $service,
+        int $userId,
+        array $cockpit,
+        bool $stale = false,
+    ): ?array {
         try {
-            return $service->forCockpit($userId, $cockpit);
+            return $service->forCockpit($userId, $cockpit, $stale);
         } catch (\Throwable $e) {
             error_log('[Engineer] ' . $e::class);
 
@@ -622,7 +627,7 @@ class PageController
                             'weather'          => $viewData['weather'] ?? null,
                             'setup_stale'      => $setupStale,
                             'ctr'              => $cockpitRisk,
-                        ]);
+                        ], $this->syncStale);
                         if ($engineer !== null) {
                             $viewData['engineer'] = $engineer;
                         }

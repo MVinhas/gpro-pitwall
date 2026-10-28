@@ -61,6 +61,16 @@ final class RaceEngineer
     }
 
     /**
+     * The whole brief once a race has finished since the last sync: nothing else is safe to say.
+     *
+     * @return Line
+     */
+    public static function stale(): array
+    {
+        return self::line('stale', 'New race weekend', "Re-sync for this weekend's advice", tone: 'amber');
+    }
+
+    /**
      * @return Line
      */
     private static function objective(EngineerInputs $in): array
