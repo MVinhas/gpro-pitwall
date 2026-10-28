@@ -157,6 +157,18 @@ final class PageControllerTest extends TestCase
         $this->assertNotNull(PageController::buildEngineer($service, 7, [], true));
     }
 
+    public function testEngineerStalePrefersThePostSyncFlag(): void
+    {
+        $this->assertFalse(PageController::engineerStale(['sync_stale' => false], true));
+        $this->assertTrue(PageController::engineerStale(['sync_stale' => true], false));
+    }
+
+    public function testEngineerStaleFallsBackToTheBootstrapFlag(): void
+    {
+        $this->assertTrue(PageController::engineerStale([], true));
+        $this->assertFalse(PageController::engineerStale([], false));
+    }
+
     public function testEngineerFailureYieldsNullInsteadOfBreakingTheCockpit(): void
     {
         $service = $this->createStub(RaceEngineerService::class);

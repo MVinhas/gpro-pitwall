@@ -28,9 +28,15 @@ final class EngineerTabTest extends TestCase
     public function testRendersTheEngineerCard(): void
     {
         $html = $this->html([
-            'pha' => [],
+            'cockpit_data_loaded' => true,
             'engineer' => [
-                'objective' => ['objective' => 'promote', 'label' => 'Promote', 'pinned' => false, 'proposed' => 'promote', 'warning' => null],
+                'objective' => [
+                    'objective' => 'promote',
+                    'label' => 'Promote',
+                    'pinned' => false,
+                    'proposed' => 'promote',
+                    'warning' => null,
+                ],
                 'lines' => [],
                 'season' => 107,
             ],
@@ -39,12 +45,39 @@ final class EngineerTabTest extends TestCase
         $this->assertStringContainsString('id="engineer-title"', $html);
     }
 
-    public function testSaysSoWhenThereIsNoAdviceYet(): void
+    public function testSaysSoWhenTheEngineerCouldNotBuildTheAdvice(): void
     {
-        $html = $this->html(['pha' => []]);
+        $html = $this->html(['cockpit_data_loaded' => true]);
 
-        $this->assertStringContainsString('No advice yet', $html);
-        $this->assertStringContainsString('Re-sync to load this weekend&#039;s data.', $html);
+        $this->assertStringContainsString('notice-error', $html);
+        $this->assertStringContainsString("Couldn't build the advice.", $html);
+        $this->assertStringContainsString('The other screens are unaffected.', $html);
+        $this->assertStringNotContainsString('Re-sync', $html);
+    }
+
+    public function testSaysSoWhenThereIsNoSyncedDataYet(): void
+    {
+        $html = $this->html([]);
+
+        $this->assertStringContainsString('No synced data yet', $html);
+        $this->assertStringNotContainsString("Couldn't build the advice.", $html);
+    }
+
+    public function testShowsTheNoPilotNoticeForAManagerWithoutADriver(): void
+    {
+        $html = $this->html(['cockpit_error' => StrategyController::NO_PILOT_MESSAGE]);
+
+        $this->assertStringContainsString('No driver under contract.', $html);
+        $this->assertStringNotContainsString("Couldn't load the race engineer.", $html);
+    }
+
+    public function testShowsAGenericErrorWhenTheScreenDataFailed(): void
+    {
+        $html = $this->html(['cockpit_error' => 'Something broke.']);
+
+        $this->assertStringContainsString('notice-error', $html);
+        $this->assertStringContainsString("Couldn't load the race engineer.", $html);
+        $this->assertStringContainsString('Something broke.', $html);
     }
 
     public function testTheCockpitNoLongerCarriesTheEngineerCard(): void
