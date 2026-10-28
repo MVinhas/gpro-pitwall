@@ -27,9 +27,12 @@
                             : (o.cost >= 1000000
                                 ? '$' ~ (o.cost / 1000000)|number_format(1) ~ 'M'
                                 : '$' ~ (o.cost / 1000)|round ~ 'k') %}
-                        {% set move = o.delta < 0
-                            ? 'Down to L' ~ o.level
-                            : (o.delta > 0 ? 'Up to L' ~ o.level : 'Fresh L' ~ o.level) %}
+                        {% set move = {
+                            free_downgrade: 'Free downgrade to L',
+                            downgrade: 'Down to L',
+                            sidegrade: 'Same level L',
+                            upgrade: 'Up to L',
+                        }[o.kind] ~ o.level %}
                         <label class="plan-opt" title="{{ o.rationale }}">
                             <input type="radio"
                                    name="plan[{{ p.part }}]"
@@ -57,6 +60,7 @@
                         </label>
                     {% endfor %}
                 </div>
+                <p class="t-caption mt-2">{{ plan.season|default(false) ? plan.season_reason : 'Season plan unavailable: ranked for this race' }}</p>
             {% endif %}
         </td>
     </tr>

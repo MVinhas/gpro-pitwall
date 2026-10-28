@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace App\Tests\Unit\Engineer;
 
 use App\Engineer\EngineerInputs;
+use App\Engineer\Money;
 use App\Engineer\RaceEngineer;
 use App\Engineer\SeasonObjective;
+use App\Engineer\SwapLevelPicker;
 use App\Service\CarWearPlannerService;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -1136,6 +1138,99 @@ final class RaceEngineerTest extends TestCase
             'Race rated Normal: swap Engine ($100k); the budget covers the swaps',
             $this->line($in, 'ctr')['reason'],
         );
+    }
+
+    /**
+     * @return array{part: string, level: int, kind: string, cost: int, reason: string}
+     */
+    private function pick(string $part, int $level, string $kind, int $cost, string $reason = 'most_pha'): array
+    {
+        return [
+            'part' => $part, 'level' => $level, 'kind' => $kind, 'cost' => $cost,
+            'reason' => SwapLevelPicker::REASONS[$reason],
+        ];
+    }
+
+    /**
+     * @param list<array<string, mixed>> $picks
+     * @param array<string, mixed> $o
+     */
+    private function withPicks(array $picks, array $o = []): EngineerInputs
+    {
+        $replaced = [['part' => 'Brakes', 'cost' => 100_000], ['part' => 'Cooling', 'cost' => 200_000]];
+
+        return $this->planned(['rows' => $this->rowsReplacing($replaced)], $o + ['swapPicks' => $picks]);
+    }
+
+    public function testThePartsLineNamesEachSwapsLevel(): void
+    {
+        $line = $this->line($this->withPicks([
+            $this->pick('Brakes', 4, 'free_downgrade', 0),
+            $this->pick('Cooling', 7, 'upgrade', 900_000),
+        ]), 'parts');
+
+        $this->assertSame('Swap Brakes → L4 (free downgrade), Cooling → L7 (upgrade)', $line['answer']);
+        $this->assertSame(Money::short(900_000), $line['figure']);
+        $this->assertSame('Would break this race if kept; most PHA the season budget allows', $line['reason']);
+        $this->assertSame('amber', $line['tone']);
+    }
+
+    public function testEveryKindHasItsWord(): void
+    {
+        $line = $this->line($this->withPicks([
+            $this->pick('Brakes', 4, 'downgrade', 50_000),
+            $this->pick('Cooling', 5, 'sidegrade', 200_000),
+        ]), 'parts');
+
+        $this->assertSame('Swap Brakes → L4 (downgrade), Cooling → L5 (same level)', $line['answer']);
+        $this->assertSame('$250k', $line['figure']);
+    }
+
+    public function testABudgetShortPickSaysSo(): void
+    {
+        $line = $this->line($this->withPicks([
+            $this->pick('Brakes', 5, 'sidegrade', 100_000, 'budget_short'),
+            $this->pick('Cooling', 7, 'upgrade', 900_000),
+        ]), 'parts');
+
+        $this->assertSame('Budget short: cheapest option that keeps your car in place', $line['reason']);
+        $this->assertSame('amber', $line['tone']);
+    }
+
+    public function testAPartWithoutAPickKeepsItsNameAndPrice(): void
+    {
+        $line = $this->line($this->withPicks([$this->pick('Cooling', 7, 'upgrade', 900_000)]), 'parts');
+
+        $this->assertSame('Swap Brakes, Cooling → L7 (upgrade)', $line['answer']);
+        $this->assertSame('$1M', $line['figure']);
+    }
+
+    public function testOptionalPicksKeepTheOptionallyWording(): void
+    {
+        $line = $this->line($this->withPicks(
+            [$this->pick('Brakes', 4, 'free_downgrade', 0), $this->pick('Gearbox', 6, 'sidegrade', 150_000)],
+            [
+                'objective' => $this->objective(SeasonObjective::PROMOTE),
+                'optionalSwaps' => [['part' => 'Gearbox', 'cost' => 150_000]],
+            ],
+        ), 'parts');
+
+        $this->assertSame(
+            'Swap Brakes → L4 (free downgrade), Cooling, optionally Gearbox → L6 (same level)',
+            $line['answer'],
+        );
+        $this->assertSame('$350k', $line['figure']);
+    }
+
+    public function testWithoutPicksThePartsLineIsUnchanged(): void
+    {
+        $replaced = [['part' => 'Engine', 'cost' => 410_000]];
+        $line = $this->line($this->planned(['rows' => $this->rowsReplacing($replaced)]), 'parts');
+
+        $this->assertSame('Swap Engine', $line['answer']);
+        $this->assertSame('$410k', $line['figure']);
+        $this->assertSame('Would break this race if kept', $line['reason']);
+        $this->assertSame('amber', $line['tone']);
     }
 
     /**

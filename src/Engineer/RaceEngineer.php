@@ -35,6 +35,13 @@ final class RaceEngineer
     private const string STAGE_TESTING = 'testing';
     private const string UPGRADES_ANCHOR = '/season#season-upgrades';
 
+    private const array KIND_WORDS = [
+        'free_downgrade' => 'free downgrade',
+        'downgrade' => 'downgrade',
+        'sidegrade' => 'same level',
+        'upgrade' => 'upgrade',
+    ];
+
     /**
      * @return list<Line>
      */
@@ -264,15 +271,16 @@ final class RaceEngineer
         $plan = $in->plan;
         $replaced = $plan === null ? [] : $plan['rows'][0]['replaced'];
         $forced = array_column($plan === null ? $in->wearAdvice['swap'] ?? [] : $replaced, 'part');
-        $forcedSwapCost = $plan === null ? $in->forcedSwapCost : $plan['rows'][0]['repairs'];
+        $forcedSwapCost = $plan === null ? $in->forcedSwapCost : self::pickedCost($in, $replaced);
 
         if ($plan !== null && $plan['mode'] === 'push' && $plan['swaps'] !== []) {
-            return self::line(
-                'parts',
-                'Swap ' . implode(', ', $forced),
+            return self::pickedLine(
+                $in,
+                $forced,
+                'Swap ' . self::swapNames($in, $forced),
                 'Lets you push to CTR ' . $plan['ctr'],
-                '/cockpit#cockpit-wear',
                 Money::short($forcedSwapCost ?? 0),
+                'ink',
             );
         }
 
@@ -283,28 +291,95 @@ final class RaceEngineer
         }
 
         $forcedCost = $forcedSwapCost ?? 0;
-        $total = $forcedCost + array_sum(array_column($optional, 'cost'));
+        $total = $forcedCost + self::pickedCost($in, $optional);
         $figure = $forced !== [] && $forcedSwapCost === null && $optional === [] ? null : Money::short($total);
-        $optionalNames = implode(', ', array_column($optional, 'part'));
+        $optionalParts = array_column($optional, 'part');
+        $optionalNames = self::swapNames($in, $optionalParts);
 
         if ($forced === []) {
-            return self::line(
-                'parts',
+            return self::pickedLine(
+                $in,
+                $optionalParts,
                 'Swap ' . $optionalNames . ' (optional)',
                 'In the red zone, and ' . self::affordClause($in, 'it'),
-                '/cockpit#cockpit-wear',
                 $figure,
+                'ink',
             );
         }
 
         $tone = $plan === null && self::spendable($in) < $forcedCost ? 'red' : 'amber';
-        $answer = 'Swap ' . implode(', ', $forced) . ($optional === [] ? '' : ', optionally ' . $optionalNames);
+        $answer = 'Swap ' . self::swapNames($in, $forced) . ($optional === [] ? '' : ', optionally ' . $optionalNames);
         $reason = $optional === []
             ? self::keptReason($forced, $plan === null ? [] : $in->redZoneSwaps)
             : 'Forced swaps break this race; the optional ones are in the red and '
                 . self::affordClause($in, 'them');
 
+        return self::pickedLine($in, [...$forced, ...$optionalParts], $answer, $reason, $figure, $tone);
+    }
+
+    /**
+     * The parts line, with the reasons of the season picks for $parts after today's reason. A pick that only
+     * had a budget-short option left replaces the reason: that is what the manager has to know.
+     *
+     * @param list<string> $parts
+     * @return Line
+     */
+    private static function pickedLine(
+        EngineerInputs $in,
+        array $parts,
+        string $answer,
+        string $reason,
+        ?string $figure,
+        string $tone,
+    ): array {
+        $reasons = [];
+        foreach ($in->swapPicks as $pick) {
+            if (in_array($pick['part'], $parts, true)) {
+                $reasons[] = $pick['reason'];
+            }
+        }
+        $reasons = array_values(array_unique($reasons));
+
+        if (in_array(SwapLevelPicker::REASONS['budget_short'], $reasons, true)) {
+            $reason = SwapLevelPicker::REASONS['budget_short'];
+            $tone = $tone === 'red' ? 'red' : 'amber';
+        } elseif ($reasons !== []) {
+            $reason .= '; ' . implode('; ', array_map(lcfirst(...), $reasons));
+        }
+
         return self::line('parts', $answer, $reason, '/cockpit#cockpit-wear', $figure, $tone);
+    }
+
+    /**
+     * @param list<string> $parts
+     */
+    private static function swapNames(EngineerInputs $in, array $parts): string
+    {
+        $picks = array_column($in->swapPicks, null, 'part');
+
+        return implode(', ', array_map(static function (string $part) use ($picks): string {
+            $pick = $picks[$part] ?? null;
+
+            return $pick === null
+                ? $part
+                : $part . ' → L' . $pick['level'] . ' (' . (self::KIND_WORDS[$pick['kind']] ?? $pick['kind']) . ')';
+        }, $parts));
+    }
+
+    /**
+     * What the swaps cost now: a part's season pick at its price, any other part at its listed price.
+     *
+     * @param list<array{part: string, cost: int}> $swaps
+     */
+    private static function pickedCost(EngineerInputs $in, array $swaps): int
+    {
+        $picks = array_column($in->swapPicks, 'cost', 'part');
+        $total = 0;
+        foreach ($swaps as $swap) {
+            $total += $picks[$swap['part']] ?? $swap['cost'];
+        }
+
+        return $total;
     }
 
     /**
@@ -567,9 +642,11 @@ final class RaceEngineer
     }
 
     /**
+     * The optional swaps the parts line offers: only under Promote, in order, while the money lasts.
+     *
      * @return list<array{part: string, cost: int}>
      */
-    private static function offeredOptionals(EngineerInputs $in): array
+    public static function offeredOptionals(EngineerInputs $in): array
     {
         if (!self::objectiveIs($in, SeasonObjective::PROMOTE)) {
             return [];

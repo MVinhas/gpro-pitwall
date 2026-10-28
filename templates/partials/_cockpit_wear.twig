@@ -5,8 +5,8 @@
    The replacement options are deliberately inline in the wear table rather
    than behind per-part accordions: with several parts flagged, one open
    accordion per part buried the answer under its own chrome. Each part offers
-   at most one level down / same / one level up, so the whole plan fits on one
-   screen and is picked in place. #}
+   one level down, the same level and the levels above it, so the whole plan
+   fits on one screen and is picked in place. #}
 {% set wear_cls = 'text-slate-700' %}
 {% set wear_txt = 'All OK' %}
 {% if wear_advice.swap is not empty %}
@@ -153,7 +153,7 @@
                 <span class="font-bold">Over budget.</span> This plan costs more than the ${{ cockpit_cash|default(0)|number_format }} you have.
             </p>
             {% embed 'partials/_how.twig' %}{% block how %}
-                <p>Track demand and car attributes use different scales, so only the balance between P, H and A is compared: "96% like the track" means your car's balance is 96% the same as what the track asks for. Options rank by that balance first, then by price; a swap reads "better fit" or "worse fit" once it moves that balance noticeably, otherwise "same fit".</p>
+                <p>Track demand and car attributes use different scales, so only the balance between P, H and A is compared: "96% like the track" means your car's balance is 96% the same as what the track asks for. Options rank by that balance first, then by price; a swap reads "better fit" or "worse fit" once it moves that balance noticeably, otherwise "same fit". When your season plan is known, the pre-selected option is the season pick instead, and the line under the options says why.</p>
             {% endblock %}{% endembed %}
         </div>
     {% endif %}

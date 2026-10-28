@@ -24,6 +24,7 @@ use App\Database\DatabaseSeeder;
 use App\Engineer\CtrCeiling;
 use App\Engineer\CtrPlanner;
 use App\Engineer\SeasonBudget;
+use App\Engineer\SwapLevelPicker;
 use App\Engineer\UpgradeRanker;
 use App\Http\Request;
 use App\Repository\ApiArchiveRepository;
@@ -515,7 +516,12 @@ final class ManualRefreshTest extends TestCase
             new EarlyQualifyingBonusService(RaceWindow::parseDays('2,5')),
             $carWear,
             $wearAdvisor,
-            new PartSwapAdvisorService($carWear, $pha, new PartUpgradeAdvisorService($pha, [])),
+            new PartSwapAdvisorService(
+                $carWear,
+                $pha,
+                new PartUpgradeAdvisorService($pha, []),
+                new SwapLevelPicker(new SeasonBudget($carWear), []),
+            ),
             new TestingProjectionService([], 0.5),
             new SponsorAdvisorService(),
             new TestingTargetsService(),
@@ -544,6 +550,12 @@ final class ManualRefreshTest extends TestCase
                 new BoostFuelService(),
                 $fuel,
                 new UpgradeRanker(new SeasonBudget($carWear), []),
+                new PartSwapAdvisorService(
+                    $carWear,
+                    $pha,
+                    new PartUpgradeAdvisorService($pha, []),
+                    new SwapLevelPicker(new SeasonBudget($carWear), []),
+                ),
             ),
             false,
             $twig,

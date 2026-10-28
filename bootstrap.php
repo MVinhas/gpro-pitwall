@@ -534,6 +534,7 @@ $container['service.race_engineer'] = new \App\Service\RaceEngineerService(
         new \App\Engineer\SeasonBudget($container['service.car_wear']),
         $container['config']['secrets']['part_pha_contribution'] ?? [],
     ),
+    $container['service.swap_advisor'],
 );
 
 $container['controller.page'] = new PageController(

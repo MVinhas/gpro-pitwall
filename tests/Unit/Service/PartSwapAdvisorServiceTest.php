@@ -290,6 +290,44 @@ final class PartSwapAdvisorServiceTest extends TestCase
         $this->assertSame($plain['Engine']['options'], $out['Engine']['options']);
     }
 
+    public function testWithoutASeasonOnlyLevelsWithinOneStepAreRecommended(): void
+    {
+        // Power-hungry track: every Engine level adds power, so L8 fits best, yet without a season plan
+        // the recommendation stays within one level of the current L5.
+        $track = ['power' => 20, 'handling' => 5, 'acceleration' => 5];
+        $car   = ['power' => 80, 'handling' => 90, 'acceleration' => 85];
+        $carData = $this->carData([
+            ['level' => 4, 'wear' => 0, 'cost' => 300_000,   'action' => 4],
+            ['level' => 5, 'wear' => 0, 'cost' => 500_000,   'action' => 5],
+            ['level' => 6, 'wear' => 0, 'cost' => 700_000,   'action' => 6],
+            ['level' => 7, 'wear' => 0, 'cost' => 900_000,   'action' => 7],
+            ['level' => 8, 'wear' => 0, 'cost' => 1_100_000, 'action' => 8],
+        ]);
+
+        $options = $this->svc->advise(
+            $this->flaggedEngine(level: 5),
+            $carData,
+            $this->wearParts(level: 5),
+            [],
+            $track,
+            $car,
+            0,
+            [],
+            10_000_000,
+        )['Engine']['options'];
+
+        $byLevel = array_column($options, null, 'level');
+        $this->assertGreaterThan($byLevel[6]['fit'], $byLevel[8]['fit']);
+        $recommended = array_column(array_filter($options, static fn(array $o): bool => $o['recommended']), 'level');
+        $this->assertCount(1, $recommended);
+        $this->assertContains($recommended[array_key_first($recommended)], [4, 5, 6]);
+        $this->assertTrue($options[0]['recommended']);
+        $this->assertSame([4, 5, 6, 7, 8], (static function (array $l): array {
+            sort($l);
+            return $l;
+        })($this->levels($options)));
+    }
+
     public function testWhenThePickerFindsNothingTheTrackFitRankingStands(): void
     {
         [$track, $car, $carData] = $this->seasonScenario();

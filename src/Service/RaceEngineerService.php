@@ -13,6 +13,8 @@ use App\Engineer\GroupStanding;
 use App\Engineer\RaceEngineer;
 use App\Engineer\SeasonObjective;
 use App\Engineer\SeasonStart;
+use App\Engineer\StrengthFloor;
+use App\Engineer\SwapSeason;
 use App\Engineer\UpgradeRanker;
 use App\Repository\EconomyLedgerRepository;
 use App\Repository\SeasonBudgetRepository;
@@ -40,6 +42,17 @@ use App\Repository\WeekendStateRepository;
  * @phpstan-import-type Risk from EngineerInputs
  * @phpstan-import-type TestingTarget from EngineerInputs
  * @phpstan-import-type WearAdvice from EngineerInputs
+ * @phpstan-import-type SwapPick from EngineerInputs
+ * @phpstan-type Context array{
+ *     season: int,
+ *     raceNb: int,
+ *     cash: int,
+ *     standingsRow: ?array<string, mixed>,
+ *     weekends: list<array<string, mixed>>,
+ *     ledger: list<array<string, mixed>>,
+ *     outlook: array{known: bool, committed: ?int, income: ?int, free_cash: ?int, end_committed: ?int},
+ *     objective: InForce
+ * }
  */
 class RaceEngineerService
 {
@@ -61,6 +74,7 @@ class RaceEngineerService
         private readonly BoostFuelService $boost,
         private readonly FuelModel $fuel,
         private readonly UpgradeRanker $ranker,
+        private readonly PartSwapAdvisorService $swapAdvisor,
     ) {
     }
 
@@ -71,6 +85,96 @@ class RaceEngineerService
      * @return array{objective: InForce, lines: list<Line>, season: int}
      */
     public function forCockpit(int $userId, array $c, bool $stale = false): array
+    {
+        $ctx = $this->context($userId, $c);
+        $objective = $ctx['objective'];
+        $season = $ctx['season'];
+
+        if ($stale) {
+            return ['objective' => $objective, 'lines' => [RaceEngineer::stale()], 'season' => $season];
+        }
+
+        $rounds = $this->rounds($c);
+        $basis = $this->planBasis($ctx['outlook'], $ctx['raceNb'], $rounds, $c);
+        $plan = $basis === null ? null : $this->plan($ctx, $basis);
+        $inputs = $this->inputs(
+            $objective,
+            $ctx['outlook'],
+            $ctx['cash'],
+            $ctx['raceNb'],
+            $ctx['ledger'],
+            $rounds,
+            $plan,
+            $c,
+        );
+
+        if ($plan !== null) {
+            $plan = $this->withUpgrades($plan, $inputs, $objective, $ctx['outlook'], $ctx['cash'], $basis, $c);
+            $inputs = $inputs->withPlan($plan);
+            try {
+                $picks = $this->swapPicks($inputs, $plan, $this->swapSeasonFrom($ctx, $plan, $basis, $c), $c);
+            } catch (\Throwable $e) {
+                // The picks only name a level; the parts line keeps its wording without them.
+                error_log('[Engineer] ' . $e::class);
+                $picks = [];
+            }
+            if ($picks !== []) {
+                $plan['swap_picks'] = $picks;
+                $inputs = $inputs->withPlan($plan)->withSwapPicks($picks);
+            }
+            try {
+                $this->budgets->save($userId, $season, $ctx['raceNb'], $plan);
+            } catch (\Throwable $e) {
+                // Saving only feeds the Season screen; the advice stands without it.
+                error_log('[Engineer] ' . $e::class);
+            }
+        }
+
+        $lines = RaceEngineer::brief($inputs);
+
+        return ['objective' => $objective, 'lines' => $lines, 'season' => $season];
+    }
+
+    /**
+     * The season a swap is judged over, built the way the engineer builds its plan but never saved. Null when
+     * the plan can't be built (costs, calendar or next-race wear unknown).
+     *
+     * @param array<string, mixed> $c Cockpit's already-computed values
+     */
+    public function swapSeason(int $userId, array $c): ?SwapSeason
+    {
+        $ctx = $this->context($userId, $c);
+        $basis = $this->planBasis($ctx['outlook'], $ctx['raceNb'], $this->rounds($c), $c);
+        if ($basis === null) {
+            return null;
+        }
+
+        return $this->swapSeasonFrom($ctx, $this->plan($ctx, $basis), $basis, $c);
+    }
+
+    public function pin(int $userId, int $season, string $value): bool
+    {
+        if ($value === self::AUTO) {
+            $this->pins->clear($userId, $season);
+
+            return true;
+        }
+        if (!in_array($value, self::PINNABLE, true)) {
+            return false;
+        }
+
+        $this->pins->save($userId, $season, $value);
+
+        return true;
+    }
+
+    /**
+     * What the engineer knows before it plans: the race, the cash, the stored season and the objective in force.
+     *
+     * @param array<string, mixed> $c
+     * @return Context
+     */
+    private function context(int $userId, array $c): array
     {
         $office = self::arr($c['office'] ?? null);
         $menu = self::arr($c['menu'] ?? null);
@@ -99,47 +203,125 @@ class RaceEngineerService
             GroupStanding::car(self::arr($c['money_levels'] ?? null), $menu)['rank'] ?? null,
             ($c['division'] ?? null) === 'Elite',
         );
-        $objective = SeasonObjective::inForce($proposal, $this->pins->find($userId, $season));
 
-        if ($stale) {
-            return ['objective' => $objective, 'lines' => [RaceEngineer::stale()], 'season' => $season];
-        }
-
-        $rounds = $this->rounds($c);
-        $basis = $this->planBasis($outlook, $raceNb, $rounds, $c);
-        $plan = $basis === null ? null : $this->plan($objective, $outlook, $cash, $basis, $seasonLedger, $weekends);
-        $inputs = $this->inputs($objective, $outlook, $cash, $raceNb, $seasonLedger, $rounds, $plan, $c);
-
-        if ($plan !== null) {
-            $plan = $this->withUpgrades($plan, $inputs, $objective, $outlook, $cash, $basis, $c);
-            $inputs = $inputs->withPlan($plan);
-            try {
-                $this->budgets->save($userId, $season, $raceNb, $plan);
-            } catch (\Throwable $e) {
-                // Saving only feeds the Season screen; the advice stands without it.
-                error_log('[Engineer] ' . $e::class);
-            }
-        }
-
-        $lines = RaceEngineer::brief($inputs);
-
-        return ['objective' => $objective, 'lines' => $lines, 'season' => $season];
+        return [
+            'season' => $season,
+            'raceNb' => $raceNb,
+            'cash' => $cash,
+            'standingsRow' => $standingsRow,
+            'weekends' => $weekends,
+            'ledger' => $seasonLedger,
+            'outlook' => $outlook,
+            'objective' => SeasonObjective::inForce($proposal, $this->pins->find($userId, $season)),
+        ];
     }
 
-    public function pin(int $userId, int $season, string $value): bool
+    /**
+     * @param Context $ctx
+     * @param Plan $plan
+     * @param PlanBasis $basis
+     * @param array<string, mixed> $c
+     */
+    private function swapSeasonFrom(array $ctx, array $plan, array $basis, array $c): SwapSeason
     {
-        if ($value === self::AUTO) {
-            $this->pins->clear($userId, $season);
+        return new SwapSeason(
+            $ctx['objective']['objective'] ?? SeasonObjective::HOLD,
+            $plan,
+            $basis['rounds'],
+            $this->demands($c),
+            $basis['parts'],
+            $basis['prices'],
+            $basis['driverFactor'],
+            $ctx['cash'],
+            (int) $ctx['outlook']['committed'],
+            (int) $ctx['outlook']['income'],
+            StrengthFloor::fromGroup(
+                GroupStanding::car(self::arr($c['money_levels'] ?? null), self::arr($c['menu'] ?? null)),
+                SeasonObjective::relegationLine($ctx['standingsRow']),
+            ),
+        );
+    }
 
-            return true;
+    /**
+     * The season-long level for each part the plan replaces before the next race and each optional swap the
+     * parts line offers, judged at the plan's CTR. A part the picker can't judge is left out.
+     *
+     * @param Plan $plan
+     * @param array<string, mixed> $c
+     * @return list<SwapPick>
+     */
+    private function swapPicks(EngineerInputs $inputs, array $plan, SwapSeason $season, array $c): array
+    {
+        $parts = $this->wearParts($c);
+        $trackPha = self::pha($c['track_pha'] ?? null);
+        $carPha = self::pha($c['car_pha'] ?? null);
+        if ($parts === null || $trackPha === null || $carPha === null) {
+            return [];
         }
-        if (!in_array($value, self::PINNABLE, true)) {
-            return false;
+
+        $adviseParts = [];
+        foreach ($parts as $label => $part) {
+            $start = (int) $part['start'];
+            $end = $this->endAt($part, $season->driverFactor, $plan['ctr']);
+            $adviseParts[(string) $label] = [
+                'level' => (int) $part['level'],
+                'start' => $start,
+                'est' => $end - $start,
+                'end' => $end,
+                'track_base' => (float) $part['track_base'],
+            ];
+        }
+        $names = array_unique([
+            ...array_column($plan['rows'][0]['replaced'], 'part'),
+            ...array_column(RaceEngineer::offeredOptionals($inputs), 'part'),
+        ]);
+        $flagged = [];
+        foreach ($names as $name) {
+            $part = $adviseParts[$name] ?? null;
+            if ($part !== null) {
+                $flagged[] = [
+                    'part' => $name,
+                    'level' => $part['level'],
+                    'start' => $part['start'],
+                    'est' => $part['est'],
+                    'end' => $part['end'],
+                ];
+            }
+        }
+        if ($flagged === []) {
+            return [];
         }
 
-        $this->pins->save($userId, $season, $value);
+        $advice = $this->swapAdvisor->advise(
+            $flagged,
+            self::arr($c['car'] ?? null),
+            $adviseParts,
+            self::arr($c['driver'] ?? null),
+            $trackPha,
+            $carPha,
+            $plan['ctr'],
+            self::ints($c['group_car_levels'] ?? null),
+            $season->cash,
+            self::floats($c['training_wear'] ?? null),
+            $season,
+        );
 
-        return true;
+        $picks = [];
+        foreach ($advice as $label => $entry) {
+            $option = $entry['options'][0] ?? null;
+            if (!$entry['season'] || $option === null) {
+                continue;
+            }
+            $picks[] = [
+                'part' => (string) $label,
+                'level' => $option['level'],
+                'kind' => $option['kind'],
+                'cost' => $option['cost'],
+                'reason' => (string) $entry['season_reason'],
+            ];
+        }
+
+        return $picks;
     }
 
     /**
@@ -347,31 +529,22 @@ class RaceEngineerService
     }
 
     /**
-     * @param InForce $objective
-     * @param array{known: bool, committed: ?int, income: ?int, free_cash: ?int, end_committed: ?int} $outlook
+     * @param Context $ctx
      * @param PlanBasis $basis
-     * @param list<array<string, mixed>> $seasonLedger
-     * @param list<array<string, mixed>> $weekends
      * @return Plan
      */
-    private function plan(
-        array $objective,
-        array $outlook,
-        int $cash,
-        array $basis,
-        array $seasonLedger,
-        array $weekends,
-    ): array {
+    private function plan(array $ctx, array $basis): array
+    {
         return $this->ctrPlanner->plan(
-            $objective['objective'] ?? SeasonObjective::HOLD,
+            $ctx['objective']['objective'] ?? SeasonObjective::HOLD,
             $basis['rounds'],
             $basis['parts'],
             $basis['prices'],
             $basis['driverFactor'],
-            $cash,
-            (int) $outlook['committed'],
-            (int) $outlook['income'],
-            SeasonStart::cash($seasonLedger, $weekends),
+            $ctx['cash'],
+            (int) $ctx['outlook']['committed'],
+            (int) $ctx['outlook']['income'],
+            SeasonStart::cash($ctx['ledger'], $ctx['weekends']),
         );
     }
 
@@ -649,6 +822,48 @@ class RaceEngineerService
     {
         /** @var list<array<string, mixed>> */
         return is_array($value) ? array_values(array_filter($value, 'is_array')) : [];
+    }
+
+    /**
+     * @return ?array{power: float, handling: float, acceleration: float}
+     */
+    private static function pha(mixed $value): ?array
+    {
+        if (!is_array($value)) {
+            return null;
+        }
+        $out = [];
+        foreach (['power', 'handling', 'acceleration'] as $key) {
+            if (!is_numeric($value[$key] ?? null)) {
+                return null;
+            }
+            $out[$key] = (float) $value[$key];
+        }
+
+        return $out;
+    }
+
+    /**
+     * @return list<int>
+     */
+    private static function ints(mixed $value): array
+    {
+        return is_array($value) ? array_values(array_map(intval(...), array_filter($value, is_numeric(...)))) : [];
+    }
+
+    /**
+     * @return array<string, float>
+     */
+    private static function floats(mixed $value): array
+    {
+        $out = [];
+        foreach (is_array($value) ? $value : [] as $key => $number) {
+            if (is_numeric($number)) {
+                $out[(string) $key] = (float) $number;
+            }
+        }
+
+        return $out;
     }
 
     private static function stringOrNull(mixed $value): ?string

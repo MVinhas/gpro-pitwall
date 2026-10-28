@@ -44,7 +44,9 @@ use App\Engineer\SwapSeason;
  *
  * `options[0]` is the recommendation, and it is what the UI pre-selects: the
  * advisor is only ever handed parts that cannot finish the race, so there is
- * no do-nothing option to weigh it against.
+ * no do-nothing option to weigh it against. Without a season the
+ * recommendation stays within one level of the current part; higher levels
+ * are listed but never pre-selected.
  *
  * Given a season, the `SwapLevelPicker` chooses instead — judged over the rest
  * of the season rather than this race — from the options that survived the
@@ -86,6 +88,9 @@ final class PartSwapAdvisorService
 
     /** How far below the current level a replacement may go. */
     private const int LEVELS_DOWN = 1;
+
+    /** How far above the current level a pick may go without a season plan. */
+    private const int LEVELS_UP_UNPLANNED = 1;
 
     /**
      * Alignment-score granularity for ranking, in points. Differences finer
@@ -197,7 +202,7 @@ final class PartSwapAdvisorService
                 )
                 : null;
             if ($pick !== null) {
-                $options = $this->withSeasonPick($options, $pick['level']);
+                $options = $this->withPick($options, $pick['level'], 'season');
             }
 
             $out[$part] = [
@@ -400,20 +405,20 @@ final class PartSwapAdvisorService
     }
 
     /**
-     * Recommends the picked level and puts it first; everyone else keeps their
-     * track-fit order.
+     * Recommends the picked level (none when null) and puts it first; everyone
+     * else keeps their track-fit order.
      *
      * @param list<SwapOption> $options
      * @return list<SwapOption>
      */
-    private function withSeasonPick(array $options, int $level): array
+    private function withPick(array $options, ?int $level, string $reason): array
     {
         $picked = [];
         $rest   = [];
         foreach ($options as $option) {
             $isPick = $option['level'] === $level;
             $option['recommended']      = $isPick;
-            $option['recommend_reason'] = $isPick ? 'season' : '';
+            $option['recommend_reason'] = $isPick ? $reason : '';
             if ($isPick) {
                 $picked[] = $option;
             } else {
@@ -461,24 +466,28 @@ final class PartSwapAdvisorService
     }
 
     /**
-     * Marks the ranked leader, and records whether it led on alignment or
-     * merely on price — only a strictly better alignment band is a fit win.
+     * Marks the ranked leader among the levels within one step of the current
+     * one, and records whether it led on alignment or merely on price — only a
+     * strictly better alignment band is a fit win. A bigger jump is a season
+     * decision, so without a season plan it is listed but never pre-selected.
      *
      * @param list<SwapOption> $options
      * @return list<SwapOption>
      */
     private function flagChoices(array $options): array
     {
-        $reason = count($options) > 1 && $this->fitBand($options[0]) > $this->fitBand($options[1])
+        $near = array_values(array_filter(
+            $options,
+            static fn(array $o): bool => abs($o['delta']) <= self::LEVELS_UP_UNPLANNED,
+        ));
+        if ($near === []) {
+            return $this->withPick($options, null, '');
+        }
+        $reason = count($near) > 1 && $this->fitBand($near[0]) > $this->fitBand($near[1])
             ? 'fit'
             : 'value';
 
-        foreach ($options as $i => $_) {
-            $options[$i]['recommended']      = $i === 0;
-            $options[$i]['recommend_reason'] = $i === 0 ? $reason : '';
-        }
-
-        return $options;
+        return $this->withPick($options, $near[0]['level'], $reason);
     }
 
     /**
