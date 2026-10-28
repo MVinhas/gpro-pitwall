@@ -7,8 +7,6 @@ namespace App\Tests\Unit\Service;
 use App\Cache\Adapter\FilesystemCache;
 use App\Service\GproApiClient;
 use App\Service\GproApiFetcher;
-use App\Support\RaceWindow;
-use DateTimeImmutable;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -187,78 +185,47 @@ final class GproApiClientTest extends TestCase
     }
 
     /**
-     * Race-critical data (car, setup, next-track profile) is namespaced by the
-     * current race window so it auto-rolls each race weekend. Proves the read
-     * resolves the windowed key, not the bare one. Default schedule (Tue/Fri,
-     * midnight UK) is pinned via env so client and test agree on the window.
+     * Race-critical data (car, setup, next-track profile) lives under one
+     * un-windowed key that each sync overwrites, so a new race weekend still
+     * reads the newest payload instead of rolling to an empty key. A stale
+     * windowed key from an older release is ignored.
      */
-    public function testCarDataReadsFromTheRaceWindowedKey(): void
+    public function testCarDataReadsTheUnwindowedKeyWhateverTheRaceWindow(): void
     {
-        $prev = $_ENV['GPRO_RACE_DAYS'] ?? null;
-        $_ENV['GPRO_RACE_DAYS'] = '2,5';
+        $scope = 'u' . GproApiClient::scopeFor('token-a') . ':';
+        $this->cache->set($scope . 'car_data', ['carClass' => 7], 3600);
+        $this->cache->set($scope . 'car_data:w2026-10-23', ['carClass' => 1], 3600);
 
-        try {
-            $window = RaceWindow::idFor(new DateTimeImmutable('now'), [2, 5], 0, 'Europe/London');
-            $windowedKey = 'u' . GproApiClient::scopeFor('token-a') . ':car_data:w' . $window;
-            $this->cache->set($windowedKey, ['carClass' => 7], 3600);
+        $client = $this->client();
+        $client->setToken('token-a');
 
-            // The bare (un-windowed) key must be ignored — only the windowed
-            // one counts, otherwise stale pre-roll data would leak through.
-            $this->cache->set('u' . GproApiClient::scopeFor('token-a') . ':car_data', ['carClass' => 1], 3600);
-
-            $client = $this->client();
-            $client->setToken('token-a');
-
-            // Cache hit on the windowed key short-circuits before any HTTP
-            // (the fetcher points at an unreachable host).
-            $this->assertSame(7, $client->getCarData()['carClass']);
-        } finally {
-            if ($prev === null) {
-                unset($_ENV['GPRO_RACE_DAYS']);
-            } else {
-                $_ENV['GPRO_RACE_DAYS'] = $prev;
-            }
-        }
+        // Cache hit short-circuits before any HTTP (the fetcher points at an
+        // unreachable host).
+        $this->assertSame(7, $client->getCarData()['carClass']);
     }
 
     /**
      * Seeds every payload the screens read straight after a sync, under the
-     * same keys the client uses (race-critical ones carry the window suffix).
+     * same keys the client uses.
      *
      * @param list<string> $skip base keys to leave out
      */
     private function seedWarm(string $token, string $driId = '30357', array $skip = []): void
     {
         $scope = 'u' . GproApiClient::scopeFor($token) . ':';
-        $window = ':w' . RaceWindow::idFor(new DateTimeImmutable('now'), [2, 5], 0, 'Europe/London');
         $keys = [
             'office_data'       => $scope . 'office_data',
             'calendar'          => $scope . 'calendar',
             'driver_profile'    => $scope . 'driver_profile_' . $driId,
-            'car_data'          => $scope . 'car_data' . $window,
-            'race_setup'        => $scope . 'race_setup' . $window,
-            'next_race_profile' => $scope . 'next_race_profile' . $window,
+            'car_data'          => $scope . 'car_data',
+            'race_setup'        => $scope . 'race_setup',
+            'next_race_profile' => $scope . 'next_race_profile',
         ];
         foreach ($keys as $name => $key) {
             if (in_array($name, $skip, true)) {
                 continue;
             }
             $this->cache->set($key, $name === 'office_data' ? ['driId' => $driId] : ['x' => 1], 3600);
-        }
-    }
-
-    private function withRaceDays(callable $test): void
-    {
-        $prev = $_ENV['GPRO_RACE_DAYS'] ?? null;
-        $_ENV['GPRO_RACE_DAYS'] = '2,5';
-        try {
-            $test();
-        } finally {
-            if ($prev === null) {
-                unset($_ENV['GPRO_RACE_DAYS']);
-            } else {
-                $_ENV['GPRO_RACE_DAYS'] = $prev;
-            }
         }
     }
 
@@ -272,58 +239,46 @@ final class GproApiClientTest extends TestCase
 
     public function testIsWarmIsTrueOnceASyncHasCachedEveryScreenPayload(): void
     {
-        $this->withRaceDays(function (): void {
-            $this->seedWarm('token-a');
-            $client = $this->client();
-            $client->setToken('token-a');
+        $this->seedWarm('token-a');
+        $client = $this->client();
+        $client->setToken('token-a');
 
-            $this->assertTrue($client->isWarm());
-        });
+        $this->assertTrue($client->isWarm());
     }
 
-    public function testIsWarmIsFalseWhenARaceCriticalPayloadRolledOver(): void
+    public function testIsWarmIsFalseWhenARaceCriticalPayloadIsMissing(): void
     {
-        // A new race window opened: the windowed car key is a miss even though
-        // everything else is still cached, so the next screen would fetch.
-        $this->withRaceDays(function (): void {
-            $this->seedWarm('token-a', skip: ['car_data']);
-            $client = $this->client();
-            $client->setToken('token-a');
+        $this->seedWarm('token-a', skip: ['car_data']);
+        $client = $this->client();
+        $client->setToken('token-a');
 
-            $this->assertFalse($client->isWarm());
-        });
+        $this->assertFalse($client->isWarm());
     }
 
     public function testIsWarmIsFalseWhenTheDriverProfileIsMissing(): void
     {
-        $this->withRaceDays(function (): void {
-            $this->seedWarm('token-a', skip: ['driver_profile']);
-            $client = $this->client();
-            $client->setToken('token-a');
+        $this->seedWarm('token-a', skip: ['driver_profile']);
+        $client = $this->client();
+        $client->setToken('token-a');
 
-            $this->assertFalse($client->isWarm());
-        });
+        $this->assertFalse($client->isWarm());
     }
 
     public function testIsWarmNeedsNoDriverProfileWithoutADriverUnderContract(): void
     {
-        $this->withRaceDays(function (): void {
-            $this->seedWarm('token-a', driId: '', skip: ['driver_profile']);
-            $client = $this->client();
-            $client->setToken('token-a');
+        $this->seedWarm('token-a', driId: '', skip: ['driver_profile']);
+        $client = $this->client();
+        $client->setToken('token-a');
 
-            $this->assertTrue($client->isWarm());
-        });
+        $this->assertTrue($client->isWarm());
     }
 
     public function testIsWarmIsScopedToTheToken(): void
     {
-        $this->withRaceDays(function (): void {
-            $this->seedWarm('token-a');
-            $client = $this->client();
-            $client->setToken('token-b');
+        $this->seedWarm('token-a');
+        $client = $this->client();
+        $client->setToken('token-b');
 
-            $this->assertFalse($client->isWarm());
-        });
+        $this->assertFalse($client->isWarm());
     }
 }

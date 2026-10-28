@@ -202,7 +202,18 @@ final class HarvestServiceTest extends TestCase
             new EndpointFetcher($this->client),
             new SyncPlanner(),
         );
-        $this->assertSame('synced', $sync->sync(self::USER, SyncPlanner::MODE_LOGIN)->status);
+        $outcome = $sync->sync(self::USER, SyncPlanner::MODE_LOGIN);
+        $this->assertSame('synced', $outcome->status);
+    }
+
+    /**
+     * One slice owed by a Re-sync, so it may spend calls.
+     *
+     * @param array<string, mixed> $user
+     */
+    private function slice(HarvestService $harvest, array $user = self::USER): HarvestResult
+    {
+        return $harvest->runSlice($user, true);
     }
 
     /**
@@ -245,7 +256,7 @@ final class HarvestServiceTest extends TestCase
     {
         $this->userAtANewRace();
 
-        $result = $this->harvest()->runSlice(self::USER);
+        $result = $this->slice($this->harvest());
 
         $this->assertInstanceOf(HarvestResult::class, $result);
         $this->assertSame(
@@ -261,14 +272,57 @@ final class HarvestServiceTest extends TestCase
         $this->assertSame(27, (int) $this->db->query('SELECT driver_age FROM race_telemetry')->fetchColumn());
     }
 
+    public function testWithoutAClickTheHarvestSpendsNothing(): void
+    {
+        $this->userAtANewRace();
+
+        $result = $this->harvest()->runSlice(self::USER, false);
+
+        $this->assertSame(0, $result->calls);
+        $this->assertSame([], $this->gpro->requests);
+        $this->assertGreaterThanOrEqual(1, $result->projected, 'pending projections are still projected');
+        $marks = array_filter(
+            array_keys($this->store->store),
+            static fn (string $k): bool => str_contains($k, 'harvest_failed') || str_contains($k, 'analysis_attempt'),
+        );
+        $this->assertSame([], $marks, 'a fetch never made leaves no mark');
+    }
+
+    public function testAClickLetsTheHarvestFetch(): void
+    {
+        $this->userAtANewRace();
+
+        $result = $this->harvest()->runSlice(self::USER, true);
+
+        $this->assertSame(HarvestService::MAX_CALLS, $result->calls);
+        $this->assertSame(['RaceAnalysis', 'Standings', 'EconomyHistory?Page=1&show=table'], $this->gpro->requests);
+        $this->gpro->calls = [];
+        $this->assertSame([], $this->client->getGroupStaff(), 'the gate is closed again after the slice');
+        $this->assertSame([], $this->gpro->calls);
+    }
+
+    public function testIsDueIgnoresApiWorkWithoutAClick(): void
+    {
+        $this->userAtANewRace();
+        $harvest = $this->harvest();
+        // Settle what the two syncs left to project, so only API work remains.
+        $harvest->runSlice(self::USER, false);
+        $this->settle();
+
+        $this->assertFalse($harvest->isDue(self::USER, false));
+        $this->assertTrue($harvest->isDue(self::USER, true));
+        $this->assertFalse($harvest->isDueSafely(self::USER, false));
+        $this->assertSame([], $this->gpro->requests);
+    }
+
     public function testTheNextSlicesFinishThePhaseTwoWorkAndThenThereIsNothingLeft(): void
     {
         $this->userAtANewRace();
         $harvest = $this->harvest();
-        $harvest->runSlice(self::USER);
+        $this->slice($harvest);
         $this->settle();
 
-        $second = $harvest->runSlice(self::USER);
+        $second = $this->slice($harvest);
 
         $this->assertSame(
             ['ViewStaff', 'SFHistory?season=106', 'CCPHistory?season=106'],
@@ -278,20 +332,20 @@ final class HarvestServiceTest extends TestCase
         $this->settle();
 
         $this->gpro->requests = [];
-        $third = $harvest->runSlice(self::USER);
+        $third = $this->slice($harvest);
 
         $this->assertSame('done', $third->status);
         $this->assertSame(0, $third->calls);
         $this->assertSame(0, $third->projected);
         $this->assertSame([], $this->gpro->requests);
-        $this->assertFalse($harvest->isDue(self::USER));
+        $this->assertFalse($harvest->isDue(self::USER, true));
     }
 
     public function testAManagerWithoutATdFeedsTelemetryNoTd(): void
     {
         $this->userAtANewRace(['tdId' => '']);
 
-        $this->harvest()->runSlice(self::USER);
+        $this->slice($this->harvest());
 
         $this->assertSame(0, (int) $this->db->query('SELECT has_td FROM race_telemetry')->fetchColumn());
     }
@@ -300,7 +354,7 @@ final class HarvestServiceTest extends TestCase
     {
         $this->userAtANewRace(['driId' => '999']);
 
-        $this->harvest()->runSlice(self::USER);
+        $this->slice($this->harvest());
 
         $this->assertNull($this->db->query('SELECT driver_age FROM race_telemetry')->fetchColumn() ?: null);
     }
@@ -309,7 +363,7 @@ final class HarvestServiceTest extends TestCase
     {
         $this->userAtANewRace();
 
-        $result = $this->harvest()->runSlice(self::USER);
+        $result = $this->slice($this->harvest());
 
         $this->assertSame(3, $result->calls);
         $this->assertCount(3, $this->gpro->requests);
@@ -319,7 +373,7 @@ final class HarvestServiceTest extends TestCase
     {
         $this->userAtANewRace();
 
-        $result = $this->harvest($this->throttle(burst: 0.5, rate: 0.001))->runSlice(self::USER);
+        $result = $this->slice($this->harvest($this->throttle(burst: 0.5, rate: 0.001)));
 
         $this->assertSame('busy', $result->status);
         $this->assertSame(0, $result->calls);
@@ -332,7 +386,7 @@ final class HarvestServiceTest extends TestCase
         $throttle = $this->throttle(burst: 1.0, rate: 0.0001);
         $this->gpro->onRequest = static fn (): float => $throttle->reserve(microtime(true));
 
-        $result = $this->harvest($throttle)->runSlice(self::USER);
+        $result = $this->slice($this->harvest($throttle));
 
         $this->assertSame('more', $result->status);
         $this->assertSame(1, $result->calls);
@@ -345,7 +399,7 @@ final class HarvestServiceTest extends TestCase
         $this->userAtANewRace();
         $this->cache->set('sync_lock_1', time(), 60);
 
-        $result = $this->harvest()->runSlice(self::USER);
+        $result = $this->slice($this->harvest());
 
         $this->assertSame('locked', $result->status);
         $this->assertSame(0, $result->calls);
@@ -359,11 +413,11 @@ final class HarvestServiceTest extends TestCase
         $this->cache->set('harvest_lock_1', time(), 60);
         $harvest = $this->harvest();
 
-        $this->assertSame('locked', $harvest->runSlice(self::USER)->status);
+        $this->assertSame('locked', $this->slice($harvest)->status);
         $this->assertSame([], $this->gpro->requests);
 
         $this->cache->delete('harvest_lock_1');
-        $harvest->runSlice(self::USER);
+        $this->slice($harvest);
         $this->assertFalse($this->cache->has('harvest_lock_1'));
     }
 
@@ -372,19 +426,22 @@ final class HarvestServiceTest extends TestCase
         $this->userAtANewRace();
         $this->cache->delete($this->scopeKey('api_requests_remaining'));
 
-        $result = $this->harvest()->runSlice(self::USER);
+        $result = $this->slice($this->harvest());
 
         $this->assertSame(0, $result->calls);
         $this->assertSame([], $this->gpro->requests);
         $this->assertGreaterThanOrEqual(1, $result->projected);
     }
 
-    public function testWithoutACachedOfficeASliceOnlyProjects(): void
+    public function testWithoutAStoredOfficeASliceOnlyProjects(): void
     {
         $this->userAtANewRace();
+        // A cache miss now reads the newest archived page office, so "no office"
+        // means neither the cache nor that row holds one.
         $this->cache->delete($this->scopeKey('office_data'));
+        $this->db->exec("DELETE FROM user_api_archive WHERE endpoint = 'office' AND params = ''");
 
-        $result = $this->harvest()->runSlice(self::USER);
+        $result = $this->slice($this->harvest());
 
         $this->assertSame(0, $result->calls);
         $this->assertSame([], $this->gpro->requests);
@@ -399,15 +456,15 @@ final class HarvestServiceTest extends TestCase
         }
         $harvest = $this->harvest();
 
-        $first = $harvest->runSlice(self::USER);
+        $first = $this->slice($harvest);
 
         $this->assertSame(0, $first->calls);
         $this->assertSame(5, $first->projected);
         $this->assertSame('more', $first->status);
-        $this->assertTrue($harvest->isDue(self::USER));
+        $this->assertTrue($harvest->isDue(self::USER, true));
         $this->settle();
 
-        $second = $harvest->runSlice(self::USER);
+        $second = $this->slice($harvest);
 
         $this->assertSame(3, $second->projected);
         $this->assertSame('done', $second->status);
@@ -443,7 +500,7 @@ final class HarvestServiceTest extends TestCase
     {
         $this->userWithOnlyBackfillLeft();
 
-        $result = $this->harvest()->runSlice(self::USER);
+        $result = $this->slice($this->harvest());
 
         $this->assertSame(3, $result->calls);
         $this->assertSame('more', $result->status);
@@ -460,7 +517,7 @@ final class HarvestServiceTest extends TestCase
 
         $perSlice = [];
         for ($i = 0; $i < 10; $i++) {
-            $result = $harvest->runSlice(self::USER);
+            $result = $this->slice($harvest);
             $perSlice[] = $result->calls;
             $this->settle();
             if ($result->status === 'done') {
@@ -486,7 +543,7 @@ final class HarvestServiceTest extends TestCase
             $this->history()->archive(1, array_merge($this->gpro->analysis, ['selRaceNb' => $race]));
         }
 
-        $this->harvest()->runSlice(self::USER);
+        $this->slice($this->harvest());
 
         $this->assertSame(
             ['RaceAnalysis?SR=107,4', 'RaceAnalysis?SR=107,5', 'RaceAnalysis?SR=107,6'],
@@ -504,7 +561,7 @@ final class HarvestServiceTest extends TestCase
         $this->archive->put(1, $scope, 'office', '', 'w2', 107, 2, $this->gpro->office);
         $this->archive->put(1, $scope, 'TDProfile', '', 'w2', 107, 2, $this->gpro->td);
 
-        $result = $this->harvest()->runSlice(self::USER);
+        $result = $this->slice($this->harvest());
 
         $this->assertSame(
             ['RaceAnalysis?SR=107,1', 'RaceAnalysis?SR=107,2', 'RaceAnalysis?SR=107,4'],
@@ -528,7 +585,7 @@ final class HarvestServiceTest extends TestCase
         $this->userAtANewRace();
         $this->db->exec("DELETE FROM user_api_archive WHERE endpoint = 'TDProfile'");
 
-        $this->harvest()->runSlice(self::USER);
+        $this->slice($this->harvest());
 
         $this->assertSame(0, $this->rows('race_telemetry'));
         $this->assertSame(1, $this->rows('user_race_history'));
@@ -542,7 +599,7 @@ final class HarvestServiceTest extends TestCase
             $this->client->addBackfill();
         }
 
-        $result = $this->harvest()->runSlice(self::USER);
+        $result = $this->slice($this->harvest());
 
         $this->assertSame(0, $result->calls);
         $this->assertSame('done', $result->status);
@@ -556,7 +613,7 @@ final class HarvestServiceTest extends TestCase
 
         $statuses = [];
         for ($i = 0; $i < 4; $i++) {
-            $statuses[] = $harvest->runSlice(self::USER)->status;
+            $statuses[] = $this->slice($harvest)->status;
             $this->settle();
         }
 
@@ -575,7 +632,7 @@ final class HarvestServiceTest extends TestCase
         $harvest = $this->harvest();
         ini_set('error_log', $log);
 
-        $result = $harvest->runSlice(self::USER);
+        $result = $this->slice($harvest);
         $this->silenceLog();
         $lines = (string) file_get_contents($log);
         @unlink($log);
@@ -589,7 +646,7 @@ final class HarvestServiceTest extends TestCase
 
     public function testAUserWithoutATokenHasNothingToHarvest(): void
     {
-        $result = $this->harvest()->runSlice(['id' => 1, 'api_token' => '']);
+        $result = $this->slice($this->harvest(), ['id' => 1, 'api_token' => '']);
 
         $this->assertSame('done', $result->status);
         $this->assertSame(0, $result->calls);
@@ -601,7 +658,7 @@ final class HarvestServiceTest extends TestCase
         $this->userAtANewRace();
         $harvest = $this->harvest();
 
-        $this->assertTrue($harvest->isDue(self::USER));
+        $this->assertTrue($harvest->isDue(self::USER, true));
         $this->assertSame([], $this->gpro->requests, 'isDue never calls the API');
     }
 
@@ -609,10 +666,10 @@ final class HarvestServiceTest extends TestCase
     {
         $this->userAtANewRace();
         $harvest = $this->harvest();
-        $this->assertTrue($harvest->isDueSafely(self::USER));
+        $this->assertTrue($harvest->isDueSafely(self::USER, true));
         $this->db->exec('DROP TABLE user_api_archive');
 
-        $this->assertFalse($harvest->isDueSafely(self::USER));
+        $this->assertFalse($harvest->isDueSafely(self::USER, true));
         $this->assertStringContainsString('[Harvest] isDue failed: PDOException', (string) file_get_contents($this->quietLog));
         $this->assertStringNotContainsString('SQLSTATE', (string) file_get_contents($this->quietLog));
     }
@@ -622,12 +679,12 @@ final class HarvestServiceTest extends TestCase
         $this->userAtANewRace();
         $harvest = $this->harvest();
         // Pending projections exist, so clear them first.
-        $harvest->runSlice(self::USER);
-        $harvest->runSlice(self::USER);
+        $this->slice($harvest);
+        $this->slice($harvest);
         $this->settle();
         $this->cache->delete($this->scopeKey('api_requests_remaining'));
 
-        $this->assertFalse($harvest->isDue(self::USER));
+        $this->assertFalse($harvest->isDue(self::USER, true));
     }
 
     public function testFetchesThatFailAreRememberedForAnHourSoLaterEntriesAreNotStarved(): void
@@ -636,14 +693,14 @@ final class HarvestServiceTest extends TestCase
         $this->gpro->failing = ['RaceAnalysis', 'Standings', 'EconomyHistory'];
         $harvest = $this->harvest();
 
-        $first = $harvest->runSlice(self::USER);
+        $first = $this->slice($harvest);
 
         $this->assertSame(3, $first->calls);
         $this->assertSame('more', $first->status);
         $this->settle();
         $this->gpro->requests = [];
 
-        $second = $harvest->runSlice(self::USER);
+        $second = $this->slice($harvest);
 
         $this->assertSame(
             ['ViewStaff', 'SFHistory?season=106', 'CCPHistory?season=106'],
@@ -653,11 +710,11 @@ final class HarvestServiceTest extends TestCase
         $this->settle();
         $this->gpro->requests = [];
 
-        $third = $harvest->runSlice(self::USER);
+        $third = $this->slice($harvest);
 
         $this->assertSame('done', $third->status);
         $this->assertSame(0, $third->calls);
-        $this->assertFalse($harvest->isDue(self::USER));
+        $this->assertFalse($harvest->isDue(self::USER, true));
         $failedKeys = array_filter(array_keys($this->store->store), static fn (string $k): bool => str_contains($k, 'harvest_failed'));
         $this->assertCount(3, $failedKeys);
         foreach ($failedKeys as $key) {
@@ -668,10 +725,10 @@ final class HarvestServiceTest extends TestCase
         foreach ($failedKeys as $key) {
             $this->cache->delete($key);
         }
-        $this->assertTrue($harvest->isDue(self::USER));
+        $this->assertTrue($harvest->isDue(self::USER, true));
         $this->gpro->failing = [];
 
-        $fourth = $harvest->runSlice(self::USER);
+        $fourth = $this->slice($harvest);
 
         // The analysis of a race that is over counts as asked once it was, so only the other two return.
         $this->assertSame(2, $fourth->calls);
@@ -685,7 +742,7 @@ final class HarvestServiceTest extends TestCase
         $this->now = new \DateTimeImmutable($parisTime, new \DateTimeZone('Europe/Paris'));
         $this->gpro->failing = ['RaceAnalysis'];
         $harvest = $this->harvest();
-        $harvest->runSlice(self::USER);
+        $this->slice($harvest);
         $this->assertContains('RaceAnalysis', $this->gpro->requests);
 
         foreach (array_keys($this->store->store) as $key) {
@@ -696,7 +753,7 @@ final class HarvestServiceTest extends TestCase
         $this->gpro->failing = [];
         $this->gpro->requests = [];
         $this->settle();
-        $harvest->runSlice(self::USER);
+        $this->slice($harvest);
 
         return in_array('RaceAnalysis', $this->gpro->requests, true);
     }
@@ -718,7 +775,7 @@ final class HarvestServiceTest extends TestCase
         $this->gpro->responses['RaceAnalysis'] = ['errorMsg' => 'Supporters only', 'data' => []];
         $this->userAtANewRace();
 
-        $result = $this->harvest()->runSlice(self::USER);
+        $result = $this->slice($this->harvest());
 
         $this->assertContains('RaceAnalysis', $this->gpro->requests);
         $this->assertNotSame('busy', $result->status);
@@ -732,9 +789,9 @@ final class HarvestServiceTest extends TestCase
         $this->gpro->failing = ['RaceAnalysis'];
         $harvest = $this->harvest();
 
-        $first = $harvest->runSlice(self::USER);
+        $first = $this->slice($harvest);
         $this->gpro->requests = [];
-        $second = $harvest->runSlice(self::USER);
+        $second = $this->slice($harvest);
 
         $this->assertSame(3, $first->calls);
         $this->assertSame(2, $second->calls);
@@ -752,13 +809,13 @@ final class HarvestServiceTest extends TestCase
         $this->store->set($key, $office);
         $harvest = $this->harvest();
 
-        $result = $harvest->runSlice(self::USER);
+        $result = $this->slice($harvest);
 
         $this->assertSame(0, $result->calls);
         $this->assertSame([], $this->gpro->requests);
         $this->assertGreaterThanOrEqual(1, $result->projected);
         $this->settle();
-        $this->assertFalse($harvest->isDue(self::USER));
+        $this->assertFalse($harvest->isDue(self::USER, true));
     }
 
     public function testTheBackfillAllowanceStartsAgainInTheNextRaceWindow(): void
@@ -768,13 +825,13 @@ final class HarvestServiceTest extends TestCase
             $this->client->addBackfill();
         }
         $harvest = $this->harvest();
-        $this->assertSame(0, $harvest->runSlice(self::USER)->calls);
+        $this->assertSame(0, $this->slice($harvest)->calls);
 
         $this->now = new \DateTimeImmutable('2026-10-27 12:00:00', new \DateTimeZone('Europe/Paris'));
         $this->settle();
 
         $this->assertSame(0, $this->client->backfillCount());
-        $result = $harvest->runSlice(self::USER);
+        $result = $this->slice($harvest);
 
         $this->assertSame(3, $result->calls);
         $this->assertSame('RaceAnalysis?SR=107,1', $this->gpro->requests[0]);

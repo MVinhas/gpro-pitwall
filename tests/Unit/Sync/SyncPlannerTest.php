@@ -23,7 +23,9 @@ final class SyncPlannerTest extends TestCase
         Endpoint::STANDINGS, Endpoint::ECONOMY, Endpoint::GROUP_STAFF,
     ];
 
-    private const array SEASONAL = [Endpoint::CALENDAR, Endpoint::TYRES, Endpoint::MENU, Endpoint::SF_HISTORY, Endpoint::CCP_HISTORY];
+    private const array SEASONAL = [
+        Endpoint::CALENDAR, Endpoint::TYRES, Endpoint::MENU, Endpoint::TRACKS, Endpoint::SF_HISTORY, Endpoint::CCP_HISTORY,
+    ];
 
     /**
      * @param array<string, mixed> $o
@@ -83,6 +85,8 @@ final class SyncPlannerTest extends TestCase
             'sponsorsAlert changed' => [[], ['sponsorsAlert' => '1'], $same, ['SPONSORS'], []],
             'tdId changed to a new TD' => [[], ['tdId' => '55'], self::office(['tdId' => '']), ['TD'], []],
             'tdId dropped plans no TD' => [[], ['tdId' => ''], $same, [], []],
+            'driId changed to a new driver' => [[], ['driId' => '456'], $same, ['DRIVER'], []],
+            'driId dropped plans no DRIVER' => [[], ['driId' => ''], $same, [], []],
             'manual unchanged' => [['mode' => SyncPlanner::MODE_MANUAL], [], $same, ['CAR', 'SETUP'], []],
             'manual with setup flip has no duplicates' => [['mode' => SyncPlanner::MODE_MANUAL], ['doneRaceSetup' => true], $same, ['CAR', 'SETUP'], []],
             'no driver on a new race' => [['race' => []], ['driId' => ''], null,
@@ -96,12 +100,12 @@ final class SyncPlannerTest extends TestCase
                 ['DRIVER', 'CAR', 'TRACK', 'SETUP', 'TESTING', 'STAFF', 'TD', 'SPONSORS', 'MONEY'], ['ANALYSIS', 'STANDINGS', 'ECONOMY', 'GROUP_STAFF']],
             'heal a missing analysis' => [['race' => array_diff(self::SNAPSHOT, ['ANALYSIS'])], [], $same, [], ['ANALYSIS']],
             'new season not archived' => [['race' => [], 'season' => []], ['seasonNb' => 11, 'raceNb' => 1], self::office(['seasonNb' => 10, 'raceNb' => 17]),
-                ['DRIVER', 'CAR', 'TRACK', 'SETUP', 'TESTING', 'STAFF', 'TD', 'SPONSORS', 'MONEY', 'CALENDAR', 'TYRES', 'MENU'],
+                ['DRIVER', 'CAR', 'TRACK', 'SETUP', 'TESTING', 'STAFF', 'TD', 'SPONSORS', 'MONEY', 'CALENDAR', 'TYRES', 'MENU', 'TRACKS'],
                 ['ANALYSIS', 'STANDINGS', 'ECONOMY', 'GROUP_STAFF', 'SF_HISTORY[season=10]', 'CCP_HISTORY[season=10]']],
-            'season endpoints missing on unchanged office' => [['season' => ['TYRES']], [], $same, ['CALENDAR', 'MENU'], ['SF_HISTORY[season=9]', 'CCP_HISTORY[season=9]']],
-            'one season history already archived' => [['season' => ['CALENDAR', 'TYRES', 'MENU', 'SF_HISTORY']], [], $same, [], ['CCP_HISTORY[season=9]']],
-            'first season has no completed season to ask about' => [['season' => ['CALENDAR', 'TYRES', 'MENU']], ['seasonNb' => 1], self::office(['seasonNb' => 1]), [], []],
-            'unknown season plans no history' => [['season' => ['CALENDAR', 'TYRES', 'MENU']], ['seasonNb' => ''], self::office(['seasonNb' => '']), [], []],
+            'season endpoints missing on unchanged office' => [['season' => ['TYRES']], [], $same, ['CALENDAR', 'MENU', 'TRACKS'], ['SF_HISTORY[season=9]', 'CCP_HISTORY[season=9]']],
+            'one season history already archived' => [['season' => ['CALENDAR', 'TYRES', 'MENU', 'TRACKS', 'SF_HISTORY']], [], $same, [], ['CCP_HISTORY[season=9]']],
+            'first season has no completed season to ask about' => [['season' => ['CALENDAR', 'TYRES', 'MENU', 'TRACKS']], ['seasonNb' => 1], self::office(['seasonNb' => 1]), [], []],
+            'unknown season plans no history' => [['season' => ['CALENDAR', 'TYRES', 'MENU', 'TRACKS']], ['seasonNb' => ''], self::office(['seasonNb' => '']), [], []],
             'heal a missing endpoint' => [['race' => array_diff(self::SNAPSHOT, ['MONEY'])], [], $same, ['MONEY'], []],
             'heal keeps priority order' => [['race' => array_diff(self::SNAPSHOT, ['MONEY', 'CAR'])], ['doneRaceSetup' => true], $same, ['CAR', 'SETUP', 'MONEY'], []],
             'heal never plans TD without a TD' => [['race' => array_diff(self::SNAPSHOT, ['TD'])], ['tdId' => ''], self::office(['tdId' => '']), [], []],
@@ -138,6 +142,7 @@ final class SyncPlannerTest extends TestCase
                 ['ANALYSIS[SR=10,1]', 'ANALYSIS[SR=10,2]', 'ANALYSIS[SR=10,3]', 'ANALYSIS[SR=10,4]', 'ANALYSIS[SR=10,5]']],
             'harvest new race has no phase 1' => [['mode' => SyncPlanner::MODE_HARVEST, 'race' => []], [], null, [], ['ANALYSIS', 'STANDINGS', 'ECONOMY', 'GROUP_STAFF']],
             'harvest ignores season-scoped phase 1' => [['mode' => SyncPlanner::MODE_HARVEST, 'season' => []], [], $same, [], ['SF_HISTORY[season=9]', 'CCP_HISTORY[season=9]']],
+            'the shared track list is planned until the caller has a row this season' => [['season' => ['CALENDAR', 'TYRES', 'MENU', 'SF_HISTORY', 'CCP_HISTORY']], [], $same, ['TRACKS'], []],
             'harvest backfill' => [['mode' => SyncPlanner::MODE_HARVEST, 'remaining' => 80, 'pending' => ['9,3']], [], $same, [], ['ANALYSIS[SR=9,3]']],
         ];
     }
@@ -186,6 +191,28 @@ final class SyncPlannerTest extends TestCase
         ));
         $this->assertSame(['SETUP'], self::names($exact->phase1));
         $this->assertFalse($exact->trimmed);
+    }
+
+    /**
+     * @return array<string, array{string, int, int, int}>
+     */
+    public static function spare(): array
+    {
+        return [
+            'login above the floor' => [SyncPlanner::MODE_LOGIN, 63, 10, 3],
+            'login at the floor' => [SyncPlanner::MODE_LOGIN, 63, 13, 0],
+            'login never negative' => [SyncPlanner::MODE_LOGIN, 40, 0, 0],
+            'manual floor' => [SyncPlanner::MODE_MANUAL, 23, 2, 1],
+            'harvest keeps phase 1 floors' => [SyncPlanner::MODE_HARVEST, 60, 0, 10],
+        ];
+    }
+
+    #[DataProvider('spare')]
+    public function testSpareCallsAreWhatTheModesFloorLeavesAfterThePlan(string $mode, int $remaining, int $spent, int $expected): void
+    {
+        $ctx = self::ctx(['mode' => $mode, 'remaining' => $remaining], self::office(), self::office());
+
+        $this->assertSame($expected, (new SyncPlanner())->spareCalls($ctx, $spent));
     }
 
     /**

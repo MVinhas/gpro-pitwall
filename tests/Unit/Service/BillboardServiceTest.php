@@ -66,6 +66,37 @@ final class BillboardServiceTest extends TestCase
         $this->assertSame(9, $strip['race']);
     }
 
+    public function testOfficeCashWinsOverTheMenus(): void
+    {
+        // The menu is fetched once a season; every sync fetches the office.
+        $this->warm('token-a', ['cash' => 1_000, 'group' => 'Pro - 8'], ['cash' => 2_500_000, 'trackName' => 'Monza']);
+
+        $this->assertSame(2_500_000, $this->service()->forToken('token-a')['cash'] ?? null);
+    }
+
+    public function testOfficeCashFillsTheStripWithNoMenuStored(): void
+    {
+        $scope = 'u' . GproApiClient::scopeFor('token-a') . ':';
+        $this->cache->set($scope . 'office_data', ['cash' => 2_500_000, 'trackName' => 'Monza']);
+
+        $this->assertSame(2_500_000, $this->service()->forToken('token-a')['cash'] ?? null);
+    }
+
+    public function testRanksTheOfficeCashAgainstTheGroup(): void
+    {
+        $this->warm(
+            'token-a',
+            ['cash' => 10_000_000, 'group' => 'Pro - 8', 'IDM' => 7],
+            ['cash' => 95_000_000],
+            ['managers' => [
+                ['IDM' => 1, 'cash' => 90_000_000],
+                ['IDM' => 7, 'cash' => 10_000_000],
+            ]],
+        );
+
+        $this->assertSame(1, $this->service()->forToken('token-a')['cash_rank'] ?? null);
+    }
+
     public function testReturnsNullBeforeTheFirstSync(): void
     {
         // Nothing cached yet: the strip must stay empty rather than show zeros,

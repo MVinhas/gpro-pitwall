@@ -11,7 +11,8 @@ namespace App\Support;
  * PHP holds the session file lock until the request ends; releasing it keeps
  * the manager's next navigation from queueing behind a long request. The figure
  * the work writes then only reaches memory, so persist() reopens the session
- * just long enough to save it, so the status line and the next page show it.
+ * just long enough to save it, so the status line and the next page show it,
+ * and to drop any session flag the work settled.
  */
 final class SessionBudget
 {
@@ -32,10 +33,16 @@ final class SessionBudget
     /**
      * The session may have changed hands meanwhile (logout, another login in
      * the same browser): then the figure belongs to nobody here and is dropped.
+     *
+     * @param list<string> $forget session keys the work settled
      */
-    public function persist(): void
+    public function persist(array $forget = []): void
     {
-        if (!$this->released || ($_SESSION['api_limit_updated_at'] ?? null) === $this->stamp) {
+        foreach ($forget as $key) {
+            unset($_SESSION[$key]);
+        }
+        $changed = ($_SESSION['api_limit_updated_at'] ?? null) !== $this->stamp;
+        if (!$this->released || (!$changed && $forget === [])) {
             return;
         }
 
@@ -52,8 +59,13 @@ final class SessionBudget
             session_abort();
             return;
         }
-        $_SESSION['api_limit'] = $limit;
-        $_SESSION['api_limit_updated_at'] = $updatedAt;
+        if ($changed) {
+            $_SESSION['api_limit'] = $limit;
+            $_SESSION['api_limit_updated_at'] = $updatedAt;
+        }
+        foreach ($forget as $key) {
+            unset($_SESSION[$key]);
+        }
         session_write_close();
     }
 }

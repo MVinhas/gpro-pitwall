@@ -35,18 +35,19 @@ class AuthService
     public const int DECOY_PENDING_REGISTRATION_ID = -1;
 
     /**
-     * Session flag: the login-time GPRO sync is owed but has not run. Login no
-     * longer waits on GPRO; the first page shows its skeleton and runs the
-     * sync in a follow-up request (see App\Support\DeferredRender).
+     * Session flag: the first sync of a never-synced account is owed but has
+     * not run. Login no longer waits on GPRO; the first page shows its skeleton
+     * and runs the sync in a follow-up request (see App\Support\DeferredRender).
+     * An account that has synced before never owes one: only Re-sync spends.
      */
     public const string SYNC_PENDING = 'sync_pending';
 
     /**
-     * Session flag: a warm page has handed the owed sync to the browser's idle
-     * time. Seeing SYNC_PENDING again with this set means that never happened,
-     * so the page syncs inline.
+     * Session flag: a sync succeeded, so the background harvest may spend GPRO
+     * calls until a slice answers that nothing is left. Without it a slice only
+     * rebuilds projections from the archive.
      */
-    public const string IDLE_SYNC_OFFERED = 'idle_sync_offered';
+    public const string HARVEST_OWED = 'harvest_owed';
 
     public function __construct(
         private readonly UserRepository $users,
@@ -61,7 +62,6 @@ class AuthService
         private readonly SecurityLogger $securityLog,
         private readonly int $codeTtlSeconds = 600,
         private readonly int $maxAttempts = 5,
-        private readonly int $syncMinIntervalSeconds = 600,
         private readonly int $maxCodesPerUserPerHour = 3
     ) {
     }
@@ -403,10 +403,11 @@ class AuthService
 
         if (empty($user['api_token'])) {
             $_SESSION['sync_status'] = 'needs_token';
-        } elseif (!$this->recentlySynced($user)) {
-            // A sync within the interval already warmed the cache, so only an
-            // older one is owed. It runs after the redirect, not in this
-            // request, so the manager lands on the cockpit at once.
+        } elseif (empty($user['last_synced_at'])) {
+            // Nothing to show until the first sync has run, so that one is
+            // owed. It runs after the redirect, not in this request, so the
+            // manager lands on the cockpit at once. An account that has synced
+            // before keeps its stored data until Re-sync.
             $_SESSION[self::SYNC_PENDING] = true;
         }
     }
@@ -547,30 +548,6 @@ class AuthService
         ))->format('Y-m-d H:i:s');
 
         return [$code, $hmac, $expiresAt];
-    }
-
-    /**
-     * True if the user synced within syncMinIntervalSeconds — so a login-time
-     * auto-sync would just re-spend API calls on already-warm data.
-     *
-     * @param array<string, mixed> $user
-     */
-    private function recentlySynced(array $user): bool
-    {
-        $last = $user['last_synced_at'] ?? null;
-        if (!is_string($last) || $last === '') {
-            return false;
-        }
-
-        try {
-            // markSynced() stores SQLite datetime('now'), which is UTC — parse
-            // it as UTC so the comparison against time() (UTC epoch) is correct.
-            $lastTs = new DateTimeImmutable($last, new \DateTimeZone('UTC'));
-        } catch (\Exception) {
-            return false;
-        }
-
-        return (time() - $lastTs->getTimestamp()) < $this->syncMinIntervalSeconds;
     }
 
     private function getDecryptedEmail(int $userId): string

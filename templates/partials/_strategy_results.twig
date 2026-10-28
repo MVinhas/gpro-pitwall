@@ -4,6 +4,8 @@
    so they take the caution tone; only the generic load failure is an error. #}
 {% if strategy_error == no_pilot_message %}
     <div data-result-state="no-driver">{% include 'partials/_no_pilot_notice.twig' %}</div>
+{% elseif strategy_error and strategy_error == no_data_message %}
+    {% include 'partials/_no_data.twig' with { state: 'no-data' } only %}
 {% elseif strategy_error == generic_error_message %}
     <div class="notice notice-error" data-result-state="failed">
         <p class="font-bold">Strategy calculation failed.</p>

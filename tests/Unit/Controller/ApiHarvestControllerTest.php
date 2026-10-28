@@ -8,9 +8,11 @@ use App\Controller\ApiHarvestController;
 use App\Http\Request;
 use App\Repository\UserRepository;
 use App\Security\Authorize;
+use App\Service\AuthService;
 use App\Service\HarvestService;
 use App\Sync\HarvestResult;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(ApiHarvestController::class)]
@@ -64,6 +66,89 @@ final class ApiHarvestControllerTest extends TestCase
 
         $this->assertSame('{"status":"more","calls":3,"projected":2}', $body);
         $this->assertStringNotContainsString('secret-token', $body);
+    }
+
+    /** @return array<string, array{array<string, mixed>, bool}> */
+    public static function owed(): array
+    {
+        return [
+            'after a Re-sync' => [[AuthService::HARVEST_OWED => true], true],
+            'without one' => [[], false],
+        ];
+    }
+
+    /** @param array<string, mixed> $flags */
+    #[DataProvider('owed')]
+    public function testASliceMaySpendCallsOnlyWhenAResyncOwedIt(array $flags, bool $mayFetch): void
+    {
+        $harvest = $this->createMock(HarvestService::class);
+        $harvest->expects($this->once())->method('runSlice')
+            ->with($this->anything(), $mayFetch)
+            ->willReturn(new HarvestResult('more'));
+        $_SESSION = ['user_id' => 7] + $flags;
+
+        $this->call($this->controller($harvest));
+    }
+
+    /** @return array<string, array{string, bool}> */
+    public static function settles(): array
+    {
+        return [
+            'done settles it' => ['done', false],
+            'busy keeps it owed' => ['busy', true],
+            'more keeps it owed' => ['more', true],
+            'locked keeps it owed' => ['locked', true],
+        ];
+    }
+
+    #[DataProvider('settles')]
+    public function testOnlyADoneSliceSettlesTheOwedHarvest(string $status, bool $stillOwed): void
+    {
+        $harvest = $this->createStub(HarvestService::class);
+        $harvest->method('runSlice')->willReturn(new HarvestResult($status));
+        $_SESSION = ['user_id' => 7, AuthService::HARVEST_OWED => true];
+
+        $this->call($this->controller($harvest));
+
+        $this->assertSame($stillOwed, isset($_SESSION[AuthService::HARVEST_OWED]));
+    }
+
+    public function testADoneSliceSettlesTheOwedHarvestInTheReleasedSession(): void
+    {
+        $dir = sys_get_temp_dir() . '/gpro_harvest_sess_' . bin2hex(random_bytes(6));
+        mkdir($dir, 0700, true);
+        $prior = [
+            ini_set('session.save_path', $dir),
+            ini_set('session.use_cookies', '0'),
+            ini_set('session.cache_limiter', ''),
+        ];
+        try {
+            session_id('harvestowed');
+            $this->assertTrue(session_start());
+            $_SESSION = ['user_id' => 7, AuthService::HARVEST_OWED => true, 'api_limit' => 80, 'api_limit_updated_at' => 1];
+            $harvest = $this->createStub(HarvestService::class);
+            $harvest->method('runSlice')->willReturn(new HarvestResult('done'));
+
+            $this->call($this->controller($harvest));
+
+            $this->assertSame(PHP_SESSION_NONE, session_status());
+            session_id('harvestowed');
+            $this->assertTrue(session_start());
+            $this->assertArrayNotHasKey(AuthService::HARVEST_OWED, $_SESSION);
+            $this->assertSame(80, $_SESSION['api_limit'], 'an unchanged budget is left alone');
+            $this->assertSame(7, $_SESSION['user_id']);
+        } finally {
+            if (session_status() === PHP_SESSION_ACTIVE) {
+                session_abort();
+            }
+            ini_set('session.save_path', (string) $prior[0]);
+            ini_set('session.use_cookies', (string) $prior[1]);
+            ini_set('session.cache_limiter', (string) $prior[2]);
+            foreach (glob($dir . '/*') ?: [] as $f) {
+                @unlink($f);
+            }
+            @rmdir($dir);
+        }
     }
 
     public function testTheSessionIsReleasedBeforeTheSliceRuns(): void
@@ -168,7 +253,7 @@ final class ApiHarvestControllerTest extends TestCase
                 {
                 }
 
-                public function runSlice(array $user): App\Sync\HarvestResult
+                public function runSlice(array $user, bool $mayFetch): App\Sync\HarvestResult
                 {
                     echo 'SLICE RAN';
 

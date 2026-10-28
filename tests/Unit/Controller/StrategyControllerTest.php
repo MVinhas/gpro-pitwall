@@ -11,7 +11,6 @@ use App\Repository\UserRepository;
 use App\Security\Authorize;
 use App\Service\FuelModel;
 use App\Service\GproApiClient;
-use App\Service\GproApiFetcher;
 use App\Service\GproDataMapper;
 use App\Service\RaceWeatherService;
 use App\Service\RiskAdvisorService;
@@ -19,8 +18,7 @@ use App\Service\PhaMatchService;
 use App\Service\CarWearService;
 use App\Service\SetupCalculatorService;
 use App\Service\StrategyService;
-use App\Support\RaceWindow;
-use DateTimeImmutable;
+use App\Tests\Support\CountingGproFetcher;
 use PDO;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -37,7 +35,8 @@ use Twig\Loader\ArrayLoader;
  *
  * Each must return a clear error instead of computing a strategy on a
  * phantom race / a falsely-assumed Pipirelli supplier. The cache is seeded
- * so getNextRaceProfile()/getOfficeData() resolve without any HTTP.
+ * so getNextRaceProfile()/getOfficeData() resolve without any HTTP; a page
+ * never fetches, so whatever is not seeded reads as empty.
  */
 #[CoversClass(StrategyController::class)]
 final class StrategyControllerTest extends TestCase
@@ -46,11 +45,13 @@ final class StrategyControllerTest extends TestCase
 
     private string $cacheDir;
     private FilesystemCache $cache;
+    private CountingGproFetcher $fetcher;
 
     protected function setUp(): void
     {
         $this->cacheDir = sys_get_temp_dir() . '/gpro_ctrl_' . bin2hex(random_bytes(6));
         $this->cache = new FilesystemCache($this->cacheDir);
+        $this->fetcher = new CountingGproFetcher();
     }
 
     protected function tearDown(): void
@@ -61,33 +62,21 @@ final class StrategyControllerTest extends TestCase
         @rmdir($this->cacheDir);
     }
 
-    /** Cache keys the client namespaces by race window — must match here. */
-    private const array RACE_WINDOWED = ['next_race_profile', 'car_data', 'race_setup'];
-
     /** @param array<string, mixed> $value */
     private function seed(string $key, array $value): void
     {
-        $cacheKey = 'u' . GproApiClient::scopeFor(self::TOKEN) . ':' . $key;
-        if (in_array($key, self::RACE_WINDOWED, true)) {
-            $window = RaceWindow::idFor(new DateTimeImmutable('now'), [2, 5], 0, 'Europe/London');
-            $cacheKey .= ':w' . $window;
-        }
-        $this->cache->set($cacheKey, $value, 3600);
+        $this->cache->set('u' . GproApiClient::scopeFor(self::TOKEN) . ':' . $key, $value, 3600);
     }
 
-    private function controller(): StrategyController
+    private function controller(?StrategyService $strategy = null): StrategyController
     {
-        $api = new GproApiClient(
-            // Unreachable host: cache hits short-circuit before any fetch.
-            new GproApiFetcher(['base_url' => 'http://127.0.0.1:9', 'version' => 'test']),
-            $this->cache,
-        );
+        $api = new GproApiClient($this->fetcher, $this->cache);
         $api->setToken(self::TOKEN);
 
         $db = new PDO('sqlite::memory:');
 
         return new StrategyController(
-            new StrategyService($db, [], new FuelModel([])),
+            $strategy ?? new StrategyService($db, [], new FuelModel([])),
             $api,
             new GproDataMapper(),
             new SetupCalculatorService($db, []),
@@ -331,12 +320,9 @@ final class StrategyControllerTest extends TestCase
         $this->assertSame('Medium', StrategyController::pickChosenCompound($tyres, false, 'medium', 'Medium'));
     }
 
-    public function testUnexpectedApiFailureReturnsGenericMessageNotRawDetails(): void
+    /** Everything the calculation reads, as a sync leaves it. */
+    private function seedRaceWeekend(bool $withRaceSetup = true): void
     {
-        // Past the curated early-exits (season/supplier/pilot all present), the
-        // driver-profile fetch isn't seeded so it hits the unreachable host and
-        // GproApiFetcher throws RuntimeException(curl error) — internal detail
-        // (connection info) that must never reach the page (A2).
         $this->seed('office_data', [
             'endOfSeason'    => 0,
             'raceNb'         => 5,
@@ -348,10 +334,47 @@ final class StrategyControllerTest extends TestCase
             'trackName'         => 'Imola',
             'laps'              => 50,
         ]);
+        $this->seed('driver_profile_123', ['concentration' => 100]);
+        if ($withRaceSetup) {
+            $this->seed('race_setup', ['weather' => ['q1Temp' => 20, 'q2Temp' => 21]]);
+        }
+    }
+
+    public function testAFailedCalculationReturnsTheGenericMessageNotRawDetails(): void
+    {
+        // Internal detail (here a path) must never reach the page (A2).
+        $strategy = $this->createStub(StrategyService::class);
+        $strategy->method('calculateStrategy')
+            ->willThrowException(new \RuntimeException('/srv/app/secret/path.php'));
+        $this->seedRaceWeekend();
+        $prior = ini_get('error_log');
+        ini_set('error_log', $this->cacheDir . '.log');
+
+        try {
+            $result = $this->controller($strategy)->runCalc(new Request([], [], [], []));
+        } finally {
+            ini_set('error_log', $prior === false ? '' : $prior);
+            @unlink($this->cacheDir . '.log');
+        }
+
+        $this->assertSame(StrategyController::GENERIC_ERROR_MESSAGE, $result['error'] ?? null);
+        $this->assertSame([], $this->fetcher->calls);
+    }
+
+    /**
+     * Pages never fetch, so a race setup the last sync did not store reads as
+     * []. Without it there is no forecast to plan on: the screen asks for a
+     * re-sync instead of computing a strategy at 0 °C (or warning on the
+     * missing temperatures).
+     */
+    public function testAMissingRaceSetupAsksForAReSyncInsteadOfAStrategy(): void
+    {
+        $this->seedRaceWeekend(withRaceSetup: false);
 
         $result = $this->controller()->runCalc(new Request([], [], [], []));
 
-        $this->assertSame(StrategyController::GENERIC_ERROR_MESSAGE, $result['error'] ?? null);
+        $this->assertSame(['error' => StrategyController::NO_DATA_MESSAGE], $result);
+        $this->assertSame([], $this->fetcher->calls);
     }
 
     public function testNewSeasonRace1NoSupplierShowsSupplierNotSeasonMessage(): void

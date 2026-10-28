@@ -45,7 +45,8 @@ final readonly class BillboardService
         $nextTrack = (string) ($office['trackName'] ?? '');
         $season = (int) ($office['seasonNb'] ?? 0);
         $race = (int) ($office['raceNb'] ?? 0);
-        $cash = (int) ($menu['cash'] ?? 0);
+        // Every sync fetches the office; the menu only once a season.
+        $cash = (int) ($office['cash'] ?? $menu['cash'] ?? 0);
 
         $money = $client->getCachedMoneyLevels();
         $managers = $money['managers'] ?? [];

@@ -6,6 +6,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.20] - 2026-10-28
+
+### Fixed
+- Pitwall no longer spends your GPRO API budget on its own. Only **Re-sync** (or saving an
+  API token) calls GPRO; logging in, opening screens and leaving a tab open spend nothing.
+  The one automatic sync left is a brand-new account's first. Screens show the data from
+  your last sync, which no longer expires, and the background history collection runs only
+  after a Re-sync.
+- When a race has finished since your last sync, the status line says "New race weekend ·
+  synced … · Re-sync to load it".
+- A screen with nothing stored yet says "No data yet · Re-sync to load your team's data."
+  instead of an error or an empty plan, and only a brand-new account's first sync shows the
+  loading placeholder.
+- Cash in the header, the Cockpit's part-swap budget and the engineer's cash outlook comes
+  from the office data every sync refreshes, not the menu fetched once a season.
+- A driver signed between races gets his profile on the next Re-sync.
+- Re-sync now also refreshes the shared track list and the profiles of sponsors you are
+  negotiating with. After this update the shared track list is empty until the first
+  manager re-syncs; one Re-sync by anyone fills it for everyone.
+
 ## [1.21.19] - 2026-10-28
 
 ### Changed

@@ -18,6 +18,7 @@ final class Endpoint
     public const string MONEY = 'MONEY';
     public const string CALENDAR = 'CALENDAR';
     public const string TYRES = 'TYRES';
+    public const string TRACKS = 'TRACKS';
     public const string MENU = 'MENU';
     public const string ANALYSIS = 'ANALYSIS';
     public const string STANDINGS = 'STANDINGS';

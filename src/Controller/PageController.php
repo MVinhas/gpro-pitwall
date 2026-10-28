@@ -10,6 +10,7 @@ use App\Repository\DivisionMetadataRepository;
 use App\Repository\UserRepository;
 use App\Support\DeferredRender;
 use App\Support\Env;
+use App\Support\HarvestOwed;
 use App\Support\RaceSettings;
 use App\Support\RaceWindow;
 use App\Support\RecruitmentQuery;
@@ -51,6 +52,11 @@ class PageController
      */
     private const array CARRIED_QUERY_KEYS = [
         'division_tab', 'track', 'page', 'sort', 'order',
+    ];
+
+    /** Screens built from the manager's own synced payloads, with nothing to show without them. */
+    private const array TEAM_SECTIONS = [
+        'Cockpit', 'Race Engineer', 'Race Strategy', 'Testing', 'Car Wear Planner',
     ];
 
     /** @param array<string, mixed> $config */
@@ -115,6 +121,19 @@ class PageController
 
             return null;
         }
+    }
+
+    /**
+     * Nothing stored for this token yet (never synced, or a new token): a team
+     * screen would otherwise read the empty office as "no driver" or "no tyre
+     * supplier". Training takes typed-in stats and Recruitment reads the shared
+     * market, so both work without it.
+     *
+     * @param array<string, mixed> $office the stored office payload
+     */
+    public static function lacksTeamData(string $section, array $office): bool
+    {
+        return $office === [] && in_array($section, self::TEAM_SECTIONS, true);
     }
 
     public function index(Request $request): void
@@ -214,10 +233,10 @@ class PageController
             $activeMainTab = $defaultTab;
         }
 
-        // A cold screen (or a login whose sync is still owed on cold data) is
-        // sent as a skeleton first; its follow-up request (wait=1) does the
-        // GPRO work. A login owed on warm data renders from what is cached and
-        // leaves the sync to an idle POST /api/sync.
+        // A first sync still owed on cold data (or a cold driver market) is sent
+        // as a skeleton first; its follow-up request (wait=1) does that work.
+        // Only a never-synced account owes a sync here; every other refresh is
+        // the manager's Re-sync click, so other screens render what is stored.
         $syncPending = !empty($_SESSION[AuthService::SYNC_PENDING]);
         $wait = (string) $request->get(DeferredRender::WAIT_PARAM, '') === '1';
         $warm = null;
@@ -228,18 +247,13 @@ class PageController
         };
         $deferred = (string) $request->get('fragment', '') === ''
             && DeferredRender::shouldDefer($wait, $syncPending, $activeMainTab, $isWarm);
-        $idleSync = DeferredRender::idleSync(
-            $wait,
-            $syncPending,
-            $deferred,
-            !empty($_SESSION[AuthService::IDLE_SYNC_OFFERED]),
-            $isWarm,
-        );
 
         $freshSync = false;
-        if (DeferredRender::syncsInline($syncPending, $deferred, $idleSync)) {
-            unset($_SESSION[AuthService::SYNC_PENDING], $_SESSION[AuthService::IDLE_SYNC_OFFERED]);
-            $this->syncService->trySyncForUser($user, false);
+        if (DeferredRender::syncsInline($syncPending, $deferred)) {
+            unset($_SESSION[AuthService::SYNC_PENDING]);
+            if ($this->syncService->trySyncForUser($user, false) === 'synced') {
+                $_SESSION[AuthService::HARVEST_OWED] = true;
+            }
             // Re-read for the sync outcome and timestamp the status line shows.
             $user = $this->userRepo->findById((int) $user['id']) ?? $user;
             $freshSync = true;
@@ -289,20 +303,10 @@ class PageController
             'can_submit'      => $isLoggedIn,
         ];
 
-        if ($idleSync) {
-            // Only a full page carries the script that answers the offer.
-            if ((string) $request->get('fragment', '') === '') {
-                $_SESSION[AuthService::IDLE_SYNC_OFFERED] = true;
-            }
-            $viewData['idle_sync'] = true;
-            $viewData['idle_follow_url'] = DeferredRender::followUpUrl($request->getPath(), $request->query());
-        }
-
-        // A page still owed its login sync starts the harvest only from the sync's
-        // answer; every other full page (not a skeleton, fragment or follow-up,
-        // whose script is discarded) starts it itself.
-        if (!$deferred && !$idleSync && !$wait && (string) $request->get('fragment', '') === '') {
-            $viewData['harvest_due'] = $this->harvest->isDueSafely($user);
+        // A skeleton, fragment or follow-up discards its script, so only a full
+        // page starts the harvest the last Re-sync (or first sync) owed.
+        if (!$deferred && !$wait && (string) $request->get('fragment', '') === '') {
+            $viewData['harvest_due'] = HarvestOwed::due($this->harvest, $user);
         }
 
         if ($freshSync) {
@@ -334,7 +338,13 @@ class PageController
             }
         }
 
-        switch ($activeMainTab) {
+        $noData = self::lacksTeamData($activeMainTab, $office);
+        if ($noData) {
+            $viewData['no_data'] = true;
+        }
+
+        // A screen without its team data builds nothing; the template shows how to load it.
+        switch ($noData ? null : $activeMainTab) {
             case 'Race Engineer':
             case 'Cockpit':
                 $cockpitRisk = RaceSettings::resolve($_SESSION, RaceSettings::CTR, $request->get('cockpit_risk'), 100);
@@ -470,7 +480,8 @@ class PageController
                         );
                     $menu = $this->apiClient->getMenu();
                     $division = $this->divisionFromMenu($menu);
-                    $cash = (int) ($menu['cash'] ?? 0);
+                    // Every sync fetches the office; the menu only once a season.
+                    $cash = (int) ($office['cash'] ?? $menu['cash'] ?? 0);
 
                     if ($isCockpit) {
                         $lastSynced = $user['last_synced_at'] ?? null;

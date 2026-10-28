@@ -87,6 +87,27 @@ final class PageControllerTest extends TestCase
         $this->assertFalse(PageController::isRaceSetupStale(0, 0));
     }
 
+    /**
+     * A token with nothing stored (never synced, or just replaced) used to read
+     * as "no driver under contract" or "no tyre supplier": every team screen
+     * shows the one way to load the data instead.
+     */
+    public function testTeamScreensLackDataWhileNoOfficeIsStored(): void
+    {
+        foreach (['Cockpit', 'Race Engineer', 'Race Strategy', 'Testing', 'Car Wear Planner'] as $section) {
+            $this->assertTrue(PageController::lacksTeamData($section, []), $section);
+            $this->assertFalse(PageController::lacksTeamData($section, ['driId' => '']), $section);
+        }
+    }
+
+    public function testScreensThatWorkWithoutTeamDataNeverLackIt(): void
+    {
+        // Training takes typed-in stats, Recruitment reads the shared market.
+        foreach (['Training Planner', 'Recruitment Analyzer', 'Division Baseline'] as $section) {
+            $this->assertFalse(PageController::lacksTeamData($section, []), $section);
+        }
+    }
+
     public function testTrainingLapsRunAtTheTestingTrack(): void
     {
         $this->assertSame('Monza', PageController::testingTrackName(['trackName' => 'Monza']));

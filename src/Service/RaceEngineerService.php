@@ -76,7 +76,8 @@ class RaceEngineerService
         $menu = self::arr($c['menu'] ?? null);
         $season = (int) ($office['seasonNb'] ?? 0);
         $raceNb = (int) ($office['raceNb'] ?? 0);
-        $cash = (int) ($menu['cash'] ?? 0);
+        // Every sync fetches the office; the menu only once a season.
+        $cash = (int) ($office['cash'] ?? $menu['cash'] ?? 0);
 
         $standingsRow = $this->standingsRow($userId, $season, $raceNb);
         $weekends = $this->weekends->forSeason($userId, $season);

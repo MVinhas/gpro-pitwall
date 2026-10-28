@@ -8,6 +8,7 @@ use App\Archive\ArchiveSanitizer;
 use App\Cache\Adapter\FilesystemCache;
 use App\Repository\ApiArchiveRepository;
 use App\Repository\UserRepository;
+use App\Service\BillboardService;
 use App\Service\GproApiClient;
 use App\Service\GproSyncService;
 use App\Sync\Endpoint;
@@ -129,10 +130,14 @@ final class GproSyncServiceTest extends TestCase
         return [$this->service($users ?? $this->createStub(UserRepository::class), $client, $db), $fetcher, $db, $client];
     }
 
-    /** What the idle harvest does with RaceAnalysis: fetch it through the same fetcher, which archives the answer. */
+    /**
+     * What the idle harvest does with RaceAnalysis: fetch it through the same
+     * fetcher, which archives the answer. The harvest opens the gate for its
+     * fetches; this drives the fetcher directly, so it opens it here.
+     */
     private function harvestAnswersTheAnalysis(GproApiClient $client): void
     {
-        (new EndpointFetcher($client))->fetch(Endpoint::ANALYSIS);
+        $client->withFetching(static fn (): array => (new EndpointFetcher($client))->fetch(Endpoint::ANALYSIS));
     }
 
     /** Whether the harvest that follows this sync would still ask for the race analysis. */
@@ -290,7 +295,7 @@ final class GproSyncServiceTest extends TestCase
         $this->assertSame(
             self::sorted([
                 'office', 'DriProfile', 'UpdateCar', 'TrackProfile', 'RaceSetup', 'Testing', 'StaffAndFacilities',
-                'TDProfile', 'NegOverview', 'MoneyLevels', 'Calendar', 'TyreSuppliers', 'Menu',
+                'TDProfile', 'NegOverview', 'MoneyLevels', 'Calendar', 'TyreSuppliers', 'Menu', 'Tracks',
             ]),
             self::sorted($fetcher->calls),
         );
@@ -311,6 +316,23 @@ final class GproSyncServiceTest extends TestCase
         $this->assertSame('synced', $outcome->status);
         $this->assertSame(['OFFICE'], $outcome->fetched);
         $this->assertSame(1, $outcome->calls);
+    }
+
+    public function testASecondSyncInTheSameSeasonMovesTheCashShown(): void
+    {
+        [$svc, $fetcher, , $client] = $this->scripted();
+        $fetcher->responses['Menu'] = ['cash' => 1_000_000, 'group' => 'Amateur - 4'];
+        $fetcher->office['cash'] = 1_000_000;
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+        $fetcher->calls = [];
+        $fetcher->office['cash'] = 3_250_000;
+
+        $svc->sync(self::USER, SyncPlanner::MODE_MANUAL);
+
+        $this->assertNotContains('Menu', $fetcher->calls, 'the menu is fetched once a season');
+        $strip = (new BillboardService($client, ['Rookie', 'Amateur', 'Pro', 'Master', 'Elite']))
+            ->forToken(self::USER['api_token']);
+        $this->assertSame(3_250_000, $strip['cash'] ?? null);
     }
 
     public function testWarmSharedTyreFeedDoesNotStopANewUserFetchingAndArchivingItOnce(): void
@@ -342,7 +364,7 @@ final class GproSyncServiceTest extends TestCase
         $this->assertSame(
             self::sorted([
                 'office', 'DriProfile', 'UpdateCar', 'TrackProfile', 'RaceSetup', 'Testing', 'StaffAndFacilities',
-                'TDProfile', 'NegOverview', 'MoneyLevels', 'Calendar', 'TyreSuppliers', 'Menu',
+                'TDProfile', 'NegOverview', 'MoneyLevels', 'Calendar', 'TyreSuppliers', 'Menu', 'Tracks',
             ]),
             self::sorted($fetcher->calls),
             'the previous account\'s rows must not suppress the new account\'s first snapshot',
@@ -547,7 +569,8 @@ final class GproSyncServiceTest extends TestCase
     {
         $users = $this->createStub(UserRepository::class);
 
-        $outcome = $this->service($users)->sync(['id' => 7, 'api_token' => ''], SyncPlanner::MODE_LOGIN);
+        $svc = $this->service($users);
+        $outcome = $svc->sync(['id' => 7, 'api_token' => ''], SyncPlanner::MODE_LOGIN);
 
         $this->assertSame('needs_token', $outcome->status);
         $this->assertSame([], $outcome->fetched);
@@ -864,6 +887,150 @@ final class GproSyncServiceTest extends TestCase
         $fetcher->calls = [];
         $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
         $this->assertNotNull($this->syncRowDoneRaceSetup($db), 'written once GPRO has finished updating');
+    }
+
+    public function testASyncFetchesThroughTheGate(): void
+    {
+        [$svc, $fetcher, , $client] = $this->scripted();
+
+        $outcome = $svc->sync(self::USER, SyncPlanner::MODE_MANUAL);
+
+        $this->assertSame('synced', $outcome->status);
+        $this->assertContains('office', $fetcher->calls, 'the service opened the gate for its plan');
+        $this->assertContains('UpdateCar', $fetcher->calls);
+        $fetcher->calls = [];
+
+        $this->assertSame([], $client->getStandings(), 'a miss after the sync is not a fetch');
+        $this->assertSame([], $fetcher->calls, 'the gate is closed again once the sync is over');
+    }
+
+    public function testAnEmptyOfficeNeverRecordsASync(): void
+    {
+        $users = $this->createMock(UserRepository::class);
+        $statuses = [];
+        $users->method('updateSyncStatus')
+            ->willReturnCallback(function (int $id, string $status) use (&$statuses): void {
+                $statuses[] = $status;
+            });
+        $users->expects($this->never())->method('markSynced');
+        $db = $this->sink();
+        $empty = new class implements \App\Service\GproFetcher {
+            /** @var list<string> */
+            public array $calls = [];
+
+            public function setToken(string $token): void
+            {
+            }
+
+            public function fetchJson(string $endpoint): array
+            {
+                $this->calls[] = $endpoint;
+
+                return [];
+            }
+
+            public function fetchMarketFile(string $market): array
+            {
+                return [];
+            }
+        };
+        $client = new GproApiClient($empty, $this->cache, new ApiArchiveRepository($db, new ArchiveSanitizer()));
+        $svc = $this->service($users, $client, $db);
+
+        $outcome = $svc->sync(self::USER, SyncPlanner::MODE_MANUAL);
+
+        $this->assertSame('failed', $outcome->status);
+        $this->assertCount(1, $empty->calls, 'nothing is planned against an empty office');
+        $this->assertSame(['running', 'failed'], $statuses);
+        $this->assertNull($this->syncRowRace($db), 'no office is recorded for the next sync to diff against');
+        $this->assertFalse($this->cache->has('sync_lock_7'));
+        $this->assertFalse($client->hasAnalysisAttempt());
+        $this->assertFalse($client->hasHarvestFailed(Endpoint::ANALYSIS, ''));
+    }
+
+    public function testTheSharedTrackListIsFetchedOncePerSeasonAndServedFromTheCallersArchive(): void
+    {
+        [$svc, $fetcher, $db, $client] = $this->scripted();
+        $fetcher->responses['Tracks'] = ['tracks' => [['id' => 1, 'name' => 'Monza']]];
+
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+
+        $this->assertContains('Tracks', $fetcher->calls);
+        $row = $db->query("SELECT user_id, season FROM user_api_archive WHERE endpoint = 'Tracks'")
+            ->fetch(\PDO::FETCH_ASSOC);
+        $this->assertSame(['user_id' => 7, 'season' => 107], $row, 'filed under the caller for the season');
+
+        $fetcher->calls = [];
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+        $this->assertSame(['office'], $fetcher->calls, 'asked once per season, then archived');
+
+        $this->cache->delete('all_tracks_preview');
+        $this->assertSame('Monza', $client->getAllTracksPreview()['tracks'][0]['name'] ?? null, 'a rotated cache reads the archived row');
+        $this->assertSame(['office'], $fetcher->calls);
+    }
+
+    public function testASyncFetchesTheProfileOfEachOngoingNegotiationNotYetStored(): void
+    {
+        [$svc, $fetcher, $db, $client] = $this->scripted();
+        $fetcher->responses['NegOverview'] = ['ongNegs' => [['sponsorId' => 5], ['sponsorId' => 6], ['sponsorId' => 0]]];
+        (new ApiArchiveRepository($db, new ArchiveSanitizer()))
+            ->put(7, GproApiClient::scopeFor('tok'), 'NegotiateSponsor', 'id=6', '', 107, 14, ['name' => 'Stored']);
+
+        $outcome = $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+
+        $this->assertSame('synced', $outcome->status);
+        $this->assertSame(['NegotiateSponsor?id=5'], array_values(array_filter(
+            $fetcher->requests,
+            static fn (string $r): bool => str_starts_with($r, 'NegotiateSponsor'),
+        )));
+        $this->assertSame(count($fetcher->calls), $outcome->calls, 'the profile call is counted');
+        $fetcher->calls = [];
+        $fetcher->requests = [];
+
+        $this->assertSame('NegotiateSponsor', $client->getSponsorProfile(5)['endpoint'] ?? null, 'served without a call');
+        $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+        $this->assertSame(['office'], $fetcher->calls, 'stored profiles are not asked for again');
+    }
+
+    public function testThePlanLogLineCountsEveryCallTheOutcomeDoes(): void
+    {
+        [$svc, $fetcher] = $this->scripted();
+        $fetcher->responses['NegOverview'] = ['ongNegs' => [['sponsorId' => 5]]];
+        $log = sys_get_temp_dir() . '/gpro_sync_log_' . bin2hex(random_bytes(4));
+        $prior = ini_set('error_log', $log);
+
+        try {
+            $outcome = $svc->sync(self::USER, SyncPlanner::MODE_LOGIN);
+        } finally {
+            ini_set('error_log', (string) $prior);
+        }
+        $lines = (string) file_get_contents($log);
+        @unlink($log);
+
+        $this->assertContains('NegotiateSponsor', $fetcher->calls);
+        $this->assertSame(count($fetcher->calls), $outcome->calls);
+        $this->assertStringContainsString('mode login plan: ' . $outcome->calls . ' calls (', $lines);
+    }
+
+    public function testSponsorProfilesSpendOnlyWhatTheFloorLeaves(): void
+    {
+        [$svc, $fetcher] = $this->scripted();
+        $fetcher->responses['NegOverview'] = ['ongNegs' => [['sponsorId' => 5], ['sponsorId' => 6]]];
+        // A first login plans 13 calls after the office; the login floor is 50.
+        $fetcher->remaining = 63;
+
+        $this->assertSame('synced', $svc->sync(self::USER, SyncPlanner::MODE_LOGIN)->status);
+        $this->assertNotContains('NegotiateSponsor', $fetcher->calls, '63 - 13 leaves nothing above the floor');
+
+        $fetcher->calls = [];
+        $fetcher->remaining = 21;
+        $this->assertSame('deferred_low_budget', $svc->sync(self::USER, SyncPlanner::MODE_MANUAL)->status);
+        $this->assertSame(['office', 'UpdateCar'], $fetcher->calls, 'the manual floor trims the plan; no profile is paid');
+
+        $fetcher->calls = [];
+        $fetcher->remaining = 23;
+        $svc->sync(self::USER, SyncPlanner::MODE_MANUAL);
+        $this->assertSame(['office', 'UpdateCar', 'RaceSetup', 'NegotiateSponsor'], $fetcher->calls, '23 - 2 - 20 leaves one call');
     }
 
     private function syncRowRace(\PDO $db): ?int

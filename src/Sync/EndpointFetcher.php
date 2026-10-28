@@ -35,6 +35,7 @@ final class EndpointFetcher
             Endpoint::CALENDAR => $this->apiClient->getCalendar(true),
             Endpoint::MENU => $this->apiClient->getMenu(true),
             Endpoint::TYRES => $this->apiClient->getTyreSuppliers(true),
+            Endpoint::TRACKS => $this->apiClient->getAllTracksPreview(true),
             Endpoint::STANDINGS => $this->apiClient->getStandings(true),
             Endpoint::ECONOMY => $this->apiClient->getEconomyHistory(1, true),
             Endpoint::GROUP_STAFF => $this->apiClient->getGroupStaff(true),

@@ -97,7 +97,8 @@
 {# Fetch a tab's page while the pointer rests on it (or on touch-down), so the
    click lands on an answer that is already here. Prefetch only, never
    prerender: a prefetch never runs the page's scripts, so it can't start a
-   sync or spend GPRO budget — a cold screen answers with its skeleton. #}
+   sync or spend GPRO budget — a page never fetches, and an owed first sync
+   answers with its skeleton. #}
 <script type="speculationrules">
 {"prefetch": [{"where": {"selector_matches": "nav[aria-label='Primary'] a[href]:not([aria-current])"}, "eagerness": "moderate"}]}
 </script>

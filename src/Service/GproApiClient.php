@@ -8,14 +8,18 @@ use App\Cache\CacheInterface;
 use App\Repository\ApiArchiveRepository;
 use App\Support\Env;
 use App\Support\RaceWindow;
+use Closure;
 use DateTimeImmutable;
 use RuntimeException;
 
 /**
  * Friendly facade over the GPRO public API: one method per endpoint, with
- * per-method cache keys and TTLs. The actual HTTP work lives in
- * GproApiFetcher; this class composes fetch + cache + apiRequestsRemaining
- * bookkeeping.
+ * per-method cache keys. The actual HTTP work lives in GproApiFetcher; this
+ * class composes fetch + cache + archive + apiRequestsRemaining bookkeeping.
+ *
+ * Manager payloads are fetched only inside withFetching(), the gate for sync
+ * runs; every other read is served from the cache or the newest archived
+ * copy, whatever its age, so rendering a page never spends the API budget.
  */
 final class GproApiClient
 {
@@ -29,6 +33,9 @@ final class GproApiClient
 
     /** Owner of the raw-payload archive for this client; null disables it. */
     private ?int $archiveUserId = null;
+
+    /** Closed by default: only work run through withFetching() may call GPRO. */
+    private bool $fetching = false;
 
     public function __construct(
         private readonly GproFetcher $fetcher,
@@ -67,8 +74,29 @@ final class GproApiClient
         $copy->scope = self::scopeFor($token);
         // The token may belong to someone other than the archive's owner.
         $copy->archiveUserId = null;
+        // A read-only copy: never let it inherit a sync run's open gate.
+        $copy->fetching = false;
 
         return $copy;
+    }
+
+    /**
+     * Runs $work with GPRO fetches allowed, then puts the gate back as it was,
+     * even when $work throws, so a failed sync never leaves it open.
+     *
+     * @template T
+     * @param Closure(): T $work
+     * @return T
+     */
+    public function withFetching(Closure $work): mixed
+    {
+        $previous = $this->fetching;
+        $this->fetching = true;
+        try {
+            return $work();
+        } finally {
+            $this->fetching = $previous;
+        }
     }
 
     /** The cache/archive namespace of the token this client is set to. */
@@ -107,7 +135,7 @@ final class GproApiClient
     /** @return array<string, mixed> */
     public function getOfficeData(bool $forceRefresh = false): array
     {
-        return $this->getCached('office_data', '/gb/backend/api/v2/office', $this->ttlShort(), $forceRefresh);
+        return $this->getCached('office_data', '/gb/backend/api/v2/office', $forceRefresh);
     }
 
     /**
@@ -136,7 +164,6 @@ final class GproApiClient
         return $this->getCached(
             'driver_profile_' . $driId,
             "/gb/backend/api/v2/DriProfile?id={$driId}",
-            $this->ttlShort(),
             $forceRefresh
         );
     }
@@ -147,9 +174,7 @@ final class GproApiClient
         return $this->getCached(
             'next_race_profile',
             '/gb/backend/api/v2/TrackProfile',
-            $this->ttlShort(),
             $forceRefresh,
-            epoch: $this->raceWindow(),
         );
     }
 
@@ -159,9 +184,7 @@ final class GproApiClient
         return $this->getCached(
             'car_data',
             '/gb/backend/api/v2/UpdateCar',
-            $this->ttlShort(),
             $forceRefresh,
-            epoch: $this->raceWindow(),
         );
     }
 
@@ -171,9 +194,7 @@ final class GproApiClient
         return $this->getCached(
             'race_setup',
             '/gb/backend/api/v2/RaceSetup',
-            $this->ttlShort(),
             $forceRefresh,
-            epoch: $this->raceWindow(),
         );
     }
 
@@ -183,9 +204,7 @@ final class GproApiClient
         return $this->getCached(
             'testing',
             '/gb/backend/api/v2/Testing',
-            $this->ttlShort(),
             $forceRefresh,
-            epoch: $this->raceWindow(),
         );
     }
 
@@ -195,7 +214,6 @@ final class GproApiClient
         return $this->getCached(
             'staff_facilities',
             '/gb/backend/api/v2/StaffAndFacilities',
-            $this->ttlShort(),
             $forceRefresh,
         );
     }
@@ -204,7 +222,7 @@ final class GproApiClient
     public function getTechnicalDirector(bool $forceRefresh = false): array
     {
         try {
-            return $this->getCached('td_profile', '/gb/backend/api/v2/TDProfile', $this->ttlShort(), $forceRefresh);
+            return $this->getCached('td_profile', '/gb/backend/api/v2/TDProfile', $forceRefresh);
         } catch (\Throwable) {
             return [];
         }
@@ -216,9 +234,9 @@ final class GproApiClient
      * warns that omitting it can be slow for long-tenured supporters, but the
      * alternative (walking racesToSelect) costs one call per race.
      *
-     * Keyed to the race window so a new weekend rolls the entry; a manager who
-     * never races again simply keeps serving the same cached payload, and the
-     * telemetry ingest de-duplicates it away.
+     * Each sync overwrites the one entry; a manager who never races again
+     * simply keeps serving the same payload, and the telemetry ingest
+     * de-duplicates it away.
      *
      * @return array<string, mixed>
      */
@@ -228,9 +246,7 @@ final class GproApiClient
             return $this->getCached(
                 'race_analysis',
                 '/gb/backend/api/v2/RaceAnalysis',
-                $this->ttlShort(),
                 $forceRefresh,
-                epoch: $this->raceWindow(),
             );
         } catch (\Throwable) {
             // A manager who is not a supporter, or has not raced, gets an
@@ -252,7 +268,6 @@ final class GproApiClient
         return $this->getCached(
             'tyre_suppliers',
             '/gb/backend/api/v2/TyreSuppliers',
-            120000,
             $forceRefresh,
             shared: true,
             archiveShared: true,
@@ -285,13 +300,13 @@ final class GproApiClient
     /** @return array<string, mixed> */
     public function getMenu(bool $forceRefresh = false): array
     {
-        return $this->getCached('manager_menu', '/gb/backend/api/v2/Menu', $this->ttlShort(), $forceRefresh);
+        return $this->getCached('manager_menu', '/gb/backend/api/v2/Menu', $forceRefresh);
     }
 
     /** @return array<string, mixed> */
     public function getMoneyLevels(bool $forceRefresh = false): array
     {
-        return $this->getCached('money_levels', '/gb/backend/api/v2/MoneyLevels', $this->ttlShort(), $forceRefresh);
+        return $this->getCached('money_levels', '/gb/backend/api/v2/MoneyLevels', $forceRefresh);
     }
 
     /**
@@ -302,12 +317,12 @@ final class GproApiClient
      */
     public function getGroupStaff(bool $forceRefresh = false): array
     {
-        return $this->getCached('group_staff', '/gb/backend/api/v2/ViewStaff', $this->ttlShort(), $forceRefresh);
+        return $this->getCached('group_staff', '/gb/backend/api/v2/ViewStaff', $forceRefresh);
     }
 
     /**
      * Season standings of the token account's own group (no Group parameter:
-     * GPRO defaults to it). A per-race snapshot, so it rolls with the window.
+     * GPRO defaults to it). A per-race snapshot, refreshed by each sync.
      *
      * @return array<string, mixed>
      */
@@ -316,9 +331,7 @@ final class GproApiClient
         return $this->getCached(
             'standings',
             '/gb/backend/api/v2/Standings',
-            $this->ttlShort(),
             $forceRefresh,
-            epoch: $this->raceWindow(),
         );
     }
 
@@ -332,9 +345,7 @@ final class GproApiClient
         return $this->getCached(
             'economy_history_' . $page,
             "/gb/backend/api/v2/EconomyHistory?Page={$page}&show=table",
-            $this->ttlShort(),
             $forceRefresh,
-            epoch: $this->raceWindow(),
         );
     }
 
@@ -384,54 +395,40 @@ final class GproApiClient
     /** @return array<string, mixed> */
     public function getCalendar(bool $forceRefresh = false): array
     {
-        return $this->getCached('calendar', '/gb/backend/api/v2/Calendar', $this->ttlShort(), $forceRefresh);
+        return $this->getCached('calendar', '/gb/backend/api/v2/Calendar', $forceRefresh);
     }
 
     /**
-     * Returns the calendar only if it's already in cache — never spends an
-     * API call. Used by surfaces (e.g. Recruitment) that want the calendar
-     * opportunistically but must not trigger a fetch. The per-user sync
-     * already warms this key, so it's normally a hit.
+     * The calendar the last sync stored (cache, else archive) — never spends
+     * an API call, even inside withFetching(). For surfaces (e.g. Recruitment)
+     * that want the calendar opportunistically.
      *
      * @return array<string, mixed>
      */
     public function getCachedCalendar(): array
     {
-        $cached = $this->cache->get($this->userKey('calendar'));
-        return is_array($cached) ? $cached : [];
+        return $this->stored($this->userKey('calendar'), '/gb/backend/api/v2/Calendar') ?? [];
     }
 
     /**
-     * Whether the payloads the screens read are all cached, so rendering one
-     * spends no API call. Cache reads only — never fetches. Race-critical
-     * payloads roll with the race window, so a new weekend reads as cold.
+     * Whether every payload the screens read is stored (cache or archive, of
+     * any age), so rendering one has data to show. Never fetches.
      */
     public function isWarm(): bool
     {
-        $window = $this->raceWindow();
-        $archiveWindow = $this->archiveWindow();
-
-        $office = $this->cache->get($this->userKey('office_data'));
-        if (!is_array($office)) {
-            $office = $this->archivedFresh('office', '', $archiveWindow);
-        }
+        $office = $this->stored($this->userKey('office_data'), '/gb/backend/api/v2/office');
         if ($office === null) {
             return false;
         }
-        if (
-            $this->cache->get($this->userKey('calendar')) === null
-            && $this->archivedFresh('Calendar', '', $archiveWindow) === null
-        ) {
-            return false;
-        }
 
-        $raceCritical = ['car_data' => 'UpdateCar', 'race_setup' => 'RaceSetup', 'next_race_profile' => 'TrackProfile'];
-        foreach ($raceCritical as $key => $endpoint) {
-            $key = $this->userKey($key);
-            if (
-                $this->cache->get($window !== '' ? $key . ':w' . $window : $key) === null
-                && $this->archivedFresh($endpoint, '', $archiveWindow) === null
-            ) {
+        $screens = [
+            'calendar' => '/gb/backend/api/v2/Calendar',
+            'car_data' => '/gb/backend/api/v2/UpdateCar',
+            'race_setup' => '/gb/backend/api/v2/RaceSetup',
+            'next_race_profile' => '/gb/backend/api/v2/TrackProfile',
+        ];
+        foreach ($screens as $key => $endpoint) {
+            if ($this->stored($this->userKey($key), $endpoint) === null) {
                 return false;
             }
         }
@@ -441,75 +438,72 @@ final class GproApiClient
             return true;
         }
 
-        return $this->cache->get($this->userKey('driver_profile_' . $driId)) !== null
-            || $this->archivedFresh('DriProfile', 'id=' . $driId, $archiveWindow) !== null;
+        return $this->stored(
+            $this->userKey('driver_profile_' . $driId),
+            "/gb/backend/api/v2/DriProfile?id={$driId}",
+        ) !== null;
     }
 
     /**
-     * Returns Menu data only if already cached — never spends an API call.
-     * Used by the global billboard, which must render on every tab without
-     * triggering a fetch. The per-user sync warms this key.
+     * The Menu the last sync stored — never spends an API call. Used by the
+     * global billboard, which renders on every tab.
      *
      * @return array<string, mixed>
      */
     public function getCachedMenu(): array
     {
-        $cached = $this->cache->get($this->userKey('manager_menu'));
-        return is_array($cached) ? $cached : [];
+        return $this->stored($this->userKey('manager_menu'), '/gb/backend/api/v2/Menu') ?? [];
     }
 
     /**
-     * Returns Office data only if already cached — never spends an API call.
-     * Same contract as getCachedMenu().
+     * The office the last sync stored — never spends an API call. Same
+     * contract as getCachedMenu().
      *
      * @return array<string, mixed>
      */
     public function getCachedOfficeData(): array
     {
-        $cached = $this->cache->get($this->userKey('office_data'));
-        return is_array($cached) ? $cached : [];
+        return $this->stored($this->userKey('office_data'), '/gb/backend/api/v2/office') ?? [];
     }
 
     /**
-     * Returns the group's money levels only if already cached — never spends an
-     * API call. The per-user sync warms this key (see GproSyncService), so the
-     * billboard can rank the manager's cash against the group for free.
+     * The group's money levels the last sync stored — never spends an API
+     * call, so the billboard can rank the manager's cash against the group.
      *
      * @return array<string, mixed>
      */
     public function getCachedMoneyLevels(): array
     {
-        $cached = $this->cache->get($this->userKey('money_levels'));
-        return is_array($cached) ? $cached : [];
+        return $this->stored($this->userKey('money_levels'), '/gb/backend/api/v2/MoneyLevels') ?? [];
     }
 
     /**
-     * The group's staff only if already cached or archived for this race
-     * window — never spends an API call. The archive row is served whatever
-     * its age: the harvest files it once per window, and a stale answer beats
-     * none for a read that must not fetch.
+     * The group's staff as last stored — never spends an API call. The
+     * harvest files it once per window; a stale answer beats none.
      *
      * @return array<string, mixed>
      */
     public function getCachedGroupStaff(): array
     {
-        $cached = $this->cache->get($this->userKey('group_staff'));
-        if (is_array($cached)) {
-            /** @var array<string, mixed> $cached */
-            return $cached;
-        }
-        $row = $this->archivedRow(
-            ...self::splitEndpoint('/gb/backend/api/v2/ViewStaff'),
-            window: $this->archiveWindow(),
-        );
-
-        return $row['payload'] ?? [];
+        return $this->stored($this->userKey('group_staff'), '/gb/backend/api/v2/ViewStaff') ?? [];
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * The same track list for everyone, but filed under each user who fetches
+     * it, like the tyre feed: a sync asks for it once a season, and a rotated
+     * shared cache then still has the caller's copy to serve.
+     *
+     * @return array<string, mixed>
+     */
     public function getAllTracksPreview(bool $forceRefresh = false): array
     {
-        return $this->getCached('all_tracks_preview', '/gb/backend/api/v2/Tracks', 21600, $forceRefresh, shared: true);
+        return $this->getCached(
+            'all_tracks_preview',
+            '/gb/backend/api/v2/Tracks',
+            $forceRefresh,
+            shared: true,
+            archiveShared: true,
+        );
     }
 
     /** @return array<string, mixed> */
@@ -518,7 +512,6 @@ final class GproApiClient
         return $this->getCached(
             'sponsor_negotiations',
             '/gb/backend/api/v2/NegOverview',
-            $this->ttlShort(),
             $forceRefresh,
         );
     }
@@ -529,7 +522,6 @@ final class GproApiClient
         return $this->getCached(
             'sponsor_profile_' . $sponsorId,
             "/gb/backend/api/v2/NegotiateSponsor?id={$sponsorId}",
-            $this->ttlShort(),
             $forceRefresh
         );
     }
@@ -585,65 +577,45 @@ final class GproApiClient
     }
 
     /**
+     * Stored payload first; only a forced call, or a miss inside
+     * withFetching(), reaches GPRO. Outside the gate a miss is [].
+     *
      * @param bool $shared When true the key is global (same payload for every
-     *   user — market dump, static track list, season-wide supplier data).
+     *   user — static track list, season-wide supplier data).
      *   Default false: the key is namespaced to the current user so per-user
      *   payloads never leak across accounts.
      * @param bool $archiveShared A shared payload is not archived unless this
-     *   is set, in which case a real fetch is filed under the calling user
-     *   (reads still come from the shared cache only).
+     *   is set, in which case a real fetch is filed under the calling user,
+     *   and a shared-cache miss serves that user's own row without writing it
+     *   to the shared key (it may be another season's; only a fetch is shared).
      * @return array<string, mixed>
      */
     private function getCached(
         string $key,
         string $endpoint,
-        int $ttl,
         bool $force,
         bool $shared = false,
-        string $epoch = '',
         bool $archiveShared = false,
     ): array {
         $key = $shared ? $key : $this->userKey($key);
-        // Race-critical endpoints pass a non-empty epoch so the key rolls when
-        // a new race weekend opens — a window miss triggers exactly one fresh
-        // fetch. Empty epoch (the default) keeps the plain TTL-only behaviour.
-        if ($epoch !== '') {
-            $key .= ':w' . $epoch;
-        }
+        $archived = !$shared || $archiveShared;
         if (!$force) {
-            $cached = $this->cache->get($key);
-            if ($cached !== null) {
-                /** @var array<string, mixed> $cached */
-                // Cache hits do NOT update the remaining-calls counter:
-                // the cached payload carries an apiRequestsRemaining value
-                // from the moment it was originally fetched, which is older
-                // than what's in the session right now. Writing it back
-                // would rewind the counter and make the header badge
-                // ping-pong as the user navigates between tabs.
-                return $cached;
-            }
-
-            // A cache miss (a deploy cold-starts the namespaced cache) is
-            // served from this window's archive before spending a fetch, for
-            // whatever is left of the TTL the row started with; an older row
-            // is a miss. Same reasoning as cache hits: the counter is left alone.
-            $row = $shared
-                ? null
-                : $this->archivedRow(...self::splitEndpoint($endpoint), window: $this->archiveWindow());
-            if ($row !== null) {
-                $age = time() - (int) strtotime($row['fetched_at'] . ' UTC');
-                if ($age < $ttl) {
-                    $this->cache->set($key, $row['payload'], max(1, $ttl - $age));
-
-                    return $row['payload'];
-                }
+            $stored = $this->stored($key, $archived ? $endpoint : null, recache: !$shared);
+            if ($stored !== null) {
+                return $stored;
             }
         }
 
-        $data = $this->fetcher->fetchJson($endpoint);
-        $this->cache->set($key, $data, $ttl);
+        $data = $this->fetch($endpoint);
+        // An empty answer ({}) is no payload: it must not replace the good one.
+        if ($data === null || $data === []) {
+            return [];
+        }
+        // No expiry: the next sync overwrites the entry, and until then the
+        // newest payload is the right one to show.
+        $this->cache->set($key, $data, null);
         $this->rememberApiLimit($data);
-        if (!$shared || $archiveShared) {
+        if ($archived) {
             $this->archivePut(...self::splitEndpoint($endpoint), window: $this->archiveWindow(), data: $data);
         }
 
@@ -654,7 +626,7 @@ final class GproApiClient
      * A payload that never changes once GPRO has produced it (a named finished
      * race, a finished season), so it is filed under the empty window and an
      * existing row is served whatever its age or the current window. A forced
-     * call still fetches and refreshes the row.
+     * call still fetches (inside withFetching()) and refreshes the row.
      *
      * @return array<string, mixed>
      */
@@ -663,24 +635,66 @@ final class GproApiClient
         $key = $this->userKey($key);
         if (!$force) {
             $cached = $this->cache->get($key);
-            if ($cached !== null) {
+            if (is_array($cached)) {
                 /** @var array<string, mixed> $cached */
                 return $cached;
             }
             $row = $this->readArchive(...self::splitEndpoint($endpoint), window: '');
             if ($row !== null) {
-                $this->cache->set($key, $row['payload'], $this->ttlShort());
+                $this->cache->set($key, $row['payload'], null);
 
                 return $row['payload'];
             }
         }
 
-        $data = $this->fetcher->fetchJson($endpoint);
-        $this->cache->set($key, $data, $this->ttlShort());
+        $data = $this->fetch($endpoint);
+        if ($data === null) {
+            return [];
+        }
+        $this->cache->set($key, $data, null);
         $this->rememberApiLimit($data);
         $this->archivePut(...self::splitEndpoint($endpoint), window: '', data: $data);
 
         return $data;
+    }
+
+    /**
+     * The one place a manager payload leaves for GPRO. Null, with no call
+     * made, unless a sync run opened the gate (withFetching()).
+     *
+     * @return array<string, mixed>|null
+     */
+    private function fetch(string $endpoint): ?array
+    {
+        return $this->fetching ? $this->fetcher->fetchJson($endpoint) : null;
+    }
+
+    /**
+     * The newest payload already held for $key, without fetching: the cache,
+     * else the newest archived row for $endpoint under this token, whatever
+     * its window or age (re-cached without expiry unless $recache is false).
+     * A null $endpoint reads the cache only. Neither touches the remaining-calls counter: a stored
+     * payload's apiRequestsRemaining is older than the session's, and writing
+     * it back would make the header badge ping-pong between tabs.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function stored(string $key, ?string $endpoint, bool $recache = true): ?array
+    {
+        $cached = $this->cache->get($key);
+        if (is_array($cached)) {
+            /** @var array<string, mixed> $cached */
+            return $cached;
+        }
+        if ($endpoint === null) {
+            return null;
+        }
+        $payload = $this->latestArchived(...self::splitEndpoint($endpoint));
+        if ($payload !== null && $recache) {
+            $this->cache->set($key, $payload, null);
+        }
+
+        return $payload;
     }
 
     /**
@@ -695,15 +709,6 @@ final class GproApiClient
         $parts = explode('?', $rest, 2);
 
         return [$parts[0], $parts[1] ?? ''];
-    }
-
-    /**
-     * @return array{payload: array<string, mixed>, fetched_at: string, season: ?int, race: ?int}|null
-     */
-    private function archivedRow(string $endpoint, string $params, string $window): ?array
-    {
-        // No window (windowing disabled) means a row can never be "current".
-        return $window === '' ? null : $this->readArchive($endpoint, $params, $window);
     }
 
     /**
@@ -727,20 +732,23 @@ final class GproApiClient
     }
 
     /**
-     * The archived payload the read-through would serve: only a row younger
-     * than the TTL counts, so a page judged warm never fetches after all.
+     * Newest archived payload of the endpoint under this client's owner and
+     * token, of any window or age. Same failure contract as readArchive().
      *
      * @return array<string, mixed>|null
      */
-    private function archivedFresh(string $endpoint, string $params, string $window): ?array
+    private function latestArchived(string $endpoint, string $params): ?array
     {
-        $row = $this->archivedRow($endpoint, $params, $window);
-        if ($row === null) {
+        if ($this->archive === null || $this->archiveUserId === null) {
             return null;
         }
-        $age = time() - (int) strtotime($row['fetched_at'] . ' UTC');
+        try {
+            return $this->archive->latest($this->archiveUserId, $endpoint, $params, $this->scope);
+        } catch (\Throwable $e) {
+            error_log('[ApiArchive] ' . $e::class);
 
-        return $age < $this->ttlShort() ? $row['payload'] : null;
+            return null;
+        }
     }
 
     /** @param array<string, mixed> $data */
@@ -798,15 +806,10 @@ final class GproApiClient
         return $this->clock === null ? new DateTimeImmutable('now') : ($this->clock)();
     }
 
-    private function ttlShort(): int
-    {
-        return Env::int('CACHE_TTL_SHORT', 259200);
-    }
-
     /**
-     * Window the archive files rows under. Unlike the cache's raceWindow(), it
-     * rolls at race start, so the last pre-race snapshot survives as the one
-     * that raced. An empty GPRO_RACE_DAYS yields '' and disables archive reads.
+     * Window the archive files rows under. It rolls at race start, so the last
+     * pre-race snapshot survives as the one that raced. An empty GPRO_RACE_DAYS
+     * yields '' (every row filed under one window); reads never depend on it.
      */
     public function archiveWindow(): string
     {
@@ -898,21 +901,5 @@ final class GproApiClient
     public function archiveSyncOffice(array $office): void
     {
         $this->archivePut('office', 'sync', $this->archiveWindow(), $office);
-    }
-
-    /**
-     * Current race-window id used to namespace race-critical cache keys. Pure
-     * clock arithmetic against GPRO's fixed weekly schedule — no API call.
-     * Configurable via env (days, boundary hour, timezone); an empty
-     * GPRO_RACE_DAYS disables windowing and falls back to the plain TTL.
-     */
-    private function raceWindow(): string
-    {
-        return RaceWindow::idFor(
-            $this->now(),
-            RaceWindow::parseDays(Env::get('GPRO_RACE_DAYS', '2,5')),
-            Env::int('GPRO_RACE_BOUNDARY_HOUR', 0),
-            Env::get('GPRO_RACE_TZ', 'Europe/London'),
-        );
     }
 }
