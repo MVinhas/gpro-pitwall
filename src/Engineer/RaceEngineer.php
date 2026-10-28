@@ -371,7 +371,7 @@ final class RaceEngineer
                 );
         }
 
-        if (!self::affords($in, $cost, self::STAGE_TESTING)) {
+        if (self::testingSpend($in) === null) {
             return self::line(
                 'testing',
                 $skip,
@@ -385,6 +385,20 @@ final class RaceEngineer
     }
 
     /**
+     * What the testing line spends: the session cost when a session is open, aimed and affordable; null when
+     * the line spends nothing.
+     */
+    private static function testingSpend(EngineerInputs $in): ?int
+    {
+        $cost = $in->testingCost;
+        if (!$in->testingOpen || $in->testingTarget === null || $cost === null) {
+            return null;
+        }
+
+        return self::affords($in, $cost, self::STAGE_TESTING) ? $cost : null;
+    }
+
+    /**
      * What is left of the plan's envelope for car upgrades, after the lines that draw first: optional swaps,
      * training, then testing.
      */
@@ -394,14 +408,7 @@ final class RaceEngineer
             return 0;
         }
 
-        $left = self::envelopeLeft($in, self::STAGE_TESTING);
-        $cost = $in->testingCost;
-        $testing = $in->testingOpen && $in->testingTarget !== null && $cost !== null;
-        if ($testing && self::affords($in, $cost, self::STAGE_TESTING)) {
-            $left -= $cost;
-        }
-
-        return max(0, $left);
+        return max(0, self::envelopeLeft($in, self::STAGE_TESTING) - (self::testingSpend($in) ?? 0));
     }
 
     /**

@@ -1230,6 +1230,32 @@ final class RaceEngineerTest extends TestCase
         $this->assertSame(0, RaceEngineer::upgradeBudget($this->inputs()));
     }
 
+    public function testUpgradeBudgetTakesTestingOnlyWhenTheTestingLineSpendsIt(): void
+    {
+        $training = ['name' => 'Talent course', 'score' => 1.0, 'cost' => 550_000, 'gains' => []];
+        $states = [
+            'fits' => ['testingCost' => 1_000_000],
+            'too dear' => ['testingCost' => 1_450_001],
+            'exact' => ['testingCost' => 1_450_000],
+            'cost unknown' => ['testingCost' => null],
+            'closed' => ['testingOpen' => false],
+            'no target' => ['testingTarget' => null],
+            'free' => ['testingCost' => 0],
+        ];
+
+        foreach ($states as $state => $o) {
+            $in = $this->withUpgrades([], $o + ['trainingPick' => $training], ['envelope' => 2_000_000]);
+            $testing = $this->line($in, 'testing');
+            $spends = str_starts_with($testing['answer'], 'Test at');
+
+            $this->assertSame(
+                1_450_000 - ($spends ? (int) $in->testingCost : 0),
+                RaceEngineer::upgradeBudget($in),
+                $state,
+            );
+        }
+    }
+
     public function testUpgradeBudgetNeverGoesBelowZero(): void
     {
         $in = $this->withUpgrades([], ['trainingPick' => null, 'testingCost' => 100_000], ['envelope' => -50_000]);
