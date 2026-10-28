@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.21] - 2026-10-28
+
+### Fixed
+- CI is green again: the manual-refresh screen test now adds its own track instead of relying on the
+  local-only track list, which CI does not have. No change to the app itself.
+
 ## [1.21.20] - 2026-10-28
 
 ### Fixed
