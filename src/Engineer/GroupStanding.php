@@ -29,7 +29,8 @@ final readonly class GroupStanding
                 $own = $oa;
             }
         }
-        if ($own === null) {
+        // Thirds of one or two managers rank no one against anyone.
+        if ($own === null || count($all) < 3) {
             return null;
         }
 
@@ -40,13 +41,14 @@ final readonly class GroupStanding
         $hold = $objective === SeasonObjective::HOLD;
 
         $middle = array_slice($all, $third, max(0, $of - 2 * $third));
-        $band = $hold && $middle !== [] ? $middle : array_slice($all, 0, $third);
+        $useMiddle = $hold && $middle !== [];
+        $band = $useMiddle ? $middle : array_slice($all, 0, $third);
 
         return [
             'rank' => $rank,
             'of' => $of,
             'own' => $own,
-            'band' => $hold ? 'middle' : 'top',
+            'band' => $useMiddle ? 'middle' : 'top',
             'band_average' => (int) round(array_sum($band) / count($band)),
             'nudge' => match ($objective) {
                 SeasonObjective::PROMOTE => $rank > $third,
@@ -106,6 +108,9 @@ final readonly class GroupStanding
      */
     private static function isOwn(array $manager, array $menu): bool
     {
-        return isset($manager['IDM'], $menu['IDM']) && (string) $manager['IDM'] === (string) $menu['IDM'];
+        $mine = $menu['IDM'] ?? null;
+        $theirs = $manager['IDM'] ?? null;
+
+        return is_scalar($mine) && is_scalar($theirs) && (string) $theirs === (string) $mine;
     }
 }

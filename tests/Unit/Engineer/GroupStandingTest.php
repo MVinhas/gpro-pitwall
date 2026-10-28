@@ -98,11 +98,38 @@ final class GroupStandingTest extends TestCase
 
     public function testHoldWithAnEmptyMiddleFallsBackToTheTop(): void
     {
-        // of 2: third 1, middle slice is positions 2..1, empty
-        $standing = GroupStanding::staff(self::staff([90, 70], 1), ['IDM' => 7], SeasonObjective::HOLD);
+        // of 4: third 2, middle slice is positions 3..2, empty
+        $standing = GroupStanding::staff(self::staff([90, 80, 70, 60], 3), ['IDM' => 7], SeasonObjective::HOLD);
 
         $this->assertNotNull($standing);
-        $this->assertSame(90, $standing['band_average']);
+        $this->assertSame(85, $standing['band_average']);
+        $this->assertSame('top', $standing['band']);
+    }
+
+    public function testAGroupOfFewerThanThreeRatedManagersMakesNoClaim(): void
+    {
+        foreach ([SeasonObjective::PROMOTE, SeasonObjective::HOLD] as $objective) {
+            $this->assertNull(GroupStanding::staff(self::staff([50], 0), ['IDM' => 7], $objective));
+            $this->assertNull(GroupStanding::staff(self::staff([90, 50], 1), ['IDM' => 7], $objective));
+
+            $group = self::staff([90, 50], 1);
+            $group['managers'][] = ['name' => 'Blank', 'IDM' => 55, 'staffOA' => ''];
+            $this->assertNull(GroupStanding::staff($group, ['IDM' => 7], $objective));
+        }
+
+        $this->assertNotNull(GroupStanding::staff(self::staff([90, 70, 50], 2), ['IDM' => 7], SeasonObjective::HOLD));
+    }
+
+    public function testANonScalarIdmNeverMatches(): void
+    {
+        $group = self::staff([60, 80, 70], 1);
+        $group['managers'][1]['IDM'] = [7];
+
+        $this->assertNull(GroupStanding::staff($group, ['IDM' => [7]], SeasonObjective::PROMOTE));
+        $this->assertNull(GroupStanding::staff(self::staff([60, 80, 70], 1), ['IDM' => [7]], SeasonObjective::PROMOTE));
+
+        $money = ['managers' => [['IDM' => [7], 'carLevel' => 6, 'carLevelRank' => 2]]];
+        $this->assertNull(GroupStanding::car($money, ['IDM' => [7]]));
     }
 
     public function testSurviveNeverNudges(): void
