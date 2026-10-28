@@ -169,8 +169,8 @@
     {% if is_logged_in %}
     <script>
     // Fetch a screen from the server and swap it, and the status line (a sync
-    // may have just changed both), into this page. Shared by the skeleton fill
-    // and the idle revalidation. Resolves 'swapped', or:
+    // may have just changed both), into this page. Used by the skeleton fill.
+    // Resolves 'swapped', or:
     //  - 'held' when allow() vetoed replacing the content (checked right before
     //    the swap, after the fetch; the status line is still updated);
     //  - 'invalid' when the response is not a screen (auth lapsed, token lost)
