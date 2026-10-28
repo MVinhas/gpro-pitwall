@@ -281,10 +281,8 @@ class SeasonService
         }
 
         try {
-            foreach ($plan['upgrades'] as $u) {
-                if (!self::isUpgrade($u)) {
-                    throw new \UnexpectedValueException('Saved upgrade ranking has an unexpected row.');
-                }
+            if (!self::isRanking($plan['upgrades'])) {
+                throw new \UnexpectedValueException('Saved upgrade ranking has an unexpected row.');
             }
 
             return array_map(static fn (array $u): array => [
@@ -302,16 +300,26 @@ class SeasonService
         }
     }
 
-    private static function isUpgrade(mixed $u): bool
+    private static function isRanking(mixed $rows): bool
     {
-        return is_array($u)
-            && is_string($u['part'] ?? null)
-            && is_int($u['from'] ?? null)
-            && is_int($u['to'] ?? null)
-            && is_int($u['price'] ?? null)
-            && is_int($u['net_cost'] ?? null)
-            && (is_int($u['gain'] ?? null) || is_float($u['gain'] ?? null))
-            && is_bool($u['affordable'] ?? null);
+        if (!is_array($rows)) {
+            return false;
+        }
+        foreach ($rows as $u) {
+            $ok = is_array($u)
+                && is_string($u['part'] ?? null)
+                && is_int($u['from'] ?? null)
+                && is_int($u['to'] ?? null)
+                && is_int($u['price'] ?? null)
+                && is_int($u['net_cost'] ?? null)
+                && (is_int($u['gain'] ?? null) || is_float($u['gain'] ?? null))
+                && is_bool($u['affordable'] ?? null);
+            if (!$ok) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

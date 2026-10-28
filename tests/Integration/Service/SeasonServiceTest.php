@@ -251,6 +251,25 @@ final class SeasonServiceTest extends TestCase
         $this->assertStringNotContainsString('Engine', $logged);
     }
 
+    public function testANonListRankingHidesOnlyTheUpgradesCard(): void
+    {
+        $this->race(1);
+        $this->budgets->save(1, 107, 9, $this->plan(['upgrades' => 'Engine']));
+        $log = tempnam(sys_get_temp_dir(), 'season-log');
+        $this->assertIsString($log);
+        $previous = ini_set('error_log', $log);
+
+        try {
+            $budget = $this->service->build(1, null)['budget'];
+        } finally {
+            ini_set('error_log', (string) $previous);
+        }
+
+        unlink($log);
+        $this->assertNotNull($budget);
+        $this->assertNull($budget['view']['upgrades']);
+    }
+
     public function testBudgetOnlyForTheLatestSeason(): void
     {
         $this->race(1, season: 106);
