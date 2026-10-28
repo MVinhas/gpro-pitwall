@@ -204,6 +204,7 @@ class SeasonService
     {
         return match ($plan['target_kind']) {
             'start' => 'End above ' . Dollars::short($plan['target']),
+            'reserve' => 'End above ' . Dollars::short($plan['target']) . ' (half your season start)',
             'start_out_of_reach' => 'Keep one race of costs in hand (your '
                 . Dollars::short($plan['season_start'] ?? $plan['target']) . ' start is out of reach)',
             default => 'Keep one race of costs in hand',

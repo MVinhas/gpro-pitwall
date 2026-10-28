@@ -213,13 +213,32 @@ final class CtrPlannerTest extends TestCase
         $this->assertNull($unknown['season_start']);
     }
 
-    public function testPromoteTargetIsTheCushion(): void
+    public function testPromoteKeepsHalfTheSeasonStartWhenThatIsAboveTheCushion(): void
     {
-        $plan = $this->plan(SeasonObjective::PROMOTE, 1_000_000, 50_000, 0, 900_000);
+        $plan = $this->plan(SeasonObjective::PROMOTE, 12_000_000, 50_000, 0, 10_000_000);
 
+        $this->assertLessThan(5_000_000, $plan['cushion']);
+        $this->assertSame(5_000_000, $plan['target']);
+        $this->assertSame('reserve', $plan['target_kind']);
+        $this->assertSame(CtrPlanner::PROMOTE_RESERVE, 0.5);
+    }
+
+    public function testPromoteKeepsTheCushionWhenItIsAboveHalfTheStart(): void
+    {
+        $plan = $this->plan(SeasonObjective::PROMOTE, 1_000_000, 50_000, 0, 100_000);
+
+        $this->assertGreaterThan((int) ceil(100_000 / 2), $plan['cushion']);
         $this->assertSame('cushion', $plan['target_kind']);
         $this->assertSame($plan['cushion'], $plan['target']);
         $this->assertSame(50_000 + 33_333, $plan['cushion']);
+    }
+
+    public function testPromoteWithoutASeasonStartKeepsTheCushion(): void
+    {
+        $plan = $this->plan(SeasonObjective::PROMOTE, 1_000_000, 50_000);
+
+        $this->assertSame('cushion', $plan['target_kind']);
+        $this->assertSame($plan['cushion'], $plan['target']);
     }
 
     public function testSurviveFallsBackToTheCushionWhenTheStartIsOutOfReach(): void

@@ -764,6 +764,15 @@ final class RaceEngineerTest extends TestCase
         $this->assertSame('Keeps one race of costs in hand (your $12.5M start is out of reach)', $line['reason']);
     }
 
+    public function testThePromoteReserveIsNamedInTheCashLine(): void
+    {
+        $line = $this->line($this->planned([
+            'target_kind' => 'reserve', 'target' => 5_000_000, 'season_start' => 10_000_000,
+        ], ['objective' => $this->objective(SeasonObjective::PROMOTE)]), 'cash');
+
+        $this->assertSame('Ends the season above $5M, half your $10M start', $line['reason']);
+    }
+
     public function testCashNothingToSpareWhenTheEnvelopeIsZero(): void
     {
         $line = $this->line($this->planned(['envelope' => 0]), 'cash');

@@ -390,6 +390,17 @@ final class SeasonServiceTest extends TestCase
         );
     }
 
+    public function testAPromoteReserveIsNamedInTheTarget(): void
+    {
+        $this->race(1);
+        $this->budgets->save(1, 107, 9, $this->plan(['target_kind' => 'reserve', 'target' => 2_000_000]));
+
+        $this->assertSame(
+            'End above $2M (half your season start)',
+            $this->service->build(1, null)['budget']['view']['target'] ?? null,
+        );
+    }
+
     public function testBudgetShowsForANewSeasonWithoutHistory(): void
     {
         $this->race(17, season: 106);

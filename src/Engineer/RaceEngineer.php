@@ -183,6 +183,8 @@ final class RaceEngineer
         $start = Money::short($plan['season_start'] ?? $plan['target']);
         $reason = match (true) {
             $plan['target_kind'] === 'start' => 'Ends the season above your ' . $start . ' start',
+            $plan['target_kind'] === 'reserve' => 'Ends the season above ' . Money::short($plan['target'])
+                . ', half your ' . $start . ' start',
             $plan['target_kind'] === 'start_out_of_reach' => 'Keeps one race of costs in hand (your ' . $start
                 . ' start is out of reach)',
             self::objectiveIs($in, SeasonObjective::PROMOTE) => 'Keeps one race of costs in hand',
