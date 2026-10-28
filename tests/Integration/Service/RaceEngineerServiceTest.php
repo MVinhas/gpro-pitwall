@@ -627,8 +627,11 @@ final class RaceEngineerServiceTest extends TestCase
         $lines = $this->service->forCockpit(self::USER, $this->upgradeCockpit(30))['lines'];
         $plan = $this->budgets->find(self::USER, self::SEASON)['plan'] ?? [];
 
-        self::assertArrayHasKey('upgrades', array_column($lines, null, 'key'));
-        self::assertNotSame([], $plan['upgrades'] ?? []);
+        $line = array_column($lines, null, 'key')['upgrades'] ?? null;
+        self::assertNotNull($line);
+        $affordable = array_values(array_filter($plan['upgrades'] ?? [], static fn (array $u): bool => $u['affordable']));
+        self::assertNotSame([], $affordable, 'the fixture must leave an upgrade that fits');
+        self::assertSame('Upgrade ' . $affordable[0]['part'] . ' to L' . $affordable[0]['to'], $line['answer']);
     }
 
     public function testWholeCardIsIdenticalAtAnyCurrentCtr(): void
