@@ -131,8 +131,8 @@ class SeasonService
     }
 
     /**
-     * The plan the Cockpit's engineer last saved, formatted for the page. The Season screen has none of the
-     * Cockpit's live inputs, so it only ever shows what was saved. It belongs to the newest season view, and
+     * The plan the Engineer tab last saved, formatted for the page. The Season screen has none of the
+     * Engineer tab's live inputs, so it only ever shows what was saved. It belongs to the newest season view, and
      * its season may be newer than any race history (a new season's first weekend). Once that season's
      * history reaches the plan's last forecast race the plan is spent: no budget, and $over is true.
      *

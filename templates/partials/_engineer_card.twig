@@ -1,5 +1,5 @@
 {# Admin-only race engineer. Renders nothing without `engineer` (non-admins, or the
-   engineer failed): the cockpit never depends on it. The objective label already
+   engineer failed): the Engineer tab then shows its empty state. The objective label already
    carries both calls when pinned ("Your call: … (engineer proposes …)"). #}
 {% if engineer is defined and engineer is not empty %}
     {% set objective = engineer.objective %}
