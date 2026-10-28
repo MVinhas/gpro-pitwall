@@ -42,13 +42,13 @@ final class EngineerCardTest extends TestCase
     {
         $html = $this->html(self::objective(), [
             self::line('objective', 'First answer'),
-            self::line('ctr', 'Second answer', 'amber', ['label' => 'Use 41', 'href' => '/cockpit?cockpit_risk=41']),
+            self::line('ctr', 'Second answer', 'amber', ['label' => 'Use 41', 'href' => '/engineer?cockpit_risk=41']),
             self::line('parts', 'Third answer', 'red'),
         ]);
 
         $this->assertLessThan(strpos($html, 'Second answer'), strpos($html, 'First answer'));
         $this->assertLessThan(strpos($html, 'Third answer'), strpos($html, 'Second answer'));
-        $this->assertStringContainsString('href="/cockpit?cockpit_risk=41"', $html);
+        $this->assertStringContainsString('href="/engineer?cockpit_risk=41"', $html);
         $this->assertStringContainsString('Use 41', $html);
         $this->assertStringContainsString('href="#cockpit-wear"', $html);
         $this->assertStringNotContainsString('##', $html);

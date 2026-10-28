@@ -273,7 +273,7 @@ final class RaceEngineerTest extends TestCase
         ]), 'ctr');
 
         $this->assertSame('CTR 45', $line['answer']);
-        $this->assertSame(['label' => 'Use 45', 'href' => '/cockpit?cockpit_risk=45'], $line['action']);
+        $this->assertSame(['label' => 'Use 45', 'href' => '/engineer?cockpit_risk=45'], $line['action']);
         $this->assertStringContainsString('Push', $line['reason']);
         $this->assertStringContainsString('no part breaks', $line['reason']);
         $this->assertSame('/cockpit#cockpit-wear', $line['anchor']);
@@ -298,7 +298,7 @@ final class RaceEngineerTest extends TestCase
         $line = $this->line($this->inputs(['currentCtr' => 0]), 'ctr');
 
         $this->assertSame('CTR 45', $line['answer']);
-        $this->assertSame(['label' => 'Use 45', 'href' => '/cockpit?cockpit_risk=45'], $line['action']);
+        $this->assertSame(['label' => 'Use 45', 'href' => '/engineer?cockpit_risk=45'], $line['action']);
         $this->assertSame('On 0 now', $line['figure']);
     }
 
@@ -307,7 +307,7 @@ final class RaceEngineerTest extends TestCase
         $line = $this->line($this->inputs(['currentCtr' => 60]), 'ctr');
 
         $this->assertSame('CTR 45', $line['answer']);
-        $this->assertSame('/cockpit?cockpit_risk=45', $line['action']['href'] ?? null);
+        $this->assertSame('/engineer?cockpit_risk=45', $line['action']['href'] ?? null);
     }
 
     public function testWithoutAPlanTheReasonSaysSeasonCostsAreUnknown(): void
@@ -818,7 +818,7 @@ final class RaceEngineerTest extends TestCase
 
         $this->assertSame('CTR 52', $line['answer']);
         $this->assertSame('On 30 now', $line['figure']);
-        $this->assertSame(['label' => 'Use 52', 'href' => '/cockpit?cockpit_risk=52'], $line['action']);
+        $this->assertSame(['label' => 'Use 52', 'href' => '/engineer?cockpit_risk=52'], $line['action']);
         $this->assertSame('/cockpit#cockpit-wear', $line['anchor']);
     }
 

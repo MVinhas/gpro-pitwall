@@ -241,7 +241,7 @@ final class RaceEngineer
             'On ' . $in->currentCtr . ' now',
             action: $target === $in->currentCtr
                 ? null
-                : ['label' => 'Use ' . $target, 'href' => '/cockpit?cockpit_risk=' . $target],
+                : ['label' => 'Use ' . $target, 'href' => '/engineer?cockpit_risk=' . $target],
         );
     }
 
