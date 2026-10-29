@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.23] - 2026-10-29
+
+### Fixed
+- The race engineer prices every testing session at GPRO's flat $1M, so it can advise on the season's first
+  session. It used to say "The session cost is unknown" until you had tested once.
+
 ## [1.21.22] - 2026-10-28
 
 ### Changed

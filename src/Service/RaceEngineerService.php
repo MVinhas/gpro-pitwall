@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Service;
 
-use App\Calibration\LedgerCategories;
 use App\Engineer\CashOutlook;
 use App\Engineer\CtrCeiling;
 use App\Engineer\CtrPlanner;
@@ -102,7 +101,6 @@ class RaceEngineerService
             $ctx['outlook'],
             $ctx['cash'],
             $ctx['raceNb'],
-            $ctx['ledger'],
             $rounds,
             $plan,
             $c,
@@ -376,7 +374,6 @@ class RaceEngineerService
     /**
      * @param InForce $objective
      * @param array{known: bool, committed: ?int, income: ?int, free_cash: ?int, end_committed: ?int} $outlook
-     * @param list<array<string, mixed>> $seasonLedger
      * @param list<Round> $rounds
      * @param ?Plan $plan
      * @param array<string, mixed> $c
@@ -386,7 +383,6 @@ class RaceEngineerService
         array $outlook,
         int $cash,
         int $raceNb,
-        array $seasonLedger,
         array $rounds,
         ?array $plan,
         array $c,
@@ -443,7 +439,7 @@ class RaceEngineerService
             testingTarget: $target,
             testingOpen: (bool) ($c['testing_open'] ?? false),
             testingTrack: is_string($testingTrack) && $testingTrack !== '' ? $testingTrack : null,
-            testingCost: self::testingCost($seasonLedger),
+            testingCost: RaceEngineer::TESTING_SESSION_COST,
             risk: $this->risk($driver, $track, $weather, $stale),
             boostLitres: $this->boostLitres($track, $weather, $stale),
             weatherStale: $stale,
@@ -756,27 +752,6 @@ class RaceEngineerService
         }
 
         return $out;
-    }
-
-    /**
-     * Mean cost of this season's testing sessions, from the ledger; null before the first one.
-     *
-     * @param list<array<string, mixed>> $seasonLedger
-     */
-    private static function testingCost(array $seasonLedger): ?int
-    {
-        $amounts = [];
-        foreach ($seasonLedger as $line) {
-            $description = trim((string) $line['description']);
-            if (
-                LedgerCategories::categorise($description) === 'Track time'
-                && stripos($description, 'Testing session') === 0
-            ) {
-                $amounts[] = abs((int) $line['amount']);
-            }
-        }
-
-        return $amounts === [] ? null : (int) round(array_sum($amounts) / count($amounts));
     }
 
     /**

@@ -72,7 +72,7 @@ final readonly class EngineerInputs
         public ?array $testingTarget,
         public bool $testingOpen,
         public ?string $testingTrack,
-        public ?int $testingCost,
+        public int $testingCost,
         public ?array $risk,
         public ?int $boostLitres,
         public bool $weatherStale,
