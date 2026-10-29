@@ -576,6 +576,36 @@ class PageController
                         }
                     }
 
+                    $carPha = [
+                        'power'        => $carData['carPower'] ?? 0,
+                        'handling'     => $carData['carHandl'] ?? 0,
+                        'acceleration' => $carData['carAccel'] ?? 0,
+                    ];
+                    // A replacement fitted now runs the planned testing
+                    // session too, so the swap advisor has to price that
+                    // in — otherwise it recommends a part that dies
+                    // before the flag. Empty when no session is planned.
+                    $trainingWearByPart = [];
+                    foreach (isset($wear['error']) ? [] : $wear['parts'] as $label => $row) {
+                        if (isset($row['training'])) {
+                            $trainingWearByPart[(string) $label] = (float) $row['training'];
+                        }
+                    }
+                    $engineerContext = [
+                        'office'           => $office,
+                        'menu'             => $menu,
+                        'money_levels'     => $moneyLevels,
+                        'division'         => $division,
+                        'car'              => $carData,
+                        'driver'           => $this->mapper->mapDriver($pilot),
+                        'wear'             => $wear,
+                        'season_calendar'  => $viewData['season_calendar'] ?? [],
+                        'track_pha'        => $trackPha,
+                        'car_pha'          => $carPha,
+                        'group_car_levels' => $groupCarLevels,
+                        'training_wear'    => $trainingWearByPart,
+                    ];
+
                     if (!isset($wear['error'])) {
                         $advice = $this->wearAdvisor->classify($wear['parts']);
                         $viewData['wear_advice'] = $advice;
@@ -596,21 +626,15 @@ class PageController
                         // the cockpit into a shopping list.
                         $forcedSwaps = $advice['swap'];
                         if ($forcedSwaps !== []) {
-                            // A replacement fitted now runs the planned testing
-                            // session too, so the swap advisor has to price that
-                            // in — otherwise it recommends a part that dies
-                            // before the flag. Empty when no session is planned.
-                            $trainingWearByPart = [];
-                            foreach ($wear['parts'] as $label => $row) {
-                                if (isset($row['training'])) {
-                                    $trainingWearByPart[(string) $label] = (float) $row['training'];
-                                }
+                            // The same season the engineer judges its swaps
+                            // over, so both name the same level. Without it the
+                            // card falls back to ranking for this race.
+                            try {
+                                $swapSeason = $this->raceEngineer->swapSeason((int) $user['id'], $engineerContext);
+                            } catch (\Throwable $e) {
+                                error_log('[Cockpit] ' . $e::class);
+                                $swapSeason = null;
                             }
-                            $carPha = [
-                                'power'        => $carData['carPower'] ?? 0,
-                                'handling'     => $carData['carHandl'] ?? 0,
-                                'acceleration' => $carData['carAccel'] ?? 0,
-                            ];
                             $swapAdvice = $this->swapAdvisor->advise(
                                 $forcedSwaps,
                                 $carData,
@@ -622,6 +646,7 @@ class PageController
                                 $groupCarLevels,
                                 $cash,
                                 $trainingWearByPart,
+                                $swapSeason,
                             );
                             $viewData['swap_advice'] = $swapAdvice;
                             $viewData['swap_plan'] = $this->swapAdvisor->summarise(
@@ -639,22 +664,14 @@ class PageController
                     $isEngineerRequest = $isAdmin && $activeMainTab === 'Race Engineer'
                         && (string) $request->get('fragment', '') === '';
                     if ($isEngineerRequest) {
-                        $engineer = self::buildEngineer($this->raceEngineer, (int) $user['id'], [
-                            'office'           => $office,
-                            'menu'             => $menu,
-                            'money_levels'     => $moneyLevels,
+                        $engineer = self::buildEngineer($this->raceEngineer, (int) $user['id'], $engineerContext + [
                             'group_staff'      => $this->apiClient->getCachedGroupStaff(),
-                            'division'         => $division,
-                            'car'              => $carData,
-                            'driver'           => $this->mapper->mapDriver($pilot),
-                            'wear'             => $wear,
                             'wear_advice'      => $viewData['wear_advice'] ?? null,
                             'swap_plan'        => $viewData['swap_plan'] ?? null,
                             'training_picks'   => $viewData['training_picks'] ?? [],
                             'testing_targets'  => $viewData['testing_targets'] ?? [],
                             'testing_open'     => $testingTrack !== null,
                             'testing_track'    => $testingTrack,
-                            'season_calendar'  => $viewData['season_calendar'] ?? [],
                             'track_name'       => $trackName,
                             'weather'          => $viewData['weather'] ?? null,
                             'setup_stale'      => $setupStale,

@@ -13,12 +13,15 @@ use InvalidArgumentException;
  * @phpstan-type Plan array{
  *   v: int, ctr: int, mode: 'nurse'|'push'|'short', safety: int,
  *   swaps: list<array{part: string, cost: int}>, refused_swap_cost: ?int,
- *   target: int, target_kind: 'cushion'|'start'|'start_out_of_reach', cushion: int, season_start: ?int,
+ *   target: int, target_kind: 'cushion'|'start'|'start_out_of_reach'|'reserve'|'reserve_out_of_reach',
+ *   cushion: int, season_start: ?int,
  *   envelope: int, shortfall: ?int, rows: list<BudgetRow>, partial: list<string>, race: int, infeasible?: bool,
  *   upgrades?: list<Upgrade>}
  */
 final readonly class CtrPlanner
 {
+    public const float PROMOTE_RESERVE = 0.5;
+
     private const int MAX_CTR = 100;
 
     public function __construct(private CtrCeiling $ceiling, private SeasonBudget $budget)
@@ -86,7 +89,17 @@ final readonly class CtrPlanner
 
         $target = $cushion;
         $targetKind = 'cushion';
-        if ($objective !== SeasonObjective::PROMOTE && $seasonStart !== null && $seasonStart > $cushion) {
+        if ($objective === SeasonObjective::PROMOTE) {
+            $reserve = $seasonStart === null ? 0 : (int) ceil($seasonStart * self::PROMOTE_RESERVE);
+            if ($reserve > $cushion) {
+                $target = $reserve;
+                $targetKind = 'reserve';
+                if (self::headroom($forecastAt(0)['rows'], $cushion, $reserve) < 0) {
+                    $target = $cushion;
+                    $targetKind = 'reserve_out_of_reach';
+                }
+            }
+        } elseif ($seasonStart !== null && $seasonStart > $cushion) {
             $target = $seasonStart;
             $targetKind = 'start';
             if ($survive && self::headroom($forecastAt(0)['rows'], $cushion, $target) < 0) {
@@ -223,7 +236,7 @@ final readonly class CtrPlanner
     /**
      * @param 'nurse'|'push'|'short' $mode
      * @param list<array{part: string, cost: int}> $swaps
-     * @param 'cushion'|'start'|'start_out_of_reach' $targetKind
+     * @param 'cushion'|'start'|'start_out_of_reach'|'reserve'|'reserve_out_of_reach' $targetKind
      * @param array{rows: list<BudgetRow>, partial: list<string>, infeasible: bool} $forecast
      * @param non-empty-list<array{race: int, track_name: ?string, base: ?array<string, float>}> $rounds
      * @return Plan

@@ -8,6 +8,8 @@ use App\Database\DatabaseSeeder;
 use App\Engineer\CtrCeiling;
 use App\Engineer\CtrPlanner;
 use App\Engineer\SeasonBudget;
+use App\Engineer\SwapLevelPicker;
+use App\Engineer\SwapSeason;
 use App\Engineer\UpgradeRanker;
 use App\Repository\EconomyLedgerRepository;
 use App\Repository\SeasonBudgetRepository;
@@ -20,6 +22,9 @@ use App\Service\BoostFuelService;
 use App\Service\CarWearPlannerService;
 use App\Service\CarWearService;
 use App\Service\FuelModel;
+use App\Service\PartSwapAdvisorService;
+use App\Service\PartUpgradeAdvisorService;
+use App\Service\PhaMatchService;
 use App\Service\RaceEngineerService;
 use App\Service\RiskAdvisorService;
 use PDO;
@@ -68,12 +73,24 @@ final class RaceEngineerServiceTest extends TestCase
         );
     }
 
-    private function engineer(?SeasonBudgetRepository $budgets = null, ?UpgradeRanker $ranker = null): RaceEngineerService
+    private function wearService(): CarWearService
     {
-        $wear = new CarWearService($this->db, [
+        return new CarWearService($this->db, [
             'driver_wear_factors' => ['concentration' => 1.0, 'talent' => 1.0, 'experience' => 1.0],
             'part_level_factors' => [1 => 1.05] + array_fill_keys(range(2, 11), 1.0),
         ]);
+    }
+
+    private function engineer(
+        ?SeasonBudgetRepository $budgets = null,
+        ?UpgradeRanker $ranker = null,
+        ?SwapLevelPicker $picker = null,
+    ): RaceEngineerService {
+        $wear = $this->wearService();
+        $contribution = [
+            'Engine' => ['power' => 3, 'handling' => 1, 'acceleration' => 1],
+            'Brakes' => ['power' => 0, 'handling' => 1, 'acceleration' => 2],
+        ];
 
         return new RaceEngineerService(
             $this->pins,
@@ -92,10 +109,13 @@ final class RaceEngineerServiceTest extends TestCase
                 'conc' => 0.0, 'agg' => 0.0, 'exp' => 0.0, 'te' => 0.0,
                 'eng_lvl' => 0.0, 'ele_lvl' => 0.0, 'constant' => 0.0,
             ]]),
-            $ranker ?? new UpgradeRanker(new SeasonBudget($wear), [
-                'Engine' => ['power' => 3, 'handling' => 1, 'acceleration' => 1],
-                'Brakes' => ['power' => 0, 'handling' => 1, 'acceleration' => 2],
-            ]),
+            $ranker ?? new UpgradeRanker(new SeasonBudget($wear), $contribution),
+            new PartSwapAdvisorService(
+                $wear,
+                new PhaMatchService(),
+                new PartUpgradeAdvisorService(new PhaMatchService(), $contribution),
+                $picker ?? new SwapLevelPicker(new SeasonBudget($wear), $contribution),
+            ),
         );
     }
 
@@ -993,6 +1013,160 @@ final class RaceEngineerServiceTest extends TestCase
         self::assertSame('Safe to spend', array_column($lines, null, 'key')['cash']['answer']);
         self::assertStringContainsString('[Engineer] PDOException', $logged);
         self::assertStringNotContainsString('locked', $logged);
+    }
+
+    public function testSwapSeasonIsNullWithoutACalendar(): void
+    {
+        $this->seedPromotionFixture();
+
+        self::assertNull($this->service->swapSeason(self::USER, $this->cockpit(['season_calendar' => []])));
+    }
+
+    public function testSwapSeasonNeverSavesAPlan(): void
+    {
+        $this->seedPromotionFixture();
+        $rows = fn (): int => (int) $this->db->query('SELECT COUNT(*) FROM user_season_budget')->fetchColumn();
+
+        $season = $this->service->swapSeason(self::USER, $this->cockpit());
+
+        self::assertInstanceOf(SwapSeason::class, $season);
+        self::assertSame('promote', $season->objective);
+        self::assertSame(0, $rows());
+    }
+
+    public function testTheEngineerNamesTheSwapLevelAndSavesItWithThePlan(): void
+    {
+        $this->seedPromotionFixture();
+        $this->seedWearTracks();
+        $this->service->pin(self::USER, self::SEASON, 'survive');
+        $parts = [
+            'Engine' => ['level' => 1, 'start' => 85, 'est' => 0.0, 'end' => 0.0, 'track_base' => 8.0],
+            'Brakes' => ['level' => 1, 'start' => 10, 'est' => 0.0, 'end' => 0.0, 'track_base' => 8.0],
+        ];
+
+        $lines = $this->service->forCockpit(self::USER, $this->cockpit($this->swapCockpit($parts)))['lines'];
+
+        $saved = $this->budgets->find(self::USER, self::SEASON);
+        self::assertNotNull($saved);
+        self::assertSame(
+            [['part' => 'Engine', 'level' => 1, 'kind' => 'sidegrade', 'cost' => 100_000, 'net_cost' => 0,
+                'reason' => 'most_pha']],
+            $saved['plan']['swap_picks'] ?? null,
+        );
+        self::assertSame('Swap Engine → L1 (same level)', array_column($lines, null, 'key')['parts']['answer']);
+    }
+
+    public function testTheUpgradeRankingSkipsAPartThatHasASwapPick(): void
+    {
+        $this->seedPromotionFixture();
+        $this->seedWearTracks();
+        $this->service->pin(self::USER, self::SEASON, 'survive');
+        $parts = [
+            'Engine' => ['level' => 1, 'start' => 85, 'est' => 0.0, 'end' => 0.0, 'track_base' => 8.0],
+            'Brakes' => ['level' => 1, 'start' => 10, 'est' => 0.0, 'end' => 0.0, 'track_base' => 8.0],
+        ];
+        $cockpit = $this->swapCockpit($parts);
+        $car = $cockpit['car'];
+        $car['engineOptions'][] = ['value' => ['value' => 2, 'cost' => 150_000], 'newLvl' => '2'];
+        $car['brakesOptions'][] = ['value' => ['value' => 2, 'cost' => 150_000], 'newLvl' => '2'];
+        $cockpit['car'] = $car;
+        $ranked = new \ArrayObject();
+        $wear = $this->wearService();
+        $ranker = new readonly class ($wear, $ranked) extends UpgradeRanker {
+            /** @param \ArrayObject<int, list<string>> $ranked */
+            public function __construct(CarWearService $wear, private \ArrayObject $ranked)
+            {
+                parent::__construct(new SeasonBudget($wear), []);
+            }
+
+            public function rank(
+                array $plan,
+                string $objective,
+                array $rounds,
+                array $demands,
+                array $parts,
+                array $prices,
+                array $options,
+                float $driverFactor,
+                int $cash,
+                int $committed,
+                int $income,
+                int $spent,
+            ): array {
+                $this->ranked->append(array_keys($options));
+
+                return [];
+            }
+        };
+
+        $this->engineer(ranker: $ranker)->forCockpit(self::USER, $this->cockpit($cockpit));
+
+        $saved = $this->budgets->find(self::USER, self::SEASON);
+        self::assertSame(['Engine'], array_column($saved['plan']['swap_picks'] ?? [], 'part'));
+        self::assertCount(1, $ranked);
+        self::assertSame(['Brakes'], $ranked[0]);
+    }
+
+    public function testAFailingSwapPickIsLoggedAndThePartsLineKeepsTodaysWording(): void
+    {
+        $this->seedPromotionFixture();
+        $this->seedWearTracks();
+        $this->service->pin(self::USER, self::SEASON, 'survive');
+        $parts = [
+            'Engine' => ['level' => 1, 'start' => 85, 'est' => 0.0, 'end' => 0.0, 'track_base' => 8.0],
+            'Brakes' => ['level' => 1, 'start' => 10, 'est' => 0.0, 'end' => 0.0, 'track_base' => 8.0],
+        ];
+        $wear = $this->wearService();
+        $failing = new readonly class ($wear) extends SwapLevelPicker {
+            public function __construct(CarWearService $wear)
+            {
+                parent::__construct(new SeasonBudget($wear), []);
+            }
+
+            public function pick(SwapSeason $s, string $part, int $currentLevel, array $candidates, array $paidPrice): ?array
+            {
+                throw new \DomainException('secret detail');
+            }
+        };
+        $service = $this->engineer(picker: $failing);
+        $log = tempnam(sys_get_temp_dir(), 'engineer-log');
+        self::assertIsString($log);
+        $prior = ini_set('error_log', $log);
+
+        try {
+            $lines = $service->forCockpit(self::USER, $this->cockpit($this->swapCockpit($parts)))['lines'];
+        } finally {
+            ini_set('error_log', $prior === false ? '' : $prior);
+        }
+        $logged = (string) file_get_contents($log);
+        unlink($log);
+
+        self::assertSame('Swap Engine', array_column($lines, null, 'key')['parts']['answer']);
+        self::assertArrayNotHasKey('swap_picks', $this->budgets->find(self::USER, self::SEASON)['plan'] ?? []);
+        self::assertStringContainsString('[Engineer] DomainException', $logged);
+        self::assertStringNotContainsString('secret', $logged);
+    }
+
+    /**
+     * A Survive cockpit whose Engine must be replaced before the next race, priced at $100k for a fresh L1.
+     *
+     * @param array<string, array<string, mixed>> $parts
+     * @return array<string, mixed>
+     */
+    private function swapCockpit(array $parts): array
+    {
+        return [
+            'ctr' => 0,
+            'car' => $this->pricedCar(100_000),
+            'season_calendar' => [['race' => 10, 'track_name' => 'Gamma'], ['race' => 11, 'track_name' => 'Gamma']],
+            'track_name' => 'Gamma',
+            'wear' => ['track_name' => 'Gamma', 'laps' => 50, 'parts' => $parts],
+            'wear_advice' => $this->adviceAt(0, $parts),
+            'track_pha' => ['power' => 5, 'handling' => 3, 'acceleration' => 2],
+            'car_pha' => ['power' => 80, 'handling' => 80, 'acceleration' => 80],
+            'group_car_levels' => [],
+            'training_wear' => [],
+        ];
     }
 
     /** @return array{swap: list<array<string, mixed>>, risky: list<mixed>, watch: list<mixed>, headline: string} */

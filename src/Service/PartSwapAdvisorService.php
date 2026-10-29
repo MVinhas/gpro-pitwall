@@ -4,14 +4,17 @@ declare(strict_types=1);
 
 namespace App\Service;
 
+use App\Engineer\SwapLevelPicker;
+use App\Engineer\SwapSeason;
+
 /**
  * Turns GPRO's per-part `*Options` arrays (from the GetCar payload) into a
  * short, decidable plan for each part the wear advisor has flagged.
  *
- * The plan is deliberately narrow: a manager replacing a worn part in GPRO
- * realistically moves one level down, stays put, or moves one level up. So
- * only the levels `current-1 … current+1` are considered, and each of those
- * levels yields **at most one** option — the cheapest way to get a part at
+ * The plan is deliberately narrow downwards: a manager replacing a worn part
+ * in GPRO realistically moves at most one level down, while any higher level
+ * GPRO offers is open to them. So the levels `current-1` and up are considered,
+ * and each of those levels yields **at most one** option — the cheapest way to get a part at
  * that level that survives the race, with a free garage spare always beating
  * a paid purchase (both survive, so paying for the same level is waste).
  * When the part still finishes as-is, a "keep it" option joins the list.
@@ -41,8 +44,17 @@ namespace App\Service;
  *
  * `options[0]` is the recommendation, and it is what the UI pre-selects: the
  * advisor is only ever handed parts that cannot finish the race, so there is
- * no do-nothing option to weigh it against.
+ * no do-nothing option to weigh it against. Without a season the
+ * recommendation stays within one level of the current part; higher levels
+ * are listed but never pre-selected.
  *
+ * Given a season, the `SwapLevelPicker` chooses instead — judged over the rest
+ * of the season rather than this race — from the options that survived the
+ * filters above, so a free downgrade is only ever picked if it finishes the
+ * next race. Its choice moves to `options[0]`; the rest keep their track-fit
+ * order. When it finds nothing, the track-fit ranking stands.
+ *
+ * @phpstan-import-type Pick from SwapLevelPicker
  * @phpstan-type Pha array{power: float, handling: float, acceleration: float}
  * @phpstan-type SwapOption array{
  *     level: int,
@@ -59,6 +71,7 @@ namespace App\Service;
  *     pha_delta: Pha,
  *     recommended: bool,
  *     recommend_reason: string,
+ *     kind: 'free_downgrade'|'downgrade'|'sidegrade'|'upgrade',
  *     rationale: string,
  *     balance: string,
  * }
@@ -74,8 +87,11 @@ final class PartSwapAdvisorService
     /** One-level buffer around the observed group envelope. */
     private const int GROUP_BUFFER = 1;
 
-    /** How far either side of the current level a replacement may go. */
-    private const int LEVEL_WINDOW = 1;
+    /** How far below the current level a replacement may go. */
+    private const int LEVELS_DOWN = 1;
+
+    /** How far above the current level a pick may go without a season plan. */
+    private const int LEVELS_UP_UNPLANNED = 1;
 
     /**
      * Alignment-score granularity for ranking, in points. Differences finer
@@ -87,11 +103,16 @@ final class PartSwapAdvisorService
         private readonly CarWearService $carWear,
         private readonly PhaMatchService $pha,
         private readonly PartUpgradeAdvisorService $upgrade,
+        private readonly ?SwapLevelPicker $picker = null,
     ) {
     }
 
     /**
-     * @param list<array{part: string, level: int, start: int, est: float, end: float}> $flaggedParts
+     * Parts are judged forced first, then the optional ones, each group most worn first. Under a season,
+     * each pick's net cost is committed before the next part is judged, so the picks are affordable together.
+     *
+     * @param list<array{part: string, level: int, start: int, est: float, end: float, optional?: bool}> $flaggedParts
+     *     an `optional` part is one the manager may keep; every other part is forced
      * @param array<string, mixed> $carData full GetCar payload (with *Options arrays)
      * @param array<string, array{
      *     level: int, start: int, est: float, end: float, track_base: float
@@ -107,11 +128,16 @@ final class PartSwapAdvisorService
      *     so it is charged on every option — including the survivability filter, which
      *     would otherwise green-light a part that dies before the flag. Testing wear is
      *     independent of part level, so the same flat figure applies to every option.
+     * @param SwapSeason|null $season when given (and a picker is wired), the season-long
+     *     pick is the recommendation instead of the track-fit leader
      * @return array<string, array{
      *     current: array{
      *         level: int, start: int, end: float, fit: float, match: string, pha: Pha
      *     },
-     *     options: list<SwapOption>
+     *     options: list<SwapOption>,
+     *     season: bool,
+     *     season_reason: ?string,
+     *     season_pick: ?Pick
      * }>
      */
     public function advise(
@@ -125,6 +151,7 @@ final class PartSwapAdvisorService
         array $groupCarLevels,
         int $cash,
         array $trainingWear = [],
+        ?SwapSeason $season = null,
     ): array {
         $driverFactor = $this->carWear->driverFactor($driver);
         $band = $this->operatingBand($groupCarLevels);
@@ -136,8 +163,16 @@ final class PartSwapAdvisorService
         $currentFit   = $this->pha->alignmentScore($track, $currentPha);
         $currentMatch = $this->pha->matchLevel($track, $currentPha);
         $out = [];
+        // Most worn first, then by name: the order can't depend on the caller, so the parts the Cockpit
+        // shows get the same commitments the Engineer gives them.
+        $byWear = static fn(array $a, array $b): int => [$b['end'], $a['part']] <=> [$a['end'], $b['part']];
+        $forced = array_values(array_filter($flaggedParts, static fn(array $f): bool => !($f['optional'] ?? false)));
+        $optional = array_values(array_filter($flaggedParts, static fn(array $f): bool => $f['optional'] ?? false));
+        usort($forced, $byWear);
+        usort($optional, $byWear);
+        $ordered = [...$forced, ...$optional];
 
-        foreach ($flaggedParts as $flagged) {
+        foreach ($ordered as $flagged) {
             $part = $flagged['part'];
             if (!isset(CarWearService::PARTS_MAP[$part], $wearParts[$part])) {
                 continue;
@@ -165,6 +200,26 @@ final class PartSwapAdvisorService
 
             $options = $this->flagChoices($this->rank($options));
 
+            $pick = $season !== null && $this->picker !== null && $options !== []
+                ? $this->picker->pick(
+                    $season,
+                    $part,
+                    $flagged['level'],
+                    array_map(static fn(array $o): array => [
+                        'level'   => $o['level'],
+                        'cost'    => $o['cost'],
+                        'is_free' => $o['is_free'],
+                        'start'   => $o['start'],
+                        'fit'     => $o['fit'],
+                    ], $options),
+                    $this->paidPrices($rawOptions),
+                )
+                : null;
+            if ($pick !== null) {
+                $options = $this->withPick($options, $pick['level'], 'season');
+                $season = $season->committing(max(0, $pick['net_cost']));
+            }
+
             $out[$part] = [
                 'current' => [
                     'level' => $flagged['level'],
@@ -175,6 +230,13 @@ final class PartSwapAdvisorService
                     'pha'   => $currentPha,
                 ],
                 'options' => $options,
+                'season'        => $pick !== null,
+                'season_reason' => match (true) {
+                    $pick !== null => SwapLevelPicker::REASONS[$pick['reason']],
+                    $season !== null && $this->picker !== null => 'No season pick for this part: ranked for this race',
+                    default => null,
+                },
+                'season_pick'   => $pick,
             ];
         }
 
@@ -329,12 +391,74 @@ final class PartSwapAdvisorService
                 'recommended'      => false,
                 'recommend_reason' => '',
 
+                'kind'      => $this->kind($delta, $c['is_free']),
                 'rationale' => $this->rationale($delta, $fit - $currentFit, $c['is_free']),
                 'balance'   => $this->balance($fit - $currentFit),
             ];
         }
 
         return $options;
+    }
+
+    /**
+     * Cheapest paid (positive-action) price per level across everything GPRO
+     * offers: what a future replacement at that level would cost.
+     *
+     * @param array<int, array<string, mixed>> $rawOptions
+     * @return array<int, int>
+     */
+    private function paidPrices(array $rawOptions): array
+    {
+        $prices = [];
+        foreach ($rawOptions as $opt) {
+            if (($opt['disabled'] ?? '') === 'true' || (int) ($opt['value']['value'] ?? 0) <= 0) {
+                continue;
+            }
+            $level = (int) ($opt['newLvl'] ?? 0);
+            $cost  = (int) ($opt['value']['cost'] ?? 0);
+            if (!isset($prices[$level]) || $cost < $prices[$level]) {
+                $prices[$level] = $cost;
+            }
+        }
+
+        return $prices;
+    }
+
+    /**
+     * Recommends the picked level (none when null) and puts it first; everyone
+     * else keeps their track-fit order.
+     *
+     * @param list<SwapOption> $options
+     * @return list<SwapOption>
+     */
+    private function withPick(array $options, ?int $level, string $reason): array
+    {
+        $picked = [];
+        $rest   = [];
+        foreach ($options as $option) {
+            $isPick = $option['level'] === $level;
+            $option['recommended']      = $isPick;
+            $option['recommend_reason'] = $isPick ? $reason : '';
+            if ($isPick) {
+                $picked[] = $option;
+            } else {
+                $rest[] = $option;
+            }
+        }
+
+        return [...$picked, ...$rest];
+    }
+
+    /**
+     * @return 'free_downgrade'|'downgrade'|'sidegrade'|'upgrade'
+     */
+    private function kind(int $delta, bool $isFree): string
+    {
+        return match (true) {
+            $delta < 0  => $isFree ? 'free_downgrade' : 'downgrade',
+            $delta === 0 => 'sidegrade',
+            default     => 'upgrade',
+        };
     }
 
     /**
@@ -362,24 +486,36 @@ final class PartSwapAdvisorService
     }
 
     /**
-     * Marks the ranked leader, and records whether it led on alignment or
-     * merely on price — only a strictly better alignment band is a fit win.
+     * Marks the ranked leader among the levels within one step of the current
+     * one, and records whether it led on alignment or merely on price — only a
+     * strictly better alignment band is a fit win. A bigger jump is a season
+     * decision, so without a season plan it is only pre-selected when nothing
+     * lies within one step — then the smallest jump, track-fit order on ties.
      *
      * @param list<SwapOption> $options
      * @return list<SwapOption>
      */
     private function flagChoices(array $options): array
     {
-        $reason = count($options) > 1 && $this->fitBand($options[0]) > $this->fitBand($options[1])
+        $near = array_values(array_filter(
+            $options,
+            static fn(array $o): bool => abs($o['delta']) <= self::LEVELS_UP_UNPLANNED,
+        ));
+        if ($near === []) {
+            $smallest = null;
+            foreach ($options as $option) {
+                if ($smallest === null || abs($option['delta']) < abs($smallest['delta'])) {
+                    $smallest = $option;
+                }
+            }
+
+            return $this->withPick($options, $smallest['level'] ?? null, $smallest === null ? '' : 'value');
+        }
+        $reason = count($near) > 1 && $this->fitBand($near[0]) > $this->fitBand($near[1])
             ? 'fit'
             : 'value';
 
-        foreach ($options as $i => $_) {
-            $options[$i]['recommended']      = $i === 0;
-            $options[$i]['recommend_reason'] = $i === 0 ? $reason : '';
-        }
-
-        return $options;
+        return $this->withPick($options, $near[0]['level'], $reason);
     }
 
     /**
@@ -405,7 +541,7 @@ final class PartSwapAdvisorService
      */
     private function levelReachable(int $level, int $currentLevel, array $band): bool
     {
-        if (abs($level - $currentLevel) > self::LEVEL_WINDOW) {
+        if ($level < $currentLevel - self::LEVELS_DOWN) {
             return false;
         }
         if ($level < PartUpgradeAdvisorService::MIN_LEVEL || $level > PartUpgradeAdvisorService::MAX_LEVEL) {
@@ -475,7 +611,8 @@ final class PartSwapAdvisorService
     {
         $move = match (true) {
             $delta < 0 => 'One level down',
-            $delta > 0 => 'One level up',
+            $delta === 1 => 'One level up',
+            $delta > 1 => $delta . ' levels up',
             default    => 'Fresh part, same level',
         };
         $price = $isFree ? ' at no cost' : '';

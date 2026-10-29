@@ -17,7 +17,8 @@
             {% if plan.options is empty %}
                 <p class="t-caption">No affordable replacement survives the race within your group's level range.</p>
             {% else %}
-                <div class="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Replacement for {{ p.part }}">
+                {% set why_id = 'swap-why-' ~ p.part|lower|replace({' ': '-'}) %}
+                <div class="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Replacement for {{ p.part }}" aria-describedby="{{ why_id }}">
                     {% for o in plan.options %}
                         {# The advisor's own verdict on the P/H/A balance, in words — a raw fit
                            delta ("+0.13") means nothing without the model behind it. #}
@@ -27,9 +28,12 @@
                             : (o.cost >= 1000000
                                 ? '$' ~ (o.cost / 1000000)|number_format(1) ~ 'M'
                                 : '$' ~ (o.cost / 1000)|round ~ 'k') %}
-                        {% set move = o.delta < 0
-                            ? 'Down to L' ~ o.level
-                            : (o.delta > 0 ? 'Up to L' ~ o.level : 'Fresh L' ~ o.level) %}
+                        {% set move = {
+                            free_downgrade: 'Free downgrade to L',
+                            downgrade: 'Down to L',
+                            sidegrade: 'Same level L',
+                            upgrade: 'Up to L',
+                        }[o.kind] ~ o.level %}
                         <label class="plan-opt" title="{{ o.rationale }}">
                             <input type="radio"
                                    name="plan[{{ p.part }}]"
@@ -46,7 +50,7 @@
                                 {% if o.recommended %}
                                     <span class="plan-tag plan-tag-best">Best</span>
                                 {% endif %}
-                                {% if o.is_free %}<span class="plan-tag plan-tag-free">Free</span>{% endif %}
+                                {% if o.is_free and o.kind != 'free_downgrade' %}<span class="plan-tag plan-tag-free">Free</span>{% endif %}
                                 {% if o.match != plan.current.match and o.match != 'none' %}
                                     <span class="plan-tag plan-tag-match">→ {{ o.match == 'perfect' ? 'Perfect' : 'Top' }}</span>
                                 {% endif %}
@@ -57,6 +61,7 @@
                         </label>
                     {% endfor %}
                 </div>
+                <p id="{{ why_id }}" class="t-caption mt-2">{{ plan.season_reason|default('Season plan unavailable: ranked for this race') }}</p>
             {% endif %}
         </td>
     </tr>

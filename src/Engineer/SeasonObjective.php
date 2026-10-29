@@ -205,6 +205,14 @@ final readonly class SeasonObjective
     }
 
     /**
+     * @param array<string, mixed>|null $standingsRow a user_standings row, managers_json undecoded
+     */
+    public static function relegationLine(?array $standingsRow): ?int
+    {
+        return self::relegationPos(self::managers($standingsRow));
+    }
+
+    /**
      * @param Numbers $numbers
      * @param list<string> $cashReasons
      * @return Proposal

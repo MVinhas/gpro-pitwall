@@ -14,8 +14,6 @@ namespace App\Engineer;
  */
 readonly class UpgradeRanker
 {
-    private const array ATTRIBUTES = ['power', 'handling', 'acceleration'];
-
     /**
      * @param array<string, Demand> $contribution part label → PHA points one level adds
      */
@@ -69,7 +67,7 @@ readonly class UpgradeRanker
             $from = $parts[$part]['level'];
 
             foreach ($levels as $option) {
-                $gain = $this->gain($this->contribution[$part], $option['level'] - $from, $rounds, $demands);
+                $gain = SeasonPha::gain($this->contribution[$part], $option['level'] - $from, $rounds, $demands);
                 if ($gain <= 0) {
                     continue;
                 }
@@ -129,7 +127,18 @@ readonly class UpgradeRanker
      * @param Plan $plan
      * @param list<BudgetRow> $rows
      */
-    private static function paysUpFront(array $plan, array $rows, int $now): bool
+    public static function paysUpFront(array $plan, array $rows, int $now): bool
+    {
+        return self::headroomPaying($plan, $rows, $now) >= 0;
+    }
+
+    /**
+     * The plan's headroom over $rows with $now paid before the first race; negative by the shortfall.
+     *
+     * @param Plan $plan
+     * @param list<BudgetRow> $rows
+     */
+    public static function headroomPaying(array $plan, array $rows, int $now): int
     {
         $paid = array_map(static function (array $row) use ($now): array {
             $row['balance'] -= $now;
@@ -137,7 +146,7 @@ readonly class UpgradeRanker
             return $row;
         }, $rows);
 
-        return CtrPlanner::headroom($paid, $plan['cushion'], $plan['target']) >= 0;
+        return CtrPlanner::headroom($paid, $plan['cushion'], $plan['target']);
     }
 
     /**
@@ -159,33 +168,5 @@ readonly class UpgradeRanker
             : $b['gain'] / $b['net_cost'] <=> $a['gain'] / $a['net_cost'];
 
         return $order ?: ($a['part'] <=> $b['part'] ?: $a['to'] <=> $b['to']);
-    }
-
-    /**
-     * @param Demand $contribution
-     * @param list<Round> $rounds
-     * @param array<int, ?Demand> $demands
-     */
-    private function gain(array $contribution, int $levels, array $rounds, array $demands): float
-    {
-        $gain = 0.0;
-        foreach ($rounds as $round) {
-            $demand = $demands[$round['race']] ?? null;
-            if ($demand === null) {
-                continue;
-            }
-            $total = 0.0;
-            foreach (self::ATTRIBUTES as $attribute) {
-                $total += $demand[$attribute];
-            }
-            if ($total <= 0) {
-                continue;
-            }
-            foreach (self::ATTRIBUTES as $attribute) {
-                $gain += $contribution[$attribute] * $levels * $demand[$attribute] / $total;
-            }
-        }
-
-        return $gain;
     }
 }

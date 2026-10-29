@@ -11,6 +11,8 @@ namespace App\Engineer;
  * @phpstan-import-type CarStanding from GroupStanding
  * @phpstan-type Outlook array{known: bool, committed: ?int, income: ?int, free_cash: ?int, end_committed: ?int}
  * @phpstan-type PartAdvice array{part: string, level: int, start: int, est: float, end: float}
+ * @phpstan-import-type PickReason from SwapLevelPicker
+ * @phpstan-type SwapPick array{part: string, level: int, kind: string, cost: int, net_cost: int, reason: PickReason}
  * @phpstan-type WearAdvice array{
  *     swap: list<PartAdvice>,
  *     risky: list<PartAdvice>,
@@ -52,6 +54,7 @@ final readonly class EngineerInputs
      *     at the plan's CTR
      * @param ?StaffStanding $staffStanding
      * @param ?CarStanding $carStanding
+     * @param list<SwapPick> $swapPicks the season-long level picked for each swapped part that has one
      */
     public function __construct(
         public array $objective,
@@ -77,6 +80,7 @@ final readonly class EngineerInputs
         public array $redZoneSwaps = [],
         public ?array $staffStanding = null,
         public ?array $carStanding = null,
+        public array $swapPicks = [],
     ) {
     }
 
@@ -86,5 +90,13 @@ final readonly class EngineerInputs
     public function withPlan(array $plan): self
     {
         return clone($this, ['plan' => $plan]);
+    }
+
+    /**
+     * @param list<SwapPick> $picks
+     */
+    public function withSwapPicks(array $picks): self
+    {
+        return clone($this, ['swapPicks' => $picks]);
     }
 }

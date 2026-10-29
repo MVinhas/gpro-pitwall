@@ -466,10 +466,16 @@ $container['service.upgrade_advisor'] = new \App\Service\PartUpgradeAdvisorServi
     $container['service.pha_match'],
     $container['config']['secrets']['part_pha_contribution'] ?? [],
 );
+$container['service.swap_level_picker'] = new \App\Engineer\SwapLevelPicker(
+    new \App\Engineer\SeasonBudget($container['service.car_wear']),
+    $container['config']['secrets']['part_pha_contribution'] ?? [],
+);
+
 $container['service.swap_advisor'] = new \App\Service\PartSwapAdvisorService(
     $container['service.car_wear'],
     $container['service.pha_match'],
     $container['service.upgrade_advisor'],
+    $container['service.swap_level_picker'],
 );
 $container['service.training_advisor'] = new \App\Service\TrainingAdvisorService(
     $container['config']['secrets']['pilot_recruitment_factors'] ?? [],
@@ -528,6 +534,7 @@ $container['service.race_engineer'] = new \App\Service\RaceEngineerService(
         new \App\Engineer\SeasonBudget($container['service.car_wear']),
         $container['config']['secrets']['part_pha_contribution'] ?? [],
     ),
+    $container['service.swap_advisor'],
 );
 
 $container['controller.page'] = new PageController(
