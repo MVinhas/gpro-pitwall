@@ -28,6 +28,8 @@ final class RaceEngineer
     /** Boost sets per race; the caller's extra-fuel litres must use BOOST_SETS * BOOST_LAPS_PER_SET laps. */
     public const int BOOST_SETS = 3;
     public const int BOOST_LAPS_PER_SET = 3;
+    /** GPRO charges a flat $1M for every testing session. */
+    public const int TESTING_SESSION_COST = 1_000_000;
 
     private const string NOTHING = 'Nothing to do';
     private const string STALE = 'After you save the race setup';
@@ -458,17 +460,6 @@ final class RaceEngineer
             . ($target['track_name'] === null ? '' : ' (race ' . $target['race'] . ')');
         $cost = $in->testingCost;
 
-        if ($cost === null) {
-            return self::objectiveIs($in, SeasonObjective::SURVIVE)
-                ? self::line('testing', $skip, 'The session cost is unknown, and repairs come first', $anchor)
-                : self::line(
-                    'testing',
-                    $where . ' — cost unknown',
-                    'No earlier session this season to price it; ' . $tunes,
-                    $anchor,
-                );
-        }
-
         if (self::testingSpend($in) === null) {
             return self::line(
                 'testing',
@@ -489,7 +480,7 @@ final class RaceEngineer
     private static function testingSpend(EngineerInputs $in): ?int
     {
         $cost = $in->testingCost;
-        if (!$in->testingOpen || $in->testingTarget === null || $cost === null) {
+        if (!$in->testingOpen || $in->testingTarget === null) {
             return null;
         }
 

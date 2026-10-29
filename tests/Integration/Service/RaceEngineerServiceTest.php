@@ -414,26 +414,29 @@ final class RaceEngineerServiceTest extends TestCase
         self::assertSame('After you save the race setup', $risk['answer']);
     }
 
-    public function testTestingCostIsTheMeanOfThisSeasonsSessions(): void
+    public function testATestingSessionAlwaysCostsOneMillion(): void
     {
         $this->seedPromotionFixture();
+        $testingAfter = function (): array {
+            $lines = $this->service->forCockpit(self::USER, $this->cockpit([
+                'testing_open' => true,
+                'testing_track' => 'Silverstone',
+                'testing_targets' => [[
+                    'offset' => 3, 'season' => 'current', 'race' => 13, 'track_id' => 1, 'track_name' => 'Testring',
+                    'power' => 1, 'handling' => 1, 'acceleration' => 1,
+                ]],
+            ]))['lines'];
+
+            return array_column($lines, null, 'key')['testing'];
+        };
+
+        $firstOfTheSeason = $testingAfter();
         $this->movement('Testing session 1', -80_000, 8);
-        $this->movement('Testing session 2', -120_000, 9);
-        $this->movement('Practice lap', -5_000, 9);
+        $afterACheaperEntry = $testingAfter();
 
-        $lines = $this->service->forCockpit(self::USER, $this->cockpit([
-            'testing_open' => true,
-            'testing_track' => 'Silverstone',
-            'testing_targets' => [[
-                'offset' => 3, 'season' => 'current', 'race' => 13, 'track_id' => 1, 'track_name' => 'Testring',
-                'power' => 1, 'handling' => 1, 'acceleration' => 1,
-            ]],
-        ]))['lines'];
-        $testing = array_values(array_filter($lines, static fn (array $l): bool => $l['key'] === 'testing'))[0];
-
-        self::assertSame('Test at Silverstone', $testing['answer']);
-        self::assertSame('The budget covers it; tunes for Testring (race 13)', $testing['reason']);
-        self::assertSame('$100k', $testing['figure']);
+        self::assertSame('$1M', $firstOfTheSeason['figure']);
+        self::assertStringNotContainsString('unknown', $firstOfTheSeason['answer'] . $firstOfTheSeason['reason']);
+        self::assertSame($firstOfTheSeason, $afterACheaperEntry);
     }
 
     public function testNoStoredRowsStillReturnsLines(): void

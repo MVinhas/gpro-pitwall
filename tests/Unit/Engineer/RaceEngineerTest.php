@@ -618,14 +618,6 @@ final class RaceEngineerTest extends TestCase
         $this->assertSame('Free cash covers it; tunes for race 10', $noName['reason']);
     }
 
-    public function testUnknownTestingCostStillNamesTheTarget(): void
-    {
-        $line = $this->line($this->inputs(['testingCost' => null]), 'testing');
-
-        $this->assertSame('Test at Silverstone — cost unknown', $line['answer']);
-        $this->assertSame('No earlier session this season to price it; tunes for Monza (race 10)', $line['reason']);
-    }
-
     public function testTestingClosedIsNothingToDo(): void
     {
         $this->assertSame('Nothing to do', $this->line($this->inputs(['testingOpen' => false]), 'testing')['answer']);
@@ -637,18 +629,6 @@ final class RaceEngineerTest extends TestCase
         $line = $this->line($this->inputs(['outlook' => $this->outlook(100_000)]), 'testing');
 
         $this->assertSame('Skip testing at Silverstone', $line['answer']);
-    }
-
-    public function testUnknownTestingCost(): void
-    {
-        $hold = $this->line($this->inputs(['testingCost' => null]), 'testing');
-        $survive = $this->line($this->inputs([
-            'testingCost' => null,
-            'objective' => $this->objective(SeasonObjective::SURVIVE),
-        ]), 'testing');
-
-        $this->assertSame('Test at Silverstone — cost unknown', $hold['answer']);
-        $this->assertSame('Skip testing at Silverstone', $survive['answer']);
     }
 
     public function testRiskPassesTheAdvisorNumbersThrough(): void
@@ -1457,7 +1437,6 @@ final class RaceEngineerTest extends TestCase
             'fits' => ['testingCost' => 1_000_000],
             'too dear' => ['testingCost' => 1_450_001],
             'exact' => ['testingCost' => 1_450_000],
-            'cost unknown' => ['testingCost' => null],
             'closed' => ['testingOpen' => false],
             'no target' => ['testingTarget' => null],
             'free' => ['testingCost' => 0],
@@ -1469,7 +1448,7 @@ final class RaceEngineerTest extends TestCase
             $spends = str_starts_with($testing['answer'], 'Test at');
 
             $this->assertSame(
-                1_450_000 - ($spends ? (int) $in->testingCost : 0),
+                1_450_000 - ($spends ? $in->testingCost : 0),
                 RaceEngineer::upgradeBudget($in),
                 $state,
             );
