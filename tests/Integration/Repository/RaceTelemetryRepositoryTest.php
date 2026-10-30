@@ -259,4 +259,35 @@ final class RaceTelemetryRepositoryTest extends TestCase
     {
         $this->assertSame([], $this->repo->calibrationRows());
     }
+
+    public function testTrackConditionsGroupByBaseNameWithACorpusWideRow(): void
+    {
+        $rows = [
+            ['Monza (Italy)', 1, 20.0], ['Monza (Italy)', 0, 30.0], ['Monza (Italy)', 1, null],
+            ['Monza', 0, 10.0],
+        ];
+        foreach ($rows as $i => [$name, $wet, $temp]) {
+            $this->repo->insertIfNew($this->row([
+                'race' => $i + 1, 'q1_time_ms' => 100 + $i, 'track_name' => $name,
+                'was_wet' => $wet, 'avg_temp' => $temp,
+            ]));
+        }
+
+        $conditions = $this->repo->trackConditions();
+
+        $this->assertSame(['Monza'], array_keys($conditions['tracks']));
+        $this->assertSame(
+            ['races' => 4, 'wet' => 0.5, 'temp_races' => 3, 'temp' => 20.0],
+            $conditions['tracks']['Monza']
+        );
+        $this->assertSame(['races' => 4, 'wet' => 0.5, 'temp' => 20.0], $conditions['all']);
+    }
+
+    public function testTrackConditionsOnAnEmptyCorpus(): void
+    {
+        $this->assertSame(
+            ['tracks' => [], 'all' => ['races' => 0, 'wet' => null, 'temp' => null]],
+            $this->repo->trackConditions()
+        );
+    }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Repository;
 
+use App\Support\TrackName;
 use PDO;
 
 /**
@@ -508,6 +509,72 @@ class RaceTelemetryRepository
             GROUP BY track_id, track_name
             ORDER BY races DESC
         ");
+    }
+
+    /**
+     * Wet rate and mean temperature per track, plus the corpus-wide figures a
+     * thin track falls back on. Sums are folded across spellings of one track
+     * ("Monza (Italy)" and "Monza"), so every mean is weighted by races.
+     *
+     * @return array{
+     *     tracks: array<string, array{races: int, wet: float, temp_races: int, temp: ?float}>,
+     *     all: array{races: int, wet: ?float, temp: ?float}
+     * }
+     */
+    public function trackConditions(): array
+    {
+        $rows = $this->rows('
+            SELECT track_name,
+                   COUNT(*)        AS races,
+                   SUM(was_wet)    AS wet_sum,
+                   SUM(avg_temp)   AS temp_sum,
+                   COUNT(avg_temp) AS temp_races
+            FROM race_telemetry
+            GROUP BY track_name
+        ');
+
+        $races = $wetSum = $tempSum = $tempRaces = [];
+        $allRaces = $allTempRaces = 0;
+        $allWet = $allTemp = 0.0;
+        foreach ($rows as $row) {
+            $n = (int) $row['races'];
+            $wet = (float) $row['wet_sum'];
+            $temp = (float) $row['temp_sum'];
+            $tn = (int) $row['temp_races'];
+
+            $allRaces += $n;
+            $allWet += $wet;
+            $allTemp += $temp;
+            $allTempRaces += $tn;
+
+            $base = TrackName::base((string) $row['track_name']);
+            if ($base === '') {
+                continue;
+            }
+            $races[$base] = ($races[$base] ?? 0) + $n;
+            $wetSum[$base] = ($wetSum[$base] ?? 0.0) + $wet;
+            $tempSum[$base] = ($tempSum[$base] ?? 0.0) + $temp;
+            $tempRaces[$base] = ($tempRaces[$base] ?? 0) + $tn;
+        }
+
+        $tracks = [];
+        foreach ($races as $name => $n) {
+            $tracks[$name] = [
+                'races' => $n,
+                'wet' => $wetSum[$name] / $n,
+                'temp_races' => $tempRaces[$name],
+                'temp' => $tempRaces[$name] > 0 ? $tempSum[$name] / $tempRaces[$name] : null,
+            ];
+        }
+
+        return [
+            'tracks' => $tracks,
+            'all' => [
+                'races' => $allRaces,
+                'wet' => $allRaces > 0 ? $allWet / $allRaces : null,
+                'temp' => $allTempRaces > 0 ? $allTemp / $allTempRaces : null,
+            ],
+        ];
     }
 
     /**
