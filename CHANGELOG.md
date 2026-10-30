@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.24] - 2026-10-30
+
+### Fixed
+- When the race engineer says to skip testing, it now also asks you to set the Cockpit's training laps to 0 and
+  links to the slider. Those laps' wear is counted in the swaps, the CTR and the season budget, so leaving them in
+  plans for a session you won't run.
+
 ## [1.21.23] - 2026-10-29
 
 ### Fixed

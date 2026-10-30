@@ -439,6 +439,35 @@ final class RaceEngineerServiceTest extends TestCase
         self::assertSame($firstOfTheSeason, $afterACheaperEntry);
     }
 
+    public function testASkippedSessionNamesTheCockpitTrainingLaps(): void
+    {
+        $this->seedPromotionFixture();
+        $testingWith = function (int $laps): array {
+            $lines = $this->service->forCockpit(self::USER, $this->cockpit([
+                // Broke: no session fits, so the line skips it.
+                'office' => ['seasonNb' => self::SEASON, 'raceNb' => 10, 'cash' => 0],
+                'menu' => ['IDM' => 7, 'cash' => 0],
+                'training_laps' => $laps,
+                'testing_open' => true,
+                'testing_track' => 'Silverstone',
+                'testing_targets' => [[
+                    'offset' => 3, 'season' => 'current', 'race' => 13, 'track_id' => 1, 'track_name' => 'Testring',
+                    'power' => 1, 'handling' => 1, 'acceleration' => 1,
+                ]],
+            ]))['lines'];
+
+            return array_column($lines, null, 'key')['testing'];
+        };
+
+        $counted = $testingWith(100);
+        $none = $testingWith(0);
+
+        self::assertSame('Skip testing at Silverstone', $counted['answer']);
+        self::assertStringEndsWith('(it counts 100 laps of wear)', $counted['reason']);
+        self::assertSame('/cockpit#cockpit-wear', $counted['anchor']);
+        self::assertStringNotContainsString('training laps', $none['reason']);
+    }
+
     public function testNoStoredRowsStillReturnsLines(): void
     {
         $card = $this->service->forCockpit(99, $this->cockpit(['menu' => ['cash' => 1_000_000]]));
