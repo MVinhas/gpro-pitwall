@@ -521,10 +521,15 @@ class RaceEngineerService
     {
         $division = (string) ($c['division'] ?? '');
         $feed = self::arr($c['tyre_suppliers'] ?? null);
+        $signed = self::arr($c['office'] ?? null)['tyreSupplierId'] ?? null;
+        $suppliers = self::list($feed['suppliers'] ?? null);
+        // The feed is cached across managers, so its own canSignContract may be someone else's: only this
+        // manager's office says whether they have signed.
         if (
             !in_array($division, self::TYRE_DIVISIONS, true)
-            || (int) ($feed['canSignContract'] ?? 0) !== 1
-            || (int) (self::arr($c['office'] ?? null)['tyreSupplierId'] ?? 0) !== 0
+            || !is_numeric($signed)
+            || (int) $signed !== 0
+            || $suppliers === []
         ) {
             return null;
         }
@@ -538,7 +543,7 @@ class RaceEngineerService
             $baseline = $this->idealPilot->getIdealPilot($division)['stats']['Talent'] ?? null;
 
             return TyreSupplierAdvisor::advise(
-                self::list($feed['suppliers'] ?? null),
+                $suppliers,
                 $division,
                 TyreSupplierAdvisor::races(
                     $names,
@@ -568,10 +573,11 @@ class RaceEngineerService
     {
         $wear = [];
         foreach ($names as $name) {
-            $scale = $name === null
-                ? null
-                : self::TYRE_WEAR_SCALE[(string) ($this->tracks->findByName($name)['tyre_wear'] ?? '')] ?? null;
-            if ($name !== null && $scale !== null) {
+            if ($name === null) {
+                continue;
+            }
+            $scale = self::TYRE_WEAR_SCALE[(string) ($this->tracks->findByName($name)['tyre_wear'] ?? '')] ?? null;
+            if ($scale !== null) {
                 $wear[TrackName::base($name)] = (float) $scale;
             }
         }

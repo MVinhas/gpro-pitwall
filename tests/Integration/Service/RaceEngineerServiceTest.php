@@ -1052,18 +1052,19 @@ final class RaceEngineerServiceTest extends TestCase
         self::assertNull($this->budgets->find(self::USER, self::SEASON));
     }
 
-    public function testTheTyreLineShowsOnlyWhileTheWindowIsOpen(): void
+    public function testTheTyreLineShowsOnlyWhileUnsigned(): void
     {
         $this->seedPromotionFixture();
         $this->seedTyreFixture();
-        $signed = ['seasonNb' => self::SEASON, 'raceNb' => 10, 'tyreSupplierId' => 4];
+        $office = static fn (array $extra): array => ['seasonNb' => self::SEASON, 'raceNb' => 10] + $extra;
         $cases = [
-            'open, Pro, unsigned' => [[], true],
-            'open, Master' => [['division' => 'Master'], true],
-            'closed window' => [['tyre_suppliers' => $this->tyreFeed(0)], false],
-            'already signed' => [['office' => $signed], false],
-            'Amateur' => [['division' => 'Amateur'], false],
-            'no feed' => [['tyre_suppliers' => []], false],
+            'unsigned, Pro' => [['office' => $office(['tyreSupplierId' => 0])], true],
+            'unsigned, Master' => [['office' => $office(['tyreSupplierId' => 0]), 'division' => 'Master'], true],
+            'office without tyreSupplierId' => [['office' => $office([])], false],
+            'non-numeric tyreSupplierId' => [['office' => $office(['tyreSupplierId' => 'x'])], false],
+            'already signed' => [['office' => $office(['tyreSupplierId' => 4])], false],
+            'Amateur' => [['office' => $office(['tyreSupplierId' => 0]), 'division' => 'Amateur'], false],
+            'no feed' => [['office' => $office(['tyreSupplierId' => 0]), 'tyre_suppliers' => []], false],
         ];
 
         foreach ($cases as $case => [$overrides, $shown]) {
@@ -1123,6 +1124,32 @@ final class RaceEngineerServiceTest extends TestCase
             array_column($wet['rows'], 'total', 'name'),
             array_column($dry['rows'], 'total', 'name'),
         );
+    }
+
+    public function testTheCalendarTracksWearLabelChangesTheAdvice(): void
+    {
+        $this->seedPromotionFixture();
+        $this->seedTyreFixture();
+        $this->db->exec("INSERT INTO tracks (name, laps, distance, tyre_wear) VALUES ('Midway', 50, 250.0, 'Medium')");
+        $calendar = [
+            ['race' => 10, 'track_name' => 'Tyreton'],
+            ['race' => 11, 'track_name' => 'Wetburg'],
+            ['race' => 12, 'track_name' => 'Midway'],
+        ];
+        $rowsFor = function () use ($calendar): array {
+            $tyres = $this->service->forCockpit(
+                self::USER,
+                $this->tyreCockpit(['season_calendar' => $calendar]),
+            )['tyres'];
+            self::assertNotNull($tyres);
+
+            return array_column($tyres['rows'], 'total', 'name');
+        };
+
+        $before = $rowsFor();
+        $this->db->exec("UPDATE tracks SET tyre_wear = 'Very High' WHERE name = 'Midway'");
+
+        self::assertNotSame($before, $rowsFor());
     }
 
     public function testTheWetEdgeComesFromTheDriversTalentAgainstTheDivisionBaseline(): void
@@ -1213,6 +1240,7 @@ final class RaceEngineerServiceTest extends TestCase
     private function tyreCockpit(array $overrides = []): array
     {
         return $this->cockpit($overrides + [
+            'office' => ['seasonNb' => self::SEASON, 'raceNb' => 10, 'tyreSupplierId' => 0],
             'division' => 'Pro',
             'tyre_suppliers' => $this->tyreFeed(),
             'season_calendar' => [

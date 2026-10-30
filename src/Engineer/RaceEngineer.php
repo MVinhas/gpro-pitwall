@@ -103,7 +103,7 @@ final class RaceEngineer
                     - $advice['cost']) . ' a race cheaper',
             'budget_short' => 'Budget short: cheapest supplier your division allows',
         };
-        if ($advice['wet_edge'] && $advice['reason'] !== 'budget_short') {
+        if ($advice['wet_edge'] && $advice['reason'] !== 'budget_short' && $in->division !== null) {
             $reason .= "; your driver's talent (" . $advice['talent'] . ') is at or above the '
                 . $in->division . ' average (' . $advice['baseline'] . '), so rain counts more';
         }
