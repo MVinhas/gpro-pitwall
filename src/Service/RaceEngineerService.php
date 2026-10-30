@@ -49,6 +49,7 @@ use App\Repository\WeekendStateRepository;
  *     standingsRow: ?array<string, mixed>,
  *     weekends: list<array<string, mixed>>,
  *     ledger: list<array<string, mixed>>,
+ *     outlook_ledger: list<array<string, mixed>>,
  *     outlook: array{known: bool, committed: ?int, income: ?int, free_cash: ?int, end_committed: ?int},
  *     objective: InForce
  * }
@@ -186,9 +187,18 @@ class RaceEngineerService
         $seasonLedger = $this->ledger->forSeason($userId, $season);
 
         $racesRun = $standingsRow === null ? max(0, $raceNb - 1) : max(0, (int) $standingsRow['race'] - 1);
+        // Before race 1 there is nothing for this season yet; last season's final race is the best estimate.
+        $outlookLedger = $seasonLedger;
+        $outlookWeekends = $weekends;
+        if ($seasonLedger === []) {
+            $outlookLedger = $this->ledger->forSeason($userId, $season - 1);
+            if ($weekends === []) {
+                $outlookWeekends = $this->weekends->forSeason($userId, $season - 1);
+            }
+        }
         $outlook = CashOutlook::from(
-            $weekends === [] ? null : $weekends[array_key_last($weekends)],
-            $seasonLedger,
+            $outlookWeekends === [] ? null : $outlookWeekends[array_key_last($outlookWeekends)],
+            $outlookLedger,
             $cash,
             max(0, SeasonObjective::RACES - $racesRun),
         );
@@ -209,6 +219,7 @@ class RaceEngineerService
             'standingsRow' => $standingsRow,
             'weekends' => $weekends,
             'ledger' => $seasonLedger,
+            'outlook_ledger' => $outlookLedger,
             'outlook' => $outlook,
             'objective' => SeasonObjective::inForce($proposal, $this->pins->find($userId, $season)),
         ];

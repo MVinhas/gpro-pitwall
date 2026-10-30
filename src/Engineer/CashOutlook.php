@@ -61,6 +61,24 @@ final readonly class CashOutlook
         ];
     }
 
+    /**
+     * What the tyre supplier charged in the most recent race of the rows.
+     *
+     * @param list<array<string, mixed>> $ledger user_economy_ledger rows
+     */
+    public static function latestTyreCost(array $ledger): int
+    {
+        if ($ledger === []) {
+            return 0;
+        }
+
+        $latest = max(array_map(static fn(array $row): int => (int) $row['race'], $ledger));
+
+        $lines = array_values(array_filter($ledger, static fn(array $row): bool => (int) $row['race'] === $latest));
+
+        return abs(self::sum($lines, 'Tyres'));
+    }
+
     private static function salary(mixed $json): ?int
     {
         if (!is_string($json)) {

@@ -590,6 +590,19 @@ final class RaceEngineerServiceTest extends TestCase
         self::assertSame(10, $saved['plan']['race']);
     }
 
+    public function testBeforeTheFirstRaceTheOutlookUsesLastSeasonsFinalRace(): void
+    {
+        $this->seedPromotionFixture(self::SEASON - 1);
+
+        $this->service->forCockpit(self::USER, $this->cockpit());
+
+        self::assertNotNull($this->budgets->find(self::USER, self::SEASON));
+
+        $this->service->forCockpit(99, $this->cockpit());
+
+        self::assertNull($this->budgets->find(99, self::SEASON));
+    }
+
     public function testSeasonStartComesFromTheLedger(): void
     {
         $this->seedPromotionFixture();
@@ -1300,11 +1313,11 @@ final class RaceEngineerServiceTest extends TestCase
         return $car;
     }
 
-    private function seedPromotionFixture(): void
+    private function seedPromotionFixture(int $season = self::SEASON): void
     {
-        $this->standing(9, 2, 60);
+        $this->standing(9, 2, 60, $season);
         $this->weekends->save([
-            'user_id' => self::USER, 'season' => self::SEASON, 'race' => 9, 'source' => 'snapshot',
+            'user_id' => self::USER, 'season' => $season, 'race' => 9, 'source' => 'snapshot',
             'driver_json' => json_encode(['salary' => 100_000], JSON_THROW_ON_ERROR),
             'td_json' => null,
             'staff_json' => json_encode(['salary' => 50_000], JSON_THROW_ON_ERROR),
@@ -1312,14 +1325,14 @@ final class RaceEngineerServiceTest extends TestCase
             'cash' => 5_000_000, 'pts' => 60, 'pos' => 2,
         ]);
         foreach ([8, 9] as $race) {
-            $this->movement('Sponsor Acme', 300_000, $race);
-            $this->movement('Race ' . $race . ' finish position', 100_000, $race);
-            $this->movement('Facilities upkeep', -50_000, $race);
-            $this->movement('Tyre supplier', -20_000, $race);
+            $this->movement('Sponsor Acme', 300_000, $race, $season);
+            $this->movement('Race ' . $race . ' finish position', 100_000, $race, $season);
+            $this->movement('Facilities upkeep', -50_000, $race, $season);
+            $this->movement('Tyre supplier', -20_000, $race, $season);
         }
     }
 
-    private function standing(int $race, int $pos, int $pts): void
+    private function standing(int $race, int $pos, int $pts, int $season = self::SEASON): void
     {
         $managers = [];
         for ($i = 1; $i <= 28; $i++) {
@@ -1334,17 +1347,17 @@ final class RaceEngineerServiceTest extends TestCase
             ];
         }
         $this->standings->save([
-            'user_id' => self::USER, 'season' => self::SEASON, 'race' => $race,
+            'user_id' => self::USER, 'season' => $season, 'race' => $race,
             'own_pos' => $pos, 'own_pts' => $pts, 'group_label' => 'Amateur - 4',
             'managers_json' => json_encode($managers, JSON_THROW_ON_ERROR),
         ]);
     }
 
-    private function movement(string $description, int $amount, int $race): void
+    private function movement(string $description, int $amount, int $race, int $season = self::SEASON): void
     {
         $at = sprintf('2026-10-%02d 12:00:00', $race);
         $this->ledger->save([
-            'user_id' => self::USER, 'season' => self::SEASON, 'race' => $race, 'source' => 'economy',
+            'user_id' => self::USER, 'season' => $season, 'race' => $race, 'source' => 'economy',
             'occurred_at' => $at, 'description' => $description, 'amount' => $amount,
             'balance_after' => null, 'fingerprint' => sha1($description . $race . $amount),
         ]);
