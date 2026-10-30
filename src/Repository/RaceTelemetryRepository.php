@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Repository;
 
+use App\Support\TrackName;
 use PDO;
 
 /**
@@ -508,6 +509,84 @@ class RaceTelemetryRepository
             GROUP BY track_id, track_name
             ORDER BY races DESC
         ");
+    }
+
+    /**
+     * Wet rate and mean temperature per track, plus the corpus-wide figures a
+     * thin track falls back on. Every figure counts races, not manager rows:
+     * a race is wet when any row of it was, and one race stored under two
+     * spellings of a track ("Monza (Italy)" and "Monza") counts once.
+     *
+     * @return array{
+     *     tracks: array<string, array{races: int, wet: float, temp_races: int, temp: ?float}>,
+     *     all: array{races: int, wet: ?float, temp: ?float}
+     * }
+     */
+    public function trackConditions(): array
+    {
+        $rows = $this->rows('
+            SELECT season, race, track_name,
+                   MAX(was_wet)  AS wet,
+                   AVG(avg_temp) AS temp
+            FROM race_telemetry
+            GROUP BY season, race, track_name
+        ');
+
+        $byTrack = [];
+        $unnamed = [];
+        foreach ($rows as $row) {
+            $wet = (float) $row['wet'];
+            $temps = $row['temp'] === null ? [] : [(float) $row['temp']];
+            $base = TrackName::base((string) $row['track_name']);
+            if ($base === '') {
+                $unnamed[] = ['wet' => $wet, 'temps' => $temps];
+                continue;
+            }
+            $key = $row['season'] . '-' . $row['race'];
+            $seen = $byTrack[$base][$key] ?? ['wet' => 0.0, 'temps' => []];
+            $byTrack[$base][$key] = ['wet' => max($seen['wet'], $wet), 'temps' => [...$seen['temps'], ...$temps]];
+        }
+
+        $tracks = [];
+        $all = $unnamed;
+        foreach ($byTrack as $name => $events) {
+            $all = [...$all, ...array_values($events)];
+            $summary = self::conditionsOf(array_values($events));
+            $tracks[$name] = [
+                'races' => $summary['races'],
+                'wet' => (float) $summary['wet'],
+                'temp_races' => $summary['temp_races'],
+                'temp' => $summary['temp'],
+            ];
+        }
+        $corpus = self::conditionsOf($all);
+
+        return [
+            'tracks' => $tracks,
+            'all' => ['races' => $corpus['races'], 'wet' => $corpus['wet'], 'temp' => $corpus['temp']],
+        ];
+    }
+
+    /**
+     * @param list<array{wet: float, temps: list<float>}> $events
+     * @return array{races: int, wet: ?float, temp_races: int, temp: ?float}
+     */
+    private static function conditionsOf(array $events): array
+    {
+        $races = count($events);
+        $temps = [];
+        foreach ($events as $event) {
+            if ($event['temps'] !== []) {
+                $temps[] = array_sum($event['temps']) / count($event['temps']);
+            }
+        }
+
+        return [
+            'races' => $races,
+            'wet' => $races > 0 ? array_sum(array_column($events, 'wet')) / $races : null,
+            'temp_races' => count($temps),
+            'temp' => $temps === [] ? null : array_sum($temps) / count($temps),
+        ];
     }
 
     /**

@@ -1,0 +1,63 @@
+{# Admin-only tyre supplier panel: every supplier's cost, score and verdict, so the
+   "Sign X" line can be checked. `engineer.tyres` is null when the advice is hidden;
+   money arrives pre-formatted (figure, per_race, season). #}
+{% set tyres = engineer.tyres %}
+{% set verdict_words = {
+    pick: 'Pick',
+    close: 'Close',
+    out_pipirelli: 'Out: Pipirelli',
+    out_price: 'Out: Pro price line',
+    out_dry: 'Out: weak in the dry',
+    out_budget: 'Out: over budget'
+} %}
+{% embed 'partials/_acc.twig' with {
+    id: 'engineer-tyres',
+    title: 'Tyre supplier',
+    open_default: true,
+    tyres: tyres,
+    verdict_words: verdict_words
+} only %}
+    {% block verdict %}
+        <span class="text-sm font-semibold text-slate-900">{{ 'Sign ' ~ tyres.pick ~ ' · ' ~ tyres.figure }}</span>
+    {% endblock %}
+    {% block body %}
+        <div class="dt-scroll">
+            <table class="dt">
+                <thead class="bg-slate-50">
+                    <tr>
+                        <th class="dt-th">Supplier</th>
+                        <th class="dt-th text-right">Per race</th>
+                        <th class="dt-th text-right hidden sm:table-cell">Season (× 17)</th>
+                        <th class="dt-th text-right">Score</th>
+                        <th class="dt-th text-right hidden lg:table-cell">Performance</th>
+                        <th class="dt-th text-right hidden lg:table-cell">Temperature</th>
+                        <th class="dt-th text-right hidden lg:table-cell">Durability</th>
+                        <th class="dt-th text-right hidden lg:table-cell">Warm-up</th>
+                        <th class="dt-th">Verdict</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for row in tyres.rows %}
+                        <tr>
+                            <td class="dt-td font-medium">{{ row.name }}</td>
+                            <td class="dt-td text-right">{{ row.per_race }}</td>
+                            <td class="dt-td text-right hidden sm:table-cell">{{ row.season }}</td>
+                            <td class="dt-td text-right">{{ row.total|number_format(1) }}</td>
+                            <td class="dt-td text-right hidden lg:table-cell">{{ row.parts.performance|number_format(1) }}</td>
+                            <td class="dt-td text-right hidden lg:table-cell">{{ row.parts.temperature|number_format(1) }}</td>
+                            <td class="dt-td text-right hidden lg:table-cell">{{ row.parts.durability|number_format(1) }}</td>
+                            <td class="dt-td text-right hidden lg:table-cell">{{ row.parts.warmup|number_format(1) }}</td>
+                            <td class="dt-td whitespace-normal{{ row.verdict == 'pick' ? ' font-semibold text-emerald-700' : (row.verdict starts with 'out_' ? ' text-red-700' : '') }}">
+                                {{ row.verdict ? verdict_words[row.verdict] : '' }}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <p class="t-caption mt-2">
+            Scored race by race on this season's calendar: performance 55%, temperature fit 20%,
+            durability 15%, warm-up 10%. Within 10% of the best, the cheaper supplier wins.
+        </p>
+    {% endblock %}
+{% endembed %}

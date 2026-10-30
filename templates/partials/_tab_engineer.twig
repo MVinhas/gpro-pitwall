@@ -15,5 +15,6 @@
         </div>
     {% else %}
         {% include 'partials/_engineer_card.twig' %}
+        {% if engineer.tyres %}{% include 'partials/_engineer_tyres.twig' %}{% endif %}
     {% endif %}
 </div>

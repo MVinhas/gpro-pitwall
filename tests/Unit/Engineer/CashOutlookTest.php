@@ -134,4 +134,29 @@ final class CashOutlookTest extends TestCase
         $out = CashOutlook::from($this->state(['driver_json' => '5']), $this->ledger(), 2000000, 9);
         $this->assertSame(self::UNKNOWN, $out);
     }
+
+    public function testLatestTyreCostIsTheHighestRacesTyreTotal(): void
+    {
+        $this->assertSame(90000, CashOutlook::latestTyreCost($this->ledger()));
+    }
+
+    public function testLatestTyreCostSumsEveryTyreLineOfTheRace(): void
+    {
+        $ledger = [
+            ['race' => 3, 'description' => 'Tyre supplier costs (Pipirelli)', 'amount' => -2_510_000],
+            ['race' => 3, 'description' => 'Tyre supplier costs (Pipirelli)', 'amount' => -10_000],
+            ['race' => 3, 'description' => 'Sponsor money', 'amount' => 900000],
+            ['race' => 2, 'description' => 'Tyre supplier costs (Pipirelli)', 'amount' => -1],
+        ];
+
+        $this->assertSame(2_520_000, CashOutlook::latestTyreCost($ledger));
+    }
+
+    public function testLatestTyreCostIsZeroWithoutRowsOrTyreLines(): void
+    {
+        $this->assertSame(0, CashOutlook::latestTyreCost([]));
+        $this->assertSame(0, CashOutlook::latestTyreCost([
+            ['race' => 1, 'description' => 'Sponsor money', 'amount' => 900000],
+        ]));
+    }
 }

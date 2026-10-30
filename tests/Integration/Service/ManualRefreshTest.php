@@ -556,6 +556,8 @@ final class ManualRefreshTest extends TestCase
                     new PartUpgradeAdvisorService($pha, []),
                     new SwapLevelPicker(new SeasonBudget($carWear), []),
                 ),
+                $telemetryRepo,
+                $idealPilot,
             ),
             false,
             $twig,

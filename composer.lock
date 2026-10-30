@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "26acb3387e00f233fe50d7d20decf8db",
+    "content-hash": "bbd6920654ff48a502625e30f769c105",
     "packages": [
         {
             "name": "phpmailer/phpmailer",
@@ -707,7 +707,8 @@
                     "type": "github"
                 }
             ],
-            "time": "2026-06-05T09:00:01+00:00"
+            "time": "2026-06-05T09:00:01+00:00",
+            "published-time": "2026-06-05T09:00:18+00:00"
         },
         {
             "name": "phpunit/php-code-coverage",
@@ -2646,5 +2647,5 @@
         "ext-sqlite3": "*"
     },
     "platform-dev": {},
-    "plugin-api-version": "2.9.0"
+    "plugin-api-version": "2.11.0"
 }

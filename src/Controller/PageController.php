@@ -664,7 +664,14 @@ class PageController
                     $isEngineerRequest = $isAdmin && $activeMainTab === 'Race Engineer'
                         && (string) $request->get('fragment', '') === '';
                     if ($isEngineerRequest) {
+                        try {
+                            $tyreSuppliers = $this->apiClient->getTyreSuppliers();
+                        } catch (\Throwable $e) {
+                            error_log('[Engineer] ' . $e::class);
+                            $tyreSuppliers = [];
+                        }
                         $engineer = self::buildEngineer($this->raceEngineer, (int) $user['id'], $engineerContext + [
+                            'tyre_suppliers'   => $tyreSuppliers,
                             'group_staff'      => $this->apiClient->getCachedGroupStaff(),
                             'wear_advice'      => $viewData['wear_advice'] ?? null,
                             'swap_plan'        => $viewData['swap_plan'] ?? null,
