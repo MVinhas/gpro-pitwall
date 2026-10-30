@@ -124,12 +124,10 @@ final readonly class TyreSupplierAdvisor
                 $verdicts[$i] ??= 'out_dry';
             }
         }
-        $budgetFailed = false;
         if ($plan !== null) {
             foreach ($kept as $i => $supplier) {
                 if (($verdicts[$i] ?? null) === null && !self::affordable($plan, $supplier['cost'], $currentTyreCost)) {
                     $verdicts[$i] = 'out_budget';
-                    $budgetFailed = true;
                 }
             }
         }
@@ -338,7 +336,8 @@ final readonly class TyreSupplierAdvisor
 
     /**
      * The suppliers at or below the dry-performance value at position floor(n / 3), counted from 1 after sorting
-     * ascending; with fewer than three suppliers there is no bottom third.
+     * ascending; with fewer than three suppliers, or when the cutoff is
+     * the highest value (a shared or tied dry value), there is no floor.
      *
      * @param list<array{dryPerformance: float}> $kept
      * @return list<int>
@@ -352,6 +351,9 @@ final readonly class TyreSupplierAdvisor
         $dry = array_column($kept, 'dryPerformance');
         sort($dry);
         $cutoff = $dry[$position - 1];
+        if ($cutoff === $dry[count($dry) - 1]) {
+            return [];
+        }
 
         return array_keys(array_filter($kept, static fn (array $s): bool => $s['dryPerformance'] <= $cutoff));
     }

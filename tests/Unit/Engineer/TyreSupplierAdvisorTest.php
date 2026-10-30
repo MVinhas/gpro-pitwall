@@ -270,6 +270,33 @@ final class TyreSupplierAdvisorTest extends TestCase
         self::assertSame('close', $verdicts['Contimental']);
     }
 
+    public function testTheBudgetChargesTheExtraCostFromTheFirstRaceOn(): void
+    {
+        $advice = TyreSupplierAdvisor::advise(
+            self::FEED,
+            'Pro',
+            $this->season(),
+            150,
+            193,
+            $this->plan(45000000),
+            2000000,
+        );
+
+        self::assertNotNull($advice);
+        self::assertSame('out_budget', $this->verdicts($advice)['Badyear']);
+    }
+
+    public function testASharedDryValueIsNoDryFloor(): void
+    {
+        $feed = array_map(static fn (array $row): array => ['dryPerformance' => 5] + $row, self::FEED);
+
+        $advice = TyreSupplierAdvisor::advise($feed, 'Master', $this->season(), 150, 193, null, 0);
+
+        self::assertNotNull($advice);
+        self::assertNotContains('out_dry', $this->verdicts($advice));
+        self::assertNotSame('budget_short', $advice['reason']);
+    }
+
     public function testMoneyShortPicksTheCheapestTheRedLinesAllow(): void
     {
         $advice = TyreSupplierAdvisor::advise(self::FEED, 'Pro', $this->season(), 150, 193, $this->plan(1000000), 0);
@@ -389,13 +416,13 @@ final class TyreSupplierAdvisorTest extends TestCase
 
         self::assertNotNull($advice);
         $seenOut = false;
-        $previous = [false => INF, true => INF];
+        $previous = [INF, INF];
         foreach ($advice['rows'] as $row) {
             $out = $row['verdict'] !== null && str_starts_with($row['verdict'], 'out_');
             self::assertFalse($seenOut && !$out, 'an un-out row follows an out row');
             $seenOut = $seenOut || $out;
-            self::assertLessThanOrEqual($previous[$out], $row['total']);
-            $previous[$out] = $row['total'];
+            self::assertLessThanOrEqual($previous[(int) $out], $row['total']);
+            $previous[(int) $out] = $row['total'];
             self::assertSame($row['cost'] * 17, $row['season_cost']);
         }
     }
