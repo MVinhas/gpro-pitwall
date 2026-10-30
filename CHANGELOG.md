@@ -6,6 +6,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.25] - 2026-10-30
+
+### Added
+- The race engineer names the tyre supplier to sign while GPRO's contract window is open (Pro and above). It
+  respects the red lines (no Pipirelli; in Pro, not the two most expensive), checks the whole season can pay it,
+  favours rain tyres when your driver's talent is at or above the division average, and shows why every other
+  supplier lost.
+
+### Changed
+- Before the first race of a season, the race engineer plans from last season's final race.
+- The tyre contract is paid for first: the engineer's upgrade, training and testing advice spends only what the
+  recommended supplier leaves, and once you have signed, the season plan uses your supplier's price.
+
 ## [1.21.24] - 2026-10-30
 
 ### Fixed
