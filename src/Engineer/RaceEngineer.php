@@ -10,6 +10,7 @@ use App\Support\Ordinal;
  * @phpstan-import-type Plan from CtrPlanner
  * @phpstan-import-type Upgrade from UpgradeRanker
  * @phpstan-import-type SwapPick from EngineerInputs
+ * @phpstan-import-type TyreAdvice from TyreSupplierAdvisor
  * @phpstan-type Line array{
  *     key: string,
  *     answer: string,
@@ -55,6 +56,11 @@ final class RaceEngineer
             return $lines;
         }
 
+        $tyres = self::tyres($in);
+        if ($tyres !== null) {
+            $lines[] = $tyres;
+        }
+
         $optional = [
             self::cash($in),
             self::ctr($in),
@@ -78,6 +84,40 @@ final class RaceEngineer
     public static function stale(): array
     {
         return self::line('stale', 'New race weekend', "Re-sync for this weekend's advice", tone: 'amber');
+    }
+
+    /**
+     * @return ?Line
+     */
+    private static function tyres(EngineerInputs $in): ?array
+    {
+        $advice = $in->tyreAdvice;
+        if ($advice === null) {
+            return null;
+        }
+
+        $reason = match ($advice['reason']) {
+            'best' => 'Best balance for your calendar',
+            'band' => 'Within 10% of ' . $advice['best'] . ', and '
+                . Money::short((array_column($advice['rows'], 'cost', 'name')[$advice['best']] ?? $advice['cost'])
+                    - $advice['cost']) . ' a race cheaper',
+            'budget_short' => 'Budget short: cheapest supplier your division allows',
+        };
+        if ($advice['wet_edge'] && $advice['reason'] !== 'budget_short') {
+            $reason .= "; your driver's talent (" . $advice['talent'] . ') is at or above the '
+                . $in->division . ' average (' . $advice['baseline'] . '), so rain counts more';
+        }
+        if (!$advice['finances_known']) {
+            $reason .= '; finances unknown, picked on performance';
+        }
+
+        return self::line(
+            'tyres',
+            'Sign ' . $advice['pick'],
+            $reason,
+            anchor: '/engineer#engineer-tyres',
+            figure: Money::short($advice['cost']) . ' a race',
+        );
     }
 
     /**

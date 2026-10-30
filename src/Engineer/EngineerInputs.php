@@ -8,6 +8,7 @@ namespace App\Engineer;
  * @phpstan-import-type InForce from SeasonObjective
  * @phpstan-import-type Plan from CtrPlanner
  * @phpstan-import-type StaffStanding from GroupStanding
+ * @phpstan-import-type TyreAdvice from TyreSupplierAdvisor
  * @phpstan-import-type CarStanding from GroupStanding
  * @phpstan-type Outlook array{known: bool, committed: ?int, income: ?int, free_cash: ?int, end_committed: ?int}
  * @phpstan-type PartAdvice array{part: string, level: int, start: int, est: float, end: float}
@@ -56,6 +57,7 @@ final readonly class EngineerInputs
      * @param ?CarStanding $carStanding
      * @param list<SwapPick> $swapPicks the season-long level picked for each swapped part that has one
      * @param int $testingLaps the Cockpit's training laps, whose testing wear every plan counts
+     * @param ?TyreAdvice $tyreAdvice set only while GPRO's tyre contract window is open and unsigned
      */
     public function __construct(
         public array $objective,
@@ -83,6 +85,8 @@ final readonly class EngineerInputs
         public ?array $carStanding = null,
         public array $swapPicks = [],
         public int $testingLaps = 0,
+        public ?array $tyreAdvice = null,
+        public ?string $division = null,
     ) {
     }
 
@@ -100,5 +104,13 @@ final readonly class EngineerInputs
     public function withSwapPicks(array $picks): self
     {
         return clone($this, ['swapPicks' => $picks]);
+    }
+
+    /**
+     * @param ?TyreAdvice $advice
+     */
+    public function withTyreAdvice(?array $advice): self
+    {
+        return clone($this, ['tyreAdvice' => $advice]);
     }
 }

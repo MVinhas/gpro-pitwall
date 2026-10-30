@@ -155,6 +155,109 @@ final class RaceEngineerTest extends TestCase
         $this->assertSame(self::KEYS, $keys);
     }
 
+    /**
+     * @param array<string, mixed> $o
+     * @return array<string, mixed>
+     */
+    private function tyreAdvice(array $o = []): array
+    {
+        return $o + [
+            'pick' => 'Badyear', 'cost' => 4_800_000, 'best' => 'Badyear', 'reason' => 'best', 'wet_edge' => false,
+            'talent' => 150, 'baseline' => 193, 'finances_known' => true, 'rows' => [],
+        ];
+    }
+
+    public function testTheTyreLineFollowsTheObjective(): void
+    {
+        $lines = RaceEngineer::brief($this->inputs(['tyreAdvice' => $this->tyreAdvice(), 'division' => 'Pro']));
+
+        $this->assertSame('tyres', $lines[1]['key']);
+        $this->assertSame('Sign Badyear', $lines[1]['answer']);
+        $this->assertSame('$4.8M a race', $lines[1]['figure']);
+        $this->assertSame('/engineer#engineer-tyres', $lines[1]['anchor']);
+        $this->assertSame('ink', $lines[1]['tone']);
+        $this->assertSame('cash', $lines[2]['key']);
+    }
+
+    public function testNoAdviceMeansNoTyreLine(): void
+    {
+        $this->assertNotContains('tyres', array_column(RaceEngineer::brief($this->inputs()), 'key'));
+    }
+
+    public function testASeasonOverBriefHasNoTyreLine(): void
+    {
+        $over = $this->objective(null, ['over' => true, 'reasons' => []]);
+
+        $lines = RaceEngineer::brief($this->inputs(['objective' => $over, 'tyreAdvice' => $this->tyreAdvice()]));
+
+        $this->assertSame(['objective'], array_column($lines, 'key'));
+    }
+
+    public function testTheBestBalanceReason(): void
+    {
+        $line = $this->line($this->inputs(['tyreAdvice' => $this->tyreAdvice(), 'division' => 'Pro']), 'tyres');
+
+        $this->assertSame('Best balance for your calendar', $line['reason']);
+    }
+
+    public function testABandPickNamesTheBestAndWhatItSaves(): void
+    {
+        $advice = $this->tyreAdvice([
+            'pick' => 'Dunnolop', 'cost' => 3_800_000, 'best' => 'Badyear', 'reason' => 'band',
+            'rows' => [
+                ['name' => 'Badyear', 'cost' => 4_800_000],
+                ['name' => 'Dunnolop', 'cost' => 3_800_000],
+            ],
+        ]);
+
+        $line = $this->line($this->inputs(['tyreAdvice' => $advice, 'division' => 'Pro']), 'tyres');
+
+        $this->assertSame('Sign Dunnolop', $line['answer']);
+        $this->assertSame('$3.8M a race', $line['figure']);
+        $this->assertSame('Within 10% of Badyear, and $1M a race cheaper', $line['reason']);
+    }
+
+    public function testAFinancesShortPickSaysItIsTheCheapestAllowed(): void
+    {
+        $advice = $this->tyreAdvice(['reason' => 'budget_short', 'wet_edge' => true]);
+
+        $line = $this->line($this->inputs(['tyreAdvice' => $advice, 'division' => 'Pro']), 'tyres');
+
+        $this->assertSame('Budget short: cheapest supplier your division allows', $line['reason']);
+    }
+
+    public function testTheWetEdgeIsExplained(): void
+    {
+        $advice = $this->tyreAdvice(['wet_edge' => true, 'talent' => 200, 'baseline' => 193]);
+
+        $line = $this->line($this->inputs(['tyreAdvice' => $advice, 'division' => 'Pro']), 'tyres');
+
+        $this->assertSame(
+            "Best balance for your calendar; your driver's talent (200) is at or above the Pro average (193), "
+            . 'so rain counts more',
+            $line['reason'],
+        );
+    }
+
+    public function testUnknownFinancesAreSaidSo(): void
+    {
+        $advice = $this->tyreAdvice(['finances_known' => false]);
+
+        $line = $this->line($this->inputs(['tyreAdvice' => $advice, 'division' => 'Pro']), 'tyres');
+
+        $this->assertSame('Best balance for your calendar; finances unknown, picked on performance', $line['reason']);
+    }
+
+    public function testTheTyreAdviceSurvivesThePlanAndPickCopies(): void
+    {
+        $in = $this->inputs(['tyreAdvice' => $this->tyreAdvice(), 'division' => 'Pro']);
+
+        $copy = $in->withPlan($this->plan())->withSwapPicks([]);
+
+        $this->assertSame($in->tyreAdvice, $copy->tyreAdvice);
+        $this->assertSame('Pro', $copy->division);
+    }
+
     public function testSeasonOverReturnsOnlyTheObjective(): void
     {
         $over = $this->objective(null, ['over' => true, 'label' => 'Season over — promoted, P2', 'reasons' => []]);

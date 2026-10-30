@@ -535,6 +535,8 @@ $container['service.race_engineer'] = new \App\Service\RaceEngineerService(
         $container['config']['secrets']['part_pha_contribution'] ?? [],
     ),
     $container['service.swap_advisor'],
+    $container['repo.race_telemetry'],
+    $container['service.ideal_pilot'],
 );
 
 $container['controller.page'] = new PageController(

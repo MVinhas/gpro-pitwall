@@ -12,6 +12,7 @@ use App\Engineer\SwapLevelPicker;
 use App\Engineer\SwapSeason;
 use App\Engineer\UpgradeRanker;
 use App\Repository\EconomyLedgerRepository;
+use App\Repository\RaceTelemetryRepository;
 use App\Repository\SeasonBudgetRepository;
 use App\Repository\SeasonObjectiveRepository;
 use App\Repository\StandingsRepository;
@@ -22,6 +23,7 @@ use App\Service\BoostFuelService;
 use App\Service\CarWearPlannerService;
 use App\Service\CarWearService;
 use App\Service\FuelModel;
+use App\Service\IdealPilotService;
 use App\Service\PartSwapAdvisorService;
 use App\Service\PartUpgradeAdvisorService;
 use App\Service\PhaMatchService;
@@ -85,6 +87,7 @@ final class RaceEngineerServiceTest extends TestCase
         ?SeasonBudgetRepository $budgets = null,
         ?UpgradeRanker $ranker = null,
         ?SwapLevelPicker $picker = null,
+        ?RaceTelemetryRepository $telemetry = null,
     ): RaceEngineerService {
         $wear = $this->wearService();
         $contribution = [
@@ -116,7 +119,23 @@ final class RaceEngineerServiceTest extends TestCase
                 new PartUpgradeAdvisorService(new PhaMatchService(), $contribution),
                 $picker ?? new SwapLevelPicker(new SeasonBudget($wear), $contribution),
             ),
+            $telemetry ?? new RaceTelemetryRepository($this->db),
+            $this->idealPilot(193),
         );
+    }
+
+    private function idealPilot(int $talent): IdealPilotService
+    {
+        return new class ($talent) extends IdealPilotService {
+            public function __construct(private readonly int $talent)
+            {
+            }
+
+            public function getIdealPilot(string $division): array
+            {
+                return ['stats' => ['Talent' => $this->talent], 'count' => 1];
+            }
+        };
     }
 
     public function testBuildsObjectiveAndLinesFromStoredRows(): void
@@ -1031,6 +1050,193 @@ final class RaceEngineerServiceTest extends TestCase
 
         self::assertStringEndsWith('season costs unknown', array_column($lines, null, 'key')['ctr']['reason']);
         self::assertNull($this->budgets->find(self::USER, self::SEASON));
+    }
+
+    public function testTheTyreLineShowsOnlyWhileTheWindowIsOpen(): void
+    {
+        $this->seedPromotionFixture();
+        $this->seedTyreFixture();
+        $signed = ['seasonNb' => self::SEASON, 'raceNb' => 10, 'tyreSupplierId' => 4];
+        $cases = [
+            'open, Pro, unsigned' => [[], true],
+            'open, Master' => [['division' => 'Master'], true],
+            'closed window' => [['tyre_suppliers' => $this->tyreFeed(0)], false],
+            'already signed' => [['office' => $signed], false],
+            'Amateur' => [['division' => 'Amateur'], false],
+            'no feed' => [['tyre_suppliers' => []], false],
+        ];
+
+        foreach ($cases as $case => [$overrides, $shown]) {
+            $card = $this->service->forCockpit(self::USER, $this->tyreCockpit($overrides));
+
+            self::assertSame($shown, in_array('tyres', array_column($card['lines'], 'key'), true), $case);
+            self::assertArrayHasKey('tyres', $card, $case);
+            self::assertSame($shown, $card['tyres'] !== null, $case);
+        }
+    }
+
+    public function testTheTyreLineSitsRightAfterTheObjectiveAndNamesTheSupplierAndItsPrice(): void
+    {
+        $this->seedPromotionFixture();
+        $this->seedTyreFixture();
+
+        $card = $this->service->forCockpit(self::USER, $this->tyreCockpit());
+
+        self::assertSame(['objective', 'tyres'], array_slice(array_column($card['lines'], 'key'), 0, 2));
+        $line = $card['lines'][1];
+        $tyres = $card['tyres'];
+        self::assertNotNull($tyres);
+        self::assertSame('Sign ' . $tyres['pick'], $line['answer']);
+        self::assertSame($tyres['figure'], $line['figure']);
+        self::assertStringEndsWith(' a race', $tyres['figure']);
+        self::assertSame('/engineer#engineer-tyres', $line['anchor']);
+    }
+
+    public function testThePanelCarriesPreformattedMoney(): void
+    {
+        $this->seedPromotionFixture();
+        $this->seedTyreFixture();
+
+        $tyres = $this->service->forCockpit(self::USER, $this->tyreCockpit())['tyres'];
+
+        self::assertNotNull($tyres);
+        self::assertSame(\App\Engineer\Money::short($tyres['cost']) . ' a race', $tyres['figure']);
+        self::assertCount(4, $tyres['rows']);
+        foreach ($tyres['rows'] as $row) {
+            self::assertSame(\App\Engineer\Money::short($row['cost']), $row['per_race']);
+            self::assertSame(\App\Engineer\Money::short($row['season_cost']), $row['season']);
+        }
+    }
+
+    public function testTheTyreAdviceReadsTheStoredCorpusAndTheCalendarsTracks(): void
+    {
+        $this->seedPromotionFixture();
+        $this->seedTyreFixture();
+
+        $wet = $this->service->forCockpit(self::USER, $this->tyreCockpit())['tyres'];
+        $this->db->exec('DELETE FROM race_telemetry');
+        $dry = $this->service->forCockpit(self::USER, $this->tyreCockpit())['tyres'];
+
+        self::assertNotNull($wet);
+        self::assertNotNull($dry);
+        self::assertNotSame(
+            array_column($wet['rows'], 'total', 'name'),
+            array_column($dry['rows'], 'total', 'name'),
+        );
+    }
+
+    public function testTheWetEdgeComesFromTheDriversTalentAgainstTheDivisionBaseline(): void
+    {
+        $this->seedPromotionFixture();
+        $this->seedTyreFixture();
+
+        $below = $this->service->forCockpit(self::USER, $this->tyreCockpit())['tyres'];
+        $at = $this->service->forCockpit(
+            self::USER,
+            $this->tyreCockpit(['driver' => ['concentration' => 100, 'talent' => 193, 'experience' => 80]]),
+        )['tyres'];
+
+        self::assertNotNull($below);
+        self::assertNotNull($at);
+        self::assertFalse($below['wet_edge']);
+        self::assertSame(90, $below['talent']);
+        self::assertSame(193, $below['baseline']);
+        self::assertTrue($at['wet_edge']);
+    }
+
+    public function testStaleDataReturnsNoTyreAdvice(): void
+    {
+        $this->seedPromotionFixture();
+        $this->seedTyreFixture();
+
+        $card = $this->service->forCockpit(self::USER, $this->tyreCockpit(), true);
+
+        self::assertArrayHasKey('tyres', $card);
+        self::assertNull($card['tyres']);
+    }
+
+    public function testAFailingCorpusReadIsLoggedAndOnlyTheTyreLineGoes(): void
+    {
+        $this->seedPromotionFixture();
+        $this->seedTyreFixture();
+        $failing = new class ($this->db) extends RaceTelemetryRepository {
+            public function trackConditions(): array
+            {
+                throw new \PDOException('database is locked');
+            }
+        };
+        $service = $this->engineer(telemetry: $failing);
+        $log = tempnam(sys_get_temp_dir(), 'engineer-log');
+        self::assertIsString($log);
+        $prior = ini_set('error_log', $log);
+
+        try {
+            $card = $service->forCockpit(self::USER, $this->tyreCockpit());
+        } finally {
+            ini_set('error_log', $prior === false ? '' : $prior);
+        }
+        $logged = (string) file_get_contents($log);
+        unlink($log);
+
+        self::assertNull($card['tyres']);
+        self::assertNotContains('tyres', array_column($card['lines'], 'key'));
+        self::assertContains('cash', array_column($card['lines'], 'key'));
+        self::assertStringContainsString('[Engineer] PDOException', $logged);
+        self::assertStringNotContainsString('locked', $logged);
+    }
+
+    /**
+     * @param int $canSign 1 while GPRO's contract window is open
+     * @return array<string, mixed>
+     */
+    private function tyreFeed(int $canSign = 1): array
+    {
+        $suppliers = [];
+        $rows = [
+            ['Badyear', 4_800_000, 30, 1.0, 1.0, 5, 12],
+            ['Dunnolop', 3_800_000, 28, 0.9, 0.7, 6, 10],
+            ['Avonn', 2_900_000, 26, 0.6, 1.2, 3, 8],
+            ['Contimental', 2_100_000, 33, 0.4, 0.5, 4, 14],
+        ];
+        foreach ($rows as $i => [$name, $cost, $peak, $dry, $rain, $durability, $warmup]) {
+            $suppliers[] = [
+                'id' => $i + 1, 'name' => $name, 'cost' => $cost, 'peakTemperature' => $peak,
+                'dryPerformance' => $dry, 'rainPerformance' => $rain, 'durability' => $durability,
+                'warmupDistance' => $warmup,
+            ];
+        }
+
+        return ['canSignContract' => $canSign, 'suppliers' => $suppliers];
+    }
+
+    /** @param array<string, mixed> $overrides */
+    private function tyreCockpit(array $overrides = []): array
+    {
+        return $this->cockpit($overrides + [
+            'division' => 'Pro',
+            'tyre_suppliers' => $this->tyreFeed(),
+            'season_calendar' => [
+                ['race' => 10, 'track_name' => 'Tyreton'],
+                ['race' => 11, 'track_name' => 'Wetburg (Nowhere)'],
+            ],
+        ]);
+    }
+
+    private function seedTyreFixture(): void
+    {
+        foreach (['Tyreton' => 'High', 'Wetburg' => 'Low'] as $name => $wear) {
+            $this->db->exec(
+                "INSERT OR IGNORE INTO tracks (name, laps, distance) VALUES ('$name', 50, 250.0)"
+            );
+            $this->db->exec("UPDATE tracks SET tyre_wear = '$wear' WHERE name = '$name'");
+        }
+        $telemetry = new RaceTelemetryRepository($this->db);
+        foreach ([['Tyreton', 0, 30.0, 1], ['Wetburg (Nowhere)', 1, 12.0, 2]] as [$track, $wet, $temp, $race]) {
+            self::assertTrue($telemetry->insertIfNew([
+                'season' => 99, 'race' => $race, 'level' => 'Pro', 'q1_time_ms' => 100_000 + $race,
+                'track_name' => $track, 'was_wet' => $wet, 'avg_temp' => $temp, 'dnf' => 0, 'has_td' => 0,
+            ]));
+        }
     }
 
     public function testAFailedPlanSaveIsLoggedAndTheLinesStillCome(): void
