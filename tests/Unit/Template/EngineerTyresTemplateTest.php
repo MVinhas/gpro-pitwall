@@ -107,7 +107,10 @@ final class EngineerTyresTemplateTest extends TestCase
                 $html,
             );
         }
-        $this->assertDoesNotMatchRegularExpression('#<th class="[^"]*hidden[^"]*">\s*(Supplier|Per race|Score|Verdict)#', $html);
+        $this->assertDoesNotMatchRegularExpression(
+            '#<th class="[^"]*hidden[^"]*">\s*(Supplier|Per race|Score|Verdict)#',
+            $html,
+        );
     }
 
     public function testTheCaptionExplainsTheScoring(): void

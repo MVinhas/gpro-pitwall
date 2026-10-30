@@ -47,7 +47,7 @@
                             <td class="dt-td text-right hidden md:table-cell">{{ row.parts.temperature|number_format(1) }}</td>
                             <td class="dt-td text-right hidden md:table-cell">{{ row.parts.durability|number_format(1) }}</td>
                             <td class="dt-td text-right hidden md:table-cell">{{ row.parts.warmup|number_format(1) }}</td>
-                            <td class="dt-td{{ row.verdict == 'pick' ? ' font-semibold text-emerald-700' : (row.verdict starts with 'out_' ? ' text-red-700' : '') }}">
+                            <td class="dt-td whitespace-normal{{ row.verdict == 'pick' ? ' font-semibold text-emerald-700' : (row.verdict starts with 'out_' ? ' text-red-700' : '') }}">
                                 {{ row.verdict ? verdict_words[row.verdict] : '' }}
                             </td>
                         </tr>
