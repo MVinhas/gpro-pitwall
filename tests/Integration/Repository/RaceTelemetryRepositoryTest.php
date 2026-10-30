@@ -262,15 +262,18 @@ final class RaceTelemetryRepositoryTest extends TestCase
 
     public function testTrackConditionsGroupByBaseNameWithACorpusWideRow(): void
     {
+        // One row per manager: four races, the third stored under both spellings of Monza.
         $rows = [
-            ['Monza (Italy)', 1, 20.0], ['Monza (Italy)', 0, 30.0], ['Monza (Italy)', 1, null],
-            ['Monza', 0, 10.0],
+            [1, 'Monza (Italy)', 1, 18.0], [1, 'Monza (Italy)', 1, 22.0],
+            [2, 'Monza (Italy)', 0, 30.0], [2, 'Monza (Italy)', 0, 30.0], [2, 'Monza (Italy)', 0, 30.0],
+            [3, 'Monza (Italy)', 1, null], [3, 'Monza', 0, null],
+            [4, 'Monza', 0, 10.0],
         ];
-        foreach ($rows as $i => [$name, $wet, $temp]) {
-            $this->repo->insertIfNew($this->row([
-                'race' => $i + 1, 'q1_time_ms' => 100 + $i, 'track_name' => $name,
+        foreach ($rows as $i => [$race, $name, $wet, $temp]) {
+            self::assertTrue($this->repo->insertIfNew($this->row([
+                'race' => $race, 'driver_id' => 1000 + $i, 'track_name' => $name,
                 'was_wet' => $wet, 'avg_temp' => $temp,
-            ]));
+            ])));
         }
 
         $conditions = $this->repo->trackConditions();
@@ -281,6 +284,24 @@ final class RaceTelemetryRepositoryTest extends TestCase
             $conditions['tracks']['Monza']
         );
         $this->assertSame(['races' => 4, 'wet' => 0.5, 'temp' => 20.0], $conditions['all']);
+    }
+
+    public function testManyManagerRowsForOneRaceCountAsOneRace(): void
+    {
+        for ($i = 0; $i < 20; $i++) {
+            self::assertTrue($this->repo->insertIfNew($this->row([
+                'season' => 99, 'race' => 5, 'driver_id' => 2000 + $i, 'track_name' => 'Monza (Italy)',
+                'was_wet' => $i === 0 ? 1 : 0, 'avg_temp' => 20.0 + $i,
+            ])));
+        }
+
+        $conditions = $this->repo->trackConditions();
+
+        self::assertSame(
+            ['races' => 1, 'wet' => 1.0, 'temp_races' => 1, 'temp' => 29.5],
+            $conditions['tracks']['Monza']
+        );
+        self::assertSame(['races' => 1, 'wet' => 1.0, 'temp' => 29.5], $conditions['all']);
     }
 
     public function testTrackConditionsOnAnEmptyCorpus(): void

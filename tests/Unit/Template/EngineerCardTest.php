@@ -44,6 +44,7 @@ final class EngineerCardTest extends TestCase
             self::line('objective', 'First answer'),
             self::line('ctr', 'Second answer', 'amber', ['label' => 'Use 41', 'href' => '/engineer?cockpit_risk=41']),
             self::line('parts', 'Third answer', 'red'),
+            self::line('tyres', 'Fourth answer'),
         ]);
 
         $this->assertLessThan(strpos($html, 'Second answer'), strpos($html, 'First answer'));
@@ -54,6 +55,7 @@ final class EngineerCardTest extends TestCase
         $this->assertStringNotContainsString('##', $html);
         $this->assertStringContainsString('<span class="sr-only"> for CTR</span>', $html);
         $this->assertStringContainsString('<span class="sr-only"> for parts</span>', $html);
+        $this->assertStringContainsString('<span class="sr-only"> for tyre supplier</span>', $html);
         $this->assertStringContainsString('text-amber-', $html);
         $this->assertStringContainsString('text-red-', $html);
         $this->assertStringContainsString('name="csrf_token" value="tok"', $html);

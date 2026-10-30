@@ -3,7 +3,7 @@
    carries both calls when pinned ("Your call: … (engineer proposes …)"). #}
 {% if engineer is defined and engineer is not empty %}
     {% set objective = engineer.objective %}
-    {% set labels = {ctr: 'CTR', parts: 'parts', risk: 'risk settings'} %}
+    {% set labels = {ctr: 'CTR', parts: 'parts', risk: 'risk settings', tyres: 'tyre supplier'} %}
     <section class="card" aria-labelledby="engineer-title">
         <div class="card-hd flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div class="min-w-0">

@@ -100,7 +100,7 @@ final class EngineerTyresTemplateTest extends TestCase
     {
         $html = $this->render([self::row('Bridgerock', 'pick')]);
 
-        $this->assertMatchesRegularExpression('#<th class="[^"]*hidden sm:table-cell[^"]*">\s*Season\s*</th>#', $html);
+        $this->assertMatchesRegularExpression('#<th class="[^"]*hidden sm:table-cell[^"]*">\s*Season \(× 17\)\s*</th>#', $html);
         foreach (['Performance', 'Temperature', 'Durability', 'Warm-up'] as $part) {
             $this->assertMatchesRegularExpression(
                 '#<th class="[^"]*hidden md:table-cell[^"]*">\s*' . $part . '\s*</th>#',

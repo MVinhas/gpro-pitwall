@@ -47,6 +47,7 @@ use App\Support\TrackName;
  * @phpstan-import-type WearAdvice from EngineerInputs
  * @phpstan-import-type SwapPick from EngineerInputs
  * @phpstan-import-type TyreAdvice from TyreSupplierAdvisor
+ * @phpstan-import-type TyreVerdict from TyreSupplierAdvisor
  * @phpstan-type TyrePanel array{
  *     pick: string,
  *     cost: int,
@@ -63,7 +64,7 @@ use App\Support\TrackName;
  *         season_cost: int,
  *         total: float,
  *         parts: array{performance: float, temperature: float, durability: float, warmup: float},
- *         verdict: 'pick'|'close'|'out_pipirelli'|'out_price'|'out_dry'|'out_budget'|null,
+ *         verdict: TyreVerdict,
  *         per_race: string,
  *         season: string
  *     }>
@@ -142,6 +143,8 @@ class RaceEngineerService
             $c,
         );
 
+        // Under a plan the advice waits for the plan it is checked against, below.
+        $tyres = $plan === null ? $this->tyreAdvice($c, null, $ctx) : null;
         if ($plan !== null) {
             try {
                 $picks = $this->swapPicks($inputs, $plan, $this->swapSeasonFrom($ctx, $plan, $basis, $c), $c);
@@ -154,7 +157,12 @@ class RaceEngineerService
                 $plan['swap_picks'] = $picks;
                 $inputs = $inputs->withPlan($plan)->withSwapPicks($picks);
             }
-            $plan = $this->withUpgrades($plan, $inputs, $objective, $ctx['outlook'], $ctx['cash'], $basis, $c);
+            $tyres = $this->tyreAdvice($c, $plan, $ctx);
+            $tyreExtra = self::tyrePickExtra($tyres, $ctx['outlook_ledger']);
+            $plan = self::payingTyreExtra($plan, $tyreExtra);
+            $inputs = $inputs->withPlan($plan);
+            $outlook = ['committed' => (int) $ctx['outlook']['committed'] + $tyreExtra] + $ctx['outlook'];
+            $plan = $this->withUpgrades($plan, $inputs, $objective, $outlook, $ctx['cash'], $basis, $c);
             $inputs = $inputs->withPlan($plan);
             try {
                 $this->budgets->save($userId, $season, $ctx['raceNb'], $plan);
@@ -164,7 +172,6 @@ class RaceEngineerService
             }
         }
 
-        $tyres = $this->tyreAdvice($c, $plan, $ctx);
         $lines = RaceEngineer::brief($inputs->withTyreAdvice($tyres));
 
         return [
@@ -237,11 +244,17 @@ class RaceEngineerService
                 $outlookWeekends = $this->weekends->forSeason($userId, $season - 1);
             }
         }
-        $outlook = CashOutlook::from(
-            $outlookWeekends === [] ? null : $outlookWeekends[array_key_last($outlookWeekends)],
+        $racesLeft = max(0, SeasonObjective::RACES - $racesRun);
+        $outlook = self::atSignedTyreCost(
+            CashOutlook::from(
+                $outlookWeekends === [] ? null : $outlookWeekends[array_key_last($outlookWeekends)],
+                $outlookLedger,
+                $cash,
+                $racesLeft,
+            ),
+            self::signedTyreCost($c),
             $outlookLedger,
-            $cash,
-            max(0, SeasonObjective::RACES - $racesRun),
+            $racesLeft,
         );
 
         $proposal = SeasonObjective::propose(
@@ -263,6 +276,53 @@ class RaceEngineerService
             'outlook_ledger' => $outlookLedger,
             'outlook' => $outlook,
             'objective' => SeasonObjective::inForce($proposal, $this->pins->find($userId, $season)),
+        ];
+    }
+
+    /**
+     * What the signed supplier charges a race, from the feed. Null when unsigned, or the feed doesn't carry
+     * the supplier with a price.
+     *
+     * @param array<string, mixed> $c
+     */
+    private static function signedTyreCost(array $c): ?int
+    {
+        $signed = self::arr($c['office'] ?? null)['tyreSupplierId'] ?? null;
+        if (!is_numeric($signed) || (int) $signed === 0) {
+            return null;
+        }
+        foreach (self::list(self::arr($c['tyre_suppliers'] ?? null)['suppliers'] ?? null) as $supplier) {
+            $id = $supplier['id'] ?? null;
+            $cost = $supplier['cost'] ?? null;
+            if (is_numeric($id) && (int) $id === (int) $signed) {
+                return is_numeric($cost) && (int) $cost > 0 ? (int) $cost : null;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The outlook with every race's tyre line at the signed price. Before race 1 the ledger still carries
+     * last season's supplier, and the contract is paid from the first race on.
+     *
+     * @param array{known: bool, committed: ?int, income: ?int, free_cash: ?int, end_committed: ?int} $outlook
+     * @param list<array<string, mixed>> $ledger
+     * @return array{known: bool, committed: ?int, income: ?int, free_cash: ?int, end_committed: ?int}
+     */
+    private static function atSignedTyreCost(array $outlook, ?int $cost, array $ledger, int $racesLeft): array
+    {
+        if ($cost === null || !$outlook['known']) {
+            return $outlook;
+        }
+        $extra = $cost - CashOutlook::latestTyreCost($ledger);
+
+        return [
+            'known' => true,
+            'committed' => (int) $outlook['committed'] + $extra,
+            'income' => $outlook['income'],
+            'free_cash' => (int) $outlook['free_cash'] - $extra * $racesLeft,
+            'end_committed' => (int) $outlook['end_committed'] - $extra * $racesLeft,
         ];
     }
 
@@ -510,7 +570,8 @@ class RaceEngineerService
 
     /**
      * Which supplier to sign for the season, while GPRO's contract window is open on a Pro, Master or Elite team
-     * that has not signed. Null when the window is shut or anything the advice reads fails.
+     * that has not signed. Null once the season is over, when the window is shut or anything the advice reads
+     * fails.
      *
      * @param array<string, mixed> $c
      * @param ?Plan $plan
@@ -526,7 +587,8 @@ class RaceEngineerService
         // The feed is cached across managers, so its own canSignContract may be someone else's: only this
         // manager's office says whether they have signed.
         if (
-            !in_array($division, self::TYRE_DIVISIONS, true)
+            $ctx['objective']['over']
+            || !in_array($division, self::TYRE_DIVISIONS, true)
             || !is_numeric($signed)
             || (int) $signed !== 0
             || $suppliers === []
@@ -560,6 +622,39 @@ class RaceEngineerService
 
             return null;
         }
+    }
+
+    /**
+     * What the advised pick costs a race over today's tyre line; 0 without advice checked against a plan.
+     *
+     * @param ?TyreAdvice $advice
+     * @param list<array<string, mixed>> $ledger
+     */
+    private static function tyrePickExtra(?array $advice, array $ledger): int
+    {
+        return $advice === null || !$advice['finances_known']
+            ? 0
+            : $advice['cost'] - CashOutlook::latestTyreCost($ledger);
+    }
+
+    /**
+     * The plan with every race paying $extra more for tyres, and the envelope what that leaves: the contract
+     * is signed before anything the envelope buys.
+     *
+     * @param Plan $plan
+     * @return Plan
+     */
+    private static function payingTyreExtra(array $plan, int $extra): array
+    {
+        if ($extra === 0) {
+            return $plan;
+        }
+        foreach ($plan['rows'] as $i => $row) {
+            $plan['rows'][$i]['balance'] = $row['balance'] - $extra * ($i + 1);
+        }
+        $plan['envelope'] = max(0, CtrPlanner::headroom($plan['rows'], $plan['cushion'], $plan['target']));
+
+        return $plan;
     }
 
     /**

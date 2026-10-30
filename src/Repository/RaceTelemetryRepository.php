@@ -513,8 +513,9 @@ class RaceTelemetryRepository
 
     /**
      * Wet rate and mean temperature per track, plus the corpus-wide figures a
-     * thin track falls back on. Sums are folded across spellings of one track
-     * ("Monza (Italy)" and "Monza"), so every mean is weighted by races.
+     * thin track falls back on. Every figure counts races, not manager rows:
+     * a race is wet when any row of it was, and one race stored under two
+     * spellings of a track ("Monza (Italy)" and "Monza") counts once.
      *
      * @return array{
      *     tracks: array<string, array{races: int, wet: float, temp_races: int, temp: ?float}>,
@@ -524,56 +525,67 @@ class RaceTelemetryRepository
     public function trackConditions(): array
     {
         $rows = $this->rows('
-            SELECT track_name,
-                   COUNT(*)        AS races,
-                   SUM(was_wet)    AS wet_sum,
-                   SUM(avg_temp)   AS temp_sum,
-                   COUNT(avg_temp) AS temp_races
+            SELECT season, race, track_name,
+                   MAX(was_wet)  AS wet,
+                   AVG(avg_temp) AS temp
             FROM race_telemetry
-            GROUP BY track_name
+            GROUP BY season, race, track_name
         ');
 
-        $races = $wetSum = $tempSum = $tempRaces = [];
-        $allRaces = $allTempRaces = 0;
-        $allWet = $allTemp = 0.0;
+        $byTrack = [];
+        $unnamed = [];
         foreach ($rows as $row) {
-            $n = (int) $row['races'];
-            $wet = (float) $row['wet_sum'];
-            $temp = (float) $row['temp_sum'];
-            $tn = (int) $row['temp_races'];
-
-            $allRaces += $n;
-            $allWet += $wet;
-            $allTemp += $temp;
-            $allTempRaces += $tn;
-
+            $wet = (float) $row['wet'];
+            $temps = $row['temp'] === null ? [] : [(float) $row['temp']];
             $base = TrackName::base((string) $row['track_name']);
             if ($base === '') {
+                $unnamed[] = ['wet' => $wet, 'temps' => $temps];
                 continue;
             }
-            $races[$base] = ($races[$base] ?? 0) + $n;
-            $wetSum[$base] = ($wetSum[$base] ?? 0.0) + $wet;
-            $tempSum[$base] = ($tempSum[$base] ?? 0.0) + $temp;
-            $tempRaces[$base] = ($tempRaces[$base] ?? 0) + $tn;
+            $key = $row['season'] . '-' . $row['race'];
+            $seen = $byTrack[$base][$key] ?? ['wet' => 0.0, 'temps' => []];
+            $byTrack[$base][$key] = ['wet' => max($seen['wet'], $wet), 'temps' => [...$seen['temps'], ...$temps]];
         }
 
         $tracks = [];
-        foreach ($races as $name => $n) {
+        $all = $unnamed;
+        foreach ($byTrack as $name => $events) {
+            $all = [...$all, ...array_values($events)];
+            $summary = self::conditionsOf(array_values($events));
             $tracks[$name] = [
-                'races' => $n,
-                'wet' => $wetSum[$name] / $n,
-                'temp_races' => $tempRaces[$name],
-                'temp' => $tempRaces[$name] > 0 ? $tempSum[$name] / $tempRaces[$name] : null,
+                'races' => $summary['races'],
+                'wet' => (float) $summary['wet'],
+                'temp_races' => $summary['temp_races'],
+                'temp' => $summary['temp'],
             ];
         }
+        $corpus = self::conditionsOf($all);
 
         return [
             'tracks' => $tracks,
-            'all' => [
-                'races' => $allRaces,
-                'wet' => $allRaces > 0 ? $allWet / $allRaces : null,
-                'temp' => $allTempRaces > 0 ? $allTemp / $allTempRaces : null,
-            ],
+            'all' => ['races' => $corpus['races'], 'wet' => $corpus['wet'], 'temp' => $corpus['temp']],
+        ];
+    }
+
+    /**
+     * @param list<array{wet: float, temps: list<float>}> $events
+     * @return array{races: int, wet: ?float, temp_races: int, temp: ?float}
+     */
+    private static function conditionsOf(array $events): array
+    {
+        $races = count($events);
+        $temps = [];
+        foreach ($events as $event) {
+            if ($event['temps'] !== []) {
+                $temps[] = array_sum($event['temps']) / count($event['temps']);
+            }
+        }
+
+        return [
+            'races' => $races,
+            'wet' => $races > 0 ? array_sum(array_column($events, 'wet')) / $races : null,
+            'temp_races' => count($temps),
+            'temp' => $temps === [] ? null : array_sum($temps) / count($temps),
         ];
     }
 
