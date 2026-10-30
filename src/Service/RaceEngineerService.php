@@ -451,6 +451,7 @@ class RaceEngineerService
                 $objective['objective'] ?? SeasonObjective::HOLD,
             ),
             carStanding: GroupStanding::car(self::arr($c['money_levels'] ?? null), self::arr($c['menu'] ?? null)),
+            testingLaps: (int) ($c['training_laps'] ?? 0),
         );
     }
 

@@ -55,6 +55,7 @@ final readonly class EngineerInputs
      * @param ?StaffStanding $staffStanding
      * @param ?CarStanding $carStanding
      * @param list<SwapPick> $swapPicks the season-long level picked for each swapped part that has one
+     * @param int $testingLaps the Cockpit's training laps, whose testing wear every plan counts
      */
     public function __construct(
         public array $objective,
@@ -81,6 +82,7 @@ final readonly class EngineerInputs
         public ?array $staffStanding = null,
         public ?array $carStanding = null,
         public array $swapPicks = [],
+        public int $testingLaps = 0,
     ) {
     }
 

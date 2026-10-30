@@ -672,6 +672,7 @@ class PageController
                             'testing_targets'  => $viewData['testing_targets'] ?? [],
                             'testing_open'     => $testingTrack !== null,
                             'testing_track'    => $testingTrack,
+                            'training_laps'    => $cockpitTrainingLaps,
                             'track_name'       => $trackName,
                             'weather'          => $viewData['weather'] ?? null,
                             'setup_stale'      => $setupStale,

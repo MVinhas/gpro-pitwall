@@ -624,6 +624,25 @@ final class RaceEngineerTest extends TestCase
         $this->assertSame('Nothing to do', $this->line($this->inputs(['testingTarget' => null]), 'testing')['answer']);
     }
 
+    public function testASkippedSessionAsksToStopCountingItsTrainingLaps(): void
+    {
+        $short = $this->outlook(100_000);
+        $counted = $this->line($this->inputs(['outlook' => $short, 'testingLaps' => 100]), 'testing');
+        $none = $this->line($this->inputs(['outlook' => $short, 'testingLaps' => 0]), 'testing');
+        $tested = $this->line($this->inputs(['testingLaps' => 100]), 'testing');
+
+        $this->assertSame('Skip testing at Silverstone', $counted['answer']);
+        $this->assertStringEndsWith(
+            '; set training laps to 0 on the Cockpit (it counts 100 laps of wear)',
+            $counted['reason'],
+        );
+        $this->assertSame('/cockpit#cockpit-wear', $counted['anchor']);
+        $this->assertStringNotContainsString('training laps', $none['reason']);
+        $this->assertSame('/cockpit#cockpit-testing', $none['anchor']);
+        $this->assertSame('Test at Silverstone', $tested['answer']);
+        $this->assertStringNotContainsString('training laps', $tested['reason']);
+    }
+
     public function testTestingSkippedWhenUnaffordable(): void
     {
         $line = $this->line($this->inputs(['outlook' => $this->outlook(100_000)]), 'testing');

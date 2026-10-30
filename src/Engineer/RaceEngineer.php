@@ -461,13 +461,23 @@ final class RaceEngineer
         $cost = $in->testingCost;
 
         if (self::testingSpend($in) === null) {
-            return self::line(
-                'testing',
-                $skip,
-                self::skipReason($in, self::STAGE_TESTING),
-                $anchor,
-                Money::short($cost),
-            );
+            // The Cockpit's training laps feed the wear every plan reads; a skipped session should stop them.
+            return $in->testingLaps > 0
+                ? self::line(
+                    'testing',
+                    $skip,
+                    self::skipReason($in, self::STAGE_TESTING) . '; set training laps to 0 on the Cockpit (it counts '
+                        . $in->testingLaps . ' laps of wear)',
+                    '/cockpit#cockpit-wear',
+                    Money::short($cost),
+                )
+                : self::line(
+                    'testing',
+                    $skip,
+                    self::skipReason($in, self::STAGE_TESTING),
+                    $anchor,
+                    Money::short($cost),
+                );
         }
 
         return self::line('testing', $where, self::affordReason($in) . '; ' . $tunes, $anchor, Money::short($cost));
