@@ -46,4 +46,24 @@ final class PlaceGapTest extends TestCase
     {
         $this->assertEqualsWithDelta(0.10 * 40, PlaceGap::fallback()->secondsPerPlace(null, 40), 1e-9);
     }
+
+    public function test_array_round_trip_keeps_the_medians(): void
+    {
+        $gap = PlaceGap::fromLapGaps(['Amateur' => array_map('floatval', range(1, 20))]);
+        $copy = PlaceGap::fromArray($gap->toArray());
+
+        $this->assertSame($gap->toArray(), $copy->toArray());
+        $this->assertEqualsWithDelta(10.5 * 3, $copy->secondsPerPlace('Amateur', 3), 1e-9);
+        $this->assertEqualsWithDelta(0.36 * 10, $copy->secondsPerPlace('Rookie', 10), 1e-9);
+    }
+
+    public function test_array_round_trip_of_the_fallback_is_empty(): void
+    {
+        $this->assertSame([], PlaceGap::fallback()->toArray());
+        $this->assertEqualsWithDelta(
+            PlaceGap::fallback()->secondsPerPlace('Pro', 20),
+            PlaceGap::fromArray([])->secondsPerPlace('Pro', 20),
+            1e-9
+        );
+    }
 }

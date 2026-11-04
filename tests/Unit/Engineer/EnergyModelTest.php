@@ -197,4 +197,32 @@ final class EnergyModelTest extends TestCase
     {
         $this->assertSame(100, EnergyModel::fallback()->raceStart(100, true));
     }
+
+    public function test_array_round_trip_keeps_a_fitted_model(): void
+    {
+        $model = EnergyModel::fit($this->exactRows(), $this->qualiRows(50.0, 0.5, 3));
+        $copy = EnergyModel::fromArray($model->toArray());
+
+        $this->assertSame($model->toArray(), $copy->toArray());
+        $this->assertSame($model->cap(70, true, 50, 50, 'Pro'), $copy->cap(70, true, 50, 50, 'Pro'));
+        $this->assertSame($model->raceStart(60, false), $copy->raceStart(60, false));
+    }
+
+    public function test_array_round_trip_keeps_an_unfitted_drain_null(): void
+    {
+        $model = EnergyModel::fallback();
+        $copy = EnergyModel::fromArray($model->toArray());
+
+        $this->assertNull($model->toArray()['drain']);
+        $this->assertSame($model->toArray(), $copy->toArray());
+        $this->assertSame($model->cap(70, true, 50, 50, 'Pro'), $copy->cap(70, true, 50, 50, 'Pro'));
+    }
+
+    public function test_from_array_survives_a_serialize_round_trip(): void
+    {
+        $model = EnergyModel::fit($this->exactRows(), []);
+        $copy = EnergyModel::fromArray(unserialize(serialize($model->toArray())));
+
+        $this->assertSame($model->toArray(), $copy->toArray());
+    }
 }

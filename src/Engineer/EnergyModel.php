@@ -49,6 +49,22 @@ final readonly class EnergyModel
         return self::fit([], []);
     }
 
+    /**
+     * @return array{drain: array{a: float, b: float, s: float}|null, r0: float, r1: float, quali_drain: int}
+     */
+    public function toArray(): array
+    {
+        return ['drain' => $this->drain, 'r0' => $this->r0, 'r1' => $this->r1, 'quali_drain' => $this->qualiDrain];
+    }
+
+    /**
+     * @param array{drain: array{a: float, b: float, s: float}|null, r0: float, r1: float, quali_drain: int} $data
+     */
+    public static function fromArray(array $data): self
+    {
+        return new self($data['drain'], $data['r0'], $data['r1'], $data['quali_drain']);
+    }
+
     public function raceStart(int $driEnergy, bool $q2Done): int
     {
         $q2End = $q2Done ? $driEnergy : max(0, $driEnergy - $this->qualiDrain);

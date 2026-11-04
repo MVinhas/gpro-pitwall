@@ -311,4 +311,49 @@ final class RaceTelemetryRepositoryTest extends TestCase
             $this->repo->trackConditions()
         );
     }
+
+    public function testEnergyRowsReturnsOnlyTheAskedDivisionsCompleteRows(): void
+    {
+        $this->repo->insertIfNew($this->row([
+            'q2_time_ms' => 1, 'clear_dry_risk' => 30, 'race_energy_from' => 80,
+            'race_energy_to' => 40, 'laps_completed' => 50, 'driver_sta' => 55,
+        ]));
+        $this->repo->insertIfNew($this->row(['q2_time_ms' => 2, 'race_energy_to' => null]));
+        $this->repo->insertIfNew($this->row(['q2_time_ms' => 3, 'clear_dry_risk' => null]));
+        $this->repo->insertIfNew($this->row(['q2_time_ms' => 4, 'laps_completed' => null]));
+        $this->repo->insertIfNew($this->row(['q2_time_ms' => 5, 'driver_sta' => null]));
+        $this->repo->insertIfNew($this->row(['q2_time_ms' => 6, 'race_energy_from' => null]));
+        $this->repo->insertIfNew($this->row(['q2_time_ms' => 7, 'level' => 'Pro', 'group_label' => 'Pro - 1']));
+
+        $this->assertSame(
+            [['ctr' => 30, 'from' => 80, 'to' => 40, 'laps' => 50, 'stamina' => 55]],
+            $this->repo->energyRows('Rookie')
+        );
+        $this->assertCount(1, $this->repo->energyRows('Pro'));
+        $this->assertSame([], $this->repo->energyRows('Elite'));
+    }
+
+    public function testLapGapsByDivisionMeasuresPairsInTheSameGroup(): void
+    {
+        $this->repo->insertIfNew($this->row(['driver_id' => 1, 'q2_time_ms' => 100000, 'q2_pos' => 3]));
+        $this->repo->insertIfNew($this->row(['driver_id' => 2, 'q2_time_ms' => 100400, 'q2_pos' => 5]));
+
+        $gaps = $this->repo->lapGapsByDivision();
+
+        $this->assertSame(['Rookie'], array_keys($gaps));
+        $this->assertCount(1, $gaps['Rookie']);
+        $this->assertEqualsWithDelta(0.2, $gaps['Rookie'][0], 1e-9);
+    }
+
+    public function testLapGapsByDivisionIgnoresPairsAcrossGroupsAndUnusableRows(): void
+    {
+        $this->repo->insertIfNew($this->row(['driver_id' => 1, 'q2_time_ms' => 100000, 'q2_pos' => 3]));
+        $this->repo->insertIfNew($this->row([
+            'driver_id' => 2, 'q2_time_ms' => 100400, 'q2_pos' => 5, 'group_label' => 'Rookie - 32',
+        ]));
+        $this->repo->insertIfNew($this->row(['driver_id' => 3, 'q2_time_ms' => 0, 'q2_pos' => 6]));
+        $this->repo->insertIfNew($this->row(['driver_id' => 4, 'q2_time_ms' => 100900, 'q2_pos' => 3]));
+
+        $this->assertSame([], $this->repo->lapGapsByDivision());
+    }
 }

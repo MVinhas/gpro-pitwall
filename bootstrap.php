@@ -303,6 +303,11 @@ $container['service.race_intelligence'] = new \App\Service\RaceIntelligenceServi
     $container['repo.race_telemetry'],
 );
 $container['repo.race_history'] = new \App\Repository\RaceHistoryRepository($container['db']);
+$container['service.ctr_model'] = new \App\Service\CtrModelService(
+    $container['repo.race_telemetry'],
+    $container['repo.race_history'],
+    $container['service.cache'],
+);
 $container['service.race_history'] = new \App\Service\RaceHistoryService(
     $container['repo.race_history'],
     new \App\Telemetry\RaceHistoryMapper(),

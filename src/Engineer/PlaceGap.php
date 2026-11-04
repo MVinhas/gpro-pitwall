@@ -46,6 +46,22 @@ final readonly class PlaceGap
         return self::fromLapGaps([]);
     }
 
+    /**
+     * @return array<string, float>
+     */
+    public function toArray(): array
+    {
+        return $this->medianByDivision;
+    }
+
+    /**
+     * @param array<string, float> $medianByDivision
+     */
+    public static function fromArray(array $medianByDivision): self
+    {
+        return new self($medianByDivision);
+    }
+
     public function secondsPerPlace(?string $division, int $laps): float
     {
         $perLap = $division !== null
