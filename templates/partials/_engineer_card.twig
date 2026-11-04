@@ -3,6 +3,7 @@
    carries both calls when pinned ("Your call: … (engineer proposes …)"). #}
 {% if engineer is defined and engineer is not empty %}
     {% set objective = engineer.objective %}
+    {% set step_titles = {car: 'Step 1 · Update the car', prep: 'Step 2 · Testing and training', race: 'Step 3 · Race settings'} %}
     {% set labels = {ctr: 'CTR', parts: 'parts', risk: 'risk settings', tyres: 'tyre supplier'} %}
     <section class="card" aria-labelledby="engineer-title">
         <div class="card-hd flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -30,6 +31,16 @@
         {% endif %}
         <div class="card-bd divide-y divide-slate-200">
             {% for line in engineer.lines %}
+                {% set step = line.step|default('season') %}
+                {% set prev_step = loop.first ? null : engineer.lines[loop.index0 - 1].step|default('season') %}
+                {% if step != prev_step and step != 'season' %}
+                    <div role="group" aria-labelledby="engineer-step-{{ step }}" class="py-3 first:pt-0 last:pb-0">
+                        <h4 id="engineer-step-{{ step }}" class="t-label mb-2 flex items-center gap-2 whitespace-nowrap">
+                            {{ step_titles[step] }}
+                            {% if step == 'car' and engineer.car_updated %}<span class="rounded-md border border-slate-300 px-1.5 py-0.5 text-xs font-medium normal-case tracking-normal text-slate-900">Done</span>{% endif %}
+                        </h4>
+                        <div class="divide-y divide-slate-200">
+                {% endif %}
                 <div class="flex flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                     <div class="min-w-0">
                         <p class="text-sm font-semibold {{ line.tone == 'red' ? 'text-red-700' : (line.tone == 'amber' ? 'text-amber-700' : 'text-slate-900') }}">
@@ -44,6 +55,11 @@
                         </div>
                     {% endif %}
                 </div>
+                {% set next_step = loop.last ? null : engineer.lines[loop.index0 + 1].step|default('season') %}
+                {% if step != 'season' and next_step != step %}
+                        </div>
+                    </div>
+                {% endif %}
             {% endfor %}
         </div>
     </section>

@@ -657,6 +657,30 @@ final class PartSwapAdvisorServiceTest extends TestCase
         $this->assertSame([], $withTraining['Engine']['options']);
     }
 
+    public function testAnOptionEndingAboveNinetyNineIsDroppedAndOneEndingAtNinetyNineIsKept(): void
+    {
+        $carWear = new CarWearService(new PDO('sqlite::memory:'), [
+            'driver_wear_factors' => ['concentration' => 1.0, 'talent' => 1.0, 'experience' => 1.0],
+            'part_level_factors'  => [5 => 1.012],
+        ]);
+        $race = $carWear->projectEndWear(5.0, 5, 85.0, 1.0, 0) - 85.0;
+        $advise = fn (float $end): array => $this->svc->advise(
+            $this->flaggedEngine(),
+            $this->carData([['level' => 5, 'wear' => 85, 'cost' => 700_000, 'action' => 5]]),
+            $this->wearParts(),
+            [],
+            ['power' => 10, 'handling' => 10, 'acceleration' => 10],
+            ['power' => 90, 'handling' => 80, 'acceleration' => 85],
+            0,
+            [],
+            10_000_000,
+            ['Engine' => $end - 85.0 - $race],
+        );
+
+        $this->assertSame([5], $this->levels($advise(99.0)['Engine']['options']));
+        $this->assertSame([], $advise(99.5)['Engine']['options']);
+    }
+
     public function testTrainingWearDefaultsToNothingForPartsWithNoPlannedSession(): void
     {
         $track = ['power' => 10, 'handling' => 10, 'acceleration' => 10];

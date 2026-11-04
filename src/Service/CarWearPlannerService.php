@@ -9,10 +9,10 @@ namespace App\Service;
  * and how hard every round of the season is on each part.
  *
  * Wear comes from CarWearService (the same track base × part level ^ CTR ×
- * driver model the cockpit uses), but each race is rounded to a whole percent
- * before it is carried forward. GPRO reports whole-percent wear after every
- * race, so carrying fractions would drift a point off the game within three
- * races. The failure line is WearAdvisorService's: a part at 100% has broken.
+ * driver model the cockpit uses), but each race is rounded up to a whole
+ * percent before it is carried forward, as GPRO counts it (99.1% is 100%).
+ * Carrying fractions would drift a point off the game within three races.
+ * The failure line is WearAdvisorService's: a part at 100% smokes.
  */
 final readonly class CarWearPlannerService
 {
@@ -185,7 +185,8 @@ final readonly class CarWearPlannerService
                     $cells[] = self::CELL_OK;
                     continue;
                 }
-                $wear += (int) round($this->wear->raceWear($base, $part['level'], $driverFactor, $race['ctr']));
+                $raceWear = $this->wear->raceWear($base, $part['level'], $driverFactor, $race['ctr']);
+                $wear += WearAdvisorService::percent($raceWear);
                 $ends[] = $wear;
                 $cells[] = self::cellFor($wear);
                 if ($failsAt === null && $wear >= WearAdvisorService::THRESHOLD_SWAP) {

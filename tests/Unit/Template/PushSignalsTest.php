@@ -58,6 +58,14 @@ final class PushSignalsTest extends TestCase
         return strip_tags($this->render($signals));
     }
 
+    public function testWearDetailRoundsUpAndCountsUpToNinetyNine(): void
+    {
+        $html = $this->render(['wear_ok' => false, 'wear_max' => 99.2, 'wear_risk' => 50]);
+
+        $this->assertStringContainsString('A part may not last the push', $html);
+        $this->assertStringContainsString('Worst part ends at 100% wear at Clear Track Risk 50; up to 99% counts.', $html);
+    }
+
     /** @param array<string, mixed> $signals */
     private function render(array $signals): string
     {

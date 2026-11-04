@@ -202,7 +202,7 @@
                     {% set signals = signals|merge([{ok: ps.driver_above, short: 'Driver ' ~ (ps.driver_above ? 'above average' : (driver_below ? 'below average' : 'mid-group')), detail: '#' ~ ps.driver_rank ~ ' of ' ~ ps.driver_total ~ ' by overall rating in your group; more drivers behind than ahead counts.'}]) %}
                 {% endif %}
                 {% if ps.wear_ok is not null %}
-                    {% set signals = signals|merge([{ok: ps.wear_ok, short: ps.wear_ok ? 'Car can take the push' : 'A part may not last the push', detail: 'Worst part ends at ' ~ ps.wear_max|number_format(0) ~ '% wear at Clear Track Risk ' ~ ps.wear_risk ~ '; under 90% counts.'}]) %}
+                    {% set signals = signals|merge([{ok: ps.wear_ok, short: ps.wear_ok ? 'Car can take the push' : 'A part may not last the push', detail: 'Worst part ends at ' ~ ps.wear_max|round(6)|round(0, 'ceil') ~ '% wear at Clear Track Risk ' ~ ps.wear_risk ~ '; up to 99% counts.'}]) %}
                 {% endif %}
                 {% set met = signals|filter(x => x.ok)|length %}
                 <div class="border-t border-slate-200 bg-slate-50 px-4 py-3 sm:px-6">

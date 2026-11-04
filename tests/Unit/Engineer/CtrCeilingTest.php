@@ -34,7 +34,7 @@ final class CtrCeilingTest extends TestCase
         foreach ($parts as $part) {
             $end = $part['start'] + ($part['training'] ?? 0)
                 + round($this->wear->raceWear($part['track_base'], $part['level'], 1.0, $ctr), 1);
-            if ($end >= $limit) {
+            if (WearAdvisorService::percent($end) >= $limit) {
                 return false;
             }
         }
@@ -95,6 +95,17 @@ final class CtrCeilingTest extends TestCase
         $this->assertLessThan($this->ceiling->for($untrained, 1.0, 100), $this->ceiling->for($worn, 1.0, 100));
     }
 
+    public function testAPartEndingAboveNinetyNineIsPastTheLine(): void
+    {
+        $perRace = round($this->wear->raceWear(10.0, 1, 1.0, 0), 1);
+        $smokes = ['Engine' => ['level' => 1, 'start' => 99.1 - $perRace, 'track_base' => 10.0]];
+        $safe = ['Engine' => ['level' => 1, 'start' => 99.0 - $perRace, 'track_base' => 10.0]];
+
+        $this->assertSame(['Engine'], $this->ceiling->pastLimitAtZero($smokes, 1.0, WearAdvisorService::THRESHOLD_SWAP));
+        $this->assertSame([], $this->ceiling->pastLimitAtZero($safe, 1.0, WearAdvisorService::THRESHOLD_SWAP));
+        $this->assertSame(0, $this->ceiling->for($safe, 1.0, WearAdvisorService::THRESHOLD_SWAP));
+    }
+
     public function testRiskyLimitIsLowerThanSwapLimit(): void
     {
         $parts = ['Chassis' => ['level' => 1, 'start' => 10.0, 'track_base' => 20.0]];
@@ -140,5 +151,13 @@ final class CtrCeilingTest extends TestCase
 
         $this->assertSame(['Engine', 'Brakes'], $this->ceiling->pastLimitAtZero($parts, 1.0, 90));
         $this->assertSame([], $this->ceiling->pastLimitAtZero($parts, 1.0, 200));
+    }
+
+    public function testALockedCarKeepsAPastLimitPartAndCapsAtZero(): void
+    {
+        $parts = ['Engine' => ['level' => 1, 'start' => 95.0, 'track_base' => 6.0]];
+
+        $this->assertGreaterThan(0, $this->ceiling->for($parts, 1.0, 80));
+        $this->assertSame(0, $this->ceiling->for($parts, 1.0, 80, true));
     }
 }

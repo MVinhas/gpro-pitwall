@@ -11,7 +11,7 @@ namespace App\Service;
  */
 final class WearAdvisorService
 {
-    /** End-of-race wear (%) at or above which the part will not finish. */
+    /** End-of-race wear (%) at which the part smokes and loses time; 99% is still safe. */
     public const int THRESHOLD_SWAP = 100;
 
     /** End-of-race wear (%) at or above which the part is dangerously close. */
@@ -24,6 +24,15 @@ final class WearAdvisorService
     public const string STATUS_RISKY = 'risky';
     public const string STATUS_WATCH = 'watch';
     public const string STATUS_OK    = 'ok';
+
+    /**
+     * Wear as GPRO counts it: a whole percent, rounded up, so 99.1% is already 100%. The inner round only
+     * drops float noise from summing tenths, which would otherwise push an exact 99.0 to 100.
+     */
+    public static function percent(float $wear): int
+    {
+        return (int) ceil(round($wear, 6));
+    }
 
     /**
      * @param array<string, array{start: int|float, est: int|float, end: int|float, level?: int}> $parts
@@ -67,10 +76,12 @@ final class WearAdvisorService
 
     private function statusFor(float $end): string
     {
+        $percent = self::percent($end);
+
         return match (true) {
-            $end >= self::THRESHOLD_SWAP  => self::STATUS_SWAP,
-            $end >= self::THRESHOLD_RISKY => self::STATUS_RISKY,
-            $end >= self::THRESHOLD_WATCH => self::STATUS_WATCH,
+            $percent >= self::THRESHOLD_SWAP  => self::STATUS_SWAP,
+            $percent >= self::THRESHOLD_RISKY => self::STATUS_RISKY,
+            $percent >= self::THRESHOLD_WATCH => self::STATUS_WATCH,
             default                       => self::STATUS_OK,
         };
     }

@@ -113,13 +113,14 @@ class RaceEngineerService
      * @param array<string, mixed> $c Cockpit's already-computed values
      * @param bool $stale A race has finished since the last sync: the figures are last weekend's, so the
      *                    engineer asks for a re-sync instead of planning (or saving a plan) on them.
-     * @return array{objective: InForce, lines: list<Line>, season: int, tyres: ?TyrePanel}
+     * @return array{objective: InForce, lines: list<Line>, season: int, tyres: ?TyrePanel, car_updated: bool}
      */
     public function forCockpit(int $userId, array $c, bool $stale = false): array
     {
         $ctx = $this->context($userId, $c);
         $objective = $ctx['objective'];
         $season = $ctx['season'];
+        $locked = self::done(self::arr($c['office'] ?? null), 'doneCarRepair');
 
         if ($stale) {
             return [
@@ -127,12 +128,13 @@ class RaceEngineerService
                 'lines' => [RaceEngineer::stale()],
                 'season' => $season,
                 'tyres' => null,
+                'car_updated' => $locked,
             ];
         }
 
         $rounds = $this->rounds($c);
         $basis = $this->planBasis($ctx['outlook'], $ctx['raceNb'], $rounds, $c);
-        $plan = $basis === null ? null : $this->plan($ctx, $basis);
+        $plan = $basis === null ? null : $this->plan($ctx, $basis, $locked);
         $inputs = $this->inputs(
             $objective,
             $ctx['outlook'],
@@ -141,17 +143,20 @@ class RaceEngineerService
             $rounds,
             $plan,
             $c,
+            $locked,
         );
 
         // Under a plan the advice waits for the plan it is checked against, below.
         $tyres = $plan === null ? $this->tyreAdvice($c, null, $ctx) : null;
         if ($plan !== null) {
-            try {
-                $picks = $this->swapPicks($inputs, $plan, $this->swapSeasonFrom($ctx, $plan, $basis, $c), $c);
-            } catch (\Throwable $e) {
-                // The picks only name a level; the parts line keeps its wording without them.
-                error_log('[Engineer] ' . $e::class);
-                $picks = [];
+            $picks = [];
+            if (!$locked) {
+                try {
+                    $picks = $this->swapPicks($inputs, $plan, $this->swapSeasonFrom($ctx, $plan, $basis, $c), $c);
+                } catch (\Throwable $e) {
+                    // The picks only name a level; the parts line keeps its wording without them.
+                    error_log('[Engineer] ' . $e::class);
+                }
             }
             if ($picks !== []) {
                 $plan['swap_picks'] = $picks;
@@ -162,8 +167,10 @@ class RaceEngineerService
             $plan = self::payingTyreExtra($plan, $tyreExtra);
             $inputs = $inputs->withPlan($plan);
             $outlook = ['committed' => (int) $ctx['outlook']['committed'] + $tyreExtra] + $ctx['outlook'];
-            $plan = $this->withUpgrades($plan, $inputs, $objective, $outlook, $ctx['cash'], $basis, $c);
-            $inputs = $inputs->withPlan($plan);
+            if (!$locked) {
+                $plan = $this->withUpgrades($plan, $inputs, $objective, $outlook, $ctx['cash'], $basis, $c);
+                $inputs = $inputs->withPlan($plan);
+            }
             try {
                 $this->budgets->save($userId, $season, $ctx['raceNb'], $plan);
             } catch (\Throwable $e) {
@@ -179,6 +186,7 @@ class RaceEngineerService
             'lines' => $lines,
             'season' => $season,
             'tyres' => $tyres === null ? null : self::tyrePanel($tyres),
+            'car_updated' => $locked,
         ];
     }
 
@@ -489,6 +497,7 @@ class RaceEngineerService
      * @param list<Round> $rounds
      * @param ?Plan $plan
      * @param array<string, mixed> $c
+     * @param bool $carLocked This race's car update is spent: nothing can be swapped before the race.
      */
     private function inputs(
         array $objective,
@@ -498,6 +507,7 @@ class RaceEngineerService
         array $rounds,
         ?array $plan,
         array $c,
+        bool $carLocked,
     ): EngineerInputs {
         $parts = $this->wearParts($c);
         /** @var ?WearAdvice $wearAdvice */
@@ -508,20 +518,14 @@ class RaceEngineerService
         $weather = self::arrOrNull($c['weather'] ?? null);
         $stale = (bool) ($c['setup_stale'] ?? false);
         $track = (string) ($c['track_name'] ?? '') === '' ? null : $this->tracks->findByName((string) $c['track_name']);
+        $office = self::arr($c['office'] ?? null);
 
-        $ceiling = null;
-        $survive = null;
-        $alwaysRed = [];
-        if ($parts !== null) {
-            $ceiling = $this->ceiling->for($parts, $driverFactor, WearAdvisorService::THRESHOLD_SWAP);
-            $survive = min($ceiling, $this->ceiling->for($parts, $driverFactor, WearAdvisorService::THRESHOLD_RISKY));
-            // Parts past the swap limit even at CTR 0 get replaced, so they aren't stuck in the red.
-            // Both lists ignore the current CTR, which keeps the reason stable once "Use N" is followed.
-            $alwaysRed = array_values(array_diff(
-                $this->ceiling->pastLimitAtZero($parts, $driverFactor, WearAdvisorService::THRESHOLD_RISKY),
-                $this->ceiling->pastLimitAtZero($parts, $driverFactor, WearAdvisorService::THRESHOLD_SWAP),
-            ));
-        }
+        $ceiling = $parts === null
+            ? null
+            : $this->ceiling->for($parts, $driverFactor, WearAdvisorService::THRESHOLD_SWAP, $carLocked);
+        $stuckSmoke = $carLocked && $parts !== null
+            ? $this->ceiling->pastLimitAtZero($parts, $driverFactor, WearAdvisorService::THRESHOLD_SWAP)
+            : [];
         $testingTrack = $c['testing_track'] ?? null;
         $car = self::arr($c['car'] ?? null);
 
@@ -539,14 +543,14 @@ class RaceEngineerService
             cash: $cash,
             currentCtr: (int) ($c['ctr'] ?? 0),
             ctrCeiling: $ceiling,
-            ctrSurvive: $survive,
-            alwaysRed: $alwaysRed,
             pushAdvice: $this->pushAdvice($c, $rounds, $raceNb),
             wearAdvice: $wearAdvice,
             forcedSwapCost: $this->forcedSwapCost($forced, self::arrOrNull($c['swap_plan'] ?? null)),
-            optionalSwaps: $plan !== null && $parts !== null
-                ? $this->plannedOptionalSwaps($plan, $parts, $driverFactor, $car)
-                : $this->optionalSwaps($wearAdvice, $car),
+            optionalSwaps: match (true) {
+                $carLocked => [],
+                $plan !== null && $parts !== null => $this->plannedOptionalSwaps($plan, $parts, $driverFactor, $car),
+                default => $this->optionalSwaps($wearAdvice, $car),
+            },
             trainingPick: $pick,
             testingTarget: $target,
             testingOpen: (bool) ($c['testing_open'] ?? false),
@@ -556,7 +560,6 @@ class RaceEngineerService
             boostLitres: $this->boostLitres($track, $weather, $stale),
             weatherStale: $stale,
             plan: $plan,
-            redZoneSwaps: $plan !== null && $parts !== null ? $this->redZoneSwaps($plan, $parts, $driverFactor) : [],
             staffStanding: GroupStanding::staff(
                 self::arr($c['group_staff'] ?? null),
                 self::arr($c['menu'] ?? null),
@@ -565,7 +568,21 @@ class RaceEngineerService
             carStanding: GroupStanding::car(self::arr($c['money_levels'] ?? null), self::arr($c['menu'] ?? null)),
             testingLaps: (int) ($c['training_laps'] ?? 0),
             division: self::stringOrNull($c['division'] ?? null),
+            carUpdated: $carLocked,
+            tested: self::done($office, 'doneTesting'),
+            driverTrained: self::done($office, 'doneDriTrain'),
+            stuckSmoke: $stuckSmoke,
         );
+    }
+
+    /**
+     * GPRO's per-race "done" flags arrive as "1"/"0"; only a literal one counts.
+     *
+     * @param array<string, mixed> $office
+     */
+    private static function done(array $office, string $flag): bool
+    {
+        return ($office[$flag] ?? null) === '1' || ($office[$flag] ?? null) === 1;
     }
 
     /**
@@ -713,7 +730,7 @@ class RaceEngineerService
         $replaced = array_column($plan['rows'][0]['replaced'], 'part');
         $out = [];
         foreach ($parts as $label => $part) {
-            $end = $this->endAt($part, $driverFactor, $plan['ctr']);
+            $end = WearAdvisorService::percent($this->endAt($part, $driverFactor, $plan['ctr']));
             $price = $prices[$label] ?? null;
             if (
                 $end >= WearAdvisorService::THRESHOLD_RISKY
@@ -722,28 +739,6 @@ class RaceEngineerService
                 && $price !== null
             ) {
                 $out[] = ['part' => (string) $label, 'cost' => $price];
-            }
-        }
-
-        return $out;
-    }
-
-    /**
-     * Parts the plan replaces before the next race that would only finish it in the red at the plan's CTR
-     * (a Survive plan swaps at 90), so the engineer doesn't call them a break.
-     *
-     * @param Plan $plan
-     * @param array<string, array{level: int, start: int|float, track_base: int|float, training?: int|float}> $parts
-     * @return list<string>
-     */
-    private function redZoneSwaps(array $plan, array $parts, float $driverFactor): array
-    {
-        $out = [];
-        foreach ($plan['rows'][0]['replaced'] as $swap) {
-            $part = $parts[$swap['part']] ?? null;
-            $end = $part === null ? null : $this->endAt($part, $driverFactor, $plan['ctr']);
-            if ($end !== null && $end < WearAdvisorService::THRESHOLD_SWAP) {
-                $out[] = $swap['part'];
             }
         }
 
@@ -821,7 +816,7 @@ class RaceEngineerService
      * @param PlanBasis $basis
      * @return Plan
      */
-    private function plan(array $ctx, array $basis): array
+    private function plan(array $ctx, array $basis, bool $carLocked = false): array
     {
         return $this->ctrPlanner->plan(
             $ctx['objective']['objective'] ?? SeasonObjective::HOLD,
@@ -833,6 +828,7 @@ class RaceEngineerService
             (int) $ctx['outlook']['committed'],
             (int) $ctx['outlook']['income'],
             SeasonStart::cash($ctx['ledger'], $ctx['weekends']),
+            $carLocked,
         );
     }
 
@@ -860,7 +856,6 @@ class RaceEngineerService
         try {
             $plan['upgrades'] = $this->ranker->rank(
                 $plan,
-                $objective['objective'] ?? SeasonObjective::HOLD,
                 $basis['rounds'],
                 $this->demands($c),
                 $basis['parts'],

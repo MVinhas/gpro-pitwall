@@ -29,20 +29,12 @@ final readonly class CtrPlanner
     }
 
     /**
-     * The wear (%) at which a part counts as gone: Survive plays it safer than the others.
-     */
-    public static function limit(string $objective): int
-    {
-        return $objective === SeasonObjective::SURVIVE
-            ? WearAdvisorService::THRESHOLD_RISKY
-            : WearAdvisorService::THRESHOLD_SWAP;
-    }
-
-    /**
      * The Clear Track Risk to advise: the highest value whose season forecast keeps every race's balance at
      * or above its target: the cushion, and at the last race the end target (the season start for Hold and
      * Survive when it is above the cushion). It reads no current CTR, so the advice holds still when the
-     * manager follows it.
+     * manager follows it. The cushion is the committed cost plus the average repairs of the races after this
+     * one at the safety CTR: this race's forced swaps are bought before the race, so counting them would make
+     * the cushion drop once the manager follows the advice.
      *
      * @param list<array{race: int, track_name: ?string, base: ?array<string, float>}> $rounds next race first
      * @param array<string, array{level: int, start: int|float, track_base: int|float, training?: int|float}> $parts
@@ -59,18 +51,16 @@ final readonly class CtrPlanner
         int $committed,
         int $income,
         ?int $seasonStart,
+        bool $carLocked = false,
     ): array {
         if ($rounds === []) {
             throw new InvalidArgumentException('A plan needs at least one remaining race.');
         }
 
         $survive = $objective === SeasonObjective::SURVIVE;
-        $limit = self::limit($objective);
+        $limit = WearAdvisorService::THRESHOLD_SWAP;
 
-        $safety = $this->ceiling->for($parts, $driverFactor, $limit);
-        if ($survive) {
-            $safety = min($safety, $this->ceiling->for($parts, $driverFactor, WearAdvisorService::THRESHOLD_SWAP));
-        }
+        $safety = $this->ceiling->for($parts, $driverFactor, $limit, $carLocked);
 
         $forecastAt = fn (int $ctr): array => $this->budget->forecast(
             $rounds,
@@ -82,10 +72,14 @@ final readonly class CtrPlanner
             $cash,
             $committed,
             $income,
+            $carLocked,
         );
 
         $atSafety = $forecastAt($safety)['rows'];
-        $cushion = $committed + intdiv(array_sum(array_column($atSafety, 'repairs')), count($atSafety));
+        $later = array_slice($atSafety, 1);
+        $cushion = $committed + ($later === []
+            ? 0
+            : intdiv(array_sum(array_column($later, 'repairs')), count($later)));
 
         $target = $cushion;
         $targetKind = 'cushion';

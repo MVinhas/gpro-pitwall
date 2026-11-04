@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Engineer;
 
 use App\Service\CarWearService;
+use App\Service\WearAdvisorService;
 
 final readonly class CtrCeiling
 {
@@ -18,14 +19,18 @@ final readonly class CtrCeiling
      * Highest Clear Track Risk at which every part ends the race below $limit. Wear only grows with CTR,
      * so the scan stops at the first failure. A part that reaches $limit even at CTR 0 is counted as
      * swapped before the race (start 0, training wear kept): it needs replacing whatever the CTR, and
-     * CTR-independent data keeps the advice stable when the manager follows it.
+     * CTR-independent data keeps the advice stable when the manager follows it. With $carLocked (this
+     * race's update is spent) nothing can be swapped before the race, so those parts keep their wear and
+     * the ceiling falls to 0.
      *
      * @param array<string, array<string, mixed>> $parts label => {level, start, track_base, training?}
      */
-    public function for(array $parts, float $driverFactor, int $limit): int
+    public function for(array $parts, float $driverFactor, int $limit, bool $carLocked = false): int
     {
-        foreach ($this->pastLimitAtZero($parts, $driverFactor, $limit) as $label) {
-            $parts[$label]['start'] = 0.0;
+        if (!$carLocked) {
+            foreach ($this->pastLimitAtZero($parts, $driverFactor, $limit) as $label) {
+                $parts[$label]['start'] = 0.0;
+            }
         }
 
         $ceiling = 0;
@@ -79,6 +84,6 @@ final readonly class CtrCeiling
         $raceWear = $this->wear->raceWear((float) $part['track_base'], (int) $part['level'], $driverFactor, $ctr);
         $end = (float) $part['start'] + (float) ($part['training'] ?? 0) + round($raceWear, 1);
 
-        return $end < $limit;
+        return WearAdvisorService::percent($end) < $limit;
     }
 }

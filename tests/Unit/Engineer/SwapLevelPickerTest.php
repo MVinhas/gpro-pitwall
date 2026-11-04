@@ -353,8 +353,8 @@ final class SwapLevelPickerTest extends TestCase
 
     public function testAnInfeasibleCandidateIsDropped(): void
     {
-        // Survive swaps at 90% and race 8 wears Cooling 95: even a fresh part crosses the limit within it.
-        $rounds = [['race' => 8, 'track_name' => null, 'base' => ['Cooling' => 95.0, 'Engine' => 10.0]]];
+        // Race 8 wears Cooling 105: even a fresh part reaches 100% within it.
+        $rounds = [['race' => 8, 'track_name' => null, 'base' => ['Cooling' => 105.0, 'Engine' => 10.0]]];
         $season = new SwapSeason(
             SeasonObjective::SURVIVE,
             ['ctr' => 0, 'rows' => [], 'cushion' => 0, 'target' => 0],
@@ -374,17 +374,17 @@ final class SwapLevelPickerTest extends TestCase
 
     public function testACandidateThatEndsThisRacePastThePlansLimitIsNotPicked(): void
     {
-        // Survive swaps at 90%: a free spare 85% worn ends race 8 at 95, one 70% worn at 80.
+        // A free spare 90% worn ends race 8 at 100 and smokes; one 85% worn ends at 95, in the red but safe.
         $season = $this->season(SeasonObjective::SURVIVE, new StrengthFloor(5, 40, 26), 250_000);
 
-        $past = $this->pick($season, [$this->paid(3), $this->freeDowngrade(85.0)]);
+        $past = $this->pick($season, [$this->paid(3), $this->freeDowngrade(90.0)]);
         $this->assertNotNull($past);
         $this->assertSame('sidegrade', $past['kind']);
         $this->assertSame('budget_short', $past['reason']);
 
-        $within = $this->pick($season, [$this->paid(3), $this->freeDowngrade(70.0)]);
-        $this->assertNotNull($within);
-        $this->assertSame('free_downgrade', $within['kind']);
+        $red = $this->pick($season, [$this->paid(3), $this->freeDowngrade(85.0)]);
+        $this->assertNotNull($red);
+        $this->assertSame('free_downgrade', $red['kind']);
     }
 
     public function testOneRaceLeftStillPicks(): void

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Engineer;
 
+use App\Service\WearAdvisorService;
+
 /**
  * @phpstan-import-type BudgetRow from SeasonBudget
  * @phpstan-import-type Demand from UpgradeRanker
@@ -49,7 +51,6 @@ readonly class SwapLevelPicker
      */
     public function pick(SwapSeason $s, string $part, int $currentLevel, array $candidates, array $paidPrice): ?array
     {
-        $limit = CtrPlanner::limit($s->objective);
         $planned = array_sum(array_column($s->plan['rows'], 'repairs'));
         $contribution = $this->contribution[$part] ?? self::NO_CONTRIBUTION;
 
@@ -67,7 +68,7 @@ readonly class SwapLevelPicker
                 [$part => $price] + $s->prices,
                 $s->driverFactor,
                 $s->plan['ctr'],
-                $limit,
+                WearAdvisorService::THRESHOLD_SWAP,
                 $s->cash,
                 $s->committed,
                 $s->income,

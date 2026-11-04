@@ -9,6 +9,7 @@ use App\Engineer\CtrPlanner;
 use App\Engineer\SeasonBudget;
 use App\Engineer\SeasonObjective;
 use App\Service\CarWearService;
+use App\Service\WearAdvisorService;
 use InvalidArgumentException;
 use PDO;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -63,6 +64,7 @@ final class CtrPlannerTest extends TestCase
         ?int $seasonStart = null,
         ?array $parts = null,
         int $races = 3,
+        bool $carLocked = false,
     ): array {
         return $this->planner->plan(
             $objective,
@@ -74,6 +76,7 @@ final class CtrPlannerTest extends TestCase
             $committed,
             $income,
             $seasonStart,
+            $carLocked,
         );
     }
 
@@ -90,6 +93,41 @@ final class CtrPlannerTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
 
         $this->planner->plan(SeasonObjective::HOLD, [], self::ENGINE, self::PRICES, 1.0, 1_000_000, 0, 0, null);
+    }
+
+    public function testCushionIsTheSameBeforeAndAfterTheCarUpdate(): void
+    {
+        $parts = static fn (float $engineStart): array => [
+            'Engine' => ['level' => 1, 'start' => $engineStart, 'track_base' => 10.0],
+            'Chassis' => ['level' => 1, 'start' => 20.0, 'track_base' => 10.0],
+        ];
+
+        $before = $this->plan(SeasonObjective::HOLD, 3_000_000, 50_000, 30_000, null, $parts(95.0), 5);
+        $after = $this->plan(
+            SeasonObjective::HOLD,
+            3_000_000 - self::PRICES['Engine'],
+            50_000,
+            30_000,
+            null,
+            $parts(0.0),
+            5,
+        );
+
+        $this->assertSame('Engine', $before['rows'][0]['replaced'][0]['part']);
+        $this->assertSame([], $after['rows'][0]['replaced']);
+        $this->assertSame($before['cushion'], $after['cushion']);
+        $this->assertSame($before['ctr'], $after['ctr']);
+        $this->assertSame($before['mode'], $after['mode']);
+        $this->assertSame($before['envelope'], $after['envelope']);
+    }
+
+    public function testSingleRaceCushionIsTheCommittedCost(): void
+    {
+        $worn = ['Engine' => ['level' => 1, 'start' => 95.0, 'track_base' => 10.0]];
+
+        $plan = $this->plan(SeasonObjective::HOLD, 1_000_000, 50_000, 0, null, $worn, 1);
+
+        $this->assertSame(50_000, $plan['cushion']);
     }
 
     public function testBudgetCeilingIsTheHighestPassingCtr(): void
@@ -119,7 +157,7 @@ final class CtrPlannerTest extends TestCase
                 $income,
             )['rows'];
 
-            $cushion = $committed + intdiv(array_sum(array_column($at($plan['safety']), 'repairs')), 3);
+            $cushion = $committed + intdiv(array_sum(array_column(array_slice($at($plan['safety']), 1), 'repairs')), 2);
             $end = $start !== null && $start > $cushion ? $start : $cushion;
             $this->assertSame($cushion, $plan['cushion'], $label);
             $this->assertSame($end, $plan['target'], $label);
@@ -230,7 +268,7 @@ final class CtrPlannerTest extends TestCase
         $this->assertGreaterThan((int) ceil(100_000 / 2), $plan['cushion']);
         $this->assertSame('cushion', $plan['target_kind']);
         $this->assertSame($plan['cushion'], $plan['target']);
-        $this->assertSame(50_000 + 33_333, $plan['cushion']);
+        $this->assertSame(50_000 + 50_000, $plan['cushion']);
     }
 
     public function testPromoteFallsBackToTheCushionWhenHalfTheStartIsOutOfReach(): void
@@ -275,7 +313,7 @@ final class CtrPlannerTest extends TestCase
 
         $balances = array_column($plan['rows'], 'balance');
         $this->assertSame([150_000, 100_000, 150_000], $balances);
-        $this->assertSame(100_000 - 33_333, $plan['envelope']);
+        $this->assertSame(100_000 - 50_000, $plan['envelope']);
     }
 
     public function testPushSwapsWhenTheBudgetCoversThem(): void
@@ -354,8 +392,8 @@ final class CtrPlannerTest extends TestCase
         $plan = $this->planner->plan(SeasonObjective::HOLD, $rounds, $parts, self::PRICES, 1.0, 10_000_000, 0, 0, null);
 
         $this->assertSame('push', $plan['mode']);
-        $this->assertLessThan(100.0, 20.0 * 1.02 ** $plan['ctr']);
-        $this->assertGreaterThanOrEqual(100.0, 20.0 * 1.02 ** ($plan['ctr'] + 1));
+        $this->assertLessThan(100, WearAdvisorService::percent(round(20.0 * 1.02 ** $plan['ctr'], 1)));
+        $this->assertGreaterThanOrEqual(100, WearAdvisorService::percent(round(20.0 * 1.02 ** ($plan['ctr'] + 1), 1)));
     }
 
     public function testSurviveNeverPushes(): void
@@ -368,12 +406,25 @@ final class CtrPlannerTest extends TestCase
         $this->assertNull($plan['refused_swap_cost']);
     }
 
-    public function testSurviveSafetyUsesTheRiskyLimit(): void
+    public function testSurviveKeepsPartsUpToTheSameLineAsHold(): void
     {
         $survive = $this->plan(SeasonObjective::SURVIVE, 50_000_000);
         $hold = $this->plan(SeasonObjective::HOLD, 50_000_000);
 
-        $this->assertLessThan($hold['safety'], $survive['safety']);
+        $this->assertSame($hold['safety'], $survive['safety']);
+    }
+
+    public function testSurviveKeepsAPartThatEndsTheRaceInTheRedZone(): void
+    {
+        $perRace = round((new CarWearService(new PDO('sqlite::memory:'), [
+            'driver_wear_factors' => [],
+            'part_level_factors' => [1 => 1.02, 2 => 1.03],
+        ]))->raceWear(10.0, 1, 1.0, 0), 1);
+        $parts = ['Engine' => ['level' => 1, 'start' => 95.0 - $perRace, 'track_base' => 10.0]];
+
+        $plan = $this->plan(SeasonObjective::SURVIVE, 50_000_000, parts: $parts);
+
+        $this->assertSame([], $plan['rows'][0]['replaced']);
     }
 
     public function testShortWhenEvenCtrZeroMissesTheTarget(): void
@@ -445,5 +496,66 @@ final class CtrPlannerTest extends TestCase
 
         $this->assertSame(1, $plan['v']);
         $this->assertSame(['T5 wear unknown'], $plan['partial']);
+    }
+
+    public function testALockedCarWithAStuckPartAdvisesCtrZeroAndNeverPushes(): void
+    {
+        $parts = [
+            'Engine' => ['level' => 1, 'start' => 95.0, 'track_base' => 10.0],
+            'Chassis' => ['level' => 1, 'start' => 0.0, 'track_base' => 10.0],
+        ];
+
+        $plan = $this->plan(SeasonObjective::PROMOTE, 5_000_000, parts: $parts, carLocked: true);
+
+        $this->assertSame(0, $plan['safety']);
+        $this->assertSame(0, $plan['ctr']);
+        $this->assertSame('nurse', $plan['mode']);
+        $this->assertSame([], $plan['swaps']);
+    }
+
+    public function testALockedHealthyCarPlansLikeAnUnlockedOne(): void
+    {
+        $parts = [
+            'Engine' => ['level' => 1, 'start' => 10.0, 'track_base' => 10.0],
+            'Chassis' => ['level' => 1, 'start' => 5.0, 'track_base' => 10.0],
+        ];
+
+        $this->assertSame(
+            $this->plan(SeasonObjective::HOLD, 2_000_000, 100_000, 50_000, parts: $parts),
+            $this->plan(SeasonObjective::HOLD, 2_000_000, 100_000, 50_000, parts: $parts, carLocked: true),
+        );
+    }
+
+    public function testALockedHealthyCarNeverPushesOnASwapItCannotBuy(): void
+    {
+        $parts = [
+            'Engine' => ['level' => 1, 'start' => 10.0, 'track_base' => 20.0],
+            'Chassis' => ['level' => 1, 'start' => 5.0, 'track_base' => 10.0],
+        ];
+        $rounds = $this->rounds();
+        foreach ($rounds as $i => $round) {
+            $rounds[$i]['base'] = ['Engine' => 20.0, 'Chassis' => 10.0];
+        }
+        $plan = fn (bool $locked): array => $this->planner->plan(
+            SeasonObjective::PROMOTE,
+            $rounds,
+            $parts,
+            self::PRICES,
+            1.0,
+            10_000_000,
+            0,
+            0,
+            null,
+            $locked,
+        );
+
+        $this->assertSame('push', $plan(false)['mode']);
+        $this->assertGreaterThan($plan(false)['safety'], $plan(false)['ctr']);
+
+        $locked = $plan(true);
+
+        $this->assertSame('nurse', $locked['mode']);
+        $this->assertLessThanOrEqual($locked['safety'], $locked['ctr']);
+        $this->assertSame([], $locked['swaps']);
     }
 }

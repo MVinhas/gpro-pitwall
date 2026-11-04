@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Tests\Unit\Engineer;
 
 use App\Engineer\SeasonBudget;
-use App\Engineer\SeasonObjective;
 use App\Engineer\UpgradeRanker;
 use App\Service\CarWearService;
 use PDO;
@@ -117,7 +116,6 @@ final class UpgradeRankerTest extends TestCase
     ): array {
         return $ranker->rank(
             $plan,
-            SeasonObjective::HOLD,
             $rounds,
             $demands,
             $parts,

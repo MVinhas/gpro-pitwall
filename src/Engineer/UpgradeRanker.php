@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Engineer;
 
+use App\Service\WearAdvisorService;
+
 /**
  * @phpstan-import-type Plan from CtrPlanner
  * @phpstan-import-type Round from SeasonBudget
@@ -39,7 +41,6 @@ readonly class UpgradeRanker
      */
     public function rank(
         array $plan,
-        string $objective,
         array $rounds,
         array $demands,
         array $parts,
@@ -56,7 +57,6 @@ readonly class UpgradeRanker
             return [];
         }
 
-        $limit = CtrPlanner::limit($objective);
         $planned = array_sum(array_column($plan['rows'], 'repairs'));
 
         $candidates = [];
@@ -78,7 +78,7 @@ readonly class UpgradeRanker
                     [$part => $option['price']] + $prices,
                     $driverFactor,
                     $plan['ctr'],
-                    $limit,
+                    WearAdvisorService::THRESHOLD_SWAP,
                     $cash,
                     $committed,
                     $income,
