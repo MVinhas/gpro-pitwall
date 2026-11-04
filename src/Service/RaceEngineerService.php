@@ -536,6 +536,12 @@ class RaceEngineerService
                 $this->ceiling->pastLimitAtZero($parts, $driverFactor, WearAdvisorService::THRESHOLD_SWAP),
             ));
         }
+        $stuckSmoke = $carLocked && $parts !== null
+            ? $this->ceiling->pastLimitAtZero($parts, $driverFactor, WearAdvisorService::THRESHOLD_SWAP)
+            : [];
+        $stuckRisky = $carLocked && $parts !== null
+            ? $this->ceiling->pastLimitAtZero($parts, $driverFactor, WearAdvisorService::THRESHOLD_RISKY)
+            : [];
         $testingTrack = $c['testing_track'] ?? null;
         $car = self::arr($c['car'] ?? null);
 
@@ -584,13 +590,8 @@ class RaceEngineerService
             carUpdated: $carLocked,
             tested: self::done($office, 'doneTesting'),
             driverTrained: self::done($office, 'doneDriTrain'),
-            stuckParts: $carLocked && $parts !== null
-                ? $this->ceiling->pastLimitAtZero(
-                    $parts,
-                    $driverFactor,
-                    CtrPlanner::limit($objective['objective'] ?? SeasonObjective::HOLD),
-                )
-                : [],
+            stuckSmoke: $stuckSmoke,
+            stuckRed: array_values(array_diff($stuckRisky, $stuckSmoke)),
         );
     }
 

@@ -275,7 +275,7 @@ final class RaceEngineer
         }
 
         $survive = self::objectiveIs($in, SeasonObjective::SURVIVE);
-        $locked = $in->carUpdated && $in->stuckParts !== [];
+        $stuck = self::stuckCtrReason($in);
         $rated = $in->pushAdvice === null ? '' : 'Race rated ' . $in->pushAdvice . ': ';
         // A plan replaces the parts that would stay in the red, so none is stuck there.
         $alwaysRed = $survive && $in->alwaysRed !== [] && $plan === null;
@@ -284,7 +284,7 @@ final class RaceEngineer
             $target = $plan['ctr'];
             $swapNames = implode(' + ', array_column($plan['swaps'], 'part'));
             $reason = match (true) {
-                $locked && $target === 0 && $plan['mode'] !== 'short' => self::stuckReason($in),
+                $stuck !== null && $target === 0 && $plan['mode'] !== 'short' => $stuck,
                 $plan['mode'] === 'short' => 'Even at CTR 0 the forecast misses the target by '
                     . Money::short($plan['shortfall'] ?? 0),
                 $plan['mode'] === 'push' && $plan['swaps'] !== [] => $rated . 'swap ' . $swapNames . ' ('
@@ -300,7 +300,7 @@ final class RaceEngineer
         } else {
             $target = $survive ? ($in->ctrSurvive ?? $in->ctrCeiling) : $in->ctrCeiling;
             $reason = match (true) {
-                $locked && $target === 0 => self::stuckReason($in),
+                $stuck !== null && $target === 0 => $stuck,
                 $alwaysRed => self::alwaysRedReason($in->alwaysRed),
                 $survive => $rated . 'capped at the highest CTR that keeps parts out of the red',
                 default => $rated . 'the highest CTR where no part breaks; season costs unknown',
@@ -319,10 +319,50 @@ final class RaceEngineer
         );
     }
 
-    private static function stuckReason(EngineerInputs $in): string
+    /**
+     * Why CTR 0 is advised on an updated car. Only parts that cap the CTR count: a red-zone part caps it under
+     * Survive alone, because Hold and Promote only limit it at the break line.
+     */
+    private static function stuckCtrReason(EngineerInputs $in): ?string
     {
-        return implode(', ', $in->stuckParts)
-            . ' past the swap line and the car is already updated: CTR 0 keeps their wear lowest';
+        if (!$in->carUpdated) {
+            return null;
+        }
+        if ($in->stuckSmoke !== []) {
+            return self::smoke($in->stuckSmoke) . ' and the car is already updated: CTR 0 keeps '
+                . self::possessive($in->stuckSmoke) . ' wear lowest';
+        }
+        if ($in->stuckRed !== [] && self::objectiveIs($in, SeasonObjective::SURVIVE)) {
+            return implode(', ', $in->stuckRed) . ' ' . self::finishes($in->stuckRed)
+                . ' in the red and the car is already updated: CTR 0 keeps ' . self::possessive($in->stuckRed)
+                . ' wear lowest';
+        }
+
+        return null;
+    }
+
+    /**
+     * @param list<string> $parts
+     */
+    private static function smoke(array $parts): string
+    {
+        return implode(', ', $parts) . (count($parts) === 1 ? ' reaches' : ' reach') . ' 100% this race';
+    }
+
+    /**
+     * @param list<string> $parts
+     */
+    private static function possessive(array $parts): string
+    {
+        return count($parts) === 1 ? 'its' : 'their';
+    }
+
+    /**
+     * @param list<string> $parts
+     */
+    private static function finishes(array $parts): string
+    {
+        return count($parts) === 1 ? 'finishes' : 'finish';
     }
 
     /**
@@ -340,20 +380,24 @@ final class RaceEngineer
     private static function parts(EngineerInputs $in): array
     {
         if ($in->carUpdated) {
-            return $in->stuckParts === []
-                ? self::line(
-                    'parts',
-                    'Car updated',
-                    'One update per race; the plan reads the car as it is now',
-                    '/cockpit#cockpit-wear',
-                )
-                : self::line(
-                    'parts',
-                    'Car updated',
-                    implode(', ', $in->stuckParts) . ' stay past the swap line until the next update',
-                    '/cockpit#cockpit-wear',
-                    tone: 'amber',
-                );
+            $red = implode(', ', $in->stuckRed) . ' ' . self::finishes($in->stuckRed) . ' in the red';
+            $smoke = self::smoke($in->stuckSmoke);
+            $reason = match (true) {
+                $in->stuckSmoke !== [] && $in->stuckRed !== [] => $smoke . ' (expect smoke and lost time) and ' . $red,
+                $in->stuckSmoke !== [] => $smoke . ': expect smoke and lost time',
+                $in->stuckRed !== [] => $red,
+                default => null,
+            };
+
+            return self::line(
+                'parts',
+                'Car updated',
+                $reason === null
+                    ? 'One update per race; the plan reads the car as it is now'
+                    : $reason . '; no more changes until the next race',
+                '/cockpit#cockpit-wear',
+                tone: $reason === null ? 'ink' : 'amber',
+            );
         }
 
         $plan = $in->plan;

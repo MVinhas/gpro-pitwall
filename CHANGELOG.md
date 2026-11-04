@@ -12,7 +12,9 @@ Every release is published as an annotated git tag of the same name.
 - The engineer's advice no longer moves when you follow it: the cushion no longer counts this race's forced swaps, so
   Clear Track Risk stays put once the parts are bought.
 - The engineer reads GPRO's done flags: once the car is updated this race it stops offering more part changes and plans
-  on the car as it is now, and testing and driver training already done are shown as done, not offered again.
+  on the car as it is now, and testing and driver training already done are shown as done, not offered again. A part
+  that will reach 100% (smoke and lost time) or finish in the red after the update is named as such, and the CTR 0
+  reason says which.
 - The Cockpit's testing laps are clamped to the laps GPRO says are left, so training laps already run are not counted
   again.
 

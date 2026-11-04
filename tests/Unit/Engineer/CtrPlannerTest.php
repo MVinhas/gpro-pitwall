@@ -511,4 +511,37 @@ final class CtrPlannerTest extends TestCase
             $this->plan(SeasonObjective::HOLD, 2_000_000, 100_000, 50_000, parts: $parts, carLocked: true),
         );
     }
+
+    public function testALockedHealthyCarNeverPushesOnASwapItCannotBuy(): void
+    {
+        $parts = [
+            'Engine' => ['level' => 1, 'start' => 10.0, 'track_base' => 20.0],
+            'Chassis' => ['level' => 1, 'start' => 5.0, 'track_base' => 10.0],
+        ];
+        $rounds = $this->rounds();
+        foreach ($rounds as $i => $round) {
+            $rounds[$i]['base'] = ['Engine' => 20.0, 'Chassis' => 10.0];
+        }
+        $plan = fn (bool $locked): array => $this->planner->plan(
+            SeasonObjective::PROMOTE,
+            $rounds,
+            $parts,
+            self::PRICES,
+            1.0,
+            10_000_000,
+            0,
+            0,
+            null,
+            $locked,
+        );
+
+        $this->assertSame('push', $plan(false)['mode']);
+        $this->assertGreaterThan($plan(false)['safety'], $plan(false)['ctr']);
+
+        $locked = $plan(true);
+
+        $this->assertSame('nurse', $locked['mode']);
+        $this->assertLessThanOrEqual($locked['safety'], $locked['ctr']);
+        $this->assertSame([], $locked['swaps']);
+    }
 }

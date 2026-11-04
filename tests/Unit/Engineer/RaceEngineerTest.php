@@ -197,27 +197,114 @@ final class RaceEngineerTest extends TestCase
         $this->assertNotContains('upgrades', array_column(RaceEngineer::brief($in), 'key'));
     }
 
-    public function testUpdatedCarWithAStuckPartWarnsOnPartsAndCtr(): void
+    public function testUpdatedCarWithTwoSmokingPartsIsAmberOnPartsAndCtr(): void
     {
-        $in = $this->planned(['ctr' => 0], ['carUpdated' => true, 'stuckParts' => ['Engine', 'Brakes']]);
+        $in = $this->planned(['ctr' => 0], ['carUpdated' => true, 'stuckSmoke' => ['Engine', 'Brakes']]);
 
         $parts = $this->line($in, 'parts');
         $ctr = $this->line($in, 'ctr');
 
         $this->assertSame('Car updated', $parts['answer']);
         $this->assertSame('amber', $parts['tone']);
-        $this->assertSame('Engine, Brakes stay past the swap line until the next update', $parts['reason']);
+        $this->assertSame('Engine, Brakes reach 100% this race: expect smoke and lost time; no more changes until the next race', $parts['reason']);
         $this->assertSame(
-            'Engine, Brakes past the swap line and the car is already updated: CTR 0 keeps their wear lowest',
+            'Engine, Brakes reach 100% this race and the car is already updated: CTR 0 keeps their wear lowest',
             $ctr['reason'],
         );
+    }
+
+    public function testUpdatedCarWithOneSmokingPartSaysItsWear(): void
+    {
+        $in = $this->planned(['ctr' => 0], ['carUpdated' => true, 'stuckSmoke' => ['Engine']]);
+
+        $this->assertSame('amber', $this->line($in, 'parts')['tone']);
+        $this->assertSame(
+            'Engine reaches 100% this race and the car is already updated: CTR 0 keeps its wear lowest',
+            $this->line($in, 'ctr')['reason'],
+        );
+    }
+
+    public function testSurviveWithAPartInTheRedIsAmberAndFinishesInTheRed(): void
+    {
+        $in = $this->planned(
+            ['ctr' => 0],
+            [
+                'carUpdated' => true,
+                'stuckRed' => ['Engine'],
+                'objective' => $this->objective(SeasonObjective::SURVIVE),
+            ],
+        );
+
+        $parts = $this->line($in, 'parts');
+
+        $this->assertSame('amber', $parts['tone']);
+        $this->assertSame('Engine finishes in the red; no more changes until the next race', $parts['reason']);
+        $this->assertSame(
+            'Engine finishes in the red and the car is already updated: CTR 0 keeps its wear lowest',
+            $this->line($in, 'ctr')['reason'],
+        );
+    }
+
+    public function testTwoPartsInTheRedFinishInTheRed(): void
+    {
+        $in = $this->planned(
+            ['ctr' => 0],
+            [
+                'carUpdated' => true,
+                'stuckRed' => ['Engine', 'Brakes'],
+                'objective' => $this->objective(SeasonObjective::SURVIVE),
+            ],
+        );
+
+        $this->assertSame(
+            'Engine, Brakes finish in the red; no more changes until the next race',
+            $this->line($in, 'parts')['reason'],
+        );
+        $this->assertSame(
+            'Engine, Brakes finish in the red and the car is already updated: CTR 0 keeps their wear lowest',
+            $this->line($in, 'ctr')['reason'],
+        );
+    }
+
+    public function testSmokeAndRedPartsTogetherAreAmberAndNameBoth(): void
+    {
+        $in = $this->planned(
+            ['ctr' => 0],
+            [
+                'carUpdated' => true,
+                'stuckSmoke' => ['Engine'],
+                'stuckRed' => ['Brakes', 'Gearbox'],
+                'objective' => $this->objective(SeasonObjective::SURVIVE),
+            ],
+        );
+
+        $parts = $this->line($in, 'parts');
+
+        $this->assertSame('amber', $parts['tone']);
+        $this->assertSame(
+            'Engine reaches 100% this race (expect smoke and lost time) and Brakes, Gearbox finish in the red; '
+                . 'no more changes until the next race',
+            $parts['reason'],
+        );
+        $this->assertSame(
+            'Engine reaches 100% this race and the car is already updated: CTR 0 keeps its wear lowest',
+            $this->line($in, 'ctr')['reason'],
+        );
+    }
+
+    public function testAHoldPartInTheRedIsInformationalAndDoesNotExplainCtrZero(): void
+    {
+        $in = $this->planned(['ctr' => 0], ['carUpdated' => true, 'stuckRed' => ['Engine']]);
+
+        $this->assertSame('amber', $this->line($in, 'parts')['tone']);
+        $this->assertStringNotContainsString('already updated', $this->line($in, 'ctr')['reason']);
     }
 
     public function testAShortPlanKeepsItsShortfallReasonOnCtr(): void
     {
         $in = $this->planned(
             ['ctr' => 0, 'mode' => 'short', 'shortfall' => 400_000],
-            ['carUpdated' => true, 'stuckParts' => ['Engine']],
+            ['carUpdated' => true, 'stuckSmoke' => ['Engine']],
         );
 
         $this->assertSame('Even at CTR 0 the forecast misses the target by $400k', $this->line($in, 'ctr')['reason']);
@@ -225,7 +312,7 @@ final class RaceEngineerTest extends TestCase
 
     public function testStuckPartsAtANonZeroCtrKeepTheOrdinaryCtrReason(): void
     {
-        $in = $this->planned(['ctr' => 40], ['carUpdated' => true, 'stuckParts' => ['Engine']]);
+        $in = $this->planned(['ctr' => 40], ['carUpdated' => true, 'stuckSmoke' => ['Engine']]);
 
         $this->assertSame('Race rated Normal: the highest CTR where no part breaks', $this->line($in, 'ctr')['reason']);
     }
@@ -244,11 +331,11 @@ final class RaceEngineerTest extends TestCase
             'plan' => null,
             'ctrCeiling' => 0,
             'carUpdated' => true,
-            'stuckParts' => ['Engine'],
+            'stuckSmoke' => ['Engine'],
         ]);
 
         $this->assertSame(
-            'Engine past the swap line and the car is already updated: CTR 0 keeps their wear lowest',
+            'Engine reaches 100% this race and the car is already updated: CTR 0 keeps its wear lowest',
             $this->line($in, 'ctr')['reason'],
         );
         $this->assertSame('amber', $this->line($in, 'parts')['tone']);
