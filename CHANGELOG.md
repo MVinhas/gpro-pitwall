@@ -6,6 +6,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.26] - 2026-11-04
+
+### Fixed
+- The engineer's advice no longer moves when you follow it: the cushion no longer counts this race's forced swaps, so
+  Clear Track Risk stays put once the parts are bought.
+- The engineer reads GPRO's done flags: once the car is updated this race it stops offering more part changes and plans
+  on the car as it is now, and testing and driver training already done are shown as done, not offered again.
+- The Cockpit's testing laps are clamped to the laps GPRO says are left, so training laps already run are not counted
+  again.
+
+### Changed
+- The race engineer card groups its advice in steps: update the car, testing and training, race settings.
+
 ## [1.21.25] - 2026-10-30
 
 ### Added
