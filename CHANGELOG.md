@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.27] - 2026-11-04
+
+### Changed
+- The race engineer no longer offers optional swaps. A part that ends the race below 100% stays on the car: the money
+  is saved, not spent on a part that would finish anyway. Only parts that would reach 100% are swapped.
+
 ## [1.21.26] - 2026-11-04
 
 ### Fixed

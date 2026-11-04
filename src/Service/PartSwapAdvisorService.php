@@ -105,11 +105,10 @@ final class PartSwapAdvisorService
     }
 
     /**
-     * Parts are judged forced first, then the optional ones, each group most worn first. Under a season,
-     * each pick's net cost is committed before the next part is judged, so the picks are affordable together.
+     * Parts are judged most worn first. Under a season, each pick's net cost is committed before the next
+     * part is judged, so the picks are affordable together.
      *
-     * @param list<array{part: string, level: int, start: int, est: float, end: float, optional?: bool}> $flaggedParts
-     *     an `optional` part is one the manager may keep; every other part is forced
+     * @param list<array{part: string, level: int, start: int, est: float, end: float}> $flaggedParts
      * @param array<string, mixed> $carData full GetCar payload (with *Options arrays)
      * @param array<string, array{
      *     level: int, start: int, est: float, end: float, track_base: float
@@ -163,11 +162,8 @@ final class PartSwapAdvisorService
         // Most worn first, then by name: the order can't depend on the caller, so the parts the Cockpit
         // shows get the same commitments the Engineer gives them.
         $byWear = static fn(array $a, array $b): int => [$b['end'], $a['part']] <=> [$a['end'], $b['part']];
-        $forced = array_values(array_filter($flaggedParts, static fn(array $f): bool => !($f['optional'] ?? false)));
-        $optional = array_values(array_filter($flaggedParts, static fn(array $f): bool => $f['optional'] ?? false));
-        usort($forced, $byWear);
-        usort($optional, $byWear);
-        $ordered = [...$forced, ...$optional];
+        $ordered = $flaggedParts;
+        usort($ordered, $byWear);
 
         foreach ($ordered as $flagged) {
             $part = $flagged['part'];

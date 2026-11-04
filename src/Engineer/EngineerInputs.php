@@ -45,7 +45,6 @@ final readonly class EngineerInputs
      * @param InForce $objective
      * @param Outlook $outlook
      * @param ?WearAdvice $wearAdvice
-     * @param list<array{part: string, cost: int}> $optionalSwaps
      * @param ?array{name: string, score: float, cost: int, gains: array<string, float>} $trainingPick
      * @param ?TestingTarget $testingTarget
      * @param ?Risk $risk
@@ -66,7 +65,6 @@ final readonly class EngineerInputs
         public ?string $pushAdvice,
         public ?array $wearAdvice,
         public ?int $forcedSwapCost,
-        public array $optionalSwaps,
         public ?array $trainingPick,
         public ?array $testingTarget,
         public bool $testingOpen,
