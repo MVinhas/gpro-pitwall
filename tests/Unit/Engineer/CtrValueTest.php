@@ -25,7 +25,11 @@ final class CtrValueTest extends TestCase
         $this->assertSame('value', $r['kind']);
         $this->assertSame(0, $r['gain']);
         $this->assertSame(0, $r['cost']);
-        $this->assertSame(['ctr' => 10, 'gain_more' => 500_000, 'cost_more' => 450_000], $r['next']);
+        // CTR 20 nets $60k over CTR 0, CTR 10 only $50k: the next step quoted is the best one, still under the bar.
+        $this->assertSame(
+            ['ctr' => 20, 'gain_more' => 1_000_000, 'cost_more' => 940_000, 'net_more' => 60_000],
+            $r['next'],
+        );
     }
 
     public function test_clearly_better_wins(): void
@@ -75,7 +79,28 @@ final class CtrValueTest extends TestCase
         $this->assertSame(5, $r['ctr']);
         $this->assertSame(400_000, $r['gain']);
         $this->assertSame(30_000, $r['cost']);
-        $this->assertSame(['ctr' => 6, 'gain_more' => 50_000, 'cost_more' => 30_000], $r['next']);
+        $this->assertSame(['ctr' => 6, 'gain_more' => 50_000, 'cost_more' => 30_000, 'net_more' => 20_000], $r['next']);
+    }
+
+    public function test_next_takes_the_lowest_of_tied_best_nets(): void
+    {
+        $r = CtrValue::choose(
+            [0 => 0, 1 => 50_000, 2 => 90_000, 3 => 90_000, 4 => 120_000],
+            [0 => 0, 1 => 0, 2 => 0, 3 => 0, 4 => 60_000],
+            0,
+            false,
+        );
+
+        $this->assertSame(0, $r['ctr']);
+        $this->assertSame(['ctr' => 2, 'gain_more' => 90_000, 'cost_more' => 0, 'net_more' => 90_000], $r['next']);
+    }
+
+    public function test_next_can_net_a_loss(): void
+    {
+        $r = CtrValue::choose([0 => 0, 5 => 100_000, 6 => 120_000], [0 => 0, 5 => 400_000, 6 => 300_000], 0, false);
+
+        $this->assertSame(0, $r['ctr']);
+        $this->assertSame(['ctr' => 6, 'gain_more' => 120_000, 'cost_more' => 300_000, 'net_more' => -180_000], $r['next']);
     }
 
     public function test_empty_throws(): void

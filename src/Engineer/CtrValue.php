@@ -7,7 +7,7 @@ namespace App\Engineer;
 use InvalidArgumentException;
 
 /**
- * @phpstan-type CtrNext array{ctr: int, gain_more: int, cost_more: int}
+ * @phpstan-type CtrNext array{ctr: int, gain_more: int, cost_more: int, net_more: int}
  * @phpstan-type CtrChoice array{ctr: int, kind: 'value'|'safety', gain: int, cost: int, next: ?CtrNext}
  */
 final class CtrValue
@@ -43,15 +43,16 @@ final class CtrValue
 
         $gain = $gainByCtr[$pick];
         $cost = $repairsByCtr[$pick] - $repairsAtZero;
+        // The higher candidate that comes closest to clearing the bar, so the reason quotes the real trade-off.
         $next = null;
         foreach ($candidates as $c) {
-            if ($c > $pick) {
+            if ($c > $pick && ($next === null || $net[$c] - $net[$pick] > $next['net_more'])) {
                 $next = [
                     'ctr' => $c,
                     'gain_more' => $gainByCtr[$c] - $gain,
                     'cost_more' => ($repairsByCtr[$c] - $repairsAtZero) - $cost,
+                    'net_more' => $net[$c] - $net[$pick],
                 ];
-                break;
             }
         }
 

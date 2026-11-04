@@ -602,7 +602,11 @@ final class CtrPlannerTest extends TestCase
         $this->assertNull($plan['refused_swap_cost']);
         $this->assertSame(0, $plan['value']['gain']);
         $this->assertSame(0, $plan['value']['cost']);
-        $this->assertSame(['ctr' => 1, 'gain_more' => 2_000, 'cost_more' => 0], $plan['value']['next']);
+        // CTR 80, the safety ceiling, is the best step up: $160,000 of pace less the $100,000 swap, under the bar.
+        $this->assertSame(
+            ['ctr' => 80, 'gain_more' => 160_000, 'cost_more' => 100_000, 'net_more' => 60_000],
+            $plan['value']['next'],
+        );
     }
 
     public function test_stay_moves_up_when_gain_clearly_beats_repairs(): void
@@ -672,6 +676,18 @@ final class CtrPlannerTest extends TestCase
         $this->assertNull($plan['value']);
         // Pushing past the safety ceiling would break the cap, so no refused push is quoted.
         $this->assertNull($plan['refused_swap_cost']);
+    }
+
+    public function test_a_stay_pick_below_the_cap_keeps_its_own_kind(): void
+    {
+        $uncapped = $this->plan(SeasonObjective::STAY, 1_000_000, policy: self::policy(20_000));
+        $cap = $uncapped['ctr'] - 1;
+
+        $plan = $this->plan(SeasonObjective::STAY, 1_000_000, policy: self::policy(20_000, cap: $cap));
+
+        $this->assertLessThan($cap, $plan['ctr'], 'the value rule steps by more than one point');
+        $this->assertSame('value', $plan['ctr_kind']);
+        $this->assertSame($cap, $plan['energy_cap']);
     }
 
     public function test_energy_cap_above_the_promote_advice_does_not_bind(): void

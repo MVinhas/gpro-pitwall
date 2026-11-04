@@ -886,14 +886,16 @@ class RaceEngineerService
         }
 
         $numbers = $ctx['objective']['numbers'];
+        $perPlace = PrizeTable::perPlace($division);
 
         return new CtrPolicy(
             $energy['cap'],
             $energy['estimate'],
             $energy['start'],
-            (int) round($places * PrizeTable::perPlace($division)),
+            (int) round($places * $perPlace),
             $placesNext,
-            $paceKnown,
+            // Without a prize per place (no or unknown division) the pace is worth nothing to weigh.
+            $paceKnown && $perPlace > 0,
             CtrPolicy::safetyFor($numbers['projected_pos'], $numbers['relegation_pos']),
         );
     }

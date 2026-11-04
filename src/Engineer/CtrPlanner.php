@@ -156,11 +156,12 @@ final readonly class CtrPlanner
             if ($choice !== null) {
                 $kind = $choice['kind'];
                 if ($choice['ctr'] > $cap) {
-                    $kind = 'energy';
                     $capped = array_filter($gain, static fn (int $c): bool => $c <= $cap, ARRAY_FILTER_USE_KEY);
                     $choice = $capped === []
                         ? null
                         : CtrValue::choose($capped, $repairs, $repairsAtZero, $policy->safety);
+                    // Only a pick that sits at the cap was set by energy; below it, its own rule chose it.
+                    $kind = $choice === null || $choice['ctr'] === $cap ? 'energy' : $choice['kind'];
                 }
             }
             $ctr = $choice['ctr'] ?? null;

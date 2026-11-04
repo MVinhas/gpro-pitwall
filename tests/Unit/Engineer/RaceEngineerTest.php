@@ -616,7 +616,7 @@ final class RaceEngineerTest extends TestCase
     }
 
     /**
-     * @param ?array{ctr: int, gain_more: int, cost_more: int} $next
+     * @param ?array{ctr: int, gain_more: int, cost_more: int, net_more: int} $next
      * @return array<string, mixed>
      */
     private function valuePlan(int $ctr, ?array $next, bool $paceKnown = true): array
@@ -684,7 +684,39 @@ final class RaceEngineerTest extends TestCase
     {
         $this->assertSame(
             'A higher CTR earns less than its repairs cost (CTR 5: +$150k, repairs +$400k)',
-            $this->ctrReason($this->valuePlan(0, ['ctr' => 5, 'gain_more' => 150_000, 'cost_more' => 400_000])),
+            $this->ctrReason($this->valuePlan(0, ['ctr' => 5, 'gain_more' => 150_000, 'cost_more' => 400_000, 'net_more' => -250_000])),
+        );
+    }
+
+    public function testAValueZeroWithANextCtrUnderTheBarSaysItIsNotWorthTheWear(): void
+    {
+        $this->assertSame(
+            "A higher CTR isn't worth the wear: CTR 1 would net only \$73k more, under the \$100k bar",
+            $this->ctrReason($this->valuePlan(0, ['ctr' => 1, 'gain_more' => 72_874, 'cost_more' => 0, 'net_more' => 72_874])),
+        );
+    }
+
+    public function testANegativeFigureDropsThePlusSign(): void
+    {
+        $this->assertSame(
+            'A higher CTR earns less than its repairs cost (CTR 5: -$10k, repairs -$5k)',
+            $this->ctrReason($this->valuePlan(0, ['ctr' => 5, 'gain_more' => -10_000, 'cost_more' => -5_000, 'net_more' => -5_000])),
+        );
+    }
+
+    public function testAValuePickUnderTheBarNamesTheBar(): void
+    {
+        $this->assertSame(
+            'About +1.4 places a race (+$1.2M this season); CTR 24 would net only $80k more, under the $100k bar',
+            $this->ctrReason($this->valuePlan(20, ['ctr' => 24, 'gain_more' => 240_000, 'cost_more' => 160_000, 'net_more' => 80_000])),
+        );
+    }
+
+    public function testSafetyOnePlaceAboveTheZoneIsSingular(): void
+    {
+        $this->assertSame(
+            'P25 projected, 1 place above the relegation zone: the highest CTR the budget and energy allow',
+            $this->ctrReason(['ctr' => 40, 'ctr_kind' => 'safety'], $this->stayAt(25, 26)),
         );
     }
 
@@ -697,7 +729,7 @@ final class RaceEngineerTest extends TestCase
     {
         $this->assertSame(
             'About +1.4 places a race (+$1.2M this season); CTR 25 would earn $300k more but cost $500k more in repairs',
-            $this->ctrReason($this->valuePlan(20, ['ctr' => 25, 'gain_more' => 300_000, 'cost_more' => 500_000])),
+            $this->ctrReason($this->valuePlan(20, ['ctr' => 25, 'gain_more' => 300_000, 'cost_more' => 500_000, 'net_more' => -200_000])),
         );
     }
 
@@ -732,10 +764,10 @@ final class RaceEngineerTest extends TestCase
     public function testAStayEnergyPickBelowTheCapGivesTheValueCopy(): void
     {
         $plan = ['ctr_kind' => 'energy', 'energy_cap' => 35, 'energy_estimate' => true]
-            + $this->valuePlan(34, ['ctr' => 35, 'gain_more' => 72_874, 'cost_more' => 0]);
+            + $this->valuePlan(34, ['ctr' => 35, 'gain_more' => 72_874, 'cost_more' => 0, 'net_more' => 72_874]);
 
         $this->assertSame(
-            'About +2.4 places a race (+$2M this season); CTR 35 would earn $73k more but cost $0 more in repairs',
+            'About +2.4 places a race (+$2M this season); CTR 35 would net only $73k more, under the $100k bar',
             $this->ctrReason($plan, $this->stayAt(10, 26)),
         );
     }

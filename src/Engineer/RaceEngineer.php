@@ -360,22 +360,35 @@ final class RaceEngineer
     private static function valueCtrReason(int $ctr, array $value): string
     {
         $next = $value['next'];
+        $underBar = $next === null ? '' : 'CTR ' . $next['ctr'] . ' would net only ' . Money::short($next['net_more'])
+            . ' more, under the ' . Money::short(CtrValue::MARGIN) . ' bar';
         if ($ctr === 0) {
             return match (true) {
                 !$value['pace_known'] => 'No pace figures for the remaining tracks: the lowest wear wins',
-                $next !== null => 'A higher CTR earns less than its repairs cost (CTR ' . $next['ctr'] . ': +'
-                    . Money::short($next['gain_more']) . ', repairs +' . Money::short($next['cost_more']) . ')',
-                default => 'A higher CTR earns less than its repairs cost',
+                $next === null => 'A higher CTR earns less than its repairs cost',
+                $next['net_more'] > 0 => "A higher CTR isn't worth the wear: " . $underBar,
+                default => 'A higher CTR earns less than its repairs cost (CTR ' . $next['ctr'] . ': '
+                    . self::signed($next['gain_more']) . ', repairs ' . self::signed($next['cost_more']) . ')',
             };
         }
 
-        $pick = 'About +' . number_format($value['places'], 1) . ' places a race (+' . Money::short($value['gain'])
+        $pick = 'About +' . number_format($value['places'], 1) . ' places a race (' . self::signed($value['gain'])
             . ' this season); ';
 
-        return $pick . ($next === null
-            ? 'no higher CTR fits the budget'
-            : 'CTR ' . $next['ctr'] . ' would earn ' . Money::short($next['gain_more']) . ' more but cost '
-                . Money::short($next['cost_more']) . ' more in repairs');
+        return $pick . match (true) {
+            $next === null => 'no higher CTR fits the budget',
+            $next['net_more'] > 0 => $underBar,
+            default => 'CTR ' . $next['ctr'] . ' would earn ' . Money::short($next['gain_more']) . ' more but cost '
+                . Money::short($next['cost_more']) . ' more in repairs',
+        };
+    }
+
+    /**
+     * A money delta with its sign: Money::short already carries the minus.
+     */
+    private static function signed(int $amount): string
+    {
+        return ($amount < 0 ? '' : '+') . Money::short($amount);
     }
 
     /**
@@ -392,7 +405,11 @@ final class RaceEngineer
         $above = $relegation - $projected;
 
         return 'P' . $projected . ' projected, '
-            . ($above > 0 ? $above . ' places above the relegation zone' : 'inside the relegation zone')
+            . match (true) {
+                $above > 1 => $above . ' places above the relegation zone',
+                $above === 1 => '1 place above the relegation zone',
+                default => 'inside the relegation zone',
+            }
             . ': the highest CTR the budget and energy allow';
     }
 

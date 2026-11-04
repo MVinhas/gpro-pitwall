@@ -531,7 +531,7 @@ final class RaceEngineerServiceTest extends TestCase
         // The Cockpit's own advice changes with the CTR: at 100 it forces the Engine swap, lower it doesn't.
         $lines = [];
         foreach ([0, 30, 60, 100] as $ctr) {
-            $lines[$ctr] = $this->surviveCtrLine($ctr, $ctr === 100 ? $this->swapAt100() : $this->noSwap());
+            $lines[$ctr] = $this->stayCtrLine($ctr, $ctr === 100 ? $this->swapAt100() : $this->noSwap());
         }
 
         self::assertLessThan(100, (int) substr($lines[0]['answer'], 4));
@@ -546,12 +546,12 @@ final class RaceEngineerServiceTest extends TestCase
         $this->seedPromotionFixture();
         $this->service->pin(self::USER, self::SEASON, 'stay');
 
-        $first = $this->surviveCtrLine(100, $this->swapAt100());
+        $first = $this->stayCtrLine(100, $this->swapAt100());
         $target = (int) substr($first['answer'], 4);
         self::assertLessThan(100, $target);
         self::assertSame('Use ' . $target, $first['action']['label'] ?? null);
 
-        $followed = $this->surviveCtrLine($target, $this->noSwap());
+        $followed = $this->stayCtrLine($target, $this->noSwap());
 
         self::assertSame($first['answer'], $followed['answer']);
         self::assertSame($first['reason'], $followed['reason']);
@@ -681,12 +681,19 @@ final class RaceEngineerServiceTest extends TestCase
 
     public function testUnknownOutlookKeepsTheP12aCashLineAndSafetyCtr(): void
     {
-        $lines = $this->service->forCockpit(99, $this->cockpit(['menu' => ['cash' => 1_000_000]]))['lines'];
+        // A worn engine keeps the wear ceiling under the energy cap, so the line shows the safety CTR.
+        $lines = $this->service->forCockpit(99, $this->cockpit([
+            'menu' => ['cash' => 1_000_000],
+            'wear' => ['track_name' => 'Testring', 'laps' => 50, 'parts' => [
+                'Engine' => ['level' => 1, 'start' => 80, 'est' => 0.0, 'end' => 0.0, 'track_base' => 8.0],
+                'Brakes' => ['level' => 1, 'start' => 10, 'est' => 0.0, 'end' => 0.0, 'track_base' => 3.0],
+            ]],
+        ]))['lines'];
         $byKey = array_column($lines, null, 'key');
 
         self::assertSame('Costs unknown — sync once after a race', $byKey['cash']['answer']);
-        self::assertSame('CTR 35', $byKey['ctr']['answer']);
-        self::assertSame(self::AMATEUR_ENERGY_REASON, $byKey['ctr']['reason']);
+        self::assertSame('CTR 17', $byKey['ctr']['answer']);
+        self::assertStringEndsWith('season costs unknown', $byKey['ctr']['reason']);
         self::assertNull($this->budgets->find(99, self::SEASON));
     }
 
@@ -1789,6 +1796,20 @@ final class RaceEngineerServiceTest extends TestCase
      * @param array<string, mixed> $advice
      * @return array<string, mixed>
      */
+    private function stayCtrLine(int $ctr, array $advice): array
+    {
+        $lines = $this->service->forCockpit(self::USER, $this->cockpit([
+            'ctr' => $ctr,
+            'wear' => ['track_name' => 'Testring', 'laps' => 50, 'parts' => [
+                'Engine' => ['level' => 1, 'start' => 60, 'est' => 0.0, 'end' => 0.0, 'track_base' => 8.0],
+                'Brakes' => ['level' => 1, 'start' => 10, 'est' => 0.0, 'end' => 0.0, 'track_base' => 3.0],
+            ]],
+            'wear_advice' => $advice,
+        ]))['lines'];
+
+        return array_column($lines, null, 'key')['ctr'];
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -1840,13 +1861,19 @@ final class RaceEngineerServiceTest extends TestCase
     public function testNullDivisionFallsBack(): void
     {
         $this->seedPromotionFixture();
+        $this->paceTrack('Testring', 5.0, 200.0);
+        $this->service->pin(self::USER, self::SEASON, 'stay');
 
         $this->service->forCockpit(self::USER, $this->cockpit([
             'division' => null,
             'office' => $this->office(['driEnergy' => '60', 'doneQ2' => '1']),
         ]));
+        $plan = $this->savedPlan();
 
-        self::assertTrue($this->savedPlan()['energy_estimate'] ?? null);
+        self::assertTrue($plan['energy_estimate'] ?? null);
+        // Without a division there is no prize per place, so the pace is worth nothing.
+        self::assertFalse($plan['value']['pace_known'] ?? null);
+        self::assertSame(0, $plan['value']['gain'] ?? null);
     }
 
     public function testACalendarTrackWithNoAverageSpeedContributesNoGain(): void
@@ -1869,21 +1896,8 @@ final class RaceEngineerServiceTest extends TestCase
         // Fastring alone: 5 km at 200 km/h x 0.001 x 50 laps = 4.5 s a point, over Amateur's 0.19 s x 50 laps a
         // place, at $153,846 a place.
         $ctr = $this->savedPlan()['ctr'];
+        self::assertGreaterThan(0, $ctr);
         self::assertSame($ctr * 72_874, $value['gain']);
-    }
-
-    private function surviveCtrLine(int $ctr, array $advice): array
-    {
-        $lines = $this->service->forCockpit(self::USER, $this->cockpit([
-            'ctr' => $ctr,
-            'wear' => ['track_name' => 'Testring', 'laps' => 50, 'parts' => [
-                'Engine' => ['level' => 1, 'start' => 60, 'est' => 0.0, 'end' => 0.0, 'track_base' => 8.0],
-                'Brakes' => ['level' => 1, 'start' => 10, 'est' => 0.0, 'end' => 0.0, 'track_base' => 3.0],
-            ]],
-            'wear_advice' => $advice,
-        ]))['lines'];
-
-        return array_column($lines, null, 'key')['ctr'];
     }
 
     /**
