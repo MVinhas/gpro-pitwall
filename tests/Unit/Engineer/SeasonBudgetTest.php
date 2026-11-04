@@ -283,4 +283,25 @@ final class SeasonBudgetTest extends TestCase
         $this->assertTrue($at(100)['infeasible']);
         $this->assertFalse($at(50)['infeasible']);
     }
+
+    public function testALockedCarReplacesNothingInTheNextRace(): void
+    {
+        $out = $this->budget->forecast(
+            [$this->round(1, 10.0, 'A'), $this->round(2, 10.0, 'B'), $this->round(3, 10.0, 'C')],
+            ['Engine' => ['level' => 1, 'start' => 95]],
+            ['Engine' => 180_000],
+            1.0,
+            0,
+            80,
+            1_000_000,
+            0,
+            0,
+            true,
+        );
+
+        $this->assertSame([], $out['rows'][0]['replaced']);
+        $this->assertSame(0, $out['rows'][0]['repairs']);
+        $this->assertSame([['part' => 'Engine', 'cost' => 180_000]], $out['rows'][1]['replaced']);
+        $this->assertFalse($out['infeasible']);
+    }
 }

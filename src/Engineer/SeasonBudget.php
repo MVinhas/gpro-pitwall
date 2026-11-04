@@ -24,6 +24,8 @@ final readonly class SeasonBudget
      * round only; a round whose track wear is unknown, or lacks any part, carries part wear forward
      * and charges nothing. A fresh part that would reach $limit within one race makes the forecast
      * infeasible: it would carry past the limit into the next round, which this model can't charge.
+     * With $carLocked the next race's update is spent: the first round replaces nothing and a part ending
+     * it at or past the limit carries that wear into the second round, where the rule above replaces it.
      *
      * @param list<Round> $rounds remaining races, next race first
      * @param array<string, array{level: int, start: int|float, training?: int|float}> $parts
@@ -40,6 +42,7 @@ final readonly class SeasonBudget
         int $cash,
         int $committed,
         int $income,
+        bool $carLocked = false,
     ): array {
         $wear = [];
         foreach ($parts as $label => $part) {
@@ -68,7 +71,7 @@ final readonly class SeasonBudget
                     );
                     $end = $wear[$label] + $training + $raceWear;
 
-                    if ($end >= $limit) {
+                    if ($end >= $limit && !($carLocked && $i === 0)) {
                         $cost = $prices[$label] ?? 0;
                         if (($prices[$label] ?? null) === null) {
                             $partial[$label . ' price unknown'] = true;

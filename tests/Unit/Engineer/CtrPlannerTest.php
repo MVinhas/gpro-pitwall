@@ -63,6 +63,7 @@ final class CtrPlannerTest extends TestCase
         ?int $seasonStart = null,
         ?array $parts = null,
         int $races = 3,
+        bool $carLocked = false,
     ): array {
         return $this->planner->plan(
             $objective,
@@ -74,6 +75,7 @@ final class CtrPlannerTest extends TestCase
             $committed,
             $income,
             $seasonStart,
+            $carLocked,
         );
     }
 
@@ -480,5 +482,33 @@ final class CtrPlannerTest extends TestCase
 
         $this->assertSame(1, $plan['v']);
         $this->assertSame(['T5 wear unknown'], $plan['partial']);
+    }
+
+    public function testALockedCarWithAStuckPartAdvisesCtrZeroAndNeverPushes(): void
+    {
+        $parts = [
+            'Engine' => ['level' => 1, 'start' => 95.0, 'track_base' => 10.0],
+            'Chassis' => ['level' => 1, 'start' => 0.0, 'track_base' => 10.0],
+        ];
+
+        $plan = $this->plan(SeasonObjective::PROMOTE, 5_000_000, parts: $parts, carLocked: true);
+
+        $this->assertSame(0, $plan['safety']);
+        $this->assertSame(0, $plan['ctr']);
+        $this->assertSame('nurse', $plan['mode']);
+        $this->assertSame([], $plan['swaps']);
+    }
+
+    public function testALockedHealthyCarPlansLikeAnUnlockedOne(): void
+    {
+        $parts = [
+            'Engine' => ['level' => 1, 'start' => 10.0, 'track_base' => 10.0],
+            'Chassis' => ['level' => 1, 'start' => 5.0, 'track_base' => 10.0],
+        ];
+
+        $this->assertSame(
+            $this->plan(SeasonObjective::HOLD, 2_000_000, 100_000, 50_000, parts: $parts),
+            $this->plan(SeasonObjective::HOLD, 2_000_000, 100_000, 50_000, parts: $parts, carLocked: true),
+        );
     }
 }

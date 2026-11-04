@@ -61,6 +61,7 @@ final readonly class CtrPlanner
         int $committed,
         int $income,
         ?int $seasonStart,
+        bool $carLocked = false,
     ): array {
         if ($rounds === []) {
             throw new InvalidArgumentException('A plan needs at least one remaining race.');
@@ -69,9 +70,14 @@ final readonly class CtrPlanner
         $survive = $objective === SeasonObjective::SURVIVE;
         $limit = self::limit($objective);
 
-        $safety = $this->ceiling->for($parts, $driverFactor, $limit);
+        $safety = $this->ceiling->for($parts, $driverFactor, $limit, $carLocked);
         if ($survive) {
-            $safety = min($safety, $this->ceiling->for($parts, $driverFactor, WearAdvisorService::THRESHOLD_SWAP));
+            $safety = min($safety, $this->ceiling->for(
+                $parts,
+                $driverFactor,
+                WearAdvisorService::THRESHOLD_SWAP,
+                $carLocked,
+            ));
         }
 
         $forecastAt = fn (int $ctr): array => $this->budget->forecast(
@@ -84,6 +90,7 @@ final readonly class CtrPlanner
             $cash,
             $committed,
             $income,
+            $carLocked,
         );
 
         $atSafety = $forecastAt($safety)['rows'];
