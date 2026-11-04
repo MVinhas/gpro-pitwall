@@ -793,10 +793,6 @@ final class RaceEngineer
         if ($in->weatherStale) {
             return self::line('boost', self::STALE, 'The fuel figure reads the saved setup', action: $strategy);
         }
-        if (self::objectiveIs($in, SeasonObjective::STAY)) {
-            return self::line('boost', 'No boost — save the fuel', 'Stay: skip the extra fuel');
-        }
-
         return self::line(
             'boost',
             'Boost: ' . self::BOOST_SETS . ' sets · +' . $in->boostLitres . ' L',

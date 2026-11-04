@@ -761,6 +761,17 @@ final class RaceEngineerTest extends TestCase
         );
     }
 
+    public function testASafetyPickAtTheEnergyCapGivesTheSafetyCopy(): void
+    {
+        $plan = ['ctr_kind' => 'safety', 'energy_cap' => 35, 'energy_estimate' => true]
+            + $this->valuePlan(35, null);
+
+        $this->assertSame(
+            'P25 projected, 1 place above the relegation zone: the highest CTR the budget and energy allow',
+            $this->ctrReason($plan, ['division' => 'Amateur'] + $this->stayAt(25, 26)),
+        );
+    }
+
     public function testAStayEnergyPickBelowTheCapGivesTheValueCopy(): void
     {
         $plan = ['ctr_kind' => 'energy', 'energy_cap' => 35, 'energy_estimate' => true]
@@ -1078,14 +1089,15 @@ final class RaceEngineerTest extends TestCase
         $this->assertNotContains('boost', $keys);
     }
 
-    public function testStayDropsBoost(): void
+    public function testStayGetsTheRegularBoostLine(): void
     {
-        $in = $this->inputs(['objective' => $this->objective(SeasonObjective::STAY)]);
+        $stay = $this->line($this->inputs(['objective' => $this->objective(SeasonObjective::STAY)]), 'boost');
+        $promote = $this->line($this->inputs(['objective' => $this->objective(SeasonObjective::PROMOTE)]), 'boost');
 
-        $line = $this->line($in, 'boost');
-
-        $this->assertSame('No boost — save the fuel', $line['answer']);
-        $this->assertNull($line['action']);
+        $this->assertSame('Boost: 3 sets · +24 L', $stay['answer']);
+        $this->assertSame('Extra fuel for 3 sets of 3 laps; Strategy picks the laps', $stay['reason']);
+        $this->assertSame(['label' => 'Laps in Strategy', 'href' => '/strategy'], $stay['action']);
+        $this->assertSame($promote, $stay);
     }
 
     /**
