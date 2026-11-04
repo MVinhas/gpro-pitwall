@@ -15,7 +15,7 @@ use InvalidArgumentException;
  * @phpstan-import-type CtrNext from CtrValue
  * @phpstan-type CtrValueFigures array{gain: int, cost: int, places: float, pace_known: bool, next: ?CtrNext}
  * @phpstan-type Plan array{
- *   v: int, ctr: int, ctr_kind: 'highest'|'value'|'safety'|'energy', mode: 'nurse'|'push'|'short', safety: int,
+ *   v: 2, ctr: int, ctr_kind: 'highest'|'value'|'safety'|'energy', mode: 'nurse'|'push'|'short', safety: int,
  *   swaps: list<array{part: string, cost: int}>, refused_swap_cost: ?int,
  *   target: int, target_kind: 'cushion'|'start'|'start_out_of_reach'|'reserve'|'reserve_out_of_reach',
  *   cushion: int, season_start: ?int,
@@ -38,12 +38,12 @@ final readonly class CtrPlanner
      * The Clear Track Risk to advise, never above the driver's energy cap. A CTR fits the budget when its season
      * forecast keeps every race's balance at or above its target: the cushion, and at the last race the end target
      * (the season start for Stay when it is above the cushion). Promote takes the highest value that fits; above
-     * the safety ceiling it must also be a real push. Stay weighs every CTR that fits: the lowest one whose higher
-     * candidates aren't clearly better value (CtrValue), or the highest one in safety mode near the relegation
-     * line. It reads no current CTR, so the advice holds still when the manager follows it. The cushion is the
-     * committed cost plus the average repairs of the races after this one at the safety CTR: this race's forced
-     * swaps are bought before the race, so counting them would make the cushion drop once the manager follows the
-     * advice.
+     * the safety ceiling it must also be a real push. Stay weighs every CTR that fits and buys no replacement it
+     * cannot price: the lowest one whose higher candidates aren't clearly better value (CtrValue), or the highest
+     * one in safety mode near the relegation line. It reads no current CTR, so the advice holds still when the
+     * manager follows it. The cushion is the committed cost plus the average repairs of the races after this one at
+     * the safety CTR: this race's forced swaps are bought before the race, so counting them would make the cushion
+     * drop once the manager follows the advice.
      *
      * @param list<array{race: int, track_name: ?string, base: ?array<string, float>}> $rounds next race first
      * @param array<string, array{level: int, start: int|float, track_base: int|float, training?: int|float}> $parts
@@ -69,6 +69,8 @@ final readonly class CtrPlanner
         }
 
         $cap = $policy === null ? self::MAX_CTR : max(0, min(self::MAX_CTR, $policy->energyCap));
+        $energyEstimate = $policy !== null && $policy->energyEstimate;
+        $energyStart = $policy?->energyStart;
         $policy ??= CtrPolicy::none();
         $stay = $objective === SeasonObjective::STAY;
         $limit = WearAdvisorService::THRESHOLD_SWAP;
@@ -138,9 +140,12 @@ final readonly class CtrPlanner
         if ($stay) {
             $gain = [];
             $repairs = [];
+            $unpricedAtZero = self::unpriced($forecastAt(0)['partial']);
             for ($c = 0; $c <= self::MAX_CTR; $c++) {
                 $forecast = $forecastAt($c);
-                if (self::withinBudget($forecast, $c, $cushion, $target)) {
+                // An unpriced replacement is charged $0, so a CTR that buys one would look free.
+                $buysUnpriced = $c > 0 && array_diff(self::unpriced($forecast['partial']), $unpricedAtZero) !== [];
+                if (!$buysUnpriced && self::withinBudget($forecast, $c, $cushion, $target)) {
                     $gain[$c] = $c * $policy->gainPerPoint;
                     $repairs[$c] = array_sum(array_column($forecast['rows'], 'repairs'));
                 }
@@ -204,7 +209,8 @@ final readonly class CtrPlanner
                 $chosen,
                 $rounds,
                 $cap,
-                $policy,
+                $energyEstimate,
+                $energyStart,
                 null,
             );
         }
@@ -237,7 +243,8 @@ final readonly class CtrPlanner
             $chosen,
             $rounds,
             $cap,
-            $policy,
+            $energyEstimate,
+            $energyStart,
             $value,
         );
     }
@@ -251,6 +258,18 @@ final readonly class CtrPlanner
     private static function withinBudget(array $forecast, int $ctr, int $cushion, int $endTarget): bool
     {
         return !($forecast['infeasible'] && $ctr > 0) && self::headroom($forecast['rows'], $cushion, $endTarget) >= 0;
+    }
+
+    /**
+     * @param list<string> $partial
+     * @return list<string>
+     */
+    private static function unpriced(array $partial): array
+    {
+        return array_values(array_filter(
+            $partial,
+            static fn (string $entry): bool => str_ends_with($entry, ' price unknown'),
+        ));
     }
 
     /**
@@ -344,7 +363,8 @@ final readonly class CtrPlanner
         array $forecast,
         array $rounds,
         int $cap,
-        CtrPolicy $policy,
+        bool $energyEstimate,
+        ?int $energyStart,
         ?array $value,
     ): array {
         return [
@@ -366,8 +386,8 @@ final readonly class CtrPlanner
             'race' => $rounds[0]['race'],
             'infeasible' => $forecast['infeasible'],
             'energy_cap' => $cap,
-            'energy_estimate' => $policy->energyEstimate,
-            'energy_start' => $policy->energyStart,
+            'energy_estimate' => $energyEstimate,
+            'energy_start' => $energyStart,
             'value' => $value,
         ];
     }

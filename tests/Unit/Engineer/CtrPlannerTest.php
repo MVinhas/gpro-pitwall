@@ -765,8 +765,47 @@ final class CtrPlannerTest extends TestCase
         $this->assertSame(2, $plan['v']);
         $this->assertSame('value', $plan['ctr_kind']);
         $this->assertSame(100, $plan['energy_cap']);
-        $this->assertTrue($plan['energy_estimate']);
+        $this->assertFalse($plan['energy_estimate']);
         $this->assertNull($plan['energy_start']);
         $this->assertFalse($plan['value']['pace_known']);
+    }
+
+    public function testStayNeverBuysAReplacementItCannotPrice(): void
+    {
+        $prices = ['Engine' => null];
+        $unpriced = static fn (array $partial): array => array_values(array_filter(
+            $partial,
+            static fn (string $entry): bool => str_ends_with($entry, ' price unknown'),
+        ));
+        $atZero = $unpriced($this->budget->forecast($this->rounds(), self::ENGINE, $prices, 1.0, 0, 100, 1_000_000, 0, 0)['partial']);
+        $highestPriced = 0;
+        for ($c = 100; $c > 0; $c--) {
+            $forecast = $this->budget->forecast($this->rounds(), self::ENGINE, $prices, 1.0, $c, 100, 1_000_000, 0, 0);
+            if (array_diff($unpriced($forecast['partial']), $atZero) === []) {
+                $highestPriced = $c;
+                break;
+            }
+        }
+
+        $plan = $this->planner->plan(
+            SeasonObjective::STAY,
+            $this->rounds(),
+            self::ENGINE,
+            $prices,
+            1.0,
+            1_000_000,
+            0,
+            0,
+            null,
+            false,
+            self::policy(20_000),
+        );
+
+        $this->assertSame(24, $highestPriced);
+        $this->assertLessThanOrEqual($highestPriced, $plan['ctr']);
+        $this->assertSame([], array_diff($unpriced($plan['partial']), $atZero));
+        $this->assertSame(0, $plan['value']['cost']);
+        $this->assertSame([], array_merge(...array_column($plan['rows'], 'replaced')));
+        $this->assertNull($plan['value']['next']);
     }
 }
