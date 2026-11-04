@@ -189,7 +189,7 @@ final class PartSwapAdvisorServiceTest extends TestCase
     private function aSeason(): SwapSeason
     {
         return new SwapSeason(
-            'survive',
+            SeasonObjective::STAY,
             ['v' => 1, 'ctr' => 0, 'mode' => 'nurse', 'safety' => 0, 'swaps' => [], 'refused_swap_cost' => null,
                 'target' => 0, 'target_kind' => 'cushion', 'cushion' => 0, 'season_start' => null, 'envelope' => 0,
                 'shortfall' => null, 'rows' => [], 'partial' => [], 'race' => 1],
@@ -1096,7 +1096,7 @@ final class PartSwapAdvisorServiceTest extends TestCase
         $rows = $budget->forecast($rounds, $parts, $prices, 1.0, 0, 100, 10_000_000, 0, 0)['rows'];
         $this->assertSame(1_800_000, $rows[0]['repairs']);
         $season = new SwapSeason(
-            SeasonObjective::HOLD,
+            SeasonObjective::STAY,
             ['v' => 1, 'ctr' => 0, 'mode' => 'nurse', 'safety' => 0, 'swaps' => [], 'refused_swap_cost' => null,
                 'target' => 7_400_000, 'target_kind' => 'cushion', 'cushion' => 7_400_000, 'season_start' => null,
                 'envelope' => 800_000, 'shortfall' => null, 'rows' => $rows, 'partial' => [], 'race' => 8],

@@ -30,8 +30,8 @@ final readonly class CtrPlanner
 
     /**
      * The Clear Track Risk to advise: the highest value whose season forecast keeps every race's balance at
-     * or above its target: the cushion, and at the last race the end target (the season start for Hold and
-     * Survive when it is above the cushion). It reads no current CTR, so the advice holds still when the
+     * or above its target: the cushion, and at the last race the end target (the season start for Stay
+     * when it is above the cushion). It reads no current CTR, so the advice holds still when the
      * manager follows it. The cushion is the committed cost plus the average repairs of the races after this
      * one at the safety CTR: this race's forced swaps are bought before the race, so counting them would make
      * the cushion drop once the manager follows the advice.
@@ -57,7 +57,7 @@ final readonly class CtrPlanner
             throw new InvalidArgumentException('A plan needs at least one remaining race.');
         }
 
-        $survive = $objective === SeasonObjective::SURVIVE;
+        $stay = $objective === SeasonObjective::STAY;
         $limit = WearAdvisorService::THRESHOLD_SWAP;
 
         $safety = $this->ceiling->for($parts, $driverFactor, $limit, $carLocked);
@@ -96,7 +96,7 @@ final readonly class CtrPlanner
         } elseif ($seasonStart !== null && $seasonStart > $cushion) {
             $target = $seasonStart;
             $targetKind = 'start';
-            if ($survive && self::headroom($forecastAt(0)['rows'], $cushion, $target) < 0) {
+            if ($stay && self::headroom($forecastAt(0)['rows'], $cushion, $target) < 0) {
                 $target = $cushion;
                 $targetKind = 'start_out_of_reach';
             }
@@ -106,7 +106,7 @@ final readonly class CtrPlanner
 
         $chosen = null;
         $ctr = 0;
-        for ($c = $survive ? $safety : self::MAX_CTR; $c >= 0; $c--) {
+        for ($c = $stay ? $safety : self::MAX_CTR; $c >= 0; $c--) {
             $forecast = $forecastAt($c);
             if ($this->passes($forecast, $c, $safety, $forced, $prices, $cushion, $target)) {
                 $chosen = $forecast;
@@ -139,7 +139,7 @@ final readonly class CtrPlanner
         $swaps = $this->unforced($chosen['rows'][0]['replaced'], $forced);
 
         $refused = null;
-        if ($mode === 'nurse' && $safety < self::MAX_CTR && !$survive) {
+        if ($mode === 'nurse' && $safety < self::MAX_CTR && !$stay) {
             $above = $this->unforced($forecastAt($safety + 1)['rows'][0]['replaced'], $forced);
             $sum = array_sum(array_column($above, 'cost'));
             $refused = $sum > 0 ? $sum : null;

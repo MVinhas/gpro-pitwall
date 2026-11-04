@@ -26,8 +26,8 @@ final class RaceEngineer
 {
     private const string SMOKE_COST = 'expect smoke and lost time, and a retirement if it comes early';
 
-    /** Tunable: how much a Survive weekend lowers the advisor's overtake risk. */
-    public const int SURVIVE_OVERTAKE_STEP = 15;
+    /** Tunable: how much a Stay weekend lowers the advisor's overtake risk. */
+    public const int STAY_OVERTAKE_STEP = 15;
 
     /** Boost sets per race; the caller's extra-fuel litres must use BOOST_SETS * BOOST_LAPS_PER_SET laps. */
     public const int BOOST_SETS = 3;
@@ -148,7 +148,7 @@ final class RaceEngineer
         $pinnedBlind = $o['pinned'] && $o['proposed'] === null;
         $reason = $o['reasons'][0] ?? match (true) {
             $o['over'] => '',
-            $o['objective'] === null => "Your position in the group isn't known yet; treated as Hold",
+            $o['objective'] === null => "Your position in the group isn't known yet; treated as Stay",
             $pinnedBlind => "Your position in the group isn't known yet",
             default => '',
         };
@@ -682,14 +682,14 @@ final class RaceEngineer
             return self::line('risk', self::STALE, 'The advice reads the saved setup and weather', action: $strategy);
         }
 
-        $survive = self::objectiveIs($in, SeasonObjective::SURVIVE);
-        $overtake = $survive ? max(0, $in->risk['overtake'] - self::SURVIVE_OVERTAKE_STEP) : $in->risk['overtake'];
+        $stay = self::objectiveIs($in, SeasonObjective::STAY);
+        $overtake = $stay ? max(0, $in->risk['overtake'] - self::STAY_OVERTAKE_STEP) : $in->risk['overtake'];
 
         return self::line(
             'risk',
             'Overtake ' . $overtake . ' · Defend ' . $in->risk['defend'],
-            $survive
-                ? 'Overtake lowered by ' . self::SURVIVE_OVERTAKE_STEP . ' to cut the cost of mistakes'
+            $stay
+                ? 'Overtake lowered by ' . self::STAY_OVERTAKE_STEP . ' to cut the cost of mistakes'
                 : 'Set for this track and driver',
             action: $strategy,
         );
@@ -708,8 +708,8 @@ final class RaceEngineer
         if ($in->weatherStale) {
             return self::line('boost', self::STALE, 'The fuel figure reads the saved setup', action: $strategy);
         }
-        if (self::objectiveIs($in, SeasonObjective::SURVIVE)) {
-            return self::line('boost', 'No boost — save the fuel', 'Survive: skip the extra fuel');
+        if (self::objectiveIs($in, SeasonObjective::STAY)) {
+            return self::line('boost', 'No boost — save the fuel', 'Stay: skip the extra fuel');
         }
 
         return self::line(
@@ -775,7 +775,7 @@ final class RaceEngineer
             return $cost <= self::envelopeLeft($in, $stage);
         }
 
-        $reserve = self::objectiveIs($in, SeasonObjective::SURVIVE) ? $in->forcedSwapCost ?? 0 : 0;
+        $reserve = self::objectiveIs($in, SeasonObjective::STAY) ? $in->forcedSwapCost ?? 0 : 0;
 
         return self::spendable($in) >= $cost + $reserve;
     }
@@ -789,10 +789,10 @@ final class RaceEngineer
         }
 
         $known = $in->outlook['known'];
-        if (self::objectiveIs($in, SeasonObjective::SURVIVE)) {
+        if (self::objectiveIs($in, SeasonObjective::STAY)) {
             return $known
-                ? 'Survive: repairs come before anything optional'
-                : 'Survive: your balance must cover repairs first; season costs unknown';
+                ? 'Stay: repairs come before anything optional'
+                : 'Stay: your balance must cover repairs first; season costs unknown';
         }
 
         return $known ? 'Free cash does not cover it' : 'Your balance does not cover it; season costs unknown';
@@ -810,7 +810,7 @@ final class RaceEngineer
         }
 
         $subject = $in->outlook['known'] ? 'free cash' : 'your balance';
-        $tail = self::objectiveIs($in, SeasonObjective::SURVIVE) ? ' and the forced repairs' : '';
+        $tail = self::objectiveIs($in, SeasonObjective::STAY) ? ' and the forced repairs' : '';
         $note = $in->outlook['known'] ? '' : '; season costs unknown';
 
         return $subject . ' covers ' . $what . $tail . $note;

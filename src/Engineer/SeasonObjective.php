@@ -13,7 +13,8 @@ namespace App\Engineer;
  *     races_left: ?int,
  *     points_on_offer: ?int,
  *     projected_pos: ?int,
- *     end_cash: ?int
+ *     end_cash: ?int,
+ *     relegation_pos: ?int
  * }
  * @phpstan-type Proposal array{
  *     objective: ?string,
@@ -48,8 +49,7 @@ final readonly class SeasonObjective
     public const string GREEN = '#007700';
     public const string RED = '#990000';
     public const string PROMOTE = 'promote';
-    public const string HOLD = 'hold';
-    public const string SURVIVE = 'survive';
+    public const string STAY = 'stay';
 
     private const string ELITE_PROMOTE_LABEL = 'Win the group';
     private const string UNKNOWN_LABEL = 'Objective unknown';
@@ -60,6 +60,44 @@ final readonly class SeasonObjective
      * @return Proposal
      */
     public static function propose(
+        ?array $standingsRow,
+        int $raceNb,
+        array $outlook,
+        int $cash,
+        ?int $ownCarLevelRank,
+        bool $elite,
+        bool $rookie = false,
+    ): array {
+        $proposal = self::derive($standingsRow, $raceNb, $outlook, $cash, $ownCarLevelRank, $elite);
+
+        // A Rookie cannot be relegated, so there is nothing to defend: the only goal is up.
+        if ($rookie && !$proposal['over']) {
+            $proposal['objective'] = self::PROMOTE;
+            $proposal['label'] = self::promoteLabel($elite);
+        }
+
+        return $proposal;
+    }
+
+    /**
+     * Folds the retired Hold and Survive objectives into Stay, so a pin or a stored row from before the merge
+     * still reads.
+     */
+    public static function normalise(?string $objective): ?string
+    {
+        return match ($objective) {
+            self::PROMOTE => self::PROMOTE,
+            self::STAY, 'hold', 'survive' => self::STAY,
+            default => null,
+        };
+    }
+
+    /**
+     * @param array<string, mixed>|null $standingsRow
+     * @param array{known: bool, committed: ?int, income: ?int, free_cash: ?int, end_committed: ?int} $outlook
+     * @return Proposal
+     */
+    private static function derive(
         ?array $standingsRow,
         int $raceNb,
         array $outlook,
@@ -88,6 +126,7 @@ final readonly class SeasonObjective
             'points_on_offer' => $racesLeft === null ? null : $racesLeft * self::POINTS_PER_RACE,
             'projected_pos' => null,
             'end_cash' => $endCash,
+            'relegation_pos' => null,
         ];
 
         $cashReasons = [];
@@ -106,8 +145,8 @@ final readonly class SeasonObjective
         if ($ownPos === null || $ownPts === null) {
             return $cashAlarm
                 ? self::proposal(
-                    self::SURVIVE,
-                    'Survive',
+                    self::STAY,
+                    'Stay',
                     cashAlarm: true,
                     numbers: $numbers,
                     reasons: $cashReasons,
@@ -128,6 +167,7 @@ final readonly class SeasonObjective
         $projectedPos = self::projectedPos($managers, $ownPos, $ownPts, $racesRun, $racesLeft);
 
         $numbers['line_pos'] = $linePos;
+        $numbers['relegation_pos'] = $relegationPos;
         $numbers['gap'] = $gap;
         $numbers['projected_pos'] = $projectedPos;
 
@@ -140,16 +180,16 @@ final readonly class SeasonObjective
                 . ' races left (' . $numbers['points_on_offer'] . ' on offer)';
         }
 
-        $survive = $cashAlarm
+        $stay = $cashAlarm
             || ($projectedPos !== null && $relegationPos !== null && $projectedPos >= $relegationPos);
-        if ($survive) {
+        if ($stay) {
             if (!$cashAlarm && $relegationPos !== null) {
                 $reasons[] = 'The relegation zone starts at P' . $relegationPos;
             }
 
             return self::proposal(
-                self::SURVIVE,
-                'Survive',
+                self::STAY,
+                'Stay',
                 cashAlarm: $cashAlarm,
                 numbers: $numbers,
                 reasons: $reasons,
@@ -169,7 +209,7 @@ final readonly class SeasonObjective
             );
         }
 
-        return self::proposal(self::HOLD, 'Hold', numbers: $numbers, reasons: $reasons, elite: $elite);
+        return self::proposal(self::STAY, 'Stay', numbers: $numbers, reasons: $reasons, elite: $elite);
     }
 
     /**
@@ -179,9 +219,9 @@ final readonly class SeasonObjective
     public static function inForce(array $proposal, ?string $pin): array
     {
         $proposed = $proposal['objective'];
-        $valid = in_array($pin, [self::PROMOTE, self::HOLD, self::SURVIVE], true);
+        $pin = self::normalise($pin);
 
-        if ($pin === null || !$valid || $proposal['over']) {
+        if ($pin === null || $proposal['over']) {
             return $proposal + ['pinned' => false, 'proposed' => $proposed, 'warning' => null];
         }
 
@@ -191,8 +231,8 @@ final readonly class SeasonObjective
             $proposed === $pin => 'same as the engineer',
             default => 'engineer proposes ' . $proposal['label'],
         };
-        $warning = $proposal['cash_alarm'] && $pin !== self::SURVIVE
-            ? 'Negative balance relegates — the engineer proposes Survive'
+        $warning = $proposal['cash_alarm'] && $pin !== self::STAY
+            ? 'Negative balance relegates; the engineer proposes Stay'
             : null;
 
         return [
@@ -226,8 +266,8 @@ final readonly class SeasonObjective
     ): array {
         if ($cashAlarm) {
             return self::proposal(
-                self::SURVIVE,
-                'Survive',
+                self::STAY,
+                'Stay',
                 early: true,
                 cashAlarm: true,
                 numbers: $numbers,
@@ -250,7 +290,7 @@ final readonly class SeasonObjective
                 reasons: $reasons,
                 elite: $elite,
             )
-            : self::proposal(self::HOLD, 'Hold', early: true, numbers: $numbers, reasons: $reasons, elite: $elite);
+            : self::proposal(self::STAY, 'Stay', early: true, numbers: $numbers, reasons: $reasons, elite: $elite);
     }
 
     /**
@@ -284,6 +324,7 @@ final readonly class SeasonObjective
                 'points_on_offer' => null,
                 'projected_pos' => null,
                 'end_cash' => null,
+                'relegation_pos' => null,
             ],
             'reasons' => $reasons,
         ];

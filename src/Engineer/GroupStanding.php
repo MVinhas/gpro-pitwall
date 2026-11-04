@@ -38,10 +38,10 @@ final readonly class GroupStanding
         $of = count($all);
         $rank = 1 + count(array_filter($all, static fn (int $oa): bool => $oa > $own));
         $third = intdiv($of + 2, 3);
-        $hold = $objective === SeasonObjective::HOLD;
+        $stay = $objective === SeasonObjective::STAY;
 
         $middle = array_slice($all, $third, max(0, $of - 2 * $third));
-        $useMiddle = $hold && $middle !== [];
+        $useMiddle = $stay && $middle !== [];
         $band = $useMiddle ? $middle : array_slice($all, 0, $third);
 
         return [
@@ -52,7 +52,7 @@ final readonly class GroupStanding
             'band_average' => (int) round(array_sum($band) / count($band)),
             'nudge' => match ($objective) {
                 SeasonObjective::PROMOTE => $rank > $third,
-                SeasonObjective::HOLD => $rank > $of - $third,
+                SeasonObjective::STAY => $rank > $of - $third,
                 default => false,
             },
         ];

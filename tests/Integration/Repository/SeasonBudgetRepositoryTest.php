@@ -165,7 +165,7 @@ final class SeasonBudgetRepositoryTest extends TestCase
         $found = $this->repo->find(1, 112);
         $this->assertNotNull($found);
         $this->assertSame(8, $found['race']);
-        $this->assertSame(19, (int) $this->db->query('PRAGMA user_version')->fetchColumn());
+        $this->assertSame(20, (int) $this->db->query('PRAGMA user_version')->fetchColumn());
     }
 
     public function testMigrationCreatesTheTableOnAVersion18Database(): void

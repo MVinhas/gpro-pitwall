@@ -95,47 +95,47 @@ final class SeasonObjectiveTest extends TestCase
         self::assertContains('6 pts behind P3 with 9 races left (90 on offer)', $proposal['reasons']);
     }
 
-    public function testFarBehindProposesHold(): void
+    public function testFarBehindProposesStay(): void
     {
         $pts = [1 => 90, 2 => 85, 3 => 80, 4 => 40, 5 => 20, 6 => 18, 7 => 15, 8 => 10, 9 => 5, 10 => 2];
         $proposal = SeasonObjective::propose($this->row(9, 5, 20, $this->group($pts)), 9, self::UNKNOWN_OUTLOOK, 1_000_000, null, false);
 
-        self::assertSame(SeasonObjective::HOLD, $proposal['objective']);
-        self::assertSame('Hold', $proposal['label']);
+        self::assertSame(SeasonObjective::STAY, $proposal['objective']);
+        self::assertSame('Stay', $proposal['label']);
         self::assertSame(60, $proposal['numbers']['gap']);
         self::assertSame(5, $proposal['numbers']['projected_pos']);
     }
 
-    public function testProjectedIntoRelegationProposesSurvive(): void
+    public function testProjectedIntoRelegationProposesStay(): void
     {
         $pts = [1 => 90, 2 => 85, 3 => 80, 4 => 40, 5 => 30, 6 => 28, 7 => 20, 8 => 8, 9 => 10, 10 => 5];
         $proposal = SeasonObjective::propose($this->row(9, 8, 8, $this->group($pts)), 9, self::UNKNOWN_OUTLOOK, 1_000_000, null, false);
 
-        self::assertSame(SeasonObjective::SURVIVE, $proposal['objective']);
-        self::assertSame('Survive', $proposal['label']);
+        self::assertSame(SeasonObjective::STAY, $proposal['objective']);
+        self::assertSame('Stay', $proposal['label']);
         self::assertSame(9, $proposal['numbers']['projected_pos']);
         self::assertFalse($proposal['cash_alarm']);
     }
 
-    public function testNegativeCashNowProposesSurviveWithAlarm(): void
+    public function testNegativeCashNowProposesStayWithAlarm(): void
     {
         $proposal = SeasonObjective::propose($this->row(9, 2, 40, $this->group($this->ladder())), 9, self::UNKNOWN_OUTLOOK, -1, null, false);
 
-        self::assertSame(SeasonObjective::SURVIVE, $proposal['objective']);
+        self::assertSame(SeasonObjective::STAY, $proposal['objective']);
         self::assertTrue($proposal['cash_alarm']);
     }
 
-    public function testNegativeEndCashProposesSurviveWithAlarm(): void
+    public function testNegativeEndCashProposesStayWithAlarm(): void
     {
         $outlook = ['known' => true, 'committed' => 1, 'income' => 1, 'free_cash' => -5, 'end_committed' => -5];
         $proposal = SeasonObjective::propose($this->row(9, 2, 40, $this->group($this->ladder())), 9, $outlook, 500_000, null, false);
 
-        self::assertSame(SeasonObjective::SURVIVE, $proposal['objective']);
+        self::assertSame(SeasonObjective::STAY, $proposal['objective']);
         self::assertTrue($proposal['cash_alarm']);
         self::assertSame(-5, $proposal['numbers']['end_cash']);
     }
 
-    public function testUnknownOutlookCannotTriggerCashSurvive(): void
+    public function testUnknownOutlookCannotTriggerCashStay(): void
     {
         $proposal = SeasonObjective::propose($this->row(9, 2, 40, $this->group($this->ladder())), 9, self::UNKNOWN_OUTLOOK, 500_000, null, false);
 
@@ -158,7 +158,7 @@ final class SeasonObjectiveTest extends TestCase
         $pts = [1 => 90, 2 => 85, 3 => 80, 4 => 40, 5 => 30, 6 => 28, 7 => 20, 8 => 10, 9 => 5, 10 => 2];
         $proposal = SeasonObjective::propose($this->row(9, 10, 2, $this->group($pts, 3, 99)), 9, self::UNKNOWN_OUTLOOK, 1_000_000, null, false);
 
-        self::assertSame(SeasonObjective::HOLD, $proposal['objective']);
+        self::assertSame(SeasonObjective::STAY, $proposal['objective']);
         self::assertSame(10, $proposal['numbers']['projected_pos']);
     }
 
@@ -173,8 +173,8 @@ final class SeasonObjectiveTest extends TestCase
 
         $outsider = SeasonObjective::propose($this->row(9, 3, 20, $this->group([1 => 90, 2 => 70, 3 => 20, 4 => 10], 3, 99)), 9, self::UNKNOWN_OUTLOOK, 1_000_000, null, true);
 
-        self::assertSame(SeasonObjective::HOLD, $outsider['objective']);
-        self::assertSame('Hold', $outsider['label']);
+        self::assertSame(SeasonObjective::STAY, $outsider['objective']);
+        self::assertSame('Stay', $outsider['label']);
         self::assertSame(70, $outsider['numbers']['gap']);
     }
 
@@ -187,16 +187,16 @@ final class SeasonObjectiveTest extends TestCase
         self::assertTrue($strong['early']);
 
         $weak = SeasonObjective::propose($row, 2, self::UNKNOWN_OUTLOOK, 1_000_000, 7, false);
-        self::assertSame(SeasonObjective::HOLD, $weak['objective']);
+        self::assertSame(SeasonObjective::STAY, $weak['objective']);
         self::assertTrue($weak['early']);
     }
 
-    public function testEarlySeasonCashStillProposesSurvive(): void
+    public function testEarlySeasonCashStillProposesStay(): void
     {
         $row = $this->row(2, 4, 8, $this->group([1 => 10, 2 => 9, 3 => 8, 4 => 8]));
         $proposal = SeasonObjective::propose($row, 2, self::UNKNOWN_OUTLOOK, -10, 1, false);
 
-        self::assertSame(SeasonObjective::SURVIVE, $proposal['objective']);
+        self::assertSame(SeasonObjective::STAY, $proposal['objective']);
         self::assertTrue($proposal['early']);
         self::assertTrue($proposal['cash_alarm']);
     }
@@ -216,7 +216,7 @@ final class SeasonObjectiveTest extends TestCase
     {
         $proposal = SeasonObjective::propose(null, 5, self::UNKNOWN_OUTLOOK, 1_000_000, 8, false);
 
-        self::assertSame(SeasonObjective::HOLD, $proposal['objective']);
+        self::assertSame(SeasonObjective::STAY, $proposal['objective']);
     }
 
     public function testStringFieldsAndMissingColourAreTolerated(): void
@@ -243,7 +243,7 @@ final class SeasonObjectiveTest extends TestCase
         $fallback = SeasonObjective::propose($this->row(9, 5, 30, $managers), 9, self::UNKNOWN_OUTLOOK, 1_000_000, null, false);
         self::assertSame(5, $fallback['numbers']['pos']);
         self::assertSame(30, $fallback['numbers']['pts']);
-        self::assertSame(SeasonObjective::HOLD, $fallback['objective']);
+        self::assertSame(SeasonObjective::STAY, $fallback['objective']);
 
         $unknown = SeasonObjective::propose($this->row(9, null, null, $managers), 9, self::UNKNOWN_OUTLOOK, 1_000_000, null, false);
         self::assertNull($unknown['objective']);
@@ -258,7 +258,7 @@ final class SeasonObjectiveTest extends TestCase
 
         $proposal = SeasonObjective::propose($row, 9, self::UNKNOWN_OUTLOOK, 1_000_000, null, false);
 
-        self::assertSame(SeasonObjective::HOLD, $proposal['objective']);
+        self::assertSame(SeasonObjective::STAY, $proposal['objective']);
         self::assertSame(5, $proposal['numbers']['pos']);
         self::assertNull($proposal['numbers']['line_pos']);
         self::assertNull($proposal['numbers']['projected_pos']);
@@ -299,12 +299,12 @@ final class SeasonObjectiveTest extends TestCase
     {
         $proposal = SeasonObjective::propose($this->row(9, 2, 40, $this->group($this->ladder())), 9, self::UNKNOWN_OUTLOOK, 1_000_000, null, false);
 
-        $inForce = SeasonObjective::inForce($proposal, SeasonObjective::HOLD);
+        $inForce = SeasonObjective::inForce($proposal, SeasonObjective::STAY);
 
-        self::assertSame(SeasonObjective::HOLD, $inForce['objective']);
+        self::assertSame(SeasonObjective::STAY, $inForce['objective']);
         self::assertTrue($inForce['pinned']);
         self::assertSame(SeasonObjective::PROMOTE, $inForce['proposed']);
-        self::assertSame('Your call: Hold (engineer proposes Promote)', $inForce['label']);
+        self::assertSame('Your call: Stay (engineer proposes Promote)', $inForce['label']);
         self::assertNull($inForce['warning']);
         self::assertSame($proposal['numbers'], $inForce['numbers']);
         self::assertSame($proposal['reasons'], $inForce['reasons']);
@@ -328,10 +328,10 @@ final class SeasonObjectiveTest extends TestCase
         $proposal = SeasonObjective::propose($this->row(9, 2, 40, $this->group($this->ladder())), 9, self::UNKNOWN_OUTLOOK, -1, null, false);
 
         $pinned = SeasonObjective::inForce($proposal, SeasonObjective::PROMOTE);
-        self::assertSame('Negative balance relegates — the engineer proposes Survive', $pinned['warning']);
+        self::assertSame('Negative balance relegates; the engineer proposes Stay', $pinned['warning']);
         self::assertSame(SeasonObjective::PROMOTE, $pinned['objective']);
 
-        self::assertNull(SeasonObjective::inForce($proposal, SeasonObjective::SURVIVE)['warning']);
+        self::assertNull(SeasonObjective::inForce($proposal, SeasonObjective::STAY)['warning']);
     }
 
     public function testUnknownPinValueIsIgnored(): void
@@ -348,7 +348,7 @@ final class SeasonObjectiveTest extends TestCase
     {
         $proposal = SeasonObjective::propose($this->row(18, 2, 140, $this->group($this->ladder())), 18, self::UNKNOWN_OUTLOOK, 1_000_000, null, false);
 
-        $inForce = SeasonObjective::inForce($proposal, SeasonObjective::HOLD);
+        $inForce = SeasonObjective::inForce($proposal, SeasonObjective::STAY);
 
         self::assertFalse($inForce['pinned']);
         self::assertNull($inForce['objective']);
@@ -391,5 +391,72 @@ final class SeasonObjectiveTest extends TestCase
         self::assertSame(31, SeasonObjective::relegationLine($this->row(9, 5, 40, $managers)));
         self::assertNull(SeasonObjective::relegationLine($this->row(9, 5, 40, $this->group($this->ladder(), 3, 99))));
         self::assertNull(SeasonObjective::relegationLine(null));
+    }
+
+    public function testRookieAlwaysPromotes(): void
+    {
+        $pts = [1 => 90, 2 => 85, 3 => 80, 4 => 40, 5 => 30, 6 => 28, 7 => 20, 8 => 8, 9 => 10, 10 => 5];
+        $relegating = SeasonObjective::propose($this->row(9, 8, 8, $this->group($pts)), 9, self::UNKNOWN_OUTLOOK, 1_000_000, null, false, true);
+        self::assertSame(SeasonObjective::PROMOTE, $relegating['objective']);
+        self::assertSame('Promote', $relegating['label']);
+        self::assertSame(9, $relegating['numbers']['projected_pos']);
+        self::assertContains('The relegation zone starts at P9', $relegating['reasons']);
+
+        $early = $this->row(2, 4, 8, $this->group([1 => 10, 2 => 9, 3 => 8, 4 => 8]));
+        $weakCar = SeasonObjective::propose($early, 2, self::UNKNOWN_OUTLOOK, 1_000_000, 7, false, true);
+        self::assertSame(SeasonObjective::PROMOTE, $weakCar['objective']);
+        self::assertTrue($weakCar['early']);
+
+        $broke = SeasonObjective::propose($this->row(9, 2, 40, $this->group($this->ladder())), 9, self::UNKNOWN_OUTLOOK, -1, null, false, true);
+        self::assertSame(SeasonObjective::PROMOTE, $broke['objective']);
+        self::assertSame('Promote', $broke['label']);
+        self::assertTrue($broke['cash_alarm']);
+        self::assertContains('The balance is negative', $broke['reasons']);
+
+        $earlyBroke = SeasonObjective::propose($early, 2, self::UNKNOWN_OUTLOOK, -10, 1, false, true);
+        self::assertSame(SeasonObjective::PROMOTE, $earlyBroke['objective']);
+        self::assertTrue($earlyBroke['cash_alarm']);
+    }
+
+    public function testRookieSeasonOverStaysOver(): void
+    {
+        $over = SeasonObjective::propose($this->row(18, 5, 90, $this->group($this->ladder())), 18, self::UNKNOWN_OUTLOOK, 1_000_000, null, false, true);
+
+        self::assertTrue($over['over']);
+        self::assertNull($over['objective']);
+    }
+
+    public function testOldPinsReadAsStay(): void
+    {
+        $proposal = SeasonObjective::propose($this->row(9, 2, 40, $this->group($this->ladder())), 9, self::UNKNOWN_OUTLOOK, 1_000_000, null, false);
+
+        foreach (['survive', 'hold', 'stay'] as $pin) {
+            $inForce = SeasonObjective::inForce($proposal, $pin);
+            self::assertSame('stay', $inForce['objective']);
+            self::assertTrue($inForce['pinned']);
+            self::assertSame('Your call: Stay (engineer proposes Promote)', $inForce['label']);
+        }
+    }
+
+    public function testNormaliseMapsTheOldObjectivesToStay(): void
+    {
+        self::assertSame('stay', SeasonObjective::normalise('hold'));
+        self::assertSame('stay', SeasonObjective::normalise('survive'));
+        self::assertSame('stay', SeasonObjective::normalise('stay'));
+        self::assertSame('promote', SeasonObjective::normalise('promote'));
+        self::assertNull(SeasonObjective::normalise('win-everything'));
+        self::assertNull(SeasonObjective::normalise(null));
+    }
+
+    public function testTheRelegationPositionRidesInTheNumbers(): void
+    {
+        $proposal = SeasonObjective::propose($this->row(9, 2, 40, $this->group($this->ladder())), 9, self::UNKNOWN_OUTLOOK, 1_000_000, null, false);
+        self::assertSame(9, $proposal['numbers']['relegation_pos']);
+
+        $noRed = SeasonObjective::propose($this->row(9, 2, 40, $this->group($this->ladder(), 3, 99)), 9, self::UNKNOWN_OUTLOOK, 1_000_000, null, false);
+        self::assertNull($noRed['numbers']['relegation_pos']);
+
+        $early = SeasonObjective::propose(null, 5, self::UNKNOWN_OUTLOOK, 1_000_000, 8, false);
+        self::assertNull($early['numbers']['relegation_pos']);
     }
 }

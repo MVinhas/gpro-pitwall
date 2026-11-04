@@ -83,7 +83,7 @@ use App\Support\TrackName;
  */
 class RaceEngineerService
 {
-    private const array PINNABLE = [SeasonObjective::PROMOTE, SeasonObjective::HOLD, SeasonObjective::SURVIVE];
+    private const array PINNABLE = [SeasonObjective::PROMOTE, SeasonObjective::STAY];
     private const string AUTO = 'auto';
     private const array TYRE_DIVISIONS = ['Pro', 'Master', 'Elite'];
     private const array TYRE_WEAR_SCALE = ['Very Low' => 1, 'Low' => 2, 'Medium' => 3, 'High' => 4, 'Very High' => 5];
@@ -214,11 +214,12 @@ class RaceEngineerService
 
             return true;
         }
-        if (!in_array($value, self::PINNABLE, true)) {
+        $objective = SeasonObjective::normalise($value);
+        if (!in_array($objective, self::PINNABLE, true)) {
             return false;
         }
 
-        $this->pins->save($userId, $season, $value);
+        $this->pins->save($userId, $season, $objective);
 
         return true;
     }
@@ -272,6 +273,7 @@ class RaceEngineerService
             $cash,
             GroupStanding::car(self::arr($c['money_levels'] ?? null), $menu)['rank'] ?? null,
             ($c['division'] ?? null) === 'Elite',
+            ($c['division'] ?? null) === 'Rookie',
         );
 
         return [
@@ -343,7 +345,7 @@ class RaceEngineerService
     private function swapSeasonFrom(array $ctx, array $plan, array $basis, array $c): SwapSeason
     {
         return new SwapSeason(
-            $ctx['objective']['objective'] ?? SeasonObjective::HOLD,
+            $ctx['objective']['objective'] ?? SeasonObjective::STAY,
             $plan,
             $basis['rounds'],
             $this->demands($c),
@@ -544,7 +546,7 @@ class RaceEngineerService
             staffStanding: GroupStanding::staff(
                 self::arr($c['group_staff'] ?? null),
                 self::arr($c['menu'] ?? null),
-                $objective['objective'] ?? SeasonObjective::HOLD,
+                $objective['objective'] ?? SeasonObjective::STAY,
             ),
             carStanding: GroupStanding::car(self::arr($c['money_levels'] ?? null), self::arr($c['menu'] ?? null)),
             testingLaps: (int) ($c['training_laps'] ?? 0),
@@ -769,7 +771,7 @@ class RaceEngineerService
     private function plan(array $ctx, array $basis, bool $carLocked = false): array
     {
         return $this->ctrPlanner->plan(
-            $ctx['objective']['objective'] ?? SeasonObjective::HOLD,
+            $ctx['objective']['objective'] ?? SeasonObjective::STAY,
             $basis['rounds'],
             $basis['parts'],
             $basis['prices'],
