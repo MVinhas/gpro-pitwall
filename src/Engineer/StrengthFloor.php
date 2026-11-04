@@ -46,6 +46,15 @@ final readonly class StrengthFloor
         return $this->rank + $this->buffer() <= intdiv(3 * $this->of, 4);
     }
 
+    public function outOfBottomQuarter(): bool
+    {
+        if ($this->rank === null || $this->of === null) {
+            return false;
+        }
+
+        return $this->rank <= intdiv(3 * $this->of, 4);
+    }
+
     private function buffer(): int
     {
         return (int) ceil(($this->of ?? 0) / 10);

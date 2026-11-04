@@ -39,6 +39,15 @@ final class StrengthFloorTest extends TestCase
         self::assertFalse(self::floor(24, 37)->keepsOutOfBottomQuarter());
     }
 
+    public function testOutOfTheBottomQuarterNowHasNoBuffer(): void
+    {
+        self::assertTrue(self::floor(30, 40)->outOfBottomQuarter());
+        self::assertFalse(self::floor(31, 40)->outOfBottomQuarter());
+        self::assertTrue(self::floor(27, 37)->outOfBottomQuarter());
+        self::assertFalse(self::floor(28, 37)->outOfBottomQuarter());
+        self::assertFalse(StrengthFloor::fromGroup(null)->outOfBottomQuarter());
+    }
+
     public function testNoRankRefusesEveryFloor(): void
     {
         $floor = StrengthFloor::fromGroup(null);

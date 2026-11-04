@@ -1580,6 +1580,62 @@ final class RaceEngineerTest extends TestCase
         $this->assertNull($line['action']);
     }
 
+    /**
+     * @param list<array<string, mixed>> $upgrades
+     */
+    private function stayUpgradeInputs(string $objective, ?int $rank, array $upgrades): EngineerInputs
+    {
+        return $this->withUpgrades($upgrades, [
+            'objective' => $this->objective($objective),
+            'carStanding' => $rank === null ? null : ['level' => 14, 'rank' => $rank, 'of' => 40],
+        ]);
+    }
+
+    public function testStayOnlyRecommendsAnUpgradeThatPays(): void
+    {
+        $in = $this->stayUpgradeInputs(SeasonObjective::STAY, 10, [
+            $this->upgrade('Engine', 4, 300_000),
+            $this->upgrade('Brakes', 5, 0),
+        ]);
+
+        $this->assertSame('Upgrade Brakes to L5', $this->line($in, 'upgrades')['answer']);
+    }
+
+    public function testStayWithNoPayingUpgradeBuysNothing(): void
+    {
+        $in = $this->stayUpgradeInputs(SeasonObjective::STAY, 10, [$this->upgrade('Engine', 4, 300_000)]);
+        $line = $this->line($in, 'upgrades');
+
+        $this->assertSame('Nothing worth buying', $line['answer']);
+        $this->assertSame(
+            'Stay: no upgrade pays for itself while your car is out of the group\'s weakest quarter',
+            $line['reason'],
+        );
+        $this->assertSame('/season#season-upgrades', $line['anchor']);
+    }
+
+    public function testStayInTheWeakestQuarterKeepsTheUpgradeAdvice(): void
+    {
+        foreach ([31, null] as $rank) {
+            $in = $this->stayUpgradeInputs(SeasonObjective::STAY, $rank, [
+                $this->upgrade('Engine', 4, 300_000),
+                $this->upgrade('Brakes', 5, 0),
+            ]);
+
+            $this->assertSame('Upgrade Engine to L4', $this->line($in, 'upgrades')['answer']);
+        }
+    }
+
+    public function testPromoteKeepsTheUpgradeAdvice(): void
+    {
+        $in = $this->stayUpgradeInputs(SeasonObjective::PROMOTE, 10, [
+            $this->upgrade('Engine', 4, 300_000),
+            $this->upgrade('Brakes', 5, 0),
+        ]);
+
+        $this->assertSame('Upgrade Engine to L4', $this->line($in, 'upgrades')['answer']);
+    }
+
     public function testUpgradePickAddsTheGroupCarLevel(): void
     {
         $in = $this->withUpgrades([$this->upgrade()], ['carStanding' => ['level' => 14, 'rank' => 22, 'of' => 30]]);

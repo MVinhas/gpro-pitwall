@@ -696,6 +696,21 @@ final class RaceEngineer
             );
         }
 
+        if (
+            self::objectiveIs($in, SeasonObjective::STAY)
+            && StrengthFloor::fromGroup($in->carStanding)->outOfBottomQuarter()
+        ) {
+            $upgrades = array_values(array_filter($upgrades, static fn (array $u): bool => $u['net_cost'] <= 0));
+            if ($upgrades === []) {
+                return self::line(
+                    'upgrades',
+                    'Nothing worth buying',
+                    'Stay: no upgrade pays for itself while your car is out of the group\'s weakest quarter',
+                    self::UPGRADES_ANCHOR,
+                );
+            }
+        }
+
         $races = count($plan['rows']);
         foreach ($upgrades as $upgrade) {
             if ($upgrade['affordable']) {
