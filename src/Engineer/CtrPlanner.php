@@ -42,7 +42,9 @@ final readonly class CtrPlanner
      * The Clear Track Risk to advise: the highest value whose season forecast keeps every race's balance at
      * or above its target: the cushion, and at the last race the end target (the season start for Hold and
      * Survive when it is above the cushion). It reads no current CTR, so the advice holds still when the
-     * manager follows it.
+     * manager follows it. The cushion is the committed cost plus the average repairs of the races after this
+     * one at the safety CTR: this race's forced swaps are bought before the race, so counting them would make
+     * the cushion drop once the manager follows the advice.
      *
      * @param list<array{race: int, track_name: ?string, base: ?array<string, float>}> $rounds next race first
      * @param array<string, array{level: int, start: int|float, track_base: int|float, training?: int|float}> $parts
@@ -85,7 +87,10 @@ final readonly class CtrPlanner
         );
 
         $atSafety = $forecastAt($safety)['rows'];
-        $cushion = $committed + intdiv(array_sum(array_column($atSafety, 'repairs')), count($atSafety));
+        $later = array_slice($atSafety, 1);
+        $cushion = $committed + ($later === []
+            ? 0
+            : intdiv(array_sum(array_column($later, 'repairs')), count($later)));
 
         $target = $cushion;
         $targetKind = 'cushion';

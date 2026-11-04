@@ -92,6 +92,41 @@ final class CtrPlannerTest extends TestCase
         $this->planner->plan(SeasonObjective::HOLD, [], self::ENGINE, self::PRICES, 1.0, 1_000_000, 0, 0, null);
     }
 
+    public function testCushionIsTheSameBeforeAndAfterTheCarUpdate(): void
+    {
+        $parts = static fn (float $engineStart): array => [
+            'Engine' => ['level' => 1, 'start' => $engineStart, 'track_base' => 10.0],
+            'Chassis' => ['level' => 1, 'start' => 20.0, 'track_base' => 10.0],
+        ];
+
+        $before = $this->plan(SeasonObjective::HOLD, 3_000_000, 50_000, 30_000, null, $parts(95.0), 5);
+        $after = $this->plan(
+            SeasonObjective::HOLD,
+            3_000_000 - self::PRICES['Engine'],
+            50_000,
+            30_000,
+            null,
+            $parts(0.0),
+            5,
+        );
+
+        $this->assertSame('Engine', $before['rows'][0]['replaced'][0]['part']);
+        $this->assertSame([], $after['rows'][0]['replaced']);
+        $this->assertSame($before['cushion'], $after['cushion']);
+        $this->assertSame($before['ctr'], $after['ctr']);
+        $this->assertSame($before['mode'], $after['mode']);
+        $this->assertSame($before['envelope'], $after['envelope']);
+    }
+
+    public function testSingleRaceCushionIsTheCommittedCost(): void
+    {
+        $worn = ['Engine' => ['level' => 1, 'start' => 95.0, 'track_base' => 10.0]];
+
+        $plan = $this->plan(SeasonObjective::HOLD, 1_000_000, 50_000, 0, null, $worn, 1);
+
+        $this->assertSame(50_000, $plan['cushion']);
+    }
+
     public function testBudgetCeilingIsTheHighestPassingCtr(): void
     {
         $scenarios = [];
@@ -119,7 +154,7 @@ final class CtrPlannerTest extends TestCase
                 $income,
             )['rows'];
 
-            $cushion = $committed + intdiv(array_sum(array_column($at($plan['safety']), 'repairs')), 3);
+            $cushion = $committed + intdiv(array_sum(array_column(array_slice($at($plan['safety']), 1), 'repairs')), 2);
             $end = $start !== null && $start > $cushion ? $start : $cushion;
             $this->assertSame($cushion, $plan['cushion'], $label);
             $this->assertSame($end, $plan['target'], $label);
@@ -230,7 +265,7 @@ final class CtrPlannerTest extends TestCase
         $this->assertGreaterThan((int) ceil(100_000 / 2), $plan['cushion']);
         $this->assertSame('cushion', $plan['target_kind']);
         $this->assertSame($plan['cushion'], $plan['target']);
-        $this->assertSame(50_000 + 33_333, $plan['cushion']);
+        $this->assertSame(50_000 + 50_000, $plan['cushion']);
     }
 
     public function testPromoteFallsBackToTheCushionWhenHalfTheStartIsOutOfReach(): void
@@ -275,7 +310,7 @@ final class CtrPlannerTest extends TestCase
 
         $balances = array_column($plan['rows'], 'balance');
         $this->assertSame([150_000, 100_000, 150_000], $balances);
-        $this->assertSame(100_000 - 33_333, $plan['envelope']);
+        $this->assertSame(100_000 - 50_000, $plan['envelope']);
     }
 
     public function testPushSwapsWhenTheBudgetCoversThem(): void
