@@ -408,18 +408,6 @@ final class SeasonObjectiveTest extends TestCase
         self::assertStringStartsWith('Your call: Win the group (', $label);
     }
 
-    public function testTheRelegationLineIsTheFirstRedRow(): void
-    {
-        $managers = [];
-        for ($pos = 1; $pos <= 40; $pos++) {
-            $managers[] = $this->manager($pos, 50 - $pos, $pos >= 31 ? SeasonObjective::RED : '');
-        }
-
-        self::assertSame(31, SeasonObjective::relegationLine($this->row(9, 5, 40, $managers)));
-        self::assertNull(SeasonObjective::relegationLine($this->row(9, 5, 40, $this->group($this->ladder(), 3, 99))));
-        self::assertNull(SeasonObjective::relegationLine(null));
-    }
-
     public function testRookieAlwaysPromotes(): void
     {
         $pts = [1 => 90, 2 => 85, 3 => 80, 4 => 40, 5 => 30, 6 => 28, 7 => 20, 8 => 8, 9 => 10, 10 => 5];

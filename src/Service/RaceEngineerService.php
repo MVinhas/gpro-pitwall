@@ -369,7 +369,6 @@ class RaceEngineerService
             (int) $ctx['outlook']['income'],
             StrengthFloor::fromGroup(
                 GroupStanding::car(self::arr($c['money_levels'] ?? null), self::arr($c['menu'] ?? null)),
-                SeasonObjective::relegationLine($ctx['standingsRow']),
             ),
         );
     }

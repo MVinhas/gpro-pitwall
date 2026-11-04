@@ -202,7 +202,7 @@ final class PartSwapAdvisorServiceTest extends TestCase
             10_000_000,
             0,
             0,
-            new StrengthFloor(null, null, null),
+            new StrengthFloor(null, null),
         );
     }
 
@@ -1111,7 +1111,7 @@ final class PartSwapAdvisorServiceTest extends TestCase
             10_000_000,
             0,
             0,
-            new StrengthFloor(5, 40, 26),
+            new StrengthFloor(5, 40),
         );
         $svc = $this->advisorWith(new SwapLevelPicker($budget, [
             'Engine'  => ['power' => 6, 'handling' => 0, 'acceleration' => 2],

@@ -153,7 +153,8 @@ readonly class SwapLevelPicker
 
     /**
      * Whether the objective lets the car take this kind of move. Promote never pays for a downgrade, and takes a
-     * free one only when the money is short.
+     * free one only when the money is short and the car stays in its group's strongest quarter; Stay downgrades
+     * only while the car stays out of the group's weakest quarter.
      *
      * @param PickKind $kind
      */
@@ -164,8 +165,8 @@ readonly class SwapLevelPicker
         }
 
         return match ($s->objective) {
-            SeasonObjective::PROMOTE => $moneyShort && $kind === 'free_downgrade' && $s->floor->keepsTopHalf(),
-            SeasonObjective::STAY => $s->floor->keepsAboveRelegation(),
+            SeasonObjective::PROMOTE => $moneyShort && $kind === 'free_downgrade' && $s->floor->keepsTopQuarter(),
+            SeasonObjective::STAY => $s->floor->keepsOutOfBottomQuarter(),
             default => false,
         };
     }
