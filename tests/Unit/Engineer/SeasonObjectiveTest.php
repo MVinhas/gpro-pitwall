@@ -290,6 +290,7 @@ final class SeasonObjectiveTest extends TestCase
 
         self::assertSame(31, $proposal['numbers']['relegation_pos']);
         self::assertSame(19, $proposal['numbers']['projected_pos']);
+        self::assertNotContains('The relegation zone starts at P31', $proposal['reasons']);
     }
 
     public function testSeasonOverReadsTheOutcome(): void

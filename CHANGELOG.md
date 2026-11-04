@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.29] - 2026-11-04
+
+### Fixed
+- The race engineer's season projection no longer counts every manager tied on points as ahead of you. GPRO breaks a
+  points tie by each manager's best race finish, and its standings order already applies that, so a tie now keeps the
+  current order. A points-less manager at P19 with 21 others on 0 was projected P37, inside the relegation zone, which
+  put Stay into safety mode and advised the highest CTR the energy allowed; it now projects P19 and Stay advises by value.
+
 ## [1.21.28] - 2026-11-04
 
 ### Changed
