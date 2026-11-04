@@ -950,7 +950,7 @@ final class RaceEngineerServiceTest extends TestCase
         return $advice;
     }
 
-    public function testUnderANursePlanTheOptionalSwapsAreThePartsInTheRedAtThePlanCtr(): void
+    public function testAPartEndingInTheRedIsNeverOfferedASwapAtAnyCtr(): void
     {
         $this->seedPromotionFixture();
         $this->seedWearTracks();
@@ -980,7 +980,7 @@ final class RaceEngineerServiceTest extends TestCase
         }
 
         self::assertSame('nurse', $this->budgets->find(self::USER, self::SEASON)['plan']['mode'] ?? null);
-        self::assertSame('Swap Brakes (optional)', $seen[0]['answer']);
+        self::assertSame('Nothing to swap', $seen[0]['answer']);
         foreach ($seen as $line) {
             self::assertSame($seen[0], $line);
         }

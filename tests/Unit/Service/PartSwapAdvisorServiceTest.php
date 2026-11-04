@@ -1006,7 +1006,7 @@ final class PartSwapAdvisorServiceTest extends TestCase
         $this->assertSame([5 => 700_000, 6 => 800_000, 7 => 1_600_000], $paid);
     }
 
-    public function testForcedPartsAreJudgedFirstAndEachPickIsCommittedBeforeTheNext(): void
+    public function testTheMostWornPartsAreJudgedFirstAndEachPickIsCommittedBeforeTheNext(): void
     {
         $calls = new ArrayObject();
         $pick = static fn (int $net): array => [
@@ -1016,7 +1016,7 @@ final class PartSwapAdvisorServiceTest extends TestCase
         $svc = $this->advisorWith($this->spyPicker($calls, ['Engine' => $pick(400_000), 'Gearbox' => $pick(-50_000)]));
         $options = [$this->rawOption(6, 900_000, 6), $this->rawOption(7, 1_500_000, 7)];
         $flagged = [
-            ['part' => 'Electronics', 'level' => 6, 'start' => 60, 'est' => 30.0, 'end' => 90.0, 'optional' => true],
+            ['part' => 'Electronics', 'level' => 6, 'start' => 60, 'est' => 30.0, 'end' => 90.0],
             ['part' => 'Gearbox', 'level' => 6, 'start' => 95, 'est' => 5.0, 'end' => 100.0],
             ['part' => 'Engine', 'level' => 6, 'start' => 95, 'est' => 5.0, 'end' => 100.0],
         ];

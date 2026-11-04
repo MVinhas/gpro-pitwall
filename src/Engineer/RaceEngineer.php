@@ -379,37 +379,21 @@ final class RaceEngineer
             );
         }
 
-        $optional = self::offeredOptionals($in);
-
-        if ($forced === [] && $optional === []) {
+        // A part that ends the race below 100% stays on the car: a swap would only spend money.
+        if ($forced === []) {
             return self::line('parts', 'Nothing to swap', 'No forced swap this race', '/cockpit#cockpit-wear');
         }
 
-        $forcedCost = $forcedSwapCost ?? 0;
-        $total = $forcedCost + self::pickedCost($in, $optional);
-        $figure = $forced !== [] && $forcedSwapCost === null && $optional === [] ? null : Money::short($total);
-        $optionalParts = array_column($optional, 'part');
-        $optionalNames = self::swapNames($in, $optionalParts);
+        $tone = $plan === null && self::spendable($in) < ($forcedSwapCost ?? 0) ? 'red' : 'amber';
 
-        if ($forced === []) {
-            return self::pickedLine(
-                $in,
-                $optionalParts,
-                'Swap ' . $optionalNames . ' (optional)',
-                'In the red zone, and ' . self::affordClause($in, 'it'),
-                $figure,
-                'ink',
-            );
-        }
-
-        $tone = $plan === null && self::spendable($in) < $forcedCost ? 'red' : 'amber';
-        $answer = 'Swap ' . self::swapNames($in, $forced) . ($optional === [] ? '' : ', optionally ' . $optionalNames);
-        $reason = $optional === []
-            ? 'Would break this race if kept'
-            : 'Forced swaps break this race; the optional ones are in the red and '
-                . self::affordClause($in, 'them');
-
-        return self::pickedLine($in, [...$forced, ...$optionalParts], $answer, $reason, $figure, $tone);
+        return self::pickedLine(
+            $in,
+            $forced,
+            'Swap ' . self::swapNames($in, $forced),
+            'Would break this race if kept',
+            $forcedSwapCost === null ? null : Money::short($forcedSwapCost),
+            $tone,
+        );
     }
 
     /**
@@ -587,8 +571,8 @@ final class RaceEngineer
     }
 
     /**
-     * What is left of the plan's envelope for car upgrades, after the lines that draw first: optional swaps,
-     * training, then testing.
+     * What is left of the plan's envelope for car upgrades, after the lines that draw first: the season
+     * picks, training, then testing.
      */
     public static function upgradeBudget(EngineerInputs $in): int
     {
@@ -738,52 +722,6 @@ final class RaceEngineer
     }
 
     /**
-     * The optional swaps the parts line offers: only under Promote, in order, while the money lasts.
-     *
-     * @return list<array{part: string, cost: int}>
-     */
-    public static function offeredOptionals(EngineerInputs $in): array
-    {
-        return array_map(
-            static fn (array $swap): array => ['part' => $swap['part'], 'cost' => $swap['cost']],
-            self::offered($in),
-        );
-    }
-
-    /**
-     * The offered optional swaps with what each takes from the envelope: its listed price, or its season
-     * pick's net cost when that is higher. Under a plan they draw on what the forced picks leave.
-     *
-     * @return list<array{part: string, cost: int, commit: int}>
-     */
-    private static function offered(EngineerInputs $in): array
-    {
-        if (!self::objectiveIs($in, SeasonObjective::PROMOTE)) {
-            return [];
-        }
-
-        $remaining = $in->plan === null
-            ? self::spendable($in) - ($in->forcedSwapCost ?? 0)
-            : $in->plan['envelope'] - self::forcedPickSpend($in);
-        // A part the plan already replaces in the next race is paid for inside the envelope.
-        $planned = self::planned($in);
-        $nets = array_column($in->swapPicks, 'net_cost', 'part');
-        $offered = [];
-        foreach ($in->optionalSwaps as $swap) {
-            if (in_array($swap['part'], $planned, true)) {
-                continue;
-            }
-            $commit = max($swap['cost'], $nets[$swap['part']] ?? 0);
-            if ($commit <= $remaining) {
-                $offered[] = $swap + ['commit' => $commit];
-                $remaining -= $commit;
-            }
-        }
-
-        return $offered;
-    }
-
-    /**
      * What the season picks for the parts the plan replaces add to it: each pick's net cost over the
      * same-level part the plan already pays for. A pick that saves money frees nothing up front.
      */
@@ -801,35 +739,11 @@ final class RaceEngineer
     }
 
     /**
-     * The plan's envelope once the season picks are paid for: the forced picks' net cost, and what the
-     * offered optional picks cost beyond the listed price the optional swaps already reserve.
+     * The plan's envelope once the season picks' net cost is paid for.
      */
     private static function afterPicks(EngineerInputs $in): int
     {
-        $extra = 0;
-        foreach (self::offered($in) as $swap) {
-            $extra += $swap['commit'] - $swap['cost'];
-        }
-
-        return ($in->plan['envelope'] ?? 0) - self::forcedPickSpend($in) - $extra;
-    }
-
-    /**
-     * The season picks worth keeping: an optional part's pick goes when the money no longer covers that swap
-     * at its picked cost, so nothing is saved, or kept out of the upgrade ranking, for a swap the line drops.
-     *
-     * @return list<SwapPick>
-     */
-    public static function shownPicks(EngineerInputs $in): array
-    {
-        $optional = array_diff(array_column($in->optionalSwaps, 'part'), self::planned($in));
-        $offered = array_column(self::offered($in), 'part');
-
-        return array_values(array_filter(
-            $in->swapPicks,
-            static fn (array $pick): bool => !in_array($pick['part'], $optional, true)
-                || in_array($pick['part'], $offered, true),
-        ));
+        return ($in->plan['envelope'] ?? 0) - self::forcedPickSpend($in);
     }
 
     /**
@@ -841,12 +755,12 @@ final class RaceEngineer
     }
 
     /**
-     * What is left of the plan's envelope when a discretionary line is judged: the season picks and optional
-     * swaps first, then training, then testing.
+     * What is left of the plan's envelope when a discretionary line is judged: the season picks first, then
+     * training, then testing.
      */
     private static function envelopeLeft(EngineerInputs $in, string $stage): int
     {
-        $left = self::afterPicks($in) - array_sum(array_column(self::offered($in), 'cost'));
+        $left = self::afterPicks($in);
         $pick = $in->trainingPick;
         if ($stage === self::STAGE_TESTING && !$in->driverTrained && $pick !== null && $pick['cost'] <= $left) {
             $left -= $pick['cost'];

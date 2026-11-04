@@ -152,7 +152,7 @@ class RaceEngineerService
             $picks = [];
             if (!$locked) {
                 try {
-                    $picks = $this->swapPicks($inputs, $plan, $this->swapSeasonFrom($ctx, $plan, $basis, $c), $c);
+                    $picks = $this->swapPicks($plan, $this->swapSeasonFrom($ctx, $plan, $basis, $c), $c);
                 } catch (\Throwable $e) {
                     // The picks only name a level; the parts line keeps its wording without them.
                     error_log('[Engineer] ' . $e::class);
@@ -361,15 +361,14 @@ class RaceEngineerService
     }
 
     /**
-     * The season-long level for each part the plan replaces before the next race, then for each optional swap
-     * the parts line offers from what those picks leave, judged at the plan's CTR on a season already paying
-     * for the forced picks. A part the picker can't judge is left out.
+     * The season-long level for each part the plan replaces before the next race, judged at the plan's CTR.
+     * A part the picker can't judge is left out.
      *
      * @param Plan $plan
      * @param array<string, mixed> $c
      * @return list<SwapPick>
      */
-    private function swapPicks(EngineerInputs $inputs, array $plan, SwapSeason $season, array $c): array
+    private function swapPicks(array $plan, SwapSeason $season, array $c): array
     {
         $parts = $this->wearParts($c);
         $trackPha = self::pha($c['track_pha'] ?? null);
@@ -390,7 +389,7 @@ class RaceEngineerService
                 'track_base' => (float) $part['track_base'],
             ];
         }
-        $forced = $this->picksAt(
+        return $this->picksAt(
             self::flagged(array_column($plan['rows'][0]['replaced'], 'part'), $adviseParts),
             $adviseParts,
             $season,
@@ -398,19 +397,6 @@ class RaceEngineerService
             $carPha,
             $c,
         );
-        $optional = array_column(RaceEngineer::offeredOptionals($inputs->withSwapPicks($forced)), 'part');
-        $committed = array_sum(array_map(static fn (array $pick): int => max(0, $pick['net_cost']), $forced));
-
-        $picks = [...$forced, ...$this->picksAt(
-            self::flagged($optional, $adviseParts),
-            $adviseParts,
-            $season->committing($committed),
-            $trackPha,
-            $carPha,
-            $c,
-        )];
-
-        return RaceEngineer::shownPicks($inputs->withSwapPicks($picks));
     }
 
     /**
@@ -546,11 +532,6 @@ class RaceEngineerService
             pushAdvice: $this->pushAdvice($c, $rounds, $raceNb),
             wearAdvice: $wearAdvice,
             forcedSwapCost: $this->forcedSwapCost($forced, self::arrOrNull($c['swap_plan'] ?? null)),
-            optionalSwaps: match (true) {
-                $carLocked => [],
-                $plan !== null && $parts !== null => $this->plannedOptionalSwaps($plan, $parts, $driverFactor, $car),
-                default => $this->optionalSwaps($wearAdvice, $car),
-            },
             trainingPick: $pick,
             testingTarget: $target,
             testingOpen: (bool) ($c['testing_open'] ?? false),
@@ -712,37 +693,6 @@ class RaceEngineerService
                 'season' => Money::short($row['season_cost']),
             ], $advice['rows']),
         ];
-    }
-
-    /**
-     * Under a plan the optional swaps are the parts that would end the next race in the red at the plan's CTR,
-     * not at the manager's current one, so following "Use N" changes nothing. Parts the plan already
-     * replaces are paid for inside the envelope.
-     *
-     * @param Plan $plan
-     * @param array<string, array{level: int, start: int|float, track_base: int|float, training?: int|float}> $parts
-     * @param array<string, mixed> $car
-     * @return list<array{part: string, cost: int}>
-     */
-    private function plannedOptionalSwaps(array $plan, array $parts, float $driverFactor, array $car): array
-    {
-        $prices = $this->planner->partPrices($car);
-        $replaced = array_column($plan['rows'][0]['replaced'], 'part');
-        $out = [];
-        foreach ($parts as $label => $part) {
-            $end = WearAdvisorService::percent($this->endAt($part, $driverFactor, $plan['ctr']));
-            $price = $prices[$label] ?? null;
-            if (
-                $end >= WearAdvisorService::THRESHOLD_RISKY
-                && $end < WearAdvisorService::THRESHOLD_SWAP
-                && !in_array($label, $replaced, true)
-                && $price !== null
-            ) {
-                $out[] = ['part' => (string) $label, 'cost' => $price];
-            }
-        }
-
-        return $out;
     }
 
     /**
@@ -965,31 +915,6 @@ class RaceEngineerService
         }
 
         return is_numeric($swapPlan['cost'] ?? null) ? (int) $swapPlan['cost'] : null;
-    }
-
-    /**
-     * @param ?array<string, mixed> $wearAdvice
-     * @param array<string, mixed> $car
-     * @return list<array{part: string, cost: int}>
-     */
-    private function optionalSwaps(?array $wearAdvice, array $car): array
-    {
-        $risky = self::list($wearAdvice['risky'] ?? null);
-        if ($risky === []) {
-            return [];
-        }
-
-        $prices = $this->planner->partPrices($car);
-        $out = [];
-        foreach ($risky as $part) {
-            $label = (string) $part['part'];
-            $price = $prices[$label] ?? null;
-            if ($price !== null) {
-                $out[] = ['part' => $label, 'cost' => $price];
-            }
-        }
-
-        return $out;
     }
 
     /**
