@@ -96,7 +96,10 @@ final class EnergyModelTest extends TestCase
     {
         $censored = [];
         for ($i = 0; $i < 20; $i++) {
+            // Ran dry, no laps on record, and energy that rose over the race: none of them measures a drain.
             $censored[] = ['ctr' => 70, 'from' => 100, 'to' => 0, 'laps' => 50, 'stamina' => 50];
+            $censored[] = ['ctr' => 40, 'from' => 90, 'to' => 60, 'laps' => 0, 'stamina' => 50];
+            $censored[] = ['ctr' => 10, 'from' => 40, 'to' => 70, 'laps' => 50, 'stamina' => 50];
         }
 
         $clean = EnergyModel::fit($this->exactRows(), []);
