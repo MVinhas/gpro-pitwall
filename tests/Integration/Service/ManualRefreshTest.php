@@ -48,6 +48,7 @@ use App\Service\BillboardService;
 use App\Service\BoostFuelService;
 use App\Service\CarWearPlannerService;
 use App\Service\CarWearService;
+use App\Service\CtrModelService;
 use App\Service\DebriefService;
 use App\Service\EarlyQualifyingBonusService;
 use App\Service\FuelModel;
@@ -558,6 +559,8 @@ final class ManualRefreshTest extends TestCase
                 ),
                 $telemetryRepo,
                 $idealPilot,
+                new CtrModelService($telemetryRepo, $raceHistory, $cache),
+                0.0,
             ),
             false,
             $twig,

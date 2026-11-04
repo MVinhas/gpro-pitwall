@@ -102,10 +102,11 @@ final class RaceEngineerTest extends TestCase
         ];
 
         return $o + [
-            'v' => 1, 'ctr' => 40, 'mode' => 'nurse', 'safety' => 40, 'swaps' => [],
+            'v' => 2, 'ctr' => 40, 'ctr_kind' => 'highest', 'mode' => 'nurse', 'safety' => 40, 'swaps' => [],
             'refused_swap_cost' => null, 'target' => 2_000_000, 'target_kind' => 'cushion',
             'cushion' => 2_000_000, 'season_start' => null, 'envelope' => 600_000,
-            'shortfall' => null, 'rows' => [$row], 'partial' => [], 'race' => 8,
+            'shortfall' => null, 'rows' => [$row], 'partial' => [], 'race' => 8, 'infeasible' => false,
+            'energy_cap' => 100, 'energy_estimate' => false, 'energy_start' => null, 'value' => null,
         ];
     }
 
@@ -603,6 +604,163 @@ final class RaceEngineerTest extends TestCase
         $keys = array_column(RaceEngineer::brief($this->inputs(['ctrCeiling' => null])), 'key');
 
         $this->assertNotContains('ctr', $keys);
+    }
+
+    /**
+     * @param array<string, mixed> $plan
+     * @param array<string, mixed> $o
+     */
+    private function ctrReason(array $plan, array $o = []): string
+    {
+        return $this->line($this->planned($plan, $o), 'ctr')['reason'];
+    }
+
+    /**
+     * @param ?array{ctr: int, gain_more: int, cost_more: int} $next
+     * @return array<string, mixed>
+     */
+    private function valuePlan(int $ctr, ?array $next, bool $paceKnown = true): array
+    {
+        return [
+            'ctr' => $ctr,
+            'ctr_kind' => 'value',
+            'value' => [
+                'gain' => $ctr * 60_000,
+                'cost' => 300_000,
+                'places' => round($ctr * 0.07, 1),
+                'pace_known' => $paceKnown,
+                'next' => $next,
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function stayAt(int $projected, int $relegation): array
+    {
+        return ['objective' => $this->objective(SeasonObjective::STAY, ['numbers' => [
+            'pos' => $projected, 'pts' => 10, 'line_pos' => 3, 'gap' => 30, 'races_left' => 8,
+            'points_on_offer' => 80, 'projected_pos' => $projected, 'end_cash' => null, 'relegation_pos' => $relegation,
+        ]])];
+    }
+
+    public function testAnEnergyCapWithAKnownStartSaysTheStart(): void
+    {
+        $this->assertSame(
+            "Capped at 30: your driver's energy (about 82% at the start) would run out above that",
+            $this->ctrReason(['ctr' => 30, 'ctr_kind' => 'energy', 'energy_cap' => 30, 'energy_start' => 82]),
+        );
+    }
+
+    public function testAnEstimatedEnergyCapNamesTheDivision(): void
+    {
+        $this->assertSame(
+            "Capped at 35: a rough Amateur estimate of what your driver's energy allows",
+            $this->ctrReason(
+                ['ctr' => 35, 'ctr_kind' => 'energy', 'energy_cap' => 35, 'energy_estimate' => true, 'energy_start' => 80],
+                ['division' => 'Amateur'],
+            ),
+        );
+    }
+
+    public function testAnEstimatedEnergyCapWithoutADivision(): void
+    {
+        $this->assertSame(
+            "Capped at 35: a rough estimate of what your driver's energy allows",
+            $this->ctrReason(['ctr' => 35, 'ctr_kind' => 'energy', 'energy_cap' => 35, 'energy_estimate' => true]),
+        );
+    }
+
+    public function testAValueZeroWithoutPaceSaysTheLowestWearWins(): void
+    {
+        $this->assertSame(
+            'No pace figures for the remaining tracks: the lowest wear wins',
+            $this->ctrReason($this->valuePlan(0, null, false)),
+        );
+    }
+
+    public function testAValueZeroWithANextCtrQuotesItsGainAndRepairs(): void
+    {
+        $this->assertSame(
+            'A higher CTR earns less than its repairs cost (CTR 5: +$150k, repairs +$400k)',
+            $this->ctrReason($this->valuePlan(0, ['ctr' => 5, 'gain_more' => 150_000, 'cost_more' => 400_000])),
+        );
+    }
+
+    public function testAValueZeroWithoutANextCtr(): void
+    {
+        $this->assertSame('A higher CTR earns less than its repairs cost', $this->ctrReason($this->valuePlan(0, null)));
+    }
+
+    public function testAValuePickQuotesItsPlacesAndTheNextCtr(): void
+    {
+        $this->assertSame(
+            'About +1.4 places a race (+$1.2M this season); CTR 25 would earn $300k more but cost $500k more in repairs',
+            $this->ctrReason($this->valuePlan(20, ['ctr' => 25, 'gain_more' => 300_000, 'cost_more' => 500_000])),
+        );
+    }
+
+    public function testAValuePickWithoutANextCtrSaysNoneFits(): void
+    {
+        $this->assertSame(
+            'About +1.4 places a race (+$1.2M this season); no higher CTR fits the budget',
+            $this->ctrReason($this->valuePlan(20, null)),
+        );
+    }
+
+    public function testSafetyAboveTheZoneCountsThePlaces(): void
+    {
+        $this->assertSame(
+            'P23 projected, 3 places above the relegation zone: the highest CTR the budget and energy allow',
+            $this->ctrReason(['ctr' => 40, 'ctr_kind' => 'safety'], $this->stayAt(23, 26)),
+        );
+    }
+
+    public function testSafetyInsideTheZoneSaysSo(): void
+    {
+        $this->assertSame(
+            'P27 projected, inside the relegation zone: the highest CTR the budget and energy allow',
+            $this->ctrReason(['ctr' => 40, 'ctr_kind' => 'safety'], $this->stayAt(27, 26)),
+        );
+        $this->assertSame(
+            'P26 projected, inside the relegation zone: the highest CTR the budget and energy allow',
+            $this->ctrReason(['ctr' => 40, 'ctr_kind' => 'safety'], $this->stayAt(26, 26)),
+        );
+    }
+
+    public function testShortBeatsEnergyReason(): void
+    {
+        $this->assertSame(
+            'Even at CTR 0 the forecast misses the target by $400k',
+            $this->ctrReason([
+                'ctr' => 0, 'mode' => 'short', 'shortfall' => 400_000,
+                'ctr_kind' => 'energy', 'energy_cap' => 0, 'energy_start' => 30,
+            ]),
+        );
+    }
+
+    public function testNoPlanPathCapsByEnergy(): void
+    {
+        $line = $this->line($this->inputs([
+            'ctrCeiling' => 40,
+            'energyCap' => 25,
+            'energyEstimate' => true,
+            'division' => 'Rookie',
+            'currentCtr' => 30,
+        ]), 'ctr');
+
+        $this->assertSame('CTR 25', $line['answer']);
+        $this->assertSame("Capped at 25: a rough Rookie estimate of what your driver's energy allows", $line['reason']);
+        $this->assertSame(['label' => 'Use 25', 'href' => '/engineer?cockpit_risk=25'], $line['action']);
+    }
+
+    public function testNoPlanPathKeepsTheWearCeilingBelowTheEnergyCap(): void
+    {
+        $line = $this->line($this->inputs(['ctrCeiling' => 40, 'energyCap' => 50, 'energyStart' => 90]), 'ctr');
+
+        $this->assertSame('CTR 40', $line['answer']);
+        $this->assertSame('Race rated Normal: the highest CTR where no part breaks; season costs unknown', $line['reason']);
     }
 
     public function testNothingToSwap(): void

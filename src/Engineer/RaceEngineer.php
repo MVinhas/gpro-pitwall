@@ -8,6 +8,7 @@ use App\Support\Ordinal;
 
 /**
  * @phpstan-import-type Plan from CtrPlanner
+ * @phpstan-import-type CtrValueFigures from CtrPlanner
  * @phpstan-import-type Upgrade from UpgradeRanker
  * @phpstan-import-type SwapPick from EngineerInputs
  * @phpstan-import-type TyreAdvice from TyreSupplierAdvisor
@@ -282,6 +283,7 @@ final class RaceEngineer
         if ($plan !== null) {
             $target = $plan['ctr'];
             $swapNames = implode(' + ', array_column($plan['swaps'], 'part'));
+            $safetyReason = self::safetyCtrReason($in);
             $reason = match (true) {
                 $stuck !== null && $target === 0 && $plan['mode'] !== 'short' => $stuck,
                 $plan['mode'] === 'short' => 'Even at CTR 0 the forecast misses the target by '
@@ -289,6 +291,17 @@ final class RaceEngineer
                 $plan['mode'] === 'push' && $plan['swaps'] !== [] => $rated . 'swap ' . $swapNames . ' ('
                     . Money::short(array_sum(array_column($plan['swaps'], 'cost')))
                     . '); the budget covers the swaps',
+                $plan['ctr_kind'] === 'energy' => self::energyCtrReason(
+                    $plan['energy_cap'],
+                    $plan['energy_estimate'],
+                    $plan['energy_start'],
+                    $in->division,
+                ),
+                $plan['ctr_kind'] === 'value' && $plan['value'] !== null => self::valueCtrReason(
+                    $plan['ctr'],
+                    $plan['value'],
+                ),
+                $plan['ctr_kind'] === 'safety' && $safetyReason !== null => $safetyReason,
                 $plan['ctr'] < $plan['safety'] => $rated . 'the highest CTR the budget covers to season end',
                 $plan['mode'] === 'nurse' && $plan['refused_swap_cost'] !== null => $rated . 'pushing past '
                     . $plan['safety'] . ' needs ' . Money::short($plan['refused_swap_cost'])
@@ -296,9 +309,12 @@ final class RaceEngineer
                 default => $rated . 'the highest CTR where no part breaks',
             };
         } else {
-            $target = $in->ctrCeiling;
+            $ceiling = (int) $in->ctrCeiling;
+            $capped = $in->energyCap !== null && $in->energyCap < $ceiling;
+            $target = $capped ? (int) $in->energyCap : $ceiling;
             $reason = match (true) {
                 $stuck !== null && $target === 0 => $stuck,
+                $capped => self::energyCtrReason($target, $in->energyEstimate, $in->energyStart, $in->division),
                 default => $rated . 'the highest CTR where no part breaks; season costs unknown',
             };
         }
@@ -326,6 +342,59 @@ final class RaceEngineer
 
         return self::smoke($in->stuckSmoke) . ' and the car is already updated: CTR 0 keeps '
             . self::possessive($in->stuckSmoke) . ' wear lowest';
+    }
+
+    private static function energyCtrReason(int $cap, bool $estimate, ?int $start, ?string $division): string
+    {
+        if (!$estimate && $start !== null) {
+            return 'Capped at ' . $cap . ": your driver's energy (about " . $start
+                . '% at the start) would run out above that';
+        }
+
+        return 'Capped at ' . $cap . ': a rough ' . ($division === null ? '' : $division . ' ')
+            . "estimate of what your driver's energy allows";
+    }
+
+    /**
+     * @param CtrValueFigures $value
+     */
+    private static function valueCtrReason(int $ctr, array $value): string
+    {
+        $next = $value['next'];
+        if ($ctr === 0) {
+            return match (true) {
+                !$value['pace_known'] => 'No pace figures for the remaining tracks: the lowest wear wins',
+                $next !== null => 'A higher CTR earns less than its repairs cost (CTR ' . $next['ctr'] . ': +'
+                    . Money::short($next['gain_more']) . ', repairs +' . Money::short($next['cost_more']) . ')',
+                default => 'A higher CTR earns less than its repairs cost',
+            };
+        }
+
+        $pick = 'About +' . number_format($value['places'], 1) . ' places a race (+' . Money::short($value['gain'])
+            . ' this season); ';
+
+        return $pick . ($next === null
+            ? 'no higher CTR fits the budget'
+            : 'CTR ' . $next['ctr'] . ' would earn ' . Money::short($next['gain_more']) . ' more but cost '
+                . Money::short($next['cost_more']) . ' more in repairs');
+    }
+
+    /**
+     * Why Stay takes the highest CTR: the projected finish is near or inside the relegation zone. Null without
+     * both figures.
+     */
+    private static function safetyCtrReason(EngineerInputs $in): ?string
+    {
+        $projected = $in->objective['numbers']['projected_pos'] ?? null;
+        $relegation = $in->objective['numbers']['relegation_pos'] ?? null;
+        if ($projected === null || $relegation === null) {
+            return null;
+        }
+        $above = $relegation - $projected;
+
+        return 'P' . $projected . ' projected, '
+            . ($above > 0 ? $above . ' places above the relegation zone' : 'inside the relegation zone')
+            . ': the highest CTR the budget and energy allow';
     }
 
     /**

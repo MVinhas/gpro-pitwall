@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Integration\Service;
 
+use App\Cache\Adapter\NullCache;
 use App\Database\DatabaseSeeder;
 use App\Engineer\CtrCeiling;
 use App\Engineer\CtrPlanner;
@@ -12,6 +13,7 @@ use App\Engineer\SwapLevelPicker;
 use App\Engineer\SwapSeason;
 use App\Engineer\UpgradeRanker;
 use App\Repository\EconomyLedgerRepository;
+use App\Repository\RaceHistoryRepository;
 use App\Repository\RaceTelemetryRepository;
 use App\Repository\SeasonBudgetRepository;
 use App\Repository\SeasonObjectiveRepository;
@@ -22,6 +24,7 @@ use App\Security\ApiTokenCrypto;
 use App\Service\BoostFuelService;
 use App\Service\CarWearPlannerService;
 use App\Service\CarWearService;
+use App\Service\CtrModelService;
 use App\Service\FuelModel;
 use App\Service\IdealPilotService;
 use App\Service\PartSwapAdvisorService;
@@ -39,6 +42,9 @@ final class RaceEngineerServiceTest extends TestCase
 {
     private const int SEASON = 112;
     private const int USER = 1;
+    private const float CTR_GAIN_FRACTION = 0.001;
+    /** With no energy corpus the cap is the division's estimate, which sits below these fixtures' wear ceiling. */
+    private const string AMATEUR_ENERGY_REASON = "Capped at 35: a rough Amateur estimate of what your driver's energy allows";
 
     private PDO $db;
     private SeasonObjectiveRepository $pins;
@@ -122,6 +128,8 @@ final class RaceEngineerServiceTest extends TestCase
             ),
             $telemetry ?? new RaceTelemetryRepository($this->db),
             $this->idealPilot(193),
+            new CtrModelService(new RaceTelemetryRepository($this->db), new RaceHistoryRepository($this->db), new NullCache()),
+            self::CTR_GAIN_FRACTION,
         );
     }
 
@@ -258,8 +266,10 @@ final class RaceEngineerServiceTest extends TestCase
         $engine = ['level' => 1, 'start' => 95, 'est' => 40.0, 'end' => 135.0, 'track_base' => 8.0];
         $brakes = ['level' => 5, 'start' => 10, 'est' => 15.0, 'end' => 25.0, 'track_base' => 30.0];
 
+        // Master's energy estimate (65) sits above the wear ceiling, so the ceiling is what the line shows.
         $lines = $this->service->forCockpit(99, $this->cockpit([
             'ctr' => 100,
+            'division' => 'Master',
             'wear' => ['track_name' => 'Testring', 'laps' => 50, 'parts' => ['Engine' => $engine, 'Brakes' => $brakes]],
             'wear_advice' => [
                 'swap' => [['part' => 'Engine', 'level' => 5, 'start' => 95, 'est' => 40.0, 'end' => 135.0]],
@@ -386,11 +396,17 @@ final class RaceEngineerServiceTest extends TestCase
             ['race' => 10, 'track_name' => 'Beta'],
             ['race' => 11, 'track_name' => 'Gamma'],
         ];
+        // The rating only shows below the energy cap: a worn engine keeps the wear ceiling under it, and a manager
+        // with no stored costs (no plan) keeps the line on the wear ceiling.
         $reasonFor = function (int $raceNb) use ($calendar): string {
-            $lines = $this->service->forCockpit(self::USER, $this->cockpit([
+            $lines = $this->service->forCockpit(99, $this->cockpit([
                 'office' => ['seasonNb' => self::SEASON, 'raceNb' => $raceNb],
                 'car' => $this->pricedCar(),
                 'season_calendar' => $calendar,
+                'wear' => ['track_name' => 'Testring', 'laps' => 50, 'parts' => [
+                    'Engine' => ['level' => 1, 'start' => 80, 'est' => 0.0, 'end' => 0.0, 'track_base' => 8.0],
+                    'Brakes' => ['level' => 1, 'start' => 10, 'est' => 0.0, 'end' => 0.0, 'track_base' => 3.0],
+                ]],
             ]))['lines'];
 
             return array_column($lines, null, 'key')['ctr']['reason'];
@@ -669,7 +685,8 @@ final class RaceEngineerServiceTest extends TestCase
         $byKey = array_column($lines, null, 'key');
 
         self::assertSame('Costs unknown — sync once after a race', $byKey['cash']['answer']);
-        self::assertStringEndsWith('season costs unknown', $byKey['ctr']['reason']);
+        self::assertSame('CTR 35', $byKey['ctr']['answer']);
+        self::assertSame(self::AMATEUR_ENERGY_REASON, $byKey['ctr']['reason']);
         self::assertNull($this->budgets->find(99, self::SEASON));
     }
 
@@ -683,7 +700,7 @@ final class RaceEngineerServiceTest extends TestCase
             ['race' => 11, 'track_name' => 'Testring'],
         ]]))['lines'];
 
-        self::assertStringEndsWith('season costs unknown', array_column($lines, null, 'key')['ctr']['reason']);
+        self::assertSame(self::AMATEUR_ENERGY_REASON, array_column($lines, null, 'key')['ctr']['reason']);
         self::assertNull($this->budgets->find(self::USER, self::SEASON));
     }
 
@@ -697,7 +714,7 @@ final class RaceEngineerServiceTest extends TestCase
             'wear' => ['track_name' => 'Testring', 'laps' => 50, 'parts' => $parts],
         ]))['lines'];
 
-        self::assertStringEndsWith('season costs unknown', array_column($lines, null, 'key')['ctr']['reason']);
+        self::assertSame(self::AMATEUR_ENERGY_REASON, array_column($lines, null, 'key')['ctr']['reason']);
         self::assertNull($this->budgets->find(self::USER, self::SEASON));
     }
 
@@ -1044,7 +1061,7 @@ final class RaceEngineerServiceTest extends TestCase
             ['race' => 12, 'track_name' => 'Testring'],
         ]]))['lines'];
 
-        self::assertStringEndsWith('season costs unknown', array_column($lines, null, 'key')['ctr']['reason']);
+        self::assertSame(self::AMATEUR_ENERGY_REASON, array_column($lines, null, 'key')['ctr']['reason']);
         self::assertNull($this->budgets->find(self::USER, self::SEASON));
     }
 
@@ -1772,6 +1789,89 @@ final class RaceEngineerServiceTest extends TestCase
      * @param array<string, mixed> $advice
      * @return array<string, mixed>
      */
+    /**
+     * @return array<string, mixed>
+     */
+    private function savedPlan(): array
+    {
+        return $this->budgets->find(self::USER, self::SEASON)['plan'] ?? [];
+    }
+
+    private function paceTrack(string $name, float $lapLength, float $avgSpeed): void
+    {
+        $this->db->prepare(
+            "INSERT INTO tracks (name, laps, lap_length, avg_speed, distance, fuel_per_lap, fuel_per_lap_wet, boost_dry,
+                boost_wet, overtaking, grip, tyre_wear, pit_time, wear_engine, wear_brakes, wear_electronics)
+             VALUES (:name, 50, :lap, :speed, 250.0, 2.0, 3.0, 0.3, 0.4, 'Normal', 'Normal', 'Normal', 20.0, 40, 30, 10)
+             ON CONFLICT(name) DO UPDATE SET lap_length = excluded.lap_length, avg_speed = excluded.avg_speed"
+        )->execute([':name' => $name, ':lap' => $lapLength, ':speed' => $avgSpeed]);
+    }
+
+    public function testOfficeEnergyAndQ2ReachThePlan(): void
+    {
+        $this->seedPromotionFixture();
+        $startWith = function (string $doneQ2): mixed {
+            $this->service->forCockpit(self::USER, $this->cockpit([
+                'office' => $this->office(['driEnergy' => '50', 'doneQ2' => $doneQ2]),
+            ]));
+
+            return $this->savedPlan()['energy_start'] ?? null;
+        };
+
+        // An empty corpus leaves the fallback recovery (70 + 0.3 x energy after Q2) and a 4-point qualifying drain.
+        self::assertSame(85, $startWith('1'));
+        self::assertSame(84, $startWith('0'));
+        self::assertSame(35, $this->savedPlan()['energy_cap'] ?? null);
+    }
+
+    public function testAStayPinPicksByValueSafetyOrEnergy(): void
+    {
+        $this->seedPromotionFixture();
+        $this->paceTrack('Testring', 5.0, 200.0);
+        $this->service->pin(self::USER, self::SEASON, 'stay');
+
+        $this->service->forCockpit(self::USER, $this->cockpit());
+        $plan = $this->savedPlan();
+
+        self::assertContains($plan['ctr_kind'] ?? null, ['value', 'safety', 'energy']);
+        self::assertTrue($plan['value']['pace_known'] ?? null);
+    }
+
+    public function testNullDivisionFallsBack(): void
+    {
+        $this->seedPromotionFixture();
+
+        $this->service->forCockpit(self::USER, $this->cockpit([
+            'division' => null,
+            'office' => $this->office(['driEnergy' => '60', 'doneQ2' => '1']),
+        ]));
+
+        self::assertTrue($this->savedPlan()['energy_estimate'] ?? null);
+    }
+
+    public function testACalendarTrackWithNoAverageSpeedContributesNoGain(): void
+    {
+        $this->seedPromotionFixture();
+        $this->paceTrack('Testring', 5.0, 0.0);
+        $this->paceTrack('Fastring', 5.0, 200.0);
+        $this->service->pin(self::USER, self::SEASON, 'stay');
+
+        $this->service->forCockpit(self::USER, $this->cockpit(['season_calendar' => [
+            ['race' => 10, 'track_name' => 'Testring'],
+            ['race' => 11, 'track_name' => 'Fastring'],
+        ]]));
+        $value = $this->savedPlan()['value'] ?? null;
+
+        self::assertNotNull($value);
+        self::assertTrue($value['pace_known']);
+        // The next race (Testring) has no lap time to gain from, so it adds no places.
+        self::assertSame(0.0, (float) $value['places']);
+        // Fastring alone: 5 km at 200 km/h x 0.001 x 50 laps = 4.5 s a point, over Amateur's 0.19 s x 50 laps a
+        // place, at $153,846 a place.
+        $ctr = $this->savedPlan()['ctr'];
+        self::assertSame($ctr * 72_874, $value['gain']);
+    }
+
     private function surviveCtrLine(int $ctr, array $advice): array
     {
         $lines = $this->service->forCockpit(self::USER, $this->cockpit([

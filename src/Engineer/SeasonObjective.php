@@ -231,7 +231,7 @@ final readonly class SeasonObjective
             $proposed === $pin => 'same as the engineer',
             default => 'engineer proposes ' . $proposal['label'],
         };
-        $warning = $proposal['cash_alarm'] && $pin !== self::STAY
+        $warning = $proposal['cash_alarm'] && $proposed === self::STAY && $pin !== $proposed
             ? 'Negative balance relegates; the engineer proposes Stay'
             : null;
 

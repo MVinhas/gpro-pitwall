@@ -55,6 +55,8 @@ final readonly class EngineerInputs
      * @param int $testingLaps the Cockpit's training laps, whose testing wear every plan counts
      * @param ?TyreAdvice $tyreAdvice set only while GPRO's tyre contract window is open and unsigned
      * @param list<string> $stuckSmoke parts that reach 100% this race even at CTR 0, while the car is updated
+     * @param ?int $energyCap the highest CTR the driver's energy allows, on every path with or without a plan
+     * @param ?int $energyStart the driver's expected energy at the race start, when the office reports it
      */
     public function __construct(
         public array $objective,
@@ -84,6 +86,9 @@ final readonly class EngineerInputs
         public bool $tested = false,
         public bool $driverTrained = false,
         public array $stuckSmoke = [],
+        public ?int $energyCap = null,
+        public bool $energyEstimate = false,
+        public ?int $energyStart = null,
     ) {
     }
 

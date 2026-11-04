@@ -190,9 +190,10 @@ final class PartSwapAdvisorServiceTest extends TestCase
     {
         return new SwapSeason(
             SeasonObjective::STAY,
-            ['v' => 1, 'ctr' => 0, 'mode' => 'nurse', 'safety' => 0, 'swaps' => [], 'refused_swap_cost' => null,
-                'target' => 0, 'target_kind' => 'cushion', 'cushion' => 0, 'season_start' => null, 'envelope' => 0,
-                'shortfall' => null, 'rows' => [], 'partial' => [], 'race' => 1],
+            ['v' => 2, 'ctr' => 0, 'ctr_kind' => 'value', 'mode' => 'nurse', 'safety' => 0, 'swaps' => [],
+                'refused_swap_cost' => null, 'target' => 0, 'target_kind' => 'cushion', 'cushion' => 0,
+                'season_start' => null, 'envelope' => 0, 'shortfall' => null, 'rows' => [], 'partial' => [], 'race' => 1,
+                'energy_cap' => 100, 'energy_estimate' => false, 'energy_start' => null, 'value' => null],
             [],
             [],
             [],
@@ -1097,9 +1098,10 @@ final class PartSwapAdvisorServiceTest extends TestCase
         $this->assertSame(1_800_000, $rows[0]['repairs']);
         $season = new SwapSeason(
             SeasonObjective::STAY,
-            ['v' => 1, 'ctr' => 0, 'mode' => 'nurse', 'safety' => 0, 'swaps' => [], 'refused_swap_cost' => null,
-                'target' => 7_400_000, 'target_kind' => 'cushion', 'cushion' => 7_400_000, 'season_start' => null,
-                'envelope' => 800_000, 'shortfall' => null, 'rows' => $rows, 'partial' => [], 'race' => 8],
+            ['v' => 2, 'ctr' => 0, 'ctr_kind' => 'value', 'mode' => 'nurse', 'safety' => 0, 'swaps' => [],
+                'refused_swap_cost' => null, 'target' => 7_400_000, 'target_kind' => 'cushion', 'cushion' => 7_400_000,
+                'season_start' => null, 'envelope' => 800_000, 'shortfall' => null, 'rows' => $rows, 'partial' => [],
+                'race' => 8, 'energy_cap' => 100, 'energy_estimate' => false, 'energy_start' => null, 'value' => null],
             $rounds,
             [8 => ['power' => 10, 'handling' => 10, 'acceleration' => 10],
                 9 => ['power' => 10, 'handling' => 10, 'acceleration' => 10]],

@@ -334,6 +334,16 @@ final class SeasonObjectiveTest extends TestCase
         self::assertNull(SeasonObjective::inForce($proposal, SeasonObjective::STAY)['warning']);
     }
 
+    public function testARookieCashAlarmNeverWarnsAboutRelegation(): void
+    {
+        $proposal = SeasonObjective::propose($this->row(9, 2, 40, $this->group($this->ladder())), 9, self::UNKNOWN_OUTLOOK, -1, null, false, true);
+
+        $pinned = SeasonObjective::inForce($proposal, SeasonObjective::PROMOTE);
+
+        self::assertTrue($pinned['cash_alarm']);
+        self::assertNull($pinned['warning']);
+    }
+
     public function testUnknownPinValueIsIgnored(): void
     {
         $proposal = SeasonObjective::propose($this->row(9, 2, 40, $this->group($this->ladder())), 9, self::UNKNOWN_OUTLOOK, 1_000_000, null, false);
