@@ -860,9 +860,9 @@ class RaceEngineerService
         }
 
         $places = 0.0;
-        $placesNext = 0.0;
+        $placesNext = null;
         $paceKnown = false;
-        foreach ($basis['rounds'] as $i => $round) {
+        foreach ($basis['rounds'] as $round) {
             $track = $round['track_name'] === null ? null : $this->tracks->findByName($round['track_name']);
             $laps = (int) ($track['laps'] ?? 0);
             $secondsPerPlace = $gap->secondsPerPlace($division, $laps);
@@ -880,9 +880,8 @@ class RaceEngineerService
             $perPoint = $seconds / $secondsPerPlace;
             $places += $perPoint;
             $paceKnown = true;
-            if ($i === 0) {
-                $placesNext = $perPoint;
-            }
+            // The places a race quote the first race with pace figures: the next race may have none.
+            $placesNext ??= $perPoint;
         }
 
         $numbers = $ctx['objective']['numbers'];
@@ -893,7 +892,7 @@ class RaceEngineerService
             $energy['estimate'],
             $energy['start'],
             (int) round($places * $perPlace),
-            $placesNext,
+            $placesNext ?? 0.0,
             // Without a prize per place (no or unknown division) the pace is worth nothing to weigh.
             $paceKnown && $perPlace > 0,
             CtrPolicy::safetyFor($numbers['projected_pos'], $numbers['relegation_pos']),

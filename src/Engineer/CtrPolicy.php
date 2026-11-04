@@ -6,8 +6,8 @@ namespace App\Engineer;
 
 /**
  * What the CTR planner needs beyond the budget: the driver's energy cap and the pace a CTR point is worth.
- * $gainPerPoint is dollars over the remaining season per CTR point; $placesPerPoint is the next race's places
- * per CTR point.
+ * $gainPerPoint is dollars over the remaining season per CTR point; $placesPerPoint is the places per CTR point
+ * in the first remaining race with pace figures (normally the next one).
  */
 final readonly class CtrPolicy
 {

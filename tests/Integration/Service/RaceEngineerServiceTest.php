@@ -1876,7 +1876,7 @@ final class RaceEngineerServiceTest extends TestCase
         self::assertSame(0, $plan['value']['gain'] ?? null);
     }
 
-    public function testACalendarTrackWithNoAverageSpeedContributesNoGain(): void
+    public function testACalendarTrackWithNoAverageSpeedContributesNoGainAndTheNextPacedTrackGivesThePlaces(): void
     {
         $this->seedPromotionFixture();
         $this->paceTrack('Testring', 5.0, 0.0);
@@ -1891,13 +1891,14 @@ final class RaceEngineerServiceTest extends TestCase
 
         self::assertNotNull($value);
         self::assertTrue($value['pace_known']);
-        // The next race (Testring) has no lap time to gain from, so it adds no places.
-        self::assertSame(0.0, (float) $value['places']);
         // Fastring alone: 5 km at 200 km/h x 0.001 x 50 laps = 4.5 s a point, over Amateur's 0.19 s x 50 laps a
         // place, at $153,846 a place.
         $ctr = $this->savedPlan()['ctr'];
         self::assertGreaterThan(0, $ctr);
         self::assertSame($ctr * 72_874, $value['gain']);
+        // The next race (Testring) has no lap time to gain from, so the places a race come from Fastring.
+        self::assertGreaterThan(0.0, (float) $value['places']);
+        self::assertSame(round($ctr * 4.5 / (0.19 * 50), 1), (float) $value['places']);
     }
 
     /**
