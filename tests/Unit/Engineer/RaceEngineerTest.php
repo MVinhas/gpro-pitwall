@@ -729,6 +729,36 @@ final class RaceEngineerTest extends TestCase
         );
     }
 
+    public function testAStayEnergyPickBelowTheCapGivesTheValueCopy(): void
+    {
+        $plan = ['ctr_kind' => 'energy', 'energy_cap' => 35, 'energy_estimate' => true]
+            + $this->valuePlan(34, ['ctr' => 35, 'gain_more' => 72_874, 'cost_more' => 0]);
+
+        $this->assertSame(
+            'About +2.4 places a race (+$2M this season); CTR 35 would earn $73k more but cost $0 more in repairs',
+            $this->ctrReason($plan, $this->stayAt(10, 26)),
+        );
+    }
+
+    public function testAPromoteEnergyPickBelowTheCapGivesTheBudgetCopy(): void
+    {
+        $this->assertSame(
+            'Race rated Normal: the highest CTR the budget covers to season end',
+            $this->ctrReason(['ctr' => 30, 'ctr_kind' => 'energy', 'energy_cap' => 35, 'energy_estimate' => true]),
+        );
+    }
+
+    public function testAnEnergyPickAtTheCapGivesTheEnergyCopy(): void
+    {
+        $this->assertSame(
+            "Capped at 35: a rough Amateur estimate of what your driver's energy allows",
+            $this->ctrReason(
+                ['ctr' => 35, 'ctr_kind' => 'energy', 'energy_cap' => 35, 'energy_estimate' => true],
+                ['division' => 'Amateur'],
+            ),
+        );
+    }
+
     public function testShortBeatsEnergyReason(): void
     {
         $this->assertSame(

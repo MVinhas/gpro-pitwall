@@ -284,6 +284,7 @@ final class RaceEngineer
             $target = $plan['ctr'];
             $swapNames = implode(' + ', array_column($plan['swaps'], 'part'));
             $safetyReason = self::safetyCtrReason($in);
+            $byValue = in_array($plan['ctr_kind'], ['value', 'energy'], true) && $plan['value'] !== null;
             $reason = match (true) {
                 $stuck !== null && $target === 0 && $plan['mode'] !== 'short' => $stuck,
                 $plan['mode'] === 'short' => 'Even at CTR 0 the forecast misses the target by '
@@ -291,16 +292,14 @@ final class RaceEngineer
                 $plan['mode'] === 'push' && $plan['swaps'] !== [] => $rated . 'swap ' . $swapNames . ' ('
                     . Money::short(array_sum(array_column($plan['swaps'], 'cost')))
                     . '); the budget covers the swaps',
-                $plan['ctr_kind'] === 'energy' => self::energyCtrReason(
+                // Below the cap the energy-kind pick was made by the value or budget rule, so that rule explains it.
+                $plan['ctr_kind'] === 'energy' && $plan['ctr'] === $plan['energy_cap'] => self::energyCtrReason(
                     $plan['energy_cap'],
                     $plan['energy_estimate'],
                     $plan['energy_start'],
                     $in->division,
                 ),
-                $plan['ctr_kind'] === 'value' && $plan['value'] !== null => self::valueCtrReason(
-                    $plan['ctr'],
-                    $plan['value'],
-                ),
+                $byValue => self::valueCtrReason($plan['ctr'], $plan['value']),
                 $plan['ctr_kind'] === 'safety' && $safetyReason !== null => $safetyReason,
                 $plan['ctr'] < $plan['safety'] => $rated . 'the highest CTR the budget covers to season end',
                 $plan['mode'] === 'nurse' && $plan['refused_swap_cost'] !== null => $rated . 'pushing past '
