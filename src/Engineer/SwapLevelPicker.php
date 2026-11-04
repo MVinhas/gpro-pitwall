@@ -11,7 +11,7 @@ use App\Service\WearAdvisorService;
  * @phpstan-import-type Demand from UpgradeRanker
  * @phpstan-type Candidate array{level: int, cost: int, is_free: bool, start: float, fit: float}
  * @phpstan-type PickKind 'free_downgrade'|'downgrade'|'sidegrade'|'upgrade'
- * @phpstan-type PickReason 'most_pha'|'top3_keep'|'top3_pays'|'budget_short'
+ * @phpstan-type PickReason 'most_pha'|'top3_keep'|'top3_pays'|'budget_short'|'stay_cheapest'
  * @phpstan-type Pick array{level: int, kind: PickKind, cost: int, season_pha: float, net_cost: int,
  *   affordable: bool, reason: PickReason}
  * @phpstan-type Option array{level: int, kind: PickKind, cost: int, free: bool, season_pha: float, net_cost: int,
@@ -24,9 +24,12 @@ readonly class SwapLevelPicker
         'top3_keep' => 'Top-3 car: same level, no extra spend',
         'top3_pays' => 'Top-3 car: this upgrade pays for itself',
         'budget_short' => 'Budget short: cheapest option that keeps your car in place',
+        'stay_cheapest' => 'Cheapest level that keeps your car out of the group\'s weakest quarter',
     ];
 
     private const float EQUAL_PHA = 0.5;
+
+    private const int NEAR_COST = CtrValue::MARGIN;
 
     private const array NO_CONTRIBUTION = ['power' => 0, 'handling' => 0, 'acceleration' => 0];
 
@@ -42,8 +45,8 @@ readonly class SwapLevelPicker
      * the part at its level and start wear, future replacements at that level's paid price; one with no known
      * paid price, whose forecast is infeasible, or that would reach the plan's wear limit in this race, is
      * dropped. The objective and the car's group rank decide which downgrades may be taken; among the
-     * affordable rest the most season PHA wins. With nothing affordable, the free option goes first, then the
-     * smallest shortfall. Null when no candidate is left.
+     * affordable rest Stay takes the cheapest over the season and the others the most season PHA. With nothing
+     * affordable, the free option goes first, then the smallest shortfall. Null when no candidate is left.
      *
      * @param list<Candidate> $candidates
      * @param array<int, ?int> $paidPrice level → price of a new part at that level
@@ -134,6 +137,10 @@ readonly class SwapLevelPicker
             return [$short[0], 'budget_short'];
         }
 
+        if ($s->objective === SeasonObjective::STAY) {
+            return [self::cheapest($affordable), 'stay_cheapest'];
+        }
+
         if ($s->objective === SeasonObjective::PROMOTE && $s->floor->topThree()) {
             $pays = self::only(
                 $affordable,
@@ -188,6 +195,26 @@ readonly class SwapLevelPicker
         );
 
         return $close[0];
+    }
+
+    /**
+     * The lowest net cost over the season; within NEAR_COST of it, the most season PHA, then the better fit for
+     * this race, then the lower net cost.
+     *
+     * @param non-empty-list<Option> $options
+     * @return Option
+     */
+    private static function cheapest(array $options): array
+    {
+        $lowest = min(array_column($options, 'net_cost'));
+        $near = self::only($options, static fn (array $o): bool => $o['net_cost'] <= $lowest + self::NEAR_COST);
+        usort(
+            $near,
+            static fn (array $a, array $b): int => [$b['season_pha'], $b['fit'], $a['net_cost']]
+                <=> [$a['season_pha'], $a['fit'], $b['net_cost']],
+        );
+
+        return $near[0];
     }
 
     /**

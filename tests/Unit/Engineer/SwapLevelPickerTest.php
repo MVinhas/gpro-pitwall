@@ -146,7 +146,7 @@ final class SwapLevelPickerTest extends TestCase
     public function testWithMoneyToSpareTheUpgradeWithMostSeasonPhaWins(): void
     {
         $pick = $this->pick(
-            $this->season(SeasonObjective::STAY, new StrengthFloor(5, 40), 10_000_000),
+            $this->season(SeasonObjective::PROMOTE, new StrengthFloor(5, 40), 10_000_000),
             [$this->freeDowngrade(), $this->paid(2), $this->paid(3), $this->paid(4), $this->paid(5)],
         );
 
@@ -164,7 +164,7 @@ final class SwapLevelPickerTest extends TestCase
     public function testAnUnaffordableUpgradeFallsBackToTheSidegrade(): void
     {
         $pick = $this->pick(
-            $this->season(SeasonObjective::STAY, new StrengthFloor(5, 40), 350_000),
+            $this->season(SeasonObjective::PROMOTE, new StrengthFloor(5, 40), 350_000),
             [$this->paid(4), $this->freeDowngrade(), $this->paid(3)],
         );
 
@@ -173,6 +173,65 @@ final class SwapLevelPickerTest extends TestCase
         $this->assertSame(3, $pick['level']);
         $this->assertSame(0, $pick['net_cost']);
         $this->assertSame('most_pha', $pick['reason']);
+    }
+
+    public function testStayWithMoneyToSpareTakesTheCheapestSafeLevel(): void
+    {
+        $pick = $this->pick(
+            $this->season(SeasonObjective::STAY, new StrengthFloor(5, 40), 10_000_000),
+            [$this->freeDowngrade(), $this->paid(2), $this->paid(3), $this->paid(4), $this->paid(5)],
+        );
+
+        $this->assertSame([
+            'level' => 2,
+            'kind' => 'free_downgrade',
+            'cost' => 0,
+            'season_pha' => -3.3,
+            'net_cost' => -300_000,
+            'affordable' => true,
+            'reason' => 'stay_cheapest',
+        ], $pick);
+    }
+
+    public function testStayNearTieGoesToMorePha(): void
+    {
+        $season = $this->season(SeasonObjective::STAY, new StrengthFloor(5, 40), 10_000_000);
+
+        $near = $this->pick($season, [$this->paid(2, 240_000), $this->paid(3)]);
+        $this->assertNotNull($near);
+        $this->assertSame(3, $near['level']);
+        $this->assertSame('stay_cheapest', $near['reason']);
+
+        $far = $this->pick($season, [$this->paid(2, 150_000), $this->paid(3)]);
+        $this->assertNotNull($far);
+        $this->assertSame(2, $far['level']);
+        $this->assertSame('stay_cheapest', $far['reason']);
+    }
+
+    public function testStayTakesACheaperUpgrade(): void
+    {
+        $pick = $this->pick(
+            $this->season(SeasonObjective::STAY, new StrengthFloor(5, 40), 10_000_000),
+            [$this->paid(4, 100_000), $this->paid(3), $this->paid(2)],
+        );
+
+        $this->assertNotNull($pick);
+        $this->assertSame('upgrade', $pick['kind']);
+        $this->assertSame(4, $pick['level']);
+        $this->assertSame(-200_000, $pick['net_cost']);
+        $this->assertSame('stay_cheapest', $pick['reason']);
+    }
+
+    public function testStayBelowTheBottomQuarterNeverDowngrades(): void
+    {
+        $pick = $this->pick(
+            $this->season(SeasonObjective::STAY, new StrengthFloor(27, 40), 10_000_000),
+            [$this->freeDowngrade(), $this->paid(2), $this->paid(3)],
+        );
+
+        $this->assertNotNull($pick);
+        $this->assertSame('sidegrade', $pick['kind']);
+        $this->assertSame('stay_cheapest', $pick['reason']);
     }
 
     public function testPromoteNeverTakesAPaidDowngrade(): void
@@ -296,7 +355,7 @@ final class SwapLevelPickerTest extends TestCase
         // Barely any handling demand: L4 adds 0.06 PHA, L5 0.12, within 0.5 of each other.
         $light = ['power' => 100, 'handling' => 1, 'acceleration' => 0];
         $season = $this->season(
-            SeasonObjective::STAY,
+            SeasonObjective::PROMOTE,
             new StrengthFloor(5, 40),
             10_000_000,
             demands: [8 => $light, 9 => $light, 10 => $light],
@@ -367,7 +426,7 @@ final class SwapLevelPickerTest extends TestCase
     public function testOneRaceLeftStillPicks(): void
     {
         $pick = $this->pick(
-            $this->season(SeasonObjective::STAY, new StrengthFloor(5, 40), 10_000_000, 1),
+            $this->season(SeasonObjective::PROMOTE, new StrengthFloor(5, 40), 10_000_000, 1),
             [$this->paid(3), $this->paid(4)],
         );
 
@@ -393,7 +452,7 @@ final class SwapLevelPickerTest extends TestCase
 
     public function testCommittingLowersTheCashAndEveryPlannedBalance(): void
     {
-        $season = $this->season(SeasonObjective::STAY, new StrengthFloor(5, 40), 450_000);
+        $season = $this->season(SeasonObjective::PROMOTE, new StrengthFloor(5, 40), 450_000);
 
         $committed = $season->committing(200_000);
 
@@ -414,6 +473,7 @@ final class SwapLevelPickerTest extends TestCase
             'top3_keep' => 'Top-3 car: same level, no extra spend',
             'top3_pays' => 'Top-3 car: this upgrade pays for itself',
             'budget_short' => 'Budget short: cheapest option that keeps your car in place',
+            'stay_cheapest' => 'Cheapest level that keeps your car out of the group\'s weakest quarter',
         ], SwapLevelPicker::REASONS);
     }
 }

@@ -929,7 +929,7 @@ final class PartSwapAdvisorServiceTest extends TestCase
 
                 /** @var ?array{level: int, kind: 'free_downgrade'|'downgrade'|'sidegrade'|'upgrade', cost: int,
                  *   season_pha: float, net_cost: int, affordable: bool,
-                 *   reason: 'most_pha'|'top3_keep'|'top3_pays'|'budget_short'} $pick */
+                 *   reason: 'most_pha'|'top3_keep'|'top3_pays'|'budget_short'|'stay_cheapest'} $pick */
                 $pick = $this->picks[$part] ?? null;
 
                 return $pick;
@@ -1097,7 +1097,7 @@ final class PartSwapAdvisorServiceTest extends TestCase
         $rows = $budget->forecast($rounds, $parts, $prices, 1.0, 0, 100, 10_000_000, 0, 0)['rows'];
         $this->assertSame(1_800_000, $rows[0]['repairs']);
         $season = new SwapSeason(
-            SeasonObjective::STAY,
+            SeasonObjective::PROMOTE,
             ['v' => 2, 'ctr' => 0, 'ctr_kind' => 'value', 'mode' => 'nurse', 'safety' => 0, 'swaps' => [],
                 'refused_swap_cost' => null, 'target' => 7_400_000, 'target_kind' => 'cushion', 'cushion' => 7_400_000,
                 'season_start' => null, 'envelope' => 800_000, 'shortfall' => null, 'rows' => $rows, 'partial' => [],
