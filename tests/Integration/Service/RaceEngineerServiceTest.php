@@ -591,6 +591,7 @@ final class RaceEngineerServiceTest extends TestCase
             'anchor' => null,
             'tone' => 'amber',
             'action' => null,
+            'step' => 'season',
         ]], $card['lines']);
         self::assertSame(self::SEASON, $card['season']);
         self::assertSame($before, $this->budgets->latest(self::USER));
@@ -605,7 +606,7 @@ final class RaceEngineerServiceTest extends TestCase
         $card = $this->service->forCockpit(self::USER, $this->cockpit(), stale: false);
 
         self::assertSame(
-            ['objective', 'cash', 'ctr', 'parts', 'training', 'testing', 'upgrades', 'risk', 'boost'],
+            ['objective', 'cash', 'parts', 'upgrades', 'training', 'testing', 'ctr', 'risk', 'boost'],
             array_column($card['lines'], 'key'),
         );
     }

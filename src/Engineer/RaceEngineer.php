@@ -18,7 +18,8 @@ use App\Support\Ordinal;
  *     reason: string,
  *     anchor: ?string,
  *     tone: string,
- *     action: ?array{label: string, href: string}
+ *     action: ?array{label: string, href: string},
+ *     step: 'season'|'car'|'prep'|'race'
  * }
  */
 final class RaceEngineer
@@ -38,6 +39,22 @@ final class RaceEngineer
     private const string STAGE_TRAINING = 'training';
     private const string STAGE_TESTING = 'testing';
     private const string UPGRADES_ANCHOR = '/season#season-upgrades';
+
+    /** Which step of the weekend each line belongs to; brief() keeps lines of one step together. */
+    public const array STEPS = [
+        'objective' => 'season',
+        'tyres' => 'season',
+        'cash' => 'season',
+        'staff' => 'season',
+        'stale' => 'season',
+        'parts' => 'car',
+        'upgrades' => 'car',
+        'training' => 'prep',
+        'testing' => 'prep',
+        'ctr' => 'race',
+        'risk' => 'race',
+        'boost' => 'race',
+    ];
 
     private const array KIND_WORDS = [
         'free_downgrade' => 'free downgrade',
@@ -63,12 +80,12 @@ final class RaceEngineer
 
         $optional = [
             self::cash($in),
-            self::ctr($in),
+            self::staff($in),
             self::parts($in),
+            self::upgrades($in),
             self::training($in),
             self::testing($in),
-            self::upgrades($in),
-            self::staff($in),
+            self::ctr($in),
             self::risk($in),
             self::boost($in),
         ];
@@ -258,6 +275,7 @@ final class RaceEngineer
         }
 
         $survive = self::objectiveIs($in, SeasonObjective::SURVIVE);
+        $locked = $in->carUpdated && $in->stuckParts !== [];
         $rated = $in->pushAdvice === null ? '' : 'Race rated ' . $in->pushAdvice . ': ';
         // A plan replaces the parts that would stay in the red, so none is stuck there.
         $alwaysRed = $survive && $in->alwaysRed !== [] && $plan === null;
@@ -266,6 +284,7 @@ final class RaceEngineer
             $target = $plan['ctr'];
             $swapNames = implode(' + ', array_column($plan['swaps'], 'part'));
             $reason = match (true) {
+                $locked && $target === 0 && $plan['mode'] !== 'short' => self::stuckReason($in),
                 $plan['mode'] === 'short' => 'Even at CTR 0 the forecast misses the target by '
                     . Money::short($plan['shortfall'] ?? 0),
                 $plan['mode'] === 'push' && $plan['swaps'] !== [] => $rated . 'swap ' . $swapNames . ' ('
@@ -281,6 +300,7 @@ final class RaceEngineer
         } else {
             $target = $survive ? ($in->ctrSurvive ?? $in->ctrCeiling) : $in->ctrCeiling;
             $reason = match (true) {
+                $locked && $target === 0 => self::stuckReason($in),
                 $alwaysRed => self::alwaysRedReason($in->alwaysRed),
                 $survive => $rated . 'capped at the highest CTR that keeps parts out of the red',
                 default => $rated . 'the highest CTR where no part breaks; season costs unknown',
@@ -299,6 +319,12 @@ final class RaceEngineer
         );
     }
 
+    private static function stuckReason(EngineerInputs $in): string
+    {
+        return implode(', ', $in->stuckParts)
+            . ' past the swap line and the car is already updated: CTR 0 keeps their wear lowest';
+    }
+
     /**
      * @param list<string> $parts
      */
@@ -313,6 +339,23 @@ final class RaceEngineer
      */
     private static function parts(EngineerInputs $in): array
     {
+        if ($in->carUpdated) {
+            return $in->stuckParts === []
+                ? self::line(
+                    'parts',
+                    'Car updated',
+                    'One update per race; the plan reads the car as it is now',
+                    '/cockpit#cockpit-wear',
+                )
+                : self::line(
+                    'parts',
+                    'Car updated',
+                    implode(', ', $in->stuckParts) . ' stay past the swap line until the next update',
+                    '/cockpit#cockpit-wear',
+                    tone: 'amber',
+                );
+        }
+
         $plan = $in->plan;
         $replaced = $plan === null ? [] : $plan['rows'][0]['replaced'];
         $forced = array_column($plan === null ? $in->wearAdvice['swap'] ?? [] : $replaced, 'part');
@@ -454,6 +497,15 @@ final class RaceEngineer
      */
     private static function training(EngineerInputs $in): array
     {
+        if ($in->driverTrained) {
+            return self::line(
+                'training',
+                'Driver trained this race',
+                'Nothing more to spend on it this race',
+                '/cockpit#cockpit-training',
+            );
+        }
+
         $pick = $in->trainingPick;
         if ($pick === null) {
             return self::line(
@@ -488,6 +540,15 @@ final class RaceEngineer
      */
     private static function testing(EngineerInputs $in): array
     {
+        if ($in->tested) {
+            return self::line(
+                'testing',
+                'Testing done this race',
+                'Nothing more to spend on it this race',
+                '/cockpit#cockpit-testing',
+            );
+        }
+
         $target = $in->testingTarget;
         if (!$in->testingOpen || $target === null) {
             return self::line('testing', self::NOTHING, 'No testing session is open', '/cockpit#cockpit-testing');
@@ -530,7 +591,7 @@ final class RaceEngineer
     private static function testingSpend(EngineerInputs $in): ?int
     {
         $cost = $in->testingCost;
-        if (!$in->testingOpen || $in->testingTarget === null) {
+        if ($in->tested || !$in->testingOpen || $in->testingTarget === null) {
             return null;
         }
 
@@ -556,7 +617,7 @@ final class RaceEngineer
     private static function upgrades(EngineerInputs $in): ?array
     {
         $plan = $in->plan;
-        if ($plan === null || !isset($plan['upgrades'])) {
+        if ($in->carUpdated || $plan === null || !isset($plan['upgrades'])) {
             return null;
         }
 
@@ -799,7 +860,7 @@ final class RaceEngineer
     {
         $left = self::afterPicks($in) - array_sum(array_column(self::offered($in), 'cost'));
         $pick = $in->trainingPick;
-        if ($stage === self::STAGE_TESTING && $pick !== null && $pick['cost'] <= $left) {
+        if ($stage === self::STAGE_TESTING && !$in->driverTrained && $pick !== null && $pick['cost'] <= $left) {
             $left -= $pick['cost'];
         }
 
@@ -889,6 +950,7 @@ final class RaceEngineer
             'anchor' => $anchor,
             'tone' => $tone,
             'action' => $action,
+            'step' => self::STEPS[$key],
         ];
     }
 }

@@ -58,6 +58,7 @@ final readonly class EngineerInputs
      * @param list<SwapPick> $swapPicks the season-long level picked for each swapped part that has one
      * @param int $testingLaps the Cockpit's training laps, whose testing wear every plan counts
      * @param ?TyreAdvice $tyreAdvice set only while GPRO's tyre contract window is open and unsigned
+     * @param list<string> $stuckParts parts still at or past the plan's limit while the car is updated
      */
     public function __construct(
         public array $objective,
@@ -87,6 +88,10 @@ final readonly class EngineerInputs
         public int $testingLaps = 0,
         public ?array $tyreAdvice = null,
         public ?string $division = null,
+        public bool $carUpdated = false,
+        public bool $tested = false,
+        public bool $driverTrained = false,
+        public array $stuckParts = [],
     ) {
     }
 
