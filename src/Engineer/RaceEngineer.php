@@ -24,6 +24,8 @@ use App\Support\Ordinal;
  */
 final class RaceEngineer
 {
+    private const string SMOKE_COST = 'expect smoke and lost time, and a retirement if it comes early';
+
     /** Tunable: how much a Survive weekend lowers the advisor's overtake risk. */
     public const int SURVIVE_OVERTAKE_STEP = 15;
 
@@ -383,8 +385,8 @@ final class RaceEngineer
             $red = implode(', ', $in->stuckRed) . ' ' . self::finishes($in->stuckRed) . ' in the red';
             $smoke = self::smoke($in->stuckSmoke);
             $reason = match (true) {
-                $in->stuckSmoke !== [] && $in->stuckRed !== [] => $smoke . ' (expect smoke and lost time) and ' . $red,
-                $in->stuckSmoke !== [] => $smoke . ': expect smoke and lost time',
+                $in->stuckSmoke !== [] && $in->stuckRed !== [] => $smoke . ' (' . self::SMOKE_COST . ') and ' . $red,
+                $in->stuckSmoke !== [] => $smoke . ': ' . self::SMOKE_COST,
                 $in->stuckRed !== [] => $red,
                 default => null,
             };

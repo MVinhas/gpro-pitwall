@@ -1514,7 +1514,8 @@ final class RaceEngineerServiceTest extends TestCase
         );
         self::assertSame('Car updated', $byKey['parts']['answer']);
         self::assertSame(
-            'Engine reaches 100% this race: expect smoke and lost time; no more changes until the next race',
+            'Engine reaches 100% this race: expect smoke and lost time, and a retirement if it comes early; '
+                . 'no more changes until the next race',
             $byKey['parts']['reason'],
         );
         self::assertSame('amber', $byKey['parts']['tone']);
@@ -1536,7 +1537,8 @@ final class RaceEngineerServiceTest extends TestCase
 
         self::assertSame('amber', $byKey['parts']['tone']);
         self::assertSame(
-            'Engine reaches 100% this race: expect smoke and lost time; no more changes until the next race',
+            'Engine reaches 100% this race: expect smoke and lost time, and a retirement if it comes early; '
+                . 'no more changes until the next race',
             $byKey['parts']['reason'],
         );
         self::assertSame(

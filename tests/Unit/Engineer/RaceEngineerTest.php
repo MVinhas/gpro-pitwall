@@ -206,7 +206,11 @@ final class RaceEngineerTest extends TestCase
 
         $this->assertSame('Car updated', $parts['answer']);
         $this->assertSame('amber', $parts['tone']);
-        $this->assertSame('Engine, Brakes reach 100% this race: expect smoke and lost time; no more changes until the next race', $parts['reason']);
+        $this->assertSame(
+            'Engine, Brakes reach 100% this race: expect smoke and lost time, and a retirement if it comes early; '
+                . 'no more changes until the next race',
+            $parts['reason'],
+        );
         $this->assertSame(
             'Engine, Brakes reach 100% this race and the car is already updated: CTR 0 keeps their wear lowest',
             $ctr['reason'],
@@ -282,7 +286,8 @@ final class RaceEngineerTest extends TestCase
 
         $this->assertSame('amber', $parts['tone']);
         $this->assertSame(
-            'Engine reaches 100% this race (expect smoke and lost time) and Brakes, Gearbox finish in the red; '
+            'Engine reaches 100% this race (expect smoke and lost time, and a retirement if it comes early) and '
+                . 'Brakes, Gearbox finish in the red; '
                 . 'no more changes until the next race',
             $parts['reason'],
         );
