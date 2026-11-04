@@ -152,7 +152,7 @@ final class SeasonServiceTest extends TestCase
     private function plan(array $overrides = []): array
     {
         return array_merge([
-            'v' => 1, 'ctr' => 41, 'mode' => 'nurse', 'safety' => 41,
+            'v' => 2, 'ctr' => 41, 'mode' => 'nurse', 'safety' => 41,
             'swaps' => [], 'refused_swap_cost' => null,
             'target' => 4_000_000, 'target_kind' => 'start', 'cushion' => 300_000, 'season_start' => 4_000_000,
             'envelope' => 1_200_000, 'shortfall' => null,
@@ -469,7 +469,7 @@ final class SeasonServiceTest extends TestCase
     public function testASavedPlanMissingKeysIsLoggedByClassAndGivesNull(): void
     {
         $this->race(1);
-        $this->budgets->save(1, 107, 9, ['v' => 1]);
+        $this->budgets->save(1, 107, 9, ['v' => 2]);
         $log = tempnam(sys_get_temp_dir(), 'season-log');
         $this->assertIsString($log);
         $previous = ini_set('error_log', $log);

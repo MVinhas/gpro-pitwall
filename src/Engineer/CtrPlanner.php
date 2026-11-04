@@ -5,17 +5,22 @@ declare(strict_types=1);
 namespace App\Engineer;
 
 use App\Service\WearAdvisorService;
+use Closure;
 use InvalidArgumentException;
 
 /**
  * @phpstan-import-type BudgetRow from SeasonBudget
+ * @phpstan-import-type Forecast from SeasonBudget
  * @phpstan-import-type Upgrade from UpgradeRanker
+ * @phpstan-import-type CtrNext from CtrValue
+ * @phpstan-type CtrValueFigures array{gain: int, cost: int, places: float, pace_known: bool, next: ?CtrNext}
  * @phpstan-type Plan array{
- *   v: int, ctr: int, mode: 'nurse'|'push'|'short', safety: int,
+ *   v: int, ctr: int, ctr_kind: 'highest'|'value'|'safety'|'energy', mode: 'nurse'|'push'|'short', safety: int,
  *   swaps: list<array{part: string, cost: int}>, refused_swap_cost: ?int,
  *   target: int, target_kind: 'cushion'|'start'|'start_out_of_reach'|'reserve'|'reserve_out_of_reach',
  *   cushion: int, season_start: ?int,
  *   envelope: int, shortfall: ?int, rows: list<BudgetRow>, partial: list<string>, race: int, infeasible?: bool,
+ *   energy_cap: int, energy_estimate: bool, energy_start: ?int, value: ?CtrValueFigures,
  *   upgrades?: list<Upgrade>}
  */
 final readonly class CtrPlanner
@@ -23,22 +28,27 @@ final readonly class CtrPlanner
     public const float PROMOTE_RESERVE = 0.5;
 
     private const int MAX_CTR = 100;
+    private const int PLAN_VERSION = 2;
 
     public function __construct(private CtrCeiling $ceiling, private SeasonBudget $budget)
     {
     }
 
     /**
-     * The Clear Track Risk to advise: the highest value whose season forecast keeps every race's balance at
-     * or above its target: the cushion, and at the last race the end target (the season start for Stay
-     * when it is above the cushion). It reads no current CTR, so the advice holds still when the
-     * manager follows it. The cushion is the committed cost plus the average repairs of the races after this
-     * one at the safety CTR: this race's forced swaps are bought before the race, so counting them would make
-     * the cushion drop once the manager follows the advice.
+     * The Clear Track Risk to advise, never above the driver's energy cap. A CTR fits the budget when its season
+     * forecast keeps every race's balance at or above its target: the cushion, and at the last race the end target
+     * (the season start for Stay when it is above the cushion). Promote takes the highest value that fits; above
+     * the safety ceiling it must also be a real push. Stay weighs every CTR that fits: the lowest one whose higher
+     * candidates aren't clearly better value (CtrValue), or the highest one in safety mode near the relegation
+     * line. It reads no current CTR, so the advice holds still when the manager follows it. The cushion is the
+     * committed cost plus the average repairs of the races after this one at the safety CTR: this race's forced
+     * swaps are bought before the race, so counting them would make the cushion drop once the manager follows the
+     * advice.
      *
      * @param list<array{race: int, track_name: ?string, base: ?array<string, float>}> $rounds next race first
      * @param array<string, array{level: int, start: int|float, track_base: int|float, training?: int|float}> $parts
      * @param array<string, ?int> $prices
+     * @param ?CtrPolicy $policy null plans with no gain and no energy cap
      * @return Plan
      */
     public function plan(
@@ -52,28 +62,47 @@ final readonly class CtrPlanner
         int $income,
         ?int $seasonStart,
         bool $carLocked = false,
+        ?CtrPolicy $policy = null,
     ): array {
         if ($rounds === []) {
             throw new InvalidArgumentException('A plan needs at least one remaining race.');
         }
 
+        $cap = $policy === null ? self::MAX_CTR : max(0, min(self::MAX_CTR, $policy->energyCap));
+        $policy ??= CtrPolicy::none();
         $stay = $objective === SeasonObjective::STAY;
         $limit = WearAdvisorService::THRESHOLD_SWAP;
 
         $safety = $this->ceiling->for($parts, $driverFactor, $limit, $carLocked);
 
-        $forecastAt = fn (int $ctr): array => $this->budget->forecast(
+        /** @var array<int, Forecast> $forecasts */
+        $forecasts = [];
+        /** @var Closure(int): Forecast $forecastAt */
+        $forecastAt = function (int $ctr) use (
+            &$forecasts,
             $rounds,
             $parts,
             $prices,
             $driverFactor,
-            $ctr,
             $limit,
             $cash,
             $committed,
             $income,
             $carLocked,
-        );
+        ): array {
+            return $forecasts[$ctr] ??= $this->budget->forecast(
+                $rounds,
+                $parts,
+                $prices,
+                $driverFactor,
+                $ctr,
+                $limit,
+                $cash,
+                $committed,
+                $income,
+                $carLocked,
+            );
+        };
 
         $atSafety = $forecastAt($safety)['rows'];
         $later = array_slice($atSafety, 1);
@@ -104,22 +133,64 @@ final readonly class CtrPlanner
 
         $forced = $this->ceiling->pastLimitAtZero($parts, $driverFactor, $limit);
 
-        $chosen = null;
-        $ctr = 0;
-        for ($c = $stay ? $safety : self::MAX_CTR; $c >= 0; $c--) {
-            $forecast = $forecastAt($c);
-            if ($this->passes($forecast, $c, $safety, $forced, $prices, $cushion, $target)) {
-                $chosen = $forecast;
-                $ctr = $c;
-                break;
+        $kind = 'highest';
+        $value = null;
+        if ($stay) {
+            $gain = [];
+            $repairs = [];
+            for ($c = 0; $c <= self::MAX_CTR; $c++) {
+                $forecast = $forecastAt($c);
+                if (self::withinBudget($forecast, $c, $cushion, $target)) {
+                    $gain[$c] = $c * $policy->gainPerPoint;
+                    $repairs[$c] = array_sum(array_column($forecast['rows'], 'repairs'));
+                }
+            }
+            $repairsAtZero = array_sum(array_column($forecastAt(0)['rows'], 'repairs'));
+
+            $choice = $gain === [] ? null : CtrValue::choose($gain, $repairs, $repairsAtZero, $policy->safety);
+            if ($choice !== null) {
+                $kind = $choice['kind'];
+                if ($choice['ctr'] > $cap) {
+                    $kind = 'energy';
+                    $capped = array_filter($gain, static fn (int $c): bool => $c <= $cap, ARRAY_FILTER_USE_KEY);
+                    $choice = $capped === []
+                        ? null
+                        : CtrValue::choose($capped, $repairs, $repairsAtZero, $policy->safety);
+                }
+            }
+            $ctr = $choice['ctr'] ?? null;
+            if ($choice !== null) {
+                $value = [
+                    'gain' => $choice['gain'],
+                    'cost' => $choice['cost'],
+                    'places' => round($choice['ctr'] * $policy->placesPerPoint, 1),
+                    'pace_known' => $policy->paceKnown,
+                    'next' => $choice['next'],
+                ];
+            }
+        } else {
+            $highest = function (int $from) use ($forecastAt, $safety, $forced, $prices, $cushion, $target): ?int {
+                for ($c = $from; $c >= 0; $c--) {
+                    if ($this->passes($forecastAt($c), $c, $safety, $forced, $prices, $cushion, $target)) {
+                        return $c;
+                    }
+                }
+
+                return null;
+            };
+            $ctr = $highest(self::MAX_CTR);
+            if ($ctr !== null && $ctr > $cap) {
+                $kind = 'energy';
+                $ctr = $highest($cap);
             }
         }
 
-        if ($chosen === null) {
+        if ($ctr === null) {
             $chosen = $forecastAt(0);
 
             return $this->result(
-                $ctr,
+                0,
+                'highest',
                 'short',
                 $safety,
                 [],
@@ -132,14 +203,19 @@ final readonly class CtrPlanner
                 max(0, -self::headroom($chosen['rows'], $cushion, $target)),
                 $chosen,
                 $rounds,
+                $cap,
+                $policy,
+                null,
             );
         }
 
+        $chosen = $forecastAt($ctr);
         $mode = $ctr > $safety ? 'push' : 'nurse';
         $swaps = $this->unforced($chosen['rows'][0]['replaced'], $forced);
 
         $refused = null;
-        if ($mode === 'nurse' && $safety < self::MAX_CTR && !$stay) {
+        // A cap at or below the safety ceiling rules out any push, so there is no refused swap to quote.
+        if ($mode === 'nurse' && $safety < $cap && !$stay) {
             $above = $this->unforced($forecastAt($safety + 1)['rows'][0]['replaced'], $forced);
             $sum = array_sum(array_column($above, 'cost'));
             $refused = $sum > 0 ? $sum : null;
@@ -147,6 +223,7 @@ final readonly class CtrPlanner
 
         return $this->result(
             $ctr,
+            $kind,
             $mode,
             $safety,
             $swaps,
@@ -159,7 +236,21 @@ final readonly class CtrPlanner
             null,
             $chosen,
             $rounds,
+            $cap,
+            $policy,
+            $value,
         );
+    }
+
+    /**
+     * The budget check alone: every row meets its own target, and a forecast that cannot be charged is only
+     * accepted at CTR 0, where no lower CTR avoids it.
+     *
+     * @param Forecast $forecast
+     */
+    private static function withinBudget(array $forecast, int $ctr, int $cushion, int $endTarget): bool
+    {
+        return !($forecast['infeasible'] && $ctr > 0) && self::headroom($forecast['rows'], $cushion, $endTarget) >= 0;
     }
 
     /**
@@ -180,7 +271,7 @@ final readonly class CtrPlanner
         int $cushion,
         int $endTarget,
     ): bool {
-        if (($forecast['infeasible'] && $ctr > 0) || self::headroom($forecast['rows'], $cushion, $endTarget) < 0) {
+        if (!self::withinBudget($forecast, $ctr, $cushion, $endTarget)) {
             return false;
         }
         if ($ctr <= $safety) {
@@ -228,15 +319,18 @@ final readonly class CtrPlanner
     }
 
     /**
+     * @param 'highest'|'value'|'safety'|'energy' $kind
      * @param 'nurse'|'push'|'short' $mode
      * @param list<array{part: string, cost: int}> $swaps
      * @param 'cushion'|'start'|'start_out_of_reach'|'reserve'|'reserve_out_of_reach' $targetKind
      * @param array{rows: list<BudgetRow>, partial: list<string>, infeasible: bool} $forecast
      * @param non-empty-list<array{race: int, track_name: ?string, base: ?array<string, float>}> $rounds
+     * @param ?CtrValueFigures $value
      * @return Plan
      */
     private function result(
         int $ctr,
+        string $kind,
         string $mode,
         int $safety,
         array $swaps,
@@ -249,10 +343,14 @@ final readonly class CtrPlanner
         ?int $shortfall,
         array $forecast,
         array $rounds,
+        int $cap,
+        CtrPolicy $policy,
+        ?array $value,
     ): array {
         return [
-            'v' => 1,
+            'v' => self::PLAN_VERSION,
             'ctr' => $ctr,
+            'ctr_kind' => $kind,
             'mode' => $mode,
             'safety' => $safety,
             'swaps' => $swaps,
@@ -267,6 +365,10 @@ final readonly class CtrPlanner
             'partial' => $forecast['partial'],
             'race' => $rounds[0]['race'],
             'infeasible' => $forecast['infeasible'],
+            'energy_cap' => $cap,
+            'energy_estimate' => $policy->energyEstimate,
+            'energy_start' => $policy->energyStart,
+            'value' => $value,
         ];
     }
 }

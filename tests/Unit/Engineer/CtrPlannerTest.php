@@ -6,6 +6,8 @@ namespace App\Tests\Unit\Engineer;
 
 use App\Engineer\CtrCeiling;
 use App\Engineer\CtrPlanner;
+use App\Engineer\CtrPolicy;
+use App\Engineer\CtrValue;
 use App\Engineer\SeasonBudget;
 use App\Engineer\SeasonObjective;
 use App\Service\CarWearService;
@@ -65,6 +67,7 @@ final class CtrPlannerTest extends TestCase
         ?array $parts = null,
         int $races = 3,
         bool $carLocked = false,
+        ?CtrPolicy $policy = null,
     ): array {
         return $this->planner->plan(
             $objective,
@@ -77,7 +80,40 @@ final class CtrPlannerTest extends TestCase
             $income,
             $seasonStart,
             $carLocked,
+            $policy,
         );
+    }
+
+    private static function policy(
+        int $gainPerPoint = 0,
+        int $cap = 100,
+        bool $safety = false,
+        float $placesPerPoint = 0.0,
+        bool $paceKnown = true,
+    ): CtrPolicy {
+        return new CtrPolicy($cap, false, 90, $gainPerPoint, $placesPerPoint, $paceKnown, $safety);
+    }
+
+    /**
+     * The highest CTR whose forecast passes the budget check alone, scanned the plan's way.
+     *
+     * @param array<string, mixed> $plan
+     */
+    private function highestBudgetCandidate(array $plan, int $cash): int
+    {
+        for ($c = 100; $c >= 0; $c--) {
+            $forecast = $this->budget->forecast($this->rounds(), self::ENGINE, self::PRICES, 1.0, $c, 100, $cash, 0, 0);
+            $cushion = $plan['cushion'];
+            $target = $plan['target'];
+            if (
+                !($forecast['infeasible'] && $c > 0)
+                && CtrPlanner::headroom($forecast['rows'], $cushion, $target) >= 0
+            ) {
+                return $c;
+            }
+        }
+
+        return -1;
     }
 
     public function testPlanNeverReadsTheCurrentCtr(): void
@@ -182,7 +218,7 @@ final class CtrPlannerTest extends TestCase
         }
     }
 
-    public function testHoldTargetIsTheSeasonStartWhenHigherThanTheCushion(): void
+    public function testStayTargetIsTheSeasonStartWhenHigherThanTheCushion(): void
     {
         $plan = $this->plan(SeasonObjective::STAY, 1_000_000, seasonStart: 500_000);
 
@@ -192,7 +228,7 @@ final class CtrPlannerTest extends TestCase
         $this->assertGreaterThanOrEqual(500_000, $plan['rows'][array_key_last($plan['rows'])]['balance']);
     }
 
-    public function testHoldStartTargetIsJudgedAtSeasonEnd(): void
+    public function testStayStartTargetIsJudgedAtSeasonEnd(): void
     {
         // Race 10 of 17: cash dips below the start mid-season, then income lifts it $3M above by the end.
         $rounds = [];
@@ -220,7 +256,9 @@ final class CtrPlannerTest extends TestCase
         $this->assertSame(20_000_000, $plan['target']);
         $this->assertSame(2_000_000, $plan['cushion']);
         $this->assertNotSame('short', $plan['mode']);
-        $this->assertSame(100, $plan['ctr']);
+        // No pace gain and no repairs at any CTR: nothing pays for a higher one.
+        $this->assertSame(0, $plan['ctr']);
+        $this->assertSame('value', $plan['ctr_kind']);
         $this->assertSame(min(min($balances) - 2_000_000, 23_000_000 - 20_000_000), $plan['envelope']);
         $this->assertSame(3_000_000, $plan['envelope']);
     }
@@ -239,7 +277,7 @@ final class CtrPlannerTest extends TestCase
         $this->assertSame(max($misses), $plan['shortfall']);
     }
 
-    public function testHoldTargetIsTheCushionWhenTheStartIsLowerOrUnknown(): void
+    public function testStayTargetIsTheCushionWhenTheStartIsLowerOrUnknown(): void
     {
         $low = $this->plan(SeasonObjective::STAY, 1_000_000, seasonStart: 1_000);
         $this->assertSame('cushion', $low['target_kind']);
@@ -341,7 +379,7 @@ final class CtrPlannerTest extends TestCase
         $rounds = $this->rounds();
         $rounds[0]['base'] = null;
 
-        $plan = $this->planner->plan(SeasonObjective::STAY, $rounds, self::ENGINE, self::PRICES, 1.0, 150_000, 0, 0, null);
+        $plan = $this->planner->plan(SeasonObjective::PROMOTE, $rounds, self::ENGINE, self::PRICES, 1.0, 150_000, 0, 0, null);
 
         $this->assertSame('nurse', $plan['mode']);
         $this->assertLessThan(100, $plan['safety']);
@@ -351,7 +389,7 @@ final class CtrPlannerTest extends TestCase
     public function testPushIsNotAdvisedWhenASwapPriceIsUnknown(): void
     {
         $plan = $this->planner->plan(
-            SeasonObjective::STAY,
+            SeasonObjective::PROMOTE,
             $this->rounds(),
             self::ENGINE,
             ['Engine' => null],
@@ -373,7 +411,7 @@ final class CtrPlannerTest extends TestCase
         $rounds = $this->rounds();
         $rounds[0]['base'] = null;
 
-        $plan = $this->planner->plan(SeasonObjective::STAY, $rounds, self::ENGINE, self::PRICES, 1.0, 10_000_000, 0, 0, null);
+        $plan = $this->planner->plan(SeasonObjective::PROMOTE, $rounds, self::ENGINE, self::PRICES, 1.0, 10_000_000, 0, 0, null);
 
         $this->assertLessThan(100, $plan['safety']);
         $this->assertSame('nurse', $plan['mode']);
@@ -395,10 +433,11 @@ final class CtrPlannerTest extends TestCase
         $this->assertGreaterThanOrEqual(100, WearAdvisorService::percent(round(20.0 * 1.02 ** ($plan['ctr'] + 1), 1)));
     }
 
-    public function testStayNeverPushes(): void
+    public function testStayWithoutAGainNeverPushes(): void
     {
         $plan = $this->plan(SeasonObjective::STAY, 50_000_000);
 
+        $this->assertSame(0, $plan['ctr']);
         $this->assertLessThanOrEqual($plan['safety'], $plan['ctr']);
         $this->assertSame('nurse', $plan['mode']);
         $this->assertSame([], $plan['swaps']);
@@ -485,7 +524,7 @@ final class CtrPlannerTest extends TestCase
 
         $plan = $this->planner->plan(SeasonObjective::STAY, $rounds, self::ENGINE, self::PRICES, 1.0, 1_000_000, 0, 0, null);
 
-        $this->assertSame(1, $plan['v']);
+        $this->assertSame(2, $plan['v']);
         $this->assertSame(['T5 wear unknown'], $plan['partial']);
     }
 
@@ -548,5 +587,186 @@ final class CtrPlannerTest extends TestCase
         $this->assertSame('nurse', $locked['mode']);
         $this->assertLessThanOrEqual($locked['safety'], $locked['ctr']);
         $this->assertSame([], $locked['swaps']);
+    }
+
+    public function test_stay_picks_lowest_clearly_better_ctr(): void
+    {
+        // $2,000 a point never pays for a swap ($100,000 from CTR 25, $300,000 above the safety ceiling).
+        $plan = $this->plan(SeasonObjective::STAY, 1_000_000, policy: self::policy(2_000));
+
+        $this->assertSame(80, $plan['safety']);
+        $this->assertLessThanOrEqual($plan['safety'], $plan['ctr']);
+        $this->assertSame(0, $plan['ctr']);
+        $this->assertSame('value', $plan['ctr_kind']);
+        $this->assertSame('nurse', $plan['mode']);
+        $this->assertNull($plan['refused_swap_cost']);
+        $this->assertSame(0, $plan['value']['gain']);
+        $this->assertSame(0, $plan['value']['cost']);
+        $this->assertSame(['ctr' => 1, 'gain_more' => 2_000, 'cost_more' => 0], $plan['value']['next']);
+    }
+
+    public function test_stay_moves_up_when_gain_clearly_beats_repairs(): void
+    {
+        $plan = $this->plan(SeasonObjective::STAY, 1_000_000, policy: self::policy(20_000, placesPerPoint: 0.04));
+
+        $this->assertGreaterThan(0, $plan['ctr']);
+        $this->assertSame('value', $plan['ctr_kind']);
+        $this->assertSame($plan['ctr'] * 20_000, $plan['value']['gain']);
+        $this->assertGreaterThan(CtrValue::MARGIN, $plan['value']['gain'] - $plan['value']['cost'], 'CTR 0 is worth 0');
+        $this->assertSame(round($plan['ctr'] * 0.04, 1), $plan['value']['places']);
+        $this->assertTrue($plan['value']['pace_known']);
+        $this->assertSame($plan['ctr'] > $plan['safety'] ? 'push' : 'nurse', $plan['mode']);
+    }
+
+    public function test_stay_safety_takes_highest_candidate(): void
+    {
+        // $120,000 covers no swap: every CTR from 25 up leaves a row under the cushion.
+        $plan = $this->plan(SeasonObjective::STAY, 120_000, policy: self::policy(safety: true));
+
+        $this->assertSame($this->highestBudgetCandidate($plan, 120_000), $plan['ctr']);
+        $this->assertSame(24, $plan['ctr']);
+        $this->assertSame('safety', $plan['ctr_kind']);
+        $this->assertSame('nurse', $plan['mode']);
+    }
+
+    public function test_stay_safety_with_room_can_push(): void
+    {
+        $plan = $this->plan(SeasonObjective::STAY, 1_000_000, policy: self::policy(safety: true));
+
+        $this->assertSame($this->highestBudgetCandidate($plan, 1_000_000), $plan['ctr']);
+        $this->assertSame(100, $plan['ctr']);
+        $this->assertSame('push', $plan['mode']);
+        $this->assertNull($plan['refused_swap_cost']);
+    }
+
+    public function test_energy_cap_binds_stay(): void
+    {
+        $plan = $this->plan(SeasonObjective::STAY, 1_000_000, policy: self::policy(1_000_000, cap: 5));
+
+        $this->assertSame(5, $plan['ctr']);
+        $this->assertSame('energy', $plan['ctr_kind']);
+        $this->assertSame(5, $plan['energy_cap']);
+        $this->assertFalse($plan['energy_estimate']);
+        $this->assertSame(90, $plan['energy_start']);
+        $this->assertNull($plan['value']['next']);
+    }
+
+    public function test_energy_cap_binds_stay_safety(): void
+    {
+        $plan = $this->plan(SeasonObjective::STAY, 1_000_000, policy: self::policy(cap: 30, safety: true));
+
+        $this->assertSame(30, $plan['ctr']);
+        $this->assertSame('energy', $plan['ctr_kind']);
+    }
+
+    public function test_energy_cap_binds_promote(): void
+    {
+        $this->assertSame(100, $this->plan(SeasonObjective::PROMOTE, 1_000_000)['ctr']);
+
+        $plan = $this->plan(SeasonObjective::PROMOTE, 1_000_000, policy: self::policy(cap: 3));
+
+        $this->assertSame(3, $plan['ctr']);
+        $this->assertSame('energy', $plan['ctr_kind']);
+        $this->assertSame(3, $plan['energy_cap']);
+        $this->assertSame('nurse', $plan['mode']);
+        $this->assertNull($plan['value']);
+        // Pushing past the safety ceiling would break the cap, so no refused push is quoted.
+        $this->assertNull($plan['refused_swap_cost']);
+    }
+
+    public function test_energy_cap_above_the_promote_advice_does_not_bind(): void
+    {
+        $plan = $this->plan(SeasonObjective::PROMOTE, 120_000, policy: self::policy(cap: 50));
+
+        $this->assertSame(24, $plan['ctr']);
+        $this->assertSame('highest', $plan['ctr_kind']);
+    }
+
+    public function test_promote_unchanged_without_cap(): void
+    {
+        $chassis = self::ENGINE + ['Chassis' => ['level' => 1, 'start' => 99.0, 'track_base' => 10.0]];
+        $stuck = [
+            'Engine' => ['level' => 1, 'start' => 95.0, 'track_base' => 10.0],
+            'Chassis' => ['level' => 1, 'start' => 0.0, 'track_base' => 10.0],
+        ];
+        // Snapshot of the advice before the energy cap existed: cash, committed, income, start, parts, locked,
+        // then the CTR and mode it gave.
+        $scenarios = [
+            [0, 0, 0, null, null, false, 0, 'short'],
+            [40_000, 0, 0, null, null, false, 0, 'short'],
+            [80_000, 0, 0, null, null, false, 24, 'nurse'],
+            [120_000, 0, 0, null, null, false, 24, 'nurse'],
+            [150_000, 0, 0, null, null, false, 80, 'nurse'],
+            [250_000, 0, 0, null, null, false, 80, 'nurse'],
+            [400_000, 0, 0, null, null, false, 100, 'push'],
+            [1_000_000, 0, 0, null, null, false, 100, 'push'],
+            [300_000, 50_000, 30_000, null, null, false, 80, 'nurse'],
+            [600_000, 50_000, 30_000, null, null, false, 100, 'push'],
+            [900_000, 50_000, 30_000, null, null, false, 100, 'push'],
+            [2_000_000, 50_000, 30_000, null, null, false, 100, 'push'],
+            [12_000_000, 50_000, 0, 10_000_000, null, false, 100, 'push'],
+            [1_000_000, 50_000, 0, 100_000, null, false, 100, 'push'],
+            [1_000_000, 50_000, 0, 10_000_000, null, false, 100, 'push'],
+            [100_000, 0, 50_000, null, null, false, 80, 'nurse'],
+            [0, 100_000, 0, null, null, false, 0, 'short'],
+            [10_000_000, 0, 0, null, $chassis, false, 100, 'push'],
+            [400_000, 0, 0, null, $chassis, false, 24, 'nurse'],
+            [5_000_000, 0, 0, null, $stuck, true, 0, 'nurse'],
+        ];
+
+        foreach ($scenarios as $i => [$cash, $committed, $income, $start, $parts, $locked, $ctr, $mode]) {
+            $plan = $this->plan(SeasonObjective::PROMOTE, $cash, $committed, $income, $start, $parts, carLocked: $locked);
+
+            $this->assertSame($ctr, $plan['ctr'], "scenario $i");
+            $this->assertSame($mode, $plan['mode'], "scenario $i");
+            $this->assertSame('highest', $plan['ctr_kind'], "scenario $i");
+            $this->assertSame(100, $plan['energy_cap'], "scenario $i");
+            $this->assertNull($plan['value'], "scenario $i");
+        }
+    }
+
+    public function test_budget_still_rules_stay(): void
+    {
+        // $1M a point makes every CTR clearly better than the one below, but from CTR 25 a swap breaks the cushion.
+        $plan = $this->plan(SeasonObjective::STAY, 120_000, policy: self::policy(1_000_000));
+
+        $this->assertSame($this->highestBudgetCandidate($plan, 120_000), $plan['ctr']);
+        $this->assertSame(24, $plan['ctr']);
+        $this->assertSame('value', $plan['ctr_kind']);
+        $this->assertGreaterThanOrEqual(0, $plan['envelope']);
+        $this->assertNull($plan['value']['next']);
+    }
+
+    public function test_stay_short_when_no_candidate_passes(): void
+    {
+        $plan = $this->plan(SeasonObjective::STAY, 0, 100_000, policy: self::policy(1_000_000));
+
+        $this->assertSame('short', $plan['mode']);
+        $this->assertSame(0, $plan['ctr']);
+        $this->assertSame('highest', $plan['ctr_kind']);
+        $this->assertNull($plan['value']);
+        $this->assertGreaterThan(0, $plan['shortfall']);
+    }
+
+    public function test_no_pace_data_advises_zero_with_its_own_reason(): void
+    {
+        $plan = $this->plan(SeasonObjective::STAY, 1_000_000, policy: self::policy(0, paceKnown: false));
+
+        $this->assertSame(0, $plan['ctr']);
+        $this->assertSame('value', $plan['ctr_kind']);
+        $this->assertFalse($plan['value']['pace_known']);
+        $this->assertSame(0.0, $plan['value']['places']);
+    }
+
+    public function test_plan_is_v2(): void
+    {
+        $plan = $this->plan(SeasonObjective::STAY, 1_000_000);
+
+        $this->assertSame(2, $plan['v']);
+        $this->assertSame('value', $plan['ctr_kind']);
+        $this->assertSame(100, $plan['energy_cap']);
+        $this->assertTrue($plan['energy_estimate']);
+        $this->assertNull($plan['energy_start']);
+        $this->assertFalse($plan['value']['pace_known']);
     }
 }

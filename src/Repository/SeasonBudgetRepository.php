@@ -13,7 +13,7 @@ use PDO;
  */
 class SeasonBudgetRepository
 {
-    private const int PLAN_VERSION = 1;
+    private const int PLAN_VERSION = 2;
 
     public function __construct(private readonly PDO $pdo)
     {

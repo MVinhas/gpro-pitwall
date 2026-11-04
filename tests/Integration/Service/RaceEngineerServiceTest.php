@@ -601,7 +601,7 @@ final class RaceEngineerServiceTest extends TestCase
         $saved = $this->budgets->find(self::USER, self::SEASON);
 
         self::assertNotNull($saved);
-        self::assertSame(1, $saved['plan']['v']);
+        self::assertSame(2, $saved['plan']['v']);
         self::assertSame(10, $saved['race']);
         self::assertSame(10, $saved['plan']['race']);
     }
@@ -762,7 +762,7 @@ final class RaceEngineerServiceTest extends TestCase
         self::assertSame(['Engine', 'Brakes'], array_column($plan['upgrades'], 'part'));
         self::assertSame(1, $plan['upgrades'][0]['from']);
         self::assertSame(2, $plan['upgrades'][0]['to']);
-        self::assertSame(1, $plan['v']);
+        self::assertSame(2, $plan['v']);
     }
 
     public function testTheUpgradesLineAgreesWithTheSavedRanking(): void
@@ -1542,7 +1542,7 @@ final class RaceEngineerServiceTest extends TestCase
             'wear' => ['track_name' => 'Testring', 'laps' => 50, 'parts' => ['Engine' => $engine, 'Brakes' => $brakes]],
         ]))['lines'], null, 'key');
 
-        self::assertNotSame('CTR 0', $byKey['ctr']['answer']);
+        self::assertStringNotContainsString('already updated', $byKey['ctr']['reason']);
         self::assertSame('ink', $byKey['parts']['tone']);
         self::assertSame('One update per race; the plan reads the car as it is now', $byKey['parts']['reason']);
     }
