@@ -152,16 +152,20 @@ final readonly class CtrPlanner
             }
             $repairsAtZero = array_sum(array_column($forecastAt(0)['rows'], 'repairs'));
 
-            $choice = $gain === [] ? null : CtrValue::choose($gain, $repairs, $repairsAtZero, $policy->safety);
+            // The pick and the higher CTR the reason quotes both come from the CTRs the driver's energy allows.
+            $capped = array_filter($gain, static fn (int $c): bool => $c <= $cap, ARRAY_FILTER_USE_KEY);
+            $choice = $capped === [] ? null : CtrValue::choose($capped, $repairs, $repairsAtZero, $policy->safety);
             if ($choice !== null) {
                 $kind = $choice['kind'];
-                if ($choice['ctr'] > $cap) {
-                    $capped = array_filter($gain, static fn (int $c): bool => $c <= $cap, ARRAY_FILTER_USE_KEY);
-                    $choice = $capped === []
-                        ? null
-                        : CtrValue::choose($capped, $repairs, $repairsAtZero, $policy->safety);
-                    // Only a pick that sits at the cap was set by energy; below it, its own rule chose it.
-                    $kind = $choice === null || $choice['ctr'] === $cap ? 'energy' : $choice['kind'];
+                // Energy set the pick only when it sits at the cap and the uncapped value rule would go higher.
+                // Safety keeps its own kind: near the relegation line, that is the reason worth giving.
+                if (
+                    !$policy->safety
+                    && $choice['ctr'] === $cap
+                    && count($capped) < count($gain)
+                    && CtrValue::choose($gain, $repairs, $repairsAtZero, false)['ctr'] > $cap
+                ) {
+                    $kind = 'energy';
                 }
             }
             $ctr = $choice['ctr'] ?? null;

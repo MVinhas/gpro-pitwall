@@ -655,12 +655,82 @@ final class CtrPlannerTest extends TestCase
         $this->assertNull($plan['value']['next']);
     }
 
-    public function test_energy_cap_binds_stay_safety(): void
+    public function test_safety_beats_energy_when_the_stay_pick_lands_on_the_cap(): void
     {
         $plan = $this->plan(SeasonObjective::STAY, 1_000_000, policy: self::policy(cap: 30, safety: true));
 
         $this->assertSame(30, $plan['ctr']);
-        $this->assertSame('energy', $plan['ctr_kind']);
+        $this->assertSame('safety', $plan['ctr_kind']);
+        $this->assertSame(30, $plan['energy_cap']);
+    }
+
+    /**
+     * One race where the Engine's swap starts at CTR 36 ($1.2M) and the Chassis's at CTR 41 ($5M more, past the
+     * $3M of cash): the budget allows CTR 0 to 40.
+     *
+     * @return array<string, mixed>
+     */
+    private function twoStepPlan(CtrPolicy $policy): array
+    {
+        return $this->planner->plan(
+            SeasonObjective::STAY,
+            [['race' => 17, 'track_name' => 'T17', 'base' => ['Engine' => 10.0, 'Chassis' => 10.0]]],
+            [
+                'Engine' => ['level' => 1, 'start' => 79.0, 'track_base' => 10.0],
+                'Chassis' => ['level' => 1, 'start' => 76.7, 'track_base' => 10.0],
+            ],
+            ['Engine' => 1_200_000, 'Chassis' => 5_000_000],
+            1.0,
+            3_000_000,
+            0,
+            0,
+            null,
+            false,
+            $policy,
+        );
+    }
+
+    public function test_a_stay_value_pick_never_hints_above_the_energy_cap(): void
+    {
+        // Uncapped, CTR 40 nets $50k over CTR 35: the hint every lower cap must not quote.
+        $uncapped = $this->twoStepPlan(self::policy(250_000));
+        $this->assertSame(35, $uncapped['ctr']);
+        $this->assertSame(40, $uncapped['value']['next']['ctr']);
+
+        $plan = $this->twoStepPlan(self::policy(250_000, cap: 38));
+
+        $this->assertSame(35, $plan['ctr']);
+        $this->assertSame('value', $plan['ctr_kind']);
+        $this->assertLessThanOrEqual($plan['energy_cap'], $plan['value']['next']['ctr']);
+        $this->assertSame(
+            ['ctr' => 38, 'gain_more' => 750_000, 'cost_more' => 1_200_000, 'net_more' => -450_000],
+            $plan['value']['next'],
+        );
+    }
+
+    public function test_a_stay_safety_pick_at_the_cap_stays_safety(): void
+    {
+        $this->assertSame(40, $this->twoStepPlan(self::policy(safety: true))['ctr']);
+
+        $plan = $this->twoStepPlan(self::policy(cap: 38, safety: true));
+
+        $this->assertSame(38, $plan['ctr']);
+        $this->assertSame('safety', $plan['ctr_kind']);
+        $this->assertNull($plan['value']['next']);
+    }
+
+    public function test_a_stay_value_pick_on_the_cap_is_energy_only_when_the_cap_held_it_down(): void
+    {
+        // Uncapped the value rule picks 35 itself: a cap of exactly 35 did not hold anything down.
+        $atPick = $this->twoStepPlan(self::policy(250_000, cap: 35));
+        $this->assertSame(35, $atPick['ctr']);
+        $this->assertSame('value', $atPick['ctr_kind']);
+        $this->assertNull($atPick['value']['next']);
+
+        // A cap of 30 sits under the uncapped pick, and the capped pick lands on it.
+        $held = $this->twoStepPlan(self::policy(250_000, cap: 30));
+        $this->assertSame(30, $held['ctr']);
+        $this->assertSame('energy', $held['ctr_kind']);
     }
 
     public function test_energy_cap_binds_promote(): void
