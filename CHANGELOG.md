@@ -6,6 +6,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.28] - 2026-11-04
+
+### Changed
+- Hold and Survive are now one season objective, **Stay**: keep the division and spend as little as you can. Rookie
+  always gets Promote (there is no relegation there). Pins stored or posted as Hold or Survive read as Stay; schema 20
+  migrates the stored rows.
+- Stay chooses Clear Track Risk for value: the lowest CTR whose higher options don't clearly pay for their extra repairs
+  (more than $100k over the season). The gain is the pace a CTR point buys, turned into places and prize money for
+  every race left. Close to the relegation line (projected within 3 places of it) Stay takes the highest CTR the budget
+  allows.
+- Every CTR advice is capped by the driver's energy: the highest CTR that still ends the race with 10% energy left,
+  fitted from past races. Divisions with too few races use a rough estimate, and the reason says so.
+- Stay keeps Survive's money rules (forced repairs first, overtake lowered by 15, downgrades while the car stays above
+  relegation) but gets the normal boost advice.
+- The Cockpit's part-swap picks are judged against the same Stay plan, so former Hold managers can be offered a
+  downgrade while the car stays above the relegation zone.
+
 ## [1.21.27] - 2026-11-04
 
 ### Changed
