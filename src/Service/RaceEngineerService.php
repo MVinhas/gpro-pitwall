@@ -520,27 +520,11 @@ class RaceEngineerService
         $track = (string) ($c['track_name'] ?? '') === '' ? null : $this->tracks->findByName((string) $c['track_name']);
         $office = self::arr($c['office'] ?? null);
 
-        $ceiling = null;
-        $survive = null;
-        $alwaysRed = [];
-        if ($parts !== null) {
-            $ceiling = $this->ceiling->for($parts, $driverFactor, WearAdvisorService::THRESHOLD_SWAP, $carLocked);
-            $survive = min(
-                $ceiling,
-                $this->ceiling->for($parts, $driverFactor, WearAdvisorService::THRESHOLD_RISKY, $carLocked),
-            );
-            // Parts past the swap limit even at CTR 0 get replaced, so they aren't stuck in the red.
-            // Both lists ignore the current CTR, which keeps the reason stable once "Use N" is followed.
-            $alwaysRed = array_values(array_diff(
-                $this->ceiling->pastLimitAtZero($parts, $driverFactor, WearAdvisorService::THRESHOLD_RISKY),
-                $this->ceiling->pastLimitAtZero($parts, $driverFactor, WearAdvisorService::THRESHOLD_SWAP),
-            ));
-        }
+        $ceiling = $parts === null
+            ? null
+            : $this->ceiling->for($parts, $driverFactor, WearAdvisorService::THRESHOLD_SWAP, $carLocked);
         $stuckSmoke = $carLocked && $parts !== null
             ? $this->ceiling->pastLimitAtZero($parts, $driverFactor, WearAdvisorService::THRESHOLD_SWAP)
-            : [];
-        $stuckRisky = $carLocked && $parts !== null
-            ? $this->ceiling->pastLimitAtZero($parts, $driverFactor, WearAdvisorService::THRESHOLD_RISKY)
             : [];
         $testingTrack = $c['testing_track'] ?? null;
         $car = self::arr($c['car'] ?? null);
@@ -559,8 +543,6 @@ class RaceEngineerService
             cash: $cash,
             currentCtr: (int) ($c['ctr'] ?? 0),
             ctrCeiling: $ceiling,
-            ctrSurvive: $survive,
-            alwaysRed: $alwaysRed,
             pushAdvice: $this->pushAdvice($c, $rounds, $raceNb),
             wearAdvice: $wearAdvice,
             forcedSwapCost: $this->forcedSwapCost($forced, self::arrOrNull($c['swap_plan'] ?? null)),
@@ -578,7 +560,6 @@ class RaceEngineerService
             boostLitres: $this->boostLitres($track, $weather, $stale),
             weatherStale: $stale,
             plan: $plan,
-            redZoneSwaps: $plan !== null && $parts !== null ? $this->redZoneSwaps($plan, $parts, $driverFactor) : [],
             staffStanding: GroupStanding::staff(
                 self::arr($c['group_staff'] ?? null),
                 self::arr($c['menu'] ?? null),
@@ -591,7 +572,6 @@ class RaceEngineerService
             tested: self::done($office, 'doneTesting'),
             driverTrained: self::done($office, 'doneDriTrain'),
             stuckSmoke: $stuckSmoke,
-            stuckRed: array_values(array_diff($stuckRisky, $stuckSmoke)),
         );
     }
 
@@ -750,7 +730,7 @@ class RaceEngineerService
         $replaced = array_column($plan['rows'][0]['replaced'], 'part');
         $out = [];
         foreach ($parts as $label => $part) {
-            $end = $this->endAt($part, $driverFactor, $plan['ctr']);
+            $end = WearAdvisorService::percent($this->endAt($part, $driverFactor, $plan['ctr']));
             $price = $prices[$label] ?? null;
             if (
                 $end >= WearAdvisorService::THRESHOLD_RISKY
@@ -759,28 +739,6 @@ class RaceEngineerService
                 && $price !== null
             ) {
                 $out[] = ['part' => (string) $label, 'cost' => $price];
-            }
-        }
-
-        return $out;
-    }
-
-    /**
-     * Parts the plan replaces before the next race that would only finish it in the red at the plan's CTR
-     * (a Survive plan swaps at 90), so the engineer doesn't call them a break.
-     *
-     * @param Plan $plan
-     * @param array<string, array{level: int, start: int|float, track_base: int|float, training?: int|float}> $parts
-     * @return list<string>
-     */
-    private function redZoneSwaps(array $plan, array $parts, float $driverFactor): array
-    {
-        $out = [];
-        foreach ($plan['rows'][0]['replaced'] as $swap) {
-            $part = $parts[$swap['part']] ?? null;
-            $end = $part === null ? null : $this->endAt($part, $driverFactor, $plan['ctr']);
-            if ($end !== null && $end < WearAdvisorService::THRESHOLD_SWAP) {
-                $out[] = $swap['part'];
             }
         }
 
@@ -898,7 +856,6 @@ class RaceEngineerService
         try {
             $plan['upgrades'] = $this->ranker->rank(
                 $plan,
-                $objective['objective'] ?? SeasonObjective::HOLD,
                 $basis['rounds'],
                 $this->demands($c),
                 $basis['parts'],

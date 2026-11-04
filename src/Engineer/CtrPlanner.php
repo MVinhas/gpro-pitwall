@@ -29,16 +29,6 @@ final readonly class CtrPlanner
     }
 
     /**
-     * The wear (%) at which a part counts as gone: Survive plays it safer than the others.
-     */
-    public static function limit(string $objective): int
-    {
-        return $objective === SeasonObjective::SURVIVE
-            ? WearAdvisorService::THRESHOLD_RISKY
-            : WearAdvisorService::THRESHOLD_SWAP;
-    }
-
-    /**
      * The Clear Track Risk to advise: the highest value whose season forecast keeps every race's balance at
      * or above its target: the cushion, and at the last race the end target (the season start for Hold and
      * Survive when it is above the cushion). It reads no current CTR, so the advice holds still when the
@@ -68,17 +58,9 @@ final readonly class CtrPlanner
         }
 
         $survive = $objective === SeasonObjective::SURVIVE;
-        $limit = self::limit($objective);
+        $limit = WearAdvisorService::THRESHOLD_SWAP;
 
         $safety = $this->ceiling->for($parts, $driverFactor, $limit, $carLocked);
-        if ($survive) {
-            $safety = min($safety, $this->ceiling->for(
-                $parts,
-                $driverFactor,
-                WearAdvisorService::THRESHOLD_SWAP,
-                $carLocked,
-            ));
-        }
 
         $forecastAt = fn (int $ctr): array => $this->budget->forecast(
             $rounds,

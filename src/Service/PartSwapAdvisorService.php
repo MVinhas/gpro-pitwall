@@ -20,7 +20,7 @@ use App\Engineer\SwapSeason;
  * When the part still finishes as-is, a "keep it" option joins the list.
  *
  * Every option is projected against the upcoming race via CarWearService and
- * hard-filtered: cost > cash (free spares pass), end-wear > 100 %, level
+ * hard-filtered: cost > cash (free spares pass), end-wear of 100 % (rounded up), level
  * outside the group's observed envelope `[min-1, max+1]` from GetMoneyLevels
  * (skipped when <3 peers observed).
  *
@@ -78,9 +78,6 @@ use App\Engineer\SwapSeason;
  */
 final class PartSwapAdvisorService
 {
-    /** End-of-race wear (%) below which a part is considered to survive. */
-    public const float SURVIVE_THRESHOLD = 100.0;
-
     /** Group sample size below which the operating-band filter is skipped. */
     private const int GROUP_MIN_SAMPLE = 3;
 
@@ -350,7 +347,7 @@ final class PartSwapAdvisorService
             $start = (float) ($opt['newWear'] ?? 0);
             $end   = $this->carWear->projectEndWear($trackBase, $level, $start, $driverFactor, $risk)
                 + $trainingWear;
-            if ($end > self::SURVIVE_THRESHOLD) {
+            if (WearAdvisorService::percent($end) >= WearAdvisorService::THRESHOLD_SWAP) {
                 continue;
             }
 

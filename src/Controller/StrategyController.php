@@ -15,6 +15,7 @@ use App\Service\RaceWeatherService;
 use App\Service\RiskAdvisorService;
 use App\Service\PhaMatchService;
 use App\Service\CarWearService;
+use App\Service\WearAdvisorService;
 use App\Support\RaceSettings;
 use Twig\Environment;
 
@@ -478,7 +479,7 @@ class StrategyController
             'driver_total'  => $driver['total'],
             'driver_above'  => $driver['above'],
             'driver_below'  => $driver['below'],
-            'wear_ok'       => $wearMaxAtPushRisk === null ? null : $wearMaxAtPushRisk <= self::WEAR_HEADROOM_LIMIT,
+            'wear_ok'       => self::pushWearOk($wearMaxAtPushRisk),
             'wear_max'      => $wearMaxAtPushRisk,
             'wear_risk'     => self::PUSH_RISK,
         ];
@@ -487,8 +488,15 @@ class StrategyController
     /** Reference Clear Track Risk for the wear-headroom signal. */
     private const int PUSH_RISK = 50;
 
-    /** A part projected past this end-wear at PUSH_RISK is a failure risk. */
-    private const float WEAR_HEADROOM_LIMIT = 90.0;
+    /**
+     * Whether the worst part lasts the push: up to 99% wear, rounded up, since 100% smokes.
+     */
+    public static function pushWearOk(?float $maxEndWear): ?bool
+    {
+        return $maxEndWear === null
+            ? null
+            : WearAdvisorService::percent($maxEndWear) < WearAdvisorService::THRESHOLD_SWAP;
+    }
 
     /**
      * Highest projected end-of-race part wear (%) at the reference push risk

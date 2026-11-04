@@ -97,11 +97,10 @@ final class CarWearPlannerServiceTest extends TestCase
         $this->assertSame([], $this->planner()->upcoming(self::season(range(1, 17)), 0));
     }
 
-    public function testEachRaceAddsItsWearRoundedToAWholePercent(): void
+    public function testEachRaceAddsItsWearRoundedUpToAWholePercent(): void
     {
-        // GPRO reports whole-percent wear after every race, so a planner that
-        // carried fractions forward would drift a point off the game by the
-        // third race. 18.49 + 17.43 + 13.2 rounds race by race to 18 + 17 + 13.
+        // GPRO reports whole-percent wear after every race, rounded up (99.1% is
+        // 100%). 18.49 + 17.43 + 13.2 rounds race by race to 19 + 18 + 14.
         $plan = $this->planner()->plan(
             [
                 ['race' => 14, 'track_name' => 'A', 'ctr' => 0, 'base' => self::base(1.0, ['Gearbox' => 18.49])],
@@ -112,19 +111,19 @@ final class CarWearPlannerServiceTest extends TestCase
             1.0,
         );
 
-        $this->assertSame([42, 59, 72], $plan['parts']['Gearbox']['ends']);
+        $this->assertSame([43, 61, 75], $plan['parts']['Gearbox']['ends']);
     }
 
     public function testClearTrackRiskAddsWearThroughThePartLevel(): void
     {
-        // Level 1 factor 1.05; CTR 10 → 10 × 1.05^10 = 16.29 → 16.
+        // Level 1 factor 1.05; CTR 10 → 10 × 1.05^10 = 16.29 → 17 (rounded up).
         $plan = $this->planner()->plan(
             [['race' => 3, 'track_name' => 'A', 'ctr' => 10, 'base' => self::base(10.0)]],
             self::parts(1, 0),
             1.0,
         );
 
-        $this->assertSame([16], $plan['parts']['Engine']['ends']);
+        $this->assertSame([17], $plan['parts']['Engine']['ends']);
     }
 
     public function testDriverFactorScalesEveryRace(): void
@@ -200,6 +199,18 @@ final class CarWearPlannerServiceTest extends TestCase
             1.0,
         );
 
+        $this->assertSame(5, $plan['parts']['Chassis']['fails_at']);
+    }
+
+    public function testWearJustOverNinetyNineDoesNotFinish(): void
+    {
+        $plan = $this->planner()->plan(
+            [['race' => 5, 'track_name' => 'A', 'ctr' => 0, 'base' => self::base(9.1)]],
+            self::parts(9, 90),
+            1.0,
+        );
+
+        $this->assertSame([100], $plan['parts']['Chassis']['ends']);
         $this->assertSame(5, $plan['parts']['Chassis']['fails_at']);
     }
 

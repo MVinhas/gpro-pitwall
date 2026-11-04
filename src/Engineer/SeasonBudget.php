@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Engineer;
 
 use App\Service\CarWearService;
+use App\Service\WearAdvisorService;
 
 /**
  * @phpstan-type Round array{race: int, track_name: ?string, base: ?array<string, float>}
@@ -71,7 +72,7 @@ final readonly class SeasonBudget
                     );
                     $end = $wear[$label] + $training + $raceWear;
 
-                    if ($end >= $limit && !($carLocked && $i === 0)) {
+                    if (WearAdvisorService::percent($end) >= $limit && !($carLocked && $i === 0)) {
                         $cost = $prices[$label] ?? 0;
                         if (($prices[$label] ?? null) === null) {
                             $partial[$label . ' price unknown'] = true;
@@ -79,7 +80,7 @@ final readonly class SeasonBudget
                         $replaced[] = ['part' => (string) $label, 'cost' => $cost];
                         $repairs += $cost;
                         $end = $training + $raceWear;
-                        $infeasible = $infeasible || $end >= $limit;
+                        $infeasible = $infeasible || WearAdvisorService::percent($end) >= $limit;
                     }
 
                     $wear[$label] = $end;

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Engineer;
 
 use App\Service\CarWearService;
+use App\Service\WearAdvisorService;
 
 final readonly class CtrCeiling
 {
@@ -83,6 +84,6 @@ final readonly class CtrCeiling
         $raceWear = $this->wear->raceWear((float) $part['track_base'], (int) $part['level'], $driverFactor, $ctr);
         $end = (float) $part['start'] + (float) ($part['training'] ?? 0) + round($raceWear, 1);
 
-        return $end < $limit;
+        return WearAdvisorService::percent($end) < $limit;
     }
 }

@@ -276,11 +276,8 @@ final class RaceEngineer
             return null;
         }
 
-        $survive = self::objectiveIs($in, SeasonObjective::SURVIVE);
         $stuck = self::stuckCtrReason($in);
         $rated = $in->pushAdvice === null ? '' : 'Race rated ' . $in->pushAdvice . ': ';
-        // A plan replaces the parts that would stay in the red, so none is stuck there.
-        $alwaysRed = $survive && $in->alwaysRed !== [] && $plan === null;
 
         if ($plan !== null) {
             $target = $plan['ctr'];
@@ -293,18 +290,15 @@ final class RaceEngineer
                     . Money::short(array_sum(array_column($plan['swaps'], 'cost')))
                     . '); the budget covers the swaps',
                 $plan['ctr'] < $plan['safety'] => $rated . 'the highest CTR the budget covers to season end',
-                $survive => $rated . 'capped at the highest CTR that keeps parts out of the red',
                 $plan['mode'] === 'nurse' && $plan['refused_swap_cost'] !== null => $rated . 'pushing past '
                     . $plan['safety'] . ' needs ' . Money::short($plan['refused_swap_cost'])
                     . " of swaps the budget can't cover",
                 default => $rated . 'the highest CTR where no part breaks',
             };
         } else {
-            $target = $survive ? ($in->ctrSurvive ?? $in->ctrCeiling) : $in->ctrCeiling;
+            $target = $in->ctrCeiling;
             $reason = match (true) {
                 $stuck !== null && $target === 0 => $stuck,
-                $alwaysRed => self::alwaysRedReason($in->alwaysRed),
-                $survive => $rated . 'capped at the highest CTR that keeps parts out of the red',
                 default => $rated . 'the highest CTR where no part breaks; season costs unknown',
             };
         }
@@ -322,25 +316,16 @@ final class RaceEngineer
     }
 
     /**
-     * Why CTR 0 is advised on an updated car. Only parts that cap the CTR count: a red-zone part caps it under
-     * Survive alone, because Hold and Promote only limit it at the break line.
+     * Why CTR 0 is advised on an updated car: a part reaches 100% at any CTR and can't be swapped any more.
      */
     private static function stuckCtrReason(EngineerInputs $in): ?string
     {
-        if (!$in->carUpdated) {
+        if (!$in->carUpdated || $in->stuckSmoke === []) {
             return null;
         }
-        if ($in->stuckSmoke !== []) {
-            return self::smoke($in->stuckSmoke) . ' and the car is already updated: CTR 0 keeps '
-                . self::possessive($in->stuckSmoke) . ' wear lowest';
-        }
-        if ($in->stuckRed !== [] && self::objectiveIs($in, SeasonObjective::SURVIVE)) {
-            return implode(', ', $in->stuckRed) . ' ' . self::finishes($in->stuckRed)
-                . ' in the red and the car is already updated: CTR 0 keeps ' . self::possessive($in->stuckRed)
-                . ' wear lowest';
-        }
 
-        return null;
+        return self::smoke($in->stuckSmoke) . ' and the car is already updated: CTR 0 keeps '
+            . self::possessive($in->stuckSmoke) . ' wear lowest';
     }
 
     /**
@@ -360,36 +345,12 @@ final class RaceEngineer
     }
 
     /**
-     * @param list<string> $parts
-     */
-    private static function finishes(array $parts): string
-    {
-        return count($parts) === 1 ? 'finishes' : 'finish';
-    }
-
-    /**
-     * @param list<string> $parts
-     */
-    private static function alwaysRedReason(array $parts): string
-    {
-        return implode(', ', $parts) . (count($parts) === 1 ? ' stays' : ' stay')
-            . ' in the red at any CTR; capped where nothing breaks';
-    }
-
-    /**
      * @return Line
      */
     private static function parts(EngineerInputs $in): array
     {
         if ($in->carUpdated) {
-            $red = implode(', ', $in->stuckRed) . ' ' . self::finishes($in->stuckRed) . ' in the red';
-            $smoke = self::smoke($in->stuckSmoke);
-            $reason = match (true) {
-                $in->stuckSmoke !== [] && $in->stuckRed !== [] => $smoke . ' (' . self::SMOKE_COST . ') and ' . $red,
-                $in->stuckSmoke !== [] => $smoke . ': ' . self::SMOKE_COST,
-                $in->stuckRed !== [] => $red,
-                default => null,
-            };
+            $reason = $in->stuckSmoke === [] ? null : self::smoke($in->stuckSmoke) . ': ' . self::SMOKE_COST;
 
             return self::line(
                 'parts',
@@ -444,7 +405,7 @@ final class RaceEngineer
         $tone = $plan === null && self::spendable($in) < $forcedCost ? 'red' : 'amber';
         $answer = 'Swap ' . self::swapNames($in, $forced) . ($optional === [] ? '' : ', optionally ' . $optionalNames);
         $reason = $optional === []
-            ? self::keptReason($forced, $plan === null ? [] : $in->redZoneSwaps)
+            ? 'Would break this race if kept'
             : 'Forced swaps break this race; the optional ones are in the red and '
                 . self::affordClause($in, 'them');
 
@@ -517,25 +478,6 @@ final class RaceEngineer
         }
 
         return $total;
-    }
-
-    /**
-     * What keeping the swapped parts would cost: a break, or (under a Survive plan) only a finish in the red.
-     *
-     * @param list<string> $swapped
-     * @param list<string> $redZone
-     */
-    private static function keptReason(array $swapped, array $redZone): string
-    {
-        $red = array_values(array_intersect($swapped, $redZone));
-        $breaks = array_values(array_diff($swapped, $redZone));
-
-        return match (true) {
-            $red === [] => 'Would break this race if kept',
-            $breaks === [] => 'Would finish in the red if kept',
-            default => implode(', ', $breaks) . ' would break this race if kept; ' . implode(', ', $red)
-                . ' would finish in the red',
-        };
     }
 
     /**

@@ -41,7 +41,7 @@ final class WearAdvisorServiceTest extends TestCase
             'A' => ['level' => 1, 'start' => 0, 'est' => 100.0, 'end' => 100.0],
             'B' => ['level' => 1, 'start' => 0, 'est' => 90.0,  'end' => 90.0],
             'C' => ['level' => 1, 'start' => 0, 'est' => 75.0,  'end' => 75.0],
-            'D' => ['level' => 1, 'start' => 0, 'est' => 74.9,  'end' => 74.9],
+            'D' => ['level' => 1, 'start' => 0, 'est' => 74.0,  'end' => 74.0],
         ]);
 
         $this->assertSame('A', $result['swap'][0]['part']);
@@ -51,6 +51,26 @@ final class WearAdvisorServiceTest extends TestCase
             [$result['swap'], $result['risky'], $result['watch']],
             fn(array $b): bool => in_array('D', array_column($b, 'part'), true)
         ));
+    }
+
+    public function testPercentRoundsUpLikeGpro(): void
+    {
+        $this->assertSame(99, WearAdvisorService::percent(99.0));
+        $this->assertSame(100, WearAdvisorService::percent(99.1));
+        $this->assertSame(99, WearAdvisorService::percent(98.01));
+        $this->assertSame(99, WearAdvisorService::percent(0.1 + 0.2 + 98.7), 'float noise is not a whole point');
+    }
+
+    public function testAPartEndingAboveNinetyNineSmokes(): void
+    {
+        $result = $this->svc->classify([
+            'Engine' => ['level' => 1, 'start' => 0, 'est' => 99.1, 'end' => 99.1],
+            'Brakes' => ['level' => 1, 'start' => 0, 'est' => 99.0, 'end' => 99.0],
+            'Gearbox' => ['level' => 1, 'start' => 0, 'est' => 89.2, 'end' => 89.2],
+        ]);
+
+        $this->assertSame(['Engine'], array_column($result['swap'], 'part'));
+        $this->assertSame(['Brakes', 'Gearbox'], array_column($result['risky'], 'part'));
     }
 
     public function testHeadlineForSwap(): void

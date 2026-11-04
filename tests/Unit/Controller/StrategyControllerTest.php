@@ -419,4 +419,13 @@ final class StrategyControllerTest extends TestCase
     {
         $this->assertSame(0, StrategyController::buildTd(['id' => 99], [])['id']);
     }
+
+    public function testThePushWearSignalHoldsUpToNinetyNinePercentRoundedUp(): void
+    {
+        $this->assertNull(StrategyController::pushWearOk(null));
+        $this->assertTrue(StrategyController::pushWearOk(95.0));
+        $this->assertTrue(StrategyController::pushWearOk(99.0));
+        $this->assertFalse(StrategyController::pushWearOk(99.1));
+    }
+
 }

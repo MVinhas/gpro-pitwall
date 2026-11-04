@@ -13,13 +13,17 @@ Every release is published as an annotated git tag of the same name.
   Clear Track Risk stays put once the parts are bought.
 - The engineer reads GPRO's done flags: once the car is updated this race it stops offering more part changes and plans
   on the car as it is now, and testing and driver training already done are shown as done, not offered again. A part
-  that will reach 100% (smoke, lost time, and a retirement if it comes early) or finish in the red after the update is
-  named as such, and the CTR 0 reason says which.
+  that will reach 100% after the update (smoke, lost time, and a retirement if it comes early) is named, and the CTR 0
+  reason says which.
 - The Cockpit's testing laps are clamped to the laps GPRO says are left, so training laps already run are not counted
   again.
 
 ### Changed
 - The race engineer card groups its advice in steps: update the car, testing and training, race settings.
+- One wear limit everywhere: a part may end the race at up to 99%, and wear is rounded up as GPRO counts it, so 99.1%
+  is 100% and smokes. Survive no longer swaps parts at 90% or caps Clear Track Risk to keep them out of the red, so a
+  free downgrade that ends the race at 91–99% now counts. The Cockpit, Car Wear, swap options and the Strategy push
+  check use the same rule (the push check allowed only 90% before; the swap options allowed exactly 100%).
 
 ## [1.21.25] - 2026-10-30
 

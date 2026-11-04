@@ -47,19 +47,15 @@ final readonly class EngineerInputs
      * @param ?WearAdvice $wearAdvice
      * @param list<array{part: string, cost: int}> $optionalSwaps
      * @param ?array{name: string, score: float, cost: int, gains: array<string, float>} $trainingPick
-     * @param list<string> $alwaysRed
      * @param ?TestingTarget $testingTarget
      * @param ?Risk $risk
      * @param ?Plan $plan
-     * @param list<string> $redZoneSwaps parts the plan replaces that would only finish in the red, not break,
-     *     at the plan's CTR
      * @param ?StaffStanding $staffStanding
      * @param ?CarStanding $carStanding
      * @param list<SwapPick> $swapPicks the season-long level picked for each swapped part that has one
      * @param int $testingLaps the Cockpit's training laps, whose testing wear every plan counts
      * @param ?TyreAdvice $tyreAdvice set only while GPRO's tyre contract window is open and unsigned
      * @param list<string> $stuckSmoke parts that reach 100% this race even at CTR 0, while the car is updated
-     * @param list<string> $stuckRed parts that end in the red but short of 100% at CTR 0, while the car is updated
      */
     public function __construct(
         public array $objective,
@@ -67,8 +63,6 @@ final readonly class EngineerInputs
         public int $cash,
         public int $currentCtr,
         public ?int $ctrCeiling,
-        public ?int $ctrSurvive,
-        public array $alwaysRed,
         public ?string $pushAdvice,
         public ?array $wearAdvice,
         public ?int $forcedSwapCost,
@@ -82,7 +76,6 @@ final readonly class EngineerInputs
         public ?int $boostLitres,
         public bool $weatherStale,
         public ?array $plan,
-        public array $redZoneSwaps = [],
         public ?array $staffStanding = null,
         public ?array $carStanding = null,
         public array $swapPicks = [],
@@ -93,7 +86,6 @@ final readonly class EngineerInputs
         public bool $tested = false,
         public bool $driverTrained = false,
         public array $stuckSmoke = [],
-        public array $stuckRed = [],
     ) {
     }
 

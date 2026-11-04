@@ -9,6 +9,7 @@ use App\Engineer\CtrPlanner;
 use App\Engineer\SeasonBudget;
 use App\Engineer\SeasonObjective;
 use App\Service\CarWearService;
+use App\Service\WearAdvisorService;
 use InvalidArgumentException;
 use PDO;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -391,8 +392,8 @@ final class CtrPlannerTest extends TestCase
         $plan = $this->planner->plan(SeasonObjective::HOLD, $rounds, $parts, self::PRICES, 1.0, 10_000_000, 0, 0, null);
 
         $this->assertSame('push', $plan['mode']);
-        $this->assertLessThan(100.0, 20.0 * 1.02 ** $plan['ctr']);
-        $this->assertGreaterThanOrEqual(100.0, 20.0 * 1.02 ** ($plan['ctr'] + 1));
+        $this->assertLessThan(100, WearAdvisorService::percent(round(20.0 * 1.02 ** $plan['ctr'], 1)));
+        $this->assertGreaterThanOrEqual(100, WearAdvisorService::percent(round(20.0 * 1.02 ** ($plan['ctr'] + 1), 1)));
     }
 
     public function testSurviveNeverPushes(): void
@@ -405,12 +406,25 @@ final class CtrPlannerTest extends TestCase
         $this->assertNull($plan['refused_swap_cost']);
     }
 
-    public function testSurviveSafetyUsesTheRiskyLimit(): void
+    public function testSurviveKeepsPartsUpToTheSameLineAsHold(): void
     {
         $survive = $this->plan(SeasonObjective::SURVIVE, 50_000_000);
         $hold = $this->plan(SeasonObjective::HOLD, 50_000_000);
 
-        $this->assertLessThan($hold['safety'], $survive['safety']);
+        $this->assertSame($hold['safety'], $survive['safety']);
+    }
+
+    public function testSurviveKeepsAPartThatEndsTheRaceInTheRedZone(): void
+    {
+        $perRace = round((new CarWearService(new PDO('sqlite::memory:'), [
+            'driver_wear_factors' => [],
+            'part_level_factors' => [1 => 1.02, 2 => 1.03],
+        ]))->raceWear(10.0, 1, 1.0, 0), 1);
+        $parts = ['Engine' => ['level' => 1, 'start' => 95.0 - $perRace, 'track_base' => 10.0]];
+
+        $plan = $this->plan(SeasonObjective::SURVIVE, 50_000_000, parts: $parts);
+
+        $this->assertSame([], $plan['rows'][0]['replaced']);
     }
 
     public function testShortWhenEvenCtrZeroMissesTheTarget(): void

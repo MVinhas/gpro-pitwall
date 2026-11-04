@@ -55,6 +55,25 @@ final class SeasonBudgetTest extends TestCase
         $this->assertSame([], $out['partial']);
     }
 
+    public function testAPartEndingAboveNinetyNineIsReplacedAndOneEndingAtNinetyNineIsKept(): void
+    {
+        $perRace = round($this->wear->raceWear(10.0, 1, 1.0, 0), 1);
+        $forecast = fn (float $end): array => $this->budget->forecast(
+            [$this->round(1, 10.0)],
+            ['Engine' => ['level' => 1, 'start' => $end - $perRace]],
+            ['Engine' => 180_000],
+            1.0,
+            0,
+            100,
+            1_000_000,
+            0,
+            0,
+        );
+
+        $this->assertSame(180_000, $forecast(99.1)['rows'][0]['repairs']);
+        $this->assertSame(0, $forecast(99.0)['rows'][0]['repairs']);
+    }
+
     public function testPartCrossingTheLimitIsReplacedBeforeTheRaceAndCharged(): void
     {
         $perRace = round($this->wear->raceWear(10.0, 1, 1.0, 0), 1);
