@@ -447,7 +447,11 @@ final readonly class SeasonObjective
 
         $project = static fn (int $pts): float => $pts + $pts / $racesRun * $racesLeft;
         $own = $project($ownPts);
-        $ahead = count(array_filter($others, static fn (array $m): bool => $project($m['pts']) >= $own));
+        $ahead = count(array_filter($others, static function (array $m) use ($project, $own, $ownPos): bool {
+            $projected = $project($m['pts']);
+
+            return $projected > $own || ($projected === $own && $m['pos'] < $ownPos);
+        }));
 
         return 1 + $ahead;
     }
