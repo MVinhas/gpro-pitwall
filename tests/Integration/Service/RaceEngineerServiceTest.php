@@ -1659,7 +1659,7 @@ final class RaceEngineerServiceTest extends TestCase
         self::assertNotNull($saved);
         self::assertSame(
             [['part' => 'Engine', 'level' => 1, 'kind' => 'sidegrade', 'cost' => 100_000, 'net_cost' => 0,
-                'reason' => 'most_pha']],
+                'reason' => 'stay_hold']],
             $saved['plan']['swap_picks'] ?? null,
         );
         self::assertSame('Swap Engine → L1 (same level)', array_column($lines, null, 'key')['parts']['answer']);

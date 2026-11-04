@@ -6,6 +6,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.30] - 2026-11-04
+
+### Changed
+- When a part must be swapped, the Stay objective now picks the cheapest level over the season, a free or paid
+  downgrade included, as long as the car stays out of its group's weakest quarter. Levels within $100k of the cheapest
+  go to the one with more PHA. A car already in that quarter, or with no known group rank, gets the cheapest level
+  without a downgrade, and the reason under the options says so. Promote may take a free downgrade only when money is
+  short and the car stays in the group's strongest quarter (it was the top half).
+- Under Stay, the engineer's Upgrades line only recommends an upgrade that pays for itself over the season, unless the
+  car is in its group's weakest quarter; then it recommends upgrades as before. The Season screen still lists every
+  upgrade.
+
 ## [1.21.29] - 2026-11-04
 
 ### Fixed

@@ -12,16 +12,15 @@ final readonly class StrengthFloor
     public function __construct(
         private ?int $rank,
         private ?int $of,
-        private ?int $relegationPos,
     ) {
     }
 
     /**
      * @param CarStanding|null $carStanding
      */
-    public static function fromGroup(?array $carStanding, ?int $relegationPos): self
+    public static function fromGroup(?array $carStanding): self
     {
-        return new self($carStanding['rank'] ?? null, $carStanding['of'] ?? null, $relegationPos);
+        return new self($carStanding['rank'] ?? null, $carStanding['of'] ?? null);
     }
 
     public function topThree(): bool
@@ -29,22 +28,31 @@ final readonly class StrengthFloor
         return $this->rank !== null && $this->rank <= 3;
     }
 
-    public function keepsTopHalf(): bool
+    public function keepsTopQuarter(): bool
     {
         if ($this->rank === null || $this->of === null) {
             return false;
         }
 
-        return $this->rank <= intdiv($this->of, 2) - $this->buffer();
+        return $this->rank + $this->buffer() <= intdiv($this->of, 4);
     }
 
-    public function keepsAboveRelegation(): bool
+    public function keepsOutOfBottomQuarter(): bool
     {
-        if ($this->rank === null || $this->of === null || $this->relegationPos === null) {
+        if ($this->rank === null || $this->of === null) {
             return false;
         }
 
-        return $this->rank <= $this->relegationPos - 1 - $this->buffer();
+        return $this->rank + $this->buffer() <= intdiv(3 * $this->of, 4);
+    }
+
+    public function outOfBottomQuarter(): bool
+    {
+        if ($this->rank === null || $this->of === null) {
+            return false;
+        }
+
+        return $this->rank <= intdiv(3 * $this->of, 4);
     }
 
     private function buffer(): int

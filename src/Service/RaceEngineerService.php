@@ -79,7 +79,6 @@ use App\Support\TrackName;
  *     season: int,
  *     raceNb: int,
  *     cash: int,
- *     standingsRow: ?array<string, mixed>,
  *     weekends: list<array<string, mixed>>,
  *     ledger: list<array<string, mixed>>,
  *     outlook_ledger: list<array<string, mixed>>,
@@ -292,7 +291,6 @@ class RaceEngineerService
             'season' => $season,
             'raceNb' => $raceNb,
             'cash' => $cash,
-            'standingsRow' => $standingsRow,
             'weekends' => $weekends,
             'ledger' => $seasonLedger,
             'outlook_ledger' => $outlookLedger,
@@ -369,7 +367,6 @@ class RaceEngineerService
             (int) $ctx['outlook']['income'],
             StrengthFloor::fromGroup(
                 GroupStanding::car(self::arr($c['money_levels'] ?? null), self::arr($c['menu'] ?? null)),
-                SeasonObjective::relegationLine($ctx['standingsRow']),
             ),
         );
     }
