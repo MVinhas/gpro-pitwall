@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Service;
 
+use App\Engineer\CtrPace;
 use PDO;
 
 class StrategyService
@@ -160,8 +161,7 @@ class StrategyService
         // state — report none rather than inventing one.
         $ctrGainFraction = (float) ($tyreSecrets['clear_track_risk_gain_lap_fraction'] ?? 0.0);
         $trackAvgSpeed = (float) ($trackDb['avg_speed'] ?? 0.0);
-        $lapTimeSec = $trackAvgSpeed > 0.0 ? ($lapLen / $trackAvgSpeed) * 3600.0 : 0.0;
-        $ctrGainPerLap = $lapTimeSec * $ctrGainFraction;
+        $ctrGainPerLap = CtrPace::secondsPerPointPerLap($lapLen, $trackAvgSpeed, $ctrGainFraction);
 
         /**
          * Every compound's plan at one risk level. Extracted so the CTR sweep

@@ -506,4 +506,38 @@ class RaceHistoryRepository
 
         return array_values(array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN)));
     }
+
+    /**
+     * Driver energy at the end of Q1 and Q2 and at the race start, across all
+     * managers. Only the three numbers leave the repository, never a user id.
+     *
+     * @return list<array{q1_end: int, q2_end: int, race_from: int}>
+     */
+    public function qualifyingEnergyRows(): array
+    {
+        $stmt = $this->pdo->query(
+            "SELECT json_extract(qualifying_json, '$.sessions[0].energy') AS q1_end,
+                    json_extract(qualifying_json, '$.sessions[1].energy') AS q2_end,
+                    energy_from AS race_from
+             FROM user_race_history
+             WHERE json_extract(qualifying_json, '$.sessions[0].energy') IS NOT NULL
+               AND json_extract(qualifying_json, '$.sessions[1].energy') IS NOT NULL
+               AND energy_from IS NOT NULL
+             ORDER BY id"
+        );
+        if ($stmt === false) {
+            return [];
+        }
+
+        $rows = [];
+        while (($row = $stmt->fetch(PDO::FETCH_ASSOC)) !== false) {
+            $rows[] = [
+                'q1_end' => (int) $row['q1_end'],
+                'q2_end' => (int) $row['q2_end'],
+                'race_from' => (int) $row['race_from'],
+            ];
+        }
+
+        return $rows;
+    }
 }

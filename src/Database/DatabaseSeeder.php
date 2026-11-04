@@ -16,7 +16,7 @@ class DatabaseSeeder
      * calls migrate() on every request; this version lets a warm database skip
      * the entire DDL + scan + legacy-encryption pass.
      */
-    private const int SCHEMA_VERSION = 19;
+    private const int SCHEMA_VERSION = 20;
 
     /**
      * @param array<string, string> $statsSchema
@@ -71,6 +71,7 @@ class DatabaseSeeder
         $this->createUserApiArchiveTable();
         $this->createProjectionTables();
         $this->createSeasonObjectiveTable();
+        $this->migrateSeasonObjectiveToStay();
         $this->createSeasonBudgetTable();
         $this->dropDeprecatedTables();
 
@@ -795,7 +796,7 @@ class DatabaseSeeder
             "CREATE TABLE IF NOT EXISTS user_season_objective (
                 user_id INTEGER NOT NULL,
                 season INTEGER NOT NULL,
-                objective TEXT NOT NULL CHECK (objective IN ('promote', 'hold', 'survive')),
+                objective TEXT NOT NULL CHECK (objective IN ('promote', 'stay')),
                 set_at TEXT NOT NULL DEFAULT (datetime('now')),
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             )"
@@ -804,6 +805,54 @@ class DatabaseSeeder
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_user_season_objective
              ON user_season_objective (user_id, season)"
         );
+    }
+
+    /**
+     * Hold and Survive merged into Stay: a table still carrying the old CHECK is rebuilt with the new one and its
+     * rows mapped across. SQLite cannot alter a CHECK in place. A no-op once the old values are gone.
+     */
+    private function migrateSeasonObjectiveToStay(): void
+    {
+        $stmt = $this->db->query(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'user_season_objective'"
+        );
+        $sql = $stmt === false ? false : $stmt->fetchColumn();
+        if ($stmt !== false) {
+            $stmt->closeCursor();
+        }
+        if (!is_string($sql) || !str_contains($sql, "'hold'")) {
+            return;
+        }
+
+        $this->db->beginTransaction();
+        try {
+            $this->db->exec('DROP TABLE IF EXISTS user_season_objective_new');
+            $this->db->exec(
+                "CREATE TABLE user_season_objective_new (
+                    user_id INTEGER NOT NULL,
+                    season INTEGER NOT NULL,
+                    objective TEXT NOT NULL CHECK (objective IN ('promote', 'stay')),
+                    set_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                )"
+            );
+            $this->db->exec(
+                "INSERT INTO user_season_objective_new (user_id, season, objective, set_at)
+                 SELECT user_id, season, CASE objective WHEN 'promote' THEN 'promote' ELSE 'stay' END, set_at
+                 FROM user_season_objective"
+            );
+            $this->db->exec('DROP TABLE user_season_objective');
+            $this->db->exec('ALTER TABLE user_season_objective_new RENAME TO user_season_objective');
+            $this->db->exec(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_user_season_objective
+                 ON user_season_objective (user_id, season)"
+            );
+            $this->db->commit();
+        } catch (\Throwable $e) {
+            $this->db->rollBack();
+
+            throw $e;
+        }
     }
 
     /**

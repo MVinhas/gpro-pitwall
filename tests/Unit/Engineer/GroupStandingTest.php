@@ -83,10 +83,10 @@ final class GroupStandingTest extends TestCase
         $this->assertFalse($standing['nudge']);
     }
 
-    public function testHoldNudgesOnlyInTheBottomThird(): void
+    public function testStayNudgesOnlyInTheBottomThird(): void
     {
-        $at26 = GroupStanding::staff(self::group(26), ['IDM' => 7], SeasonObjective::HOLD);
-        $at27 = GroupStanding::staff(self::group(27), ['IDM' => 7], SeasonObjective::HOLD);
+        $at26 = GroupStanding::staff(self::group(26), ['IDM' => 7], SeasonObjective::STAY);
+        $at27 = GroupStanding::staff(self::group(27), ['IDM' => 7], SeasonObjective::STAY);
 
         $this->assertNotNull($at26);
         $this->assertNotNull($at27);
@@ -96,10 +96,10 @@ final class GroupStandingTest extends TestCase
         $this->assertSame(81, $at27['band_average']); // positions 15..26 = 86..75, mean 80.5
     }
 
-    public function testHoldWithAnEmptyMiddleFallsBackToTheTop(): void
+    public function testStayWithAnEmptyMiddleFallsBackToTheTop(): void
     {
         // of 4: third 2, middle slice is positions 3..2, empty
-        $standing = GroupStanding::staff(self::staff([90, 80, 70, 60], 3), ['IDM' => 7], SeasonObjective::HOLD);
+        $standing = GroupStanding::staff(self::staff([90, 80, 70, 60], 3), ['IDM' => 7], SeasonObjective::STAY);
 
         $this->assertNotNull($standing);
         $this->assertSame(85, $standing['band_average']);
@@ -108,7 +108,7 @@ final class GroupStandingTest extends TestCase
 
     public function testAGroupOfFewerThanThreeRatedManagersMakesNoClaim(): void
     {
-        foreach ([SeasonObjective::PROMOTE, SeasonObjective::HOLD] as $objective) {
+        foreach ([SeasonObjective::PROMOTE, SeasonObjective::STAY] as $objective) {
             $this->assertNull(GroupStanding::staff(self::staff([50], 0), ['IDM' => 7], $objective));
             $this->assertNull(GroupStanding::staff(self::staff([90, 50], 1), ['IDM' => 7], $objective));
 
@@ -117,7 +117,7 @@ final class GroupStandingTest extends TestCase
             $this->assertNull(GroupStanding::staff($group, ['IDM' => 7], $objective));
         }
 
-        $this->assertNotNull(GroupStanding::staff(self::staff([90, 70, 50], 2), ['IDM' => 7], SeasonObjective::HOLD));
+        $this->assertNotNull(GroupStanding::staff(self::staff([90, 70, 50], 2), ['IDM' => 7], SeasonObjective::STAY));
     }
 
     public function testANonScalarIdmNeverMatches(): void
@@ -132,13 +132,13 @@ final class GroupStandingTest extends TestCase
         $this->assertNull(GroupStanding::car($money, ['IDM' => [7]]));
     }
 
-    public function testSurviveNeverNudges(): void
+    public function testStayAtTheBottomOfALargeGroupNudges(): void
     {
-        $standing = GroupStanding::staff(self::group(40), ['IDM' => 7], SeasonObjective::SURVIVE);
+        $standing = GroupStanding::staff(self::group(40), ['IDM' => 7], SeasonObjective::STAY);
 
         $this->assertNotNull($standing);
         $this->assertSame(40, $standing['rank']);
-        $this->assertFalse($standing['nudge']);
+        $this->assertTrue($standing['nudge']);
     }
 
     public function testNonNumericStaffOaIsIgnored(): void

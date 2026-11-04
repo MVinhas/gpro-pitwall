@@ -294,4 +294,23 @@ final class RaceHistoryRepositoryTest extends TestCase
         $this->assertSame([108, 107, 106], $this->repo->seasons(1));
         $this->assertSame([], $this->repo->seasons(3));
     }
+
+    public function testQualifyingEnergyRowsDecodeTheSessionEnergies(): void
+    {
+        $this->repo->upsert($this->row([
+            'qualifying_json' => '{"sessions":[{"energy":62},{"energy":55}],"delta":{}}',
+            'energy_from' => 71,
+        ]));
+        $this->repo->upsert($this->row(['user_id' => 2, 'qualifying_json' => '{"sessions":[{"energy":40}]}']));
+        $this->repo->upsert($this->row(['user_id' => 3, 'qualifying_json' => '{"sessions":[],"delta":{}}']));
+        $this->repo->upsert($this->row([
+            'user_id' => 4, 'energy_from' => null,
+            'qualifying_json' => '{"sessions":[{"energy":62},{"energy":55}]}',
+        ]));
+
+        $this->assertSame(
+            [['q1_end' => 62, 'q2_end' => 55, 'race_from' => 71]],
+            $this->repo->qualifyingEnergyRows()
+        );
+    }
 }

@@ -18,8 +18,7 @@
                 <select id="engineer-objective" name="objective" class="form-select text-sm">
                     <option value="auto"{{ not objective.pinned ? ' selected' : '' }}>Auto</option>
                     <option value="promote"{{ objective.pinned and objective.objective == 'promote' ? ' selected' : '' }}>Promote</option>
-                    <option value="hold"{{ objective.pinned and objective.objective == 'hold' ? ' selected' : '' }}>Hold</option>
-                    <option value="survive"{{ objective.pinned and objective.objective == 'survive' ? ' selected' : '' }}>Survive</option>
+                    <option value="stay"{{ objective.pinned and objective.objective == 'stay' ? ' selected' : '' }}>Stay</option>
                 </select>
                 <button type="submit" class="btn btn-sm btn-secondary">Pin</button>
             </form>

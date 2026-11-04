@@ -6,10 +6,15 @@ namespace App\Service;
 
 use App\Engineer\CashOutlook;
 use App\Engineer\CtrCeiling;
+use App\Engineer\CtrPace;
 use App\Engineer\CtrPlanner;
+use App\Engineer\CtrPolicy;
+use App\Engineer\EnergyModel;
 use App\Engineer\EngineerInputs;
 use App\Engineer\GroupStanding;
 use App\Engineer\Money;
+use App\Engineer\PlaceGap;
+use App\Engineer\PrizeTable;
 use App\Engineer\RaceEngineer;
 use App\Engineer\SeasonObjective;
 use App\Engineer\SeasonStart;
@@ -69,6 +74,7 @@ use App\Support\TrackName;
  *         season: string
  *     }>
  * }
+ * @phpstan-type EnergyCap array{cap: int, estimate: bool, start: ?int}
  * @phpstan-type Context array{
  *     season: int,
  *     raceNb: int,
@@ -83,7 +89,7 @@ use App\Support\TrackName;
  */
 class RaceEngineerService
 {
-    private const array PINNABLE = [SeasonObjective::PROMOTE, SeasonObjective::HOLD, SeasonObjective::SURVIVE];
+    private const array PINNABLE = [SeasonObjective::PROMOTE, SeasonObjective::STAY];
     private const string AUTO = 'auto';
     private const array TYRE_DIVISIONS = ['Pro', 'Master', 'Elite'];
     private const array TYRE_WEAR_SCALE = ['Very Low' => 1, 'Low' => 2, 'Medium' => 3, 'High' => 4, 'Very High' => 5];
@@ -106,6 +112,8 @@ class RaceEngineerService
         private readonly PartSwapAdvisorService $swapAdvisor,
         private readonly RaceTelemetryRepository $telemetry,
         private readonly IdealPilotService $idealPilot,
+        private readonly CtrModelService $ctrModel,
+        private readonly float $ctrGainFraction,
     ) {
     }
 
@@ -133,8 +141,9 @@ class RaceEngineerService
         }
 
         $rounds = $this->rounds($c);
+        $energy = $this->energyCap($ctx, $rounds, $c);
         $basis = $this->planBasis($ctx['outlook'], $ctx['raceNb'], $rounds, $c);
-        $plan = $basis === null ? null : $this->plan($ctx, $basis, $locked);
+        $plan = $basis === null ? null : $this->plan($ctx, $basis, $this->policy($ctx, $basis, $c, $energy), $locked);
         $inputs = $this->inputs(
             $objective,
             $ctx['outlook'],
@@ -144,6 +153,7 @@ class RaceEngineerService
             $plan,
             $c,
             $locked,
+            $energy,
         );
 
         // Under a plan the advice waits for the plan it is checked against, below.
@@ -199,12 +209,14 @@ class RaceEngineerService
     public function swapSeason(int $userId, array $c): ?SwapSeason
     {
         $ctx = $this->context($userId, $c);
-        $basis = $this->planBasis($ctx['outlook'], $ctx['raceNb'], $this->rounds($c), $c);
+        $rounds = $this->rounds($c);
+        $basis = $this->planBasis($ctx['outlook'], $ctx['raceNb'], $rounds, $c);
         if ($basis === null) {
             return null;
         }
+        $policy = $this->policy($ctx, $basis, $c, $this->energyCap($ctx, $rounds, $c));
 
-        return $this->swapSeasonFrom($ctx, $this->plan($ctx, $basis), $basis, $c);
+        return $this->swapSeasonFrom($ctx, $this->plan($ctx, $basis, $policy), $basis, $c);
     }
 
     public function pin(int $userId, int $season, string $value): bool
@@ -214,11 +226,12 @@ class RaceEngineerService
 
             return true;
         }
-        if (!in_array($value, self::PINNABLE, true)) {
+        $objective = SeasonObjective::normalise($value);
+        if (!in_array($objective, self::PINNABLE, true)) {
             return false;
         }
 
-        $this->pins->save($userId, $season, $value);
+        $this->pins->save($userId, $season, $objective);
 
         return true;
     }
@@ -272,6 +285,7 @@ class RaceEngineerService
             $cash,
             GroupStanding::car(self::arr($c['money_levels'] ?? null), $menu)['rank'] ?? null,
             ($c['division'] ?? null) === 'Elite',
+            ($c['division'] ?? null) === 'Rookie',
         );
 
         return [
@@ -343,7 +357,7 @@ class RaceEngineerService
     private function swapSeasonFrom(array $ctx, array $plan, array $basis, array $c): SwapSeason
     {
         return new SwapSeason(
-            $ctx['objective']['objective'] ?? SeasonObjective::HOLD,
+            $ctx['objective']['objective'] ?? SeasonObjective::STAY,
             $plan,
             $basis['rounds'],
             $this->demands($c),
@@ -484,6 +498,7 @@ class RaceEngineerService
      * @param ?Plan $plan
      * @param array<string, mixed> $c
      * @param bool $carLocked This race's car update is spent: nothing can be swapped before the race.
+     * @param EnergyCap $energy
      */
     private function inputs(
         array $objective,
@@ -494,6 +509,7 @@ class RaceEngineerService
         ?array $plan,
         array $c,
         bool $carLocked,
+        array $energy,
     ): EngineerInputs {
         $parts = $this->wearParts($c);
         /** @var ?WearAdvice $wearAdvice */
@@ -544,7 +560,7 @@ class RaceEngineerService
             staffStanding: GroupStanding::staff(
                 self::arr($c['group_staff'] ?? null),
                 self::arr($c['menu'] ?? null),
-                $objective['objective'] ?? SeasonObjective::HOLD,
+                $objective['objective'] ?? SeasonObjective::STAY,
             ),
             carStanding: GroupStanding::car(self::arr($c['money_levels'] ?? null), self::arr($c['menu'] ?? null)),
             testingLaps: (int) ($c['training_laps'] ?? 0),
@@ -553,6 +569,9 @@ class RaceEngineerService
             tested: self::done($office, 'doneTesting'),
             driverTrained: self::done($office, 'doneDriTrain'),
             stuckSmoke: $stuckSmoke,
+            energyCap: $energy['cap'],
+            energyEstimate: $energy['estimate'],
+            energyStart: $energy['start'],
         );
     }
 
@@ -766,10 +785,10 @@ class RaceEngineerService
      * @param PlanBasis $basis
      * @return Plan
      */
-    private function plan(array $ctx, array $basis, bool $carLocked = false): array
+    private function plan(array $ctx, array $basis, CtrPolicy $policy, bool $carLocked = false): array
     {
         return $this->ctrPlanner->plan(
-            $ctx['objective']['objective'] ?? SeasonObjective::HOLD,
+            $ctx['objective']['objective'] ?? SeasonObjective::STAY,
             $basis['rounds'],
             $basis['parts'],
             $basis['prices'],
@@ -779,6 +798,104 @@ class RaceEngineerService
             (int) $ctx['outlook']['income'],
             SeasonStart::cash($ctx['ledger'], $ctx['weekends']),
             $carLocked,
+            $policy,
+        );
+    }
+
+    /**
+     * The highest CTR the driver's energy allows at the next race, from the office's energy and Q2 flag. A model
+     * that fails to load falls back to the estimate table rather than costing the card its CTR line.
+     *
+     * @param Context $ctx
+     * @param list<Round> $rounds
+     * @param array<string, mixed> $c
+     * @return EnergyCap
+     */
+    private function energyCap(array $ctx, array $rounds, array $c): array
+    {
+        $office = self::arr($c['office'] ?? null);
+        $division = self::stringOrNull($c['division'] ?? null);
+        $driEnergy = is_numeric($office['driEnergy'] ?? null) ? (int) $office['driEnergy'] : null;
+        $q2Done = self::done($office, 'doneQ2');
+        $stamina = (int) (self::arr($c['driver'] ?? null)['stamina'] ?? 0);
+
+        $next = null;
+        foreach ($rounds as $round) {
+            if ($round['race'] === $ctx['raceNb']) {
+                $next = $round['track_name'];
+                break;
+            }
+        }
+        $next ??= self::stringOrNull($c['track_name'] ?? null);
+        $laps = $next === null ? 0 : (int) ($this->tracks->findByName($next)['laps'] ?? 0);
+
+        try {
+            $model = $this->ctrModel->energy($division, $ctx['season']);
+        } catch (\Throwable $e) {
+            error_log('[Engineer] ' . $e::class);
+            $model = EnergyModel::fallback();
+        }
+
+        return $model->cap($driEnergy, $q2Done, $laps, $stamina, $division);
+    }
+
+    /**
+     * What a CTR point is worth over the rest of the season: the lap time it buys back on each remaining track,
+     * in places at the division's gap per place, priced at the division's prize per place. A round whose track
+     * row is missing or has no lap time adds nothing.
+     *
+     * @param Context $ctx
+     * @param PlanBasis $basis
+     * @param array<string, mixed> $c
+     * @param EnergyCap $energy
+     */
+    private function policy(array $ctx, array $basis, array $c, array $energy): CtrPolicy
+    {
+        $division = self::stringOrNull($c['division'] ?? null);
+        try {
+            $gap = $this->ctrModel->placeGap($ctx['season']);
+        } catch (\Throwable $e) {
+            error_log('[Engineer] ' . $e::class);
+            $gap = PlaceGap::fallback();
+        }
+
+        $places = 0.0;
+        $placesNext = null;
+        $paceKnown = false;
+        foreach ($basis['rounds'] as $round) {
+            $track = $round['track_name'] === null ? null : $this->tracks->findByName($round['track_name']);
+            $laps = (int) ($track['laps'] ?? 0);
+            $secondsPerPlace = $gap->secondsPerPlace($division, $laps);
+            if ($track === null || $laps <= 0 || $secondsPerPlace <= 0.0) {
+                continue;
+            }
+            $seconds = CtrPace::secondsPerPointPerLap(
+                (float) ($track['lap_length'] ?? 0.0),
+                (float) ($track['avg_speed'] ?? 0.0),
+                $this->ctrGainFraction,
+            ) * $laps;
+            if ($seconds <= 0.0) {
+                continue;
+            }
+            $perPoint = $seconds / $secondsPerPlace;
+            $places += $perPoint;
+            $paceKnown = true;
+            // The places a race quote the first race with pace figures: the next race may have none.
+            $placesNext ??= $perPoint;
+        }
+
+        $numbers = $ctx['objective']['numbers'];
+        $perPlace = PrizeTable::perPlace($division);
+
+        return new CtrPolicy(
+            $energy['cap'],
+            $energy['estimate'],
+            $energy['start'],
+            (int) round($places * $perPlace),
+            $placesNext ?? 0.0,
+            // Without a prize per place (no or unknown division) the pace is worth nothing to weigh.
+            $paceKnown && $perPlace > 0,
+            CtrPolicy::safetyFor($numbers['projected_pos'], $numbers['relegation_pos']),
         );
     }
 

@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 namespace App\Repository;
 
+use App\Engineer\SeasonObjective;
 use PDO;
 
 /**
- * The season objective a manager pinned (promote, hold or survive), one per
- * user and season. No row means the engineer proposes one on its own.
+ * The season objective a manager pinned (promote or stay), one per user and season. No row means the engineer
+ * proposes one on its own. Rows stored before Hold and Survive merged read as stay.
  */
 class SeasonObjectiveRepository
 {
@@ -24,7 +25,7 @@ class SeasonObjectiveRepository
         $stmt->execute([':u' => $userId, ':s' => $season]);
         $value = $stmt->fetchColumn();
 
-        return is_string($value) ? $value : null;
+        return is_string($value) ? SeasonObjective::normalise($value) : null;
     }
 
     public function save(int $userId, int $season, string $objective): void

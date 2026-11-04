@@ -303,6 +303,11 @@ $container['service.race_intelligence'] = new \App\Service\RaceIntelligenceServi
     $container['repo.race_telemetry'],
 );
 $container['repo.race_history'] = new \App\Repository\RaceHistoryRepository($container['db']);
+$container['service.ctr_model'] = new \App\Service\CtrModelService(
+    $container['repo.race_telemetry'],
+    $container['repo.race_history'],
+    $container['service.cache'],
+);
 $container['service.race_history'] = new \App\Service\RaceHistoryService(
     $container['repo.race_history'],
     new \App\Telemetry\RaceHistoryMapper(),
@@ -537,6 +542,8 @@ $container['service.race_engineer'] = new \App\Service\RaceEngineerService(
     $container['service.swap_advisor'],
     $container['repo.race_telemetry'],
     $container['service.ideal_pilot'],
+    $container['service.ctr_model'],
+    (float) ($container['config']['secrets']['tyre_calc']['clear_track_risk_gain_lap_fraction'] ?? 0.0),
 );
 
 $container['controller.page'] = new PageController(

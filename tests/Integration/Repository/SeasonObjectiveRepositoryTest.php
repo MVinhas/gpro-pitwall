@@ -45,9 +45,9 @@ final class SeasonObjectiveRepositoryTest extends TestCase
     public function testSaveTwiceKeepsTheLatest(): void
     {
         $this->repo->save(1, 112, 'promote');
-        $this->repo->save(1, 112, 'survive');
+        $this->repo->save(1, 112, 'stay');
 
-        $this->assertSame('survive', $this->repo->find(1, 112));
+        $this->assertSame('stay', $this->repo->find(1, 112));
         $this->assertSame(
             1,
             (int) $this->db->query('SELECT COUNT(*) FROM user_season_objective')->fetchColumn(),
@@ -57,12 +57,12 @@ final class SeasonObjectiveRepositoryTest extends TestCase
     public function testClearRemovesOnlyThatSeason(): void
     {
         $this->repo->save(1, 112, 'promote');
-        $this->repo->save(1, 113, 'hold');
+        $this->repo->save(1, 113, 'stay');
 
         $this->repo->clear(1, 112);
 
         $this->assertNull($this->repo->find(1, 112));
-        $this->assertSame('hold', $this->repo->find(1, 113));
+        $this->assertSame('stay', $this->repo->find(1, 113));
     }
 
     public function testFindForAnotherUserIsNull(): void
@@ -77,6 +77,23 @@ final class SeasonObjectiveRepositoryTest extends TestCase
         $this->expectException(\PDOException::class);
 
         $this->repo->save(1, 112, 'auto');
+    }
+
+    public function testARowStoredBeforeTheMergeReadsAsStay(): void
+    {
+        $this->db->exec('DROP TABLE user_season_objective');
+        $this->db->exec(
+            "CREATE TABLE user_season_objective (
+                user_id INTEGER NOT NULL,
+                season INTEGER NOT NULL,
+                objective TEXT NOT NULL CHECK (objective IN ('promote', 'hold', 'survive')),
+                set_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )"
+        );
+        $this->db->exec("INSERT INTO user_season_objective (user_id, season, objective) VALUES (1, 110, 'hold'), (1, 111, 'survive')");
+
+        $this->assertSame('stay', $this->repo->find(1, 110));
+        $this->assertSame('stay', $this->repo->find(1, 111));
     }
 
     public function testMigrationRunsTwiceOnAnExistingDatabase(): void
@@ -101,6 +118,6 @@ final class SeasonObjectiveRepositoryTest extends TestCase
                 "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'user_season_objective'"
             )->fetchColumn(),
         );
-        $this->assertSame(19, (int) $this->db->query('PRAGMA user_version')->fetchColumn());
+        $this->assertSame(20, (int) $this->db->query('PRAGMA user_version')->fetchColumn());
     }
 }

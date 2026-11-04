@@ -37,7 +37,7 @@ final class SeasonBudgetRepositoryTest extends TestCase
 
     public function testSaveThenFindRoundTrips(): void
     {
-        $plan = ['v' => 1, 'ctr' => 40, 'rows' => [['race' => 8, 'cash' => 1200000]]];
+        $plan = ['v' => 2, 'ctr' => 40, 'rows' => [['race' => 8, 'cash' => 1200000]]];
 
         $this->repo->save(1, 112, 8, $plan);
 
@@ -50,13 +50,13 @@ final class SeasonBudgetRepositoryTest extends TestCase
 
     public function testSaveOverwritesTheSeasonRow(): void
     {
-        $this->repo->save(1, 112, 8, ['v' => 1, 'ctr' => 40]);
-        $this->repo->save(1, 112, 9, ['v' => 1, 'ctr' => 55]);
+        $this->repo->save(1, 112, 8, ['v' => 2, 'ctr' => 40]);
+        $this->repo->save(1, 112, 9, ['v' => 2, 'ctr' => 55]);
 
         $found = $this->repo->find(1, 112);
         $this->assertNotNull($found);
         $this->assertSame(9, $found['race']);
-        $this->assertSame(['v' => 1, 'ctr' => 55], $found['plan']);
+        $this->assertSame(['v' => 2, 'ctr' => 55], $found['plan']);
         $this->assertSame(
             1,
             (int) $this->db->query('SELECT COUNT(*) FROM user_season_budget')->fetchColumn(),
@@ -65,47 +65,54 @@ final class SeasonBudgetRepositoryTest extends TestCase
 
     public function testSaveRefreshesComputedAt(): void
     {
-        $this->repo->save(1, 112, 8, ['v' => 1, 'ctr' => 40]);
+        $this->repo->save(1, 112, 8, ['v' => 2, 'ctr' => 40]);
         $this->db->exec("UPDATE user_season_budget SET computed_at = '2000-01-01 00:00:00'");
 
-        $this->repo->save(1, 112, 9, ['v' => 1, 'ctr' => 55]);
+        $this->repo->save(1, 112, 9, ['v' => 2, 'ctr' => 55]);
 
         $this->assertNotSame('2000-01-01 00:00:00', $this->repo->find(1, 112)['computed_at'] ?? null);
     }
 
     public function testLatestIsTheNewestSeasonsPlan(): void
     {
-        $this->repo->save(1, 113, 2, ['v' => 1, 'ctr' => 60]);
-        $this->repo->save(1, 112, 17, ['v' => 1, 'ctr' => 40]);
-        $this->repo->save(2, 114, 1, ['v' => 1, 'ctr' => 10]);
+        $this->repo->save(1, 113, 2, ['v' => 2, 'ctr' => 60]);
+        $this->repo->save(1, 112, 17, ['v' => 2, 'ctr' => 40]);
+        $this->repo->save(2, 114, 1, ['v' => 2, 'ctr' => 10]);
 
         $latest = $this->repo->latest(1);
 
         $this->assertNotNull($latest);
         $this->assertSame(113, $latest['season']);
         $this->assertSame(2, $latest['race']);
-        $this->assertSame(['v' => 1, 'ctr' => 60], $latest['plan']);
+        $this->assertSame(['v' => 2, 'ctr' => 60], $latest['plan']);
         $this->assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $latest['computed_at']);
     }
 
     public function testLatestIgnoresAPlanOfAnotherVersion(): void
     {
-        $this->repo->save(1, 112, 17, ['v' => 1, 'ctr' => 40]);
-        $this->repo->save(1, 113, 2, ['v' => 2, 'ctr' => 60]);
+        $this->repo->save(1, 112, 17, ['v' => 2, 'ctr' => 40]);
+        $this->repo->save(1, 113, 2, ['v' => 1, 'ctr' => 60]);
 
         $this->assertNull($this->repo->latest(1));
     }
 
     public function testLatestIsNullWithoutAPlan(): void
     {
-        $this->repo->save(2, 112, 8, ['v' => 1, 'ctr' => 40]);
+        $this->repo->save(2, 112, 8, ['v' => 2, 'ctr' => 40]);
 
         $this->assertNull($this->repo->latest(1));
     }
 
+    public function testFindIgnoresAStoredVersion1Plan(): void
+    {
+        $this->repo->save(1, 112, 8, ['v' => 1, 'ctr' => 40]);
+
+        $this->assertNull($this->repo->find(1, 112));
+    }
+
     public function testFindIgnoresAnotherVersion(): void
     {
-        $this->repo->save(1, 112, 8, ['v' => 2, 'ctr' => 40]);
+        $this->repo->save(1, 112, 8, ['v' => 3, 'ctr' => 40]);
 
         $this->assertNull($this->repo->find(1, 112));
     }
@@ -137,7 +144,7 @@ final class SeasonBudgetRepositoryTest extends TestCase
 
     public function testFindIsPerSeason(): void
     {
-        $this->repo->save(1, 112, 8, ['v' => 1, 'ctr' => 40]);
+        $this->repo->save(1, 112, 8, ['v' => 2, 'ctr' => 40]);
 
         $this->assertNull($this->repo->find(1, 113));
         $this->assertNotNull($this->repo->find(1, 112));
@@ -145,7 +152,7 @@ final class SeasonBudgetRepositoryTest extends TestCase
 
     public function testFindIsPerUser(): void
     {
-        $this->repo->save(2, 112, 8, ['v' => 1, 'ctr' => 40]);
+        $this->repo->save(2, 112, 8, ['v' => 2, 'ctr' => 40]);
 
         $this->assertNull($this->repo->find(1, 112));
     }
@@ -156,7 +163,7 @@ final class SeasonBudgetRepositoryTest extends TestCase
             "INSERT INTO users (username, email_hash, email_encrypted, verified_at)
              VALUES ('u', 'h', 'e', datetime('now'))"
         );
-        $this->repo->save(1, 112, 8, ['v' => 1, 'ctr' => 40]);
+        $this->repo->save(1, 112, 8, ['v' => 2, 'ctr' => 40]);
         $this->db->exec('PRAGMA user_version = 18');
 
         $this->seeder->migrate();
@@ -165,7 +172,7 @@ final class SeasonBudgetRepositoryTest extends TestCase
         $found = $this->repo->find(1, 112);
         $this->assertNotNull($found);
         $this->assertSame(8, $found['race']);
-        $this->assertSame(19, (int) $this->db->query('PRAGMA user_version')->fetchColumn());
+        $this->assertSame(20, (int) $this->db->query('PRAGMA user_version')->fetchColumn());
     }
 
     public function testMigrationCreatesTheTableOnAVersion18Database(): void
@@ -175,7 +182,7 @@ final class SeasonBudgetRepositoryTest extends TestCase
 
         $this->seeder->migrate();
 
-        $this->repo->save(1, 112, 8, ['v' => 1]);
+        $this->repo->save(1, 112, 8, ['v' => 2]);
         $this->assertNotNull($this->repo->find(1, 112));
     }
 }

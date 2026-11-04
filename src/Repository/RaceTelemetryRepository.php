@@ -912,4 +912,62 @@ class RaceTelemetryRepository
              ORDER BY id'
         );
     }
+
+    /**
+     * Race energy drain inputs for one division, rows with any missing field skipped.
+     * Censored races (energy at the floor) are filtered by EnergyModel, not here.
+     *
+     * @return list<array{ctr: int, from: int, to: int, laps: int, stamina: int}>
+     */
+    public function energyRows(string $division): array
+    {
+        $rows = $this->rows(
+            'SELECT clear_dry_risk, race_energy_from, race_energy_to, laps_completed, driver_sta
+             FROM race_telemetry
+             WHERE level = :division
+               AND clear_dry_risk IS NOT NULL AND race_energy_from IS NOT NULL
+               AND race_energy_to IS NOT NULL AND laps_completed IS NOT NULL
+               AND driver_sta IS NOT NULL
+             ORDER BY id',
+            ['division' => $division]
+        );
+
+        return array_map(static fn (array $row): array => [
+            'ctr' => (int) $row['clear_dry_risk'],
+            'from' => (int) $row['race_energy_from'],
+            'to' => (int) $row['race_energy_to'],
+            'laps' => (int) $row['laps_completed'],
+            'stamina' => (int) $row['driver_sta'],
+        ], $rows);
+    }
+
+    /**
+     * Q2 seconds per place per lap between every pair of drivers in one race group, by division.
+     *
+     * @return array<string, list<float>>
+     */
+    public function lapGapsByDivision(): array
+    {
+        $stmt = $this->pdo->query(
+            'SELECT a.level AS level,
+                    ABS(a.q2_time_ms - b.q2_time_ms) / 1000.0 / ABS(a.q2_pos - b.q2_pos) AS gap
+             FROM race_telemetry a
+             JOIN race_telemetry b
+               ON a.season = b.season AND a.race = b.race AND a.group_label = b.group_label
+              AND a.id < b.id
+             WHERE a.q2_time_ms > 0 AND b.q2_time_ms > 0
+               AND a.q2_pos IS NOT NULL AND b.q2_pos IS NOT NULL
+               AND a.q2_pos <> b.q2_pos'
+        );
+        if ($stmt === false) {
+            return [];
+        }
+
+        $gaps = [];
+        while (($row = $stmt->fetch(PDO::FETCH_ASSOC)) !== false) {
+            $gaps[(string) $row['level']][] = (float) $row['gap'];
+        }
+
+        return $gaps;
+    }
 }

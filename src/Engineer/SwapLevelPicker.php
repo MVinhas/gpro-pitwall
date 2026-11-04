@@ -165,8 +165,7 @@ readonly class SwapLevelPicker
 
         return match ($s->objective) {
             SeasonObjective::PROMOTE => $moneyShort && $kind === 'free_downgrade' && $s->floor->keepsTopHalf(),
-            SeasonObjective::HOLD => $s->floor->keepsTopHalf(),
-            SeasonObjective::SURVIVE => $s->floor->keepsAboveRelegation(),
+            SeasonObjective::STAY => $s->floor->keepsAboveRelegation(),
             default => false,
         };
     }

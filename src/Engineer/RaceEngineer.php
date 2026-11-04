@@ -8,6 +8,7 @@ use App\Support\Ordinal;
 
 /**
  * @phpstan-import-type Plan from CtrPlanner
+ * @phpstan-import-type CtrValueFigures from CtrPlanner
  * @phpstan-import-type Upgrade from UpgradeRanker
  * @phpstan-import-type SwapPick from EngineerInputs
  * @phpstan-import-type TyreAdvice from TyreSupplierAdvisor
@@ -26,8 +27,8 @@ final class RaceEngineer
 {
     private const string SMOKE_COST = 'expect smoke and lost time, and a retirement if it comes early';
 
-    /** Tunable: how much a Survive weekend lowers the advisor's overtake risk. */
-    public const int SURVIVE_OVERTAKE_STEP = 15;
+    /** Tunable: how much a Stay weekend lowers the advisor's overtake risk. */
+    public const int STAY_OVERTAKE_STEP = 15;
 
     /** Boost sets per race; the caller's extra-fuel litres must use BOOST_SETS * BOOST_LAPS_PER_SET laps. */
     public const int BOOST_SETS = 3;
@@ -148,7 +149,7 @@ final class RaceEngineer
         $pinnedBlind = $o['pinned'] && $o['proposed'] === null;
         $reason = $o['reasons'][0] ?? match (true) {
             $o['over'] => '',
-            $o['objective'] === null => "Your position in the group isn't known yet; treated as Hold",
+            $o['objective'] === null => "Your position in the group isn't known yet; treated as Stay",
             $pinnedBlind => "Your position in the group isn't known yet",
             default => '',
         };
@@ -282,6 +283,8 @@ final class RaceEngineer
         if ($plan !== null) {
             $target = $plan['ctr'];
             $swapNames = implode(' + ', array_column($plan['swaps'], 'part'));
+            $safetyReason = self::safetyCtrReason($in);
+            $byValue = in_array($plan['ctr_kind'], ['value', 'energy'], true) && $plan['value'] !== null;
             $reason = match (true) {
                 $stuck !== null && $target === 0 && $plan['mode'] !== 'short' => $stuck,
                 $plan['mode'] === 'short' => 'Even at CTR 0 the forecast misses the target by '
@@ -289,6 +292,15 @@ final class RaceEngineer
                 $plan['mode'] === 'push' && $plan['swaps'] !== [] => $rated . 'swap ' . $swapNames . ' ('
                     . Money::short(array_sum(array_column($plan['swaps'], 'cost')))
                     . '); the budget covers the swaps',
+                // Below the cap the energy-kind pick was made by the value or budget rule, so that rule explains it.
+                $plan['ctr_kind'] === 'energy' && $plan['ctr'] === $plan['energy_cap'] => self::energyCtrReason(
+                    $plan['energy_cap'],
+                    $plan['energy_estimate'],
+                    $plan['energy_start'],
+                    $in->division,
+                ),
+                $byValue => self::valueCtrReason($plan['ctr'], $plan['value']),
+                $plan['ctr_kind'] === 'safety' && $safetyReason !== null => $safetyReason,
                 $plan['ctr'] < $plan['safety'] => $rated . 'the highest CTR the budget covers to season end',
                 $plan['mode'] === 'nurse' && $plan['refused_swap_cost'] !== null => $rated . 'pushing past '
                     . $plan['safety'] . ' needs ' . Money::short($plan['refused_swap_cost'])
@@ -296,9 +308,12 @@ final class RaceEngineer
                 default => $rated . 'the highest CTR where no part breaks',
             };
         } else {
-            $target = $in->ctrCeiling;
+            $ceiling = (int) $in->ctrCeiling;
+            $capped = $in->energyCap !== null && $in->energyCap < $ceiling;
+            $target = $capped ? (int) $in->energyCap : $ceiling;
             $reason = match (true) {
                 $stuck !== null && $target === 0 => $stuck,
+                $capped => self::energyCtrReason($target, $in->energyEstimate, $in->energyStart, $in->division),
                 default => $rated . 'the highest CTR where no part breaks; season costs unknown',
             };
         }
@@ -326,6 +341,76 @@ final class RaceEngineer
 
         return self::smoke($in->stuckSmoke) . ' and the car is already updated: CTR 0 keeps '
             . self::possessive($in->stuckSmoke) . ' wear lowest';
+    }
+
+    private static function energyCtrReason(int $cap, bool $estimate, ?int $start, ?string $division): string
+    {
+        if (!$estimate && $start !== null) {
+            return 'Capped at ' . $cap . ": your driver's energy (about " . $start
+                . '% at the start) would run out above that';
+        }
+
+        return 'Capped at ' . $cap . ': a rough ' . ($division === null ? '' : $division . ' ')
+            . "estimate of what your driver's energy allows";
+    }
+
+    /**
+     * @param CtrValueFigures $value
+     */
+    private static function valueCtrReason(int $ctr, array $value): string
+    {
+        $next = $value['next'];
+        $underBar = $next === null ? '' : 'CTR ' . $next['ctr'] . ' would net only ' . Money::short($next['net_more'])
+            . ' more, under the ' . Money::short(CtrValue::MARGIN) . ' bar';
+        if ($ctr === 0) {
+            return match (true) {
+                !$value['pace_known'] => 'No pace figures for the remaining tracks: the lowest wear wins',
+                $next === null => 'A higher CTR earns less than its repairs cost',
+                $next['net_more'] > 0 => "A higher CTR isn't worth the wear: " . $underBar,
+                default => 'A higher CTR earns less than its repairs cost (CTR ' . $next['ctr'] . ': '
+                    . self::signed($next['gain_more']) . ', repairs ' . self::signed($next['cost_more']) . ')',
+            };
+        }
+
+        $pick = 'About +' . number_format($value['places'], 1) . ' places a race (' . self::signed($value['gain'])
+            . ' this season); ';
+
+        return $pick . match (true) {
+            $next === null => 'no higher CTR fits the budget',
+            $next['net_more'] > 0 => $underBar,
+            default => 'CTR ' . $next['ctr'] . ' would earn ' . Money::short($next['gain_more']) . ' more but cost '
+                . Money::short($next['cost_more']) . ' more in repairs',
+        };
+    }
+
+    /**
+     * A money delta with its sign: Money::short already carries the minus.
+     */
+    private static function signed(int $amount): string
+    {
+        return ($amount < 0 ? '' : '+') . Money::short($amount);
+    }
+
+    /**
+     * Why Stay takes the highest CTR: the projected finish is near or inside the relegation zone. Null without
+     * both figures.
+     */
+    private static function safetyCtrReason(EngineerInputs $in): ?string
+    {
+        $projected = $in->objective['numbers']['projected_pos'] ?? null;
+        $relegation = $in->objective['numbers']['relegation_pos'] ?? null;
+        if ($projected === null || $relegation === null) {
+            return null;
+        }
+        $above = $relegation - $projected;
+
+        return 'P' . $projected . ' projected, '
+            . match (true) {
+                $above > 1 => $above . ' places above the relegation zone',
+                $above === 1 => '1 place above the relegation zone',
+                default => 'inside the relegation zone',
+            }
+            . ': the highest CTR the budget and energy allow';
     }
 
     /**
@@ -682,14 +767,14 @@ final class RaceEngineer
             return self::line('risk', self::STALE, 'The advice reads the saved setup and weather', action: $strategy);
         }
 
-        $survive = self::objectiveIs($in, SeasonObjective::SURVIVE);
-        $overtake = $survive ? max(0, $in->risk['overtake'] - self::SURVIVE_OVERTAKE_STEP) : $in->risk['overtake'];
+        $stay = self::objectiveIs($in, SeasonObjective::STAY);
+        $overtake = $stay ? max(0, $in->risk['overtake'] - self::STAY_OVERTAKE_STEP) : $in->risk['overtake'];
 
         return self::line(
             'risk',
             'Overtake ' . $overtake . ' · Defend ' . $in->risk['defend'],
-            $survive
-                ? 'Overtake lowered by ' . self::SURVIVE_OVERTAKE_STEP . ' to cut the cost of mistakes'
+            $stay
+                ? 'Overtake lowered by ' . self::STAY_OVERTAKE_STEP . ' to cut the cost of mistakes'
                 : 'Set for this track and driver',
             action: $strategy,
         );
@@ -708,10 +793,6 @@ final class RaceEngineer
         if ($in->weatherStale) {
             return self::line('boost', self::STALE, 'The fuel figure reads the saved setup', action: $strategy);
         }
-        if (self::objectiveIs($in, SeasonObjective::SURVIVE)) {
-            return self::line('boost', 'No boost — save the fuel', 'Survive: skip the extra fuel');
-        }
-
         return self::line(
             'boost',
             'Boost: ' . self::BOOST_SETS . ' sets · +' . $in->boostLitres . ' L',
@@ -775,7 +856,7 @@ final class RaceEngineer
             return $cost <= self::envelopeLeft($in, $stage);
         }
 
-        $reserve = self::objectiveIs($in, SeasonObjective::SURVIVE) ? $in->forcedSwapCost ?? 0 : 0;
+        $reserve = self::objectiveIs($in, SeasonObjective::STAY) ? $in->forcedSwapCost ?? 0 : 0;
 
         return self::spendable($in) >= $cost + $reserve;
     }
@@ -789,10 +870,10 @@ final class RaceEngineer
         }
 
         $known = $in->outlook['known'];
-        if (self::objectiveIs($in, SeasonObjective::SURVIVE)) {
+        if (self::objectiveIs($in, SeasonObjective::STAY)) {
             return $known
-                ? 'Survive: repairs come before anything optional'
-                : 'Survive: your balance must cover repairs first; season costs unknown';
+                ? 'Stay: repairs come before anything optional'
+                : 'Stay: your balance must cover repairs first; season costs unknown';
         }
 
         return $known ? 'Free cash does not cover it' : 'Your balance does not cover it; season costs unknown';
@@ -810,7 +891,7 @@ final class RaceEngineer
         }
 
         $subject = $in->outlook['known'] ? 'free cash' : 'your balance';
-        $tail = self::objectiveIs($in, SeasonObjective::SURVIVE) ? ' and the forced repairs' : '';
+        $tail = self::objectiveIs($in, SeasonObjective::STAY) ? ' and the forced repairs' : '';
         $note = $in->outlook['known'] ? '' : '; season costs unknown';
 
         return $subject . ' covers ' . $what . $tail . $note;

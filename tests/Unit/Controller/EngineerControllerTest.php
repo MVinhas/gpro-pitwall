@@ -41,7 +41,7 @@ final class EngineerControllerTest extends TestCase
         $controller = new EngineerController($service, new Authorize($users));
 
         try {
-            $controller->setObjective(new Request([], ['season' => '107', 'objective' => 'hold'], [], []));
+            $controller->setObjective(new Request([], ['season' => '107', 'objective' => 'stay'], [], []));
             $this->fail('expected a 403');
         } catch (HttpException $e) {
             $this->assertSame(403, $e->getStatusCode());
