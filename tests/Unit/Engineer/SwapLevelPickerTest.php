@@ -206,6 +206,11 @@ final class SwapLevelPickerTest extends TestCase
         $this->assertNotNull($far);
         $this->assertSame(2, $far['level']);
         $this->assertSame('stay_cheapest', $far['reason']);
+
+        $edge = $this->pick($season, [$this->paid(2, 200_000), $this->paid(3)]);
+        $this->assertNotNull($edge);
+        $this->assertSame(-100_000, $this->pick($season, [$this->paid(2, 200_000)])['net_cost'] ?? null);
+        $this->assertSame(3, $edge['level']);
     }
 
     public function testStayTakesACheaperUpgrade(): void
@@ -231,7 +236,14 @@ final class SwapLevelPickerTest extends TestCase
 
         $this->assertNotNull($pick);
         $this->assertSame('sidegrade', $pick['kind']);
-        $this->assertSame('stay_cheapest', $pick['reason']);
+        $this->assertSame('stay_hold', $pick['reason']);
+
+        $unknown = $this->pick(
+            $this->season(SeasonObjective::STAY, new StrengthFloor(null, null), 10_000_000),
+            [$this->paid(2), $this->paid(3)],
+        );
+        $this->assertNotNull($unknown);
+        $this->assertSame('stay_hold', $unknown['reason']);
     }
 
     public function testPromoteNeverTakesAPaidDowngrade(): void
@@ -474,6 +486,7 @@ final class SwapLevelPickerTest extends TestCase
             'top3_pays' => 'Top-3 car: this upgrade pays for itself',
             'budget_short' => 'Budget short: cheapest option that keeps your car in place',
             'stay_cheapest' => 'Cheapest level that keeps your car out of the group\'s weakest quarter',
+            'stay_hold' => 'Cheapest level without a downgrade: the car needs its strength against the group',
         ], SwapLevelPicker::REASONS);
     }
 }

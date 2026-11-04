@@ -929,7 +929,7 @@ final class PartSwapAdvisorServiceTest extends TestCase
 
                 /** @var ?array{level: int, kind: 'free_downgrade'|'downgrade'|'sidegrade'|'upgrade', cost: int,
                  *   season_pha: float, net_cost: int, affordable: bool,
-                 *   reason: 'most_pha'|'top3_keep'|'top3_pays'|'budget_short'|'stay_cheapest'} $pick */
+                 *   reason: 'most_pha'|'top3_keep'|'top3_pays'|'budget_short'|'stay_cheapest'|'stay_hold'} $pick */
                 $pick = $this->picks[$part] ?? null;
 
                 return $pick;

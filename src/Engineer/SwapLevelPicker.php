@@ -11,7 +11,7 @@ use App\Service\WearAdvisorService;
  * @phpstan-import-type Demand from UpgradeRanker
  * @phpstan-type Candidate array{level: int, cost: int, is_free: bool, start: float, fit: float}
  * @phpstan-type PickKind 'free_downgrade'|'downgrade'|'sidegrade'|'upgrade'
- * @phpstan-type PickReason 'most_pha'|'top3_keep'|'top3_pays'|'budget_short'|'stay_cheapest'
+ * @phpstan-type PickReason 'most_pha'|'top3_keep'|'top3_pays'|'budget_short'|'stay_cheapest'|'stay_hold'
  * @phpstan-type Pick array{level: int, kind: PickKind, cost: int, season_pha: float, net_cost: int,
  *   affordable: bool, reason: PickReason}
  * @phpstan-type Option array{level: int, kind: PickKind, cost: int, free: bool, season_pha: float, net_cost: int,
@@ -25,6 +25,7 @@ readonly class SwapLevelPicker
         'top3_pays' => 'Top-3 car: this upgrade pays for itself',
         'budget_short' => 'Budget short: cheapest option that keeps your car in place',
         'stay_cheapest' => 'Cheapest level that keeps your car out of the group\'s weakest quarter',
+        'stay_hold' => 'Cheapest level without a downgrade: the car needs its strength against the group',
     ];
 
     private const float EQUAL_PHA = 0.5;
@@ -138,7 +139,10 @@ readonly class SwapLevelPicker
         }
 
         if ($s->objective === SeasonObjective::STAY) {
-            return [self::cheapest($affordable), 'stay_cheapest'];
+            return [
+                self::cheapest($affordable),
+                $s->floor->keepsOutOfBottomQuarter() ? 'stay_cheapest' : 'stay_hold',
+            ];
         }
 
         if ($s->objective === SeasonObjective::PROMOTE && $s->floor->topThree()) {
