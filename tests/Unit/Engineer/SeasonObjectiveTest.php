@@ -268,12 +268,29 @@ final class SeasonObjectiveTest extends TestCase
         self::assertSame(SeasonObjective::PROMOTE, SeasonObjective::propose($early, 2, self::UNKNOWN_OUTLOOK, 1_000_000, 1, false)['objective']);
     }
 
-    public function testTiesRankTheManagerLast(): void
+    public function testTiesKeepTheStandingsOrder(): void
     {
         $pts = [1 => 50, 2 => 40, 3 => 31, 4 => 31, 5 => 20, 6 => 15, 7 => 12, 8 => 10, 9 => 5, 10 => 2];
-        $proposal = SeasonObjective::propose($this->row(9, 3, 31, $this->group($pts, 2)), 9, self::UNKNOWN_OUTLOOK, 1_000_000, null, false);
 
-        self::assertSame(4, $proposal['numbers']['projected_pos']);
+        $ahead = SeasonObjective::propose($this->row(9, 3, 31, $this->group($pts, 2)), 9, self::UNKNOWN_OUTLOOK, 1_000_000, null, false);
+        self::assertSame(3, $ahead['numbers']['projected_pos']);
+
+        $behind = SeasonObjective::propose($this->row(9, 4, 31, $this->group($pts, 2)), 9, self::UNKNOWN_OUTLOOK, 1_000_000, null, false);
+        self::assertSame(4, $behind['numbers']['projected_pos']);
+    }
+
+    public function testManyZeroPointManagersKeepTheOwnPosition(): void
+    {
+        $pts = [];
+        for ($pos = 1; $pos <= 40; $pos++) {
+            $pts[$pos] = $pos <= 18 ? 40 - $pos : 0;
+        }
+
+        $proposal = SeasonObjective::propose($this->row(7, 19, 0, $this->group($pts, 5, 31)), 7, self::UNKNOWN_OUTLOOK, 1_000_000, null, false);
+
+        self::assertSame(31, $proposal['numbers']['relegation_pos']);
+        self::assertSame(19, $proposal['numbers']['projected_pos']);
+        self::assertNotContains('The relegation zone starts at P31', $proposal['reasons']);
     }
 
     public function testSeasonOverReadsTheOutcome(): void
