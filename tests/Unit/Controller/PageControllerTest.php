@@ -7,6 +7,7 @@ namespace App\Tests\Unit\Controller;
 use App\Controller\PageController;
 use App\Service\RaceEngineerService;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(PageController::class)]
@@ -121,6 +122,30 @@ final class PageControllerTest extends TestCase
         $this->assertNull(PageController::testingTrackName(['trackName' => 'Monza', 'showError' => true]));
         $this->assertNull(PageController::testingTrackName(['trackName' => '']));
         $this->assertNull(PageController::testingTrackName([]));
+    }
+
+    /**
+     * @param array<string, mixed> $testing
+     */
+    #[DataProvider('lapsLeftCases')]
+    public function testTestingLapsLeft(array $testing, int $expected): void
+    {
+        $this->assertSame($expected, PageController::testingLapsLeft($testing));
+    }
+
+    /**
+     * @return array<string, array{array<string, mixed>, int}>
+     */
+    public static function lapsLeftCases(): array
+    {
+        return [
+            'partly used'     => [['lapsLeft' => 37], 37],
+            'string zero'     => [['lapsLeft' => '0'], 0],
+            'absent'          => [[], 100],
+            'non-numeric'     => [['lapsLeft' => 'x'], 100],
+            'negative'        => [['lapsLeft' => -5], 0],
+            'over the ceiling' => [['lapsLeft' => 140], 100],
+        ];
     }
 
     public function testShortTabAliasesResolveToCanonicalKeys(): void

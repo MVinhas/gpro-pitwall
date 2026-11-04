@@ -452,16 +452,24 @@ class PageController
                     // race track. While testing is closed none can be run, so
                     // the slider gives way to a note instead of guessing.
                     try {
-                        $testingTrack = self::testingTrackName($this->apiClient->getTesting());
+                        $testing = $this->apiClient->getTesting();
+                        $testingTrack = self::testingTrackName($testing);
+                        $testingLapsLeft = self::testingLapsLeft($testing);
                     } catch (\Throwable $e) {
                         error_log('[Cockpit] testing: ' . $e::class . ': ' . $e->getMessage());
                         $testingTrack = null;
+                        $testingLapsLeft = 100;
                     }
                     $viewData['cockpit_testing_track'] = $testingTrack;
+                    $viewData['cockpit_training_laps_left'] = $testingLapsLeft;
                     if ($testingTrack === null) {
                         $cockpitTrainingLaps = 0;
-                        $viewData['cockpit_training_laps'] = 0;
+                    } else {
+                        // Laps already run are in the car's wear; counting the
+                        // full slider again would double-count them.
+                        $cockpitTrainingLaps = min($cockpitTrainingLaps, $testingLapsLeft);
                     }
+                    $viewData['cockpit_training_laps'] = $cockpitTrainingLaps;
 
                     $wear = $cockpitTrainingLaps > 0 && $testingTrack !== null
                         ? $this->trainingWear->project(
@@ -1006,6 +1014,22 @@ class PageController
         $name = (string) ($testing['trackName'] ?? '');
 
         return $name !== '' ? $name : null;
+    }
+
+    /**
+     * Testing laps GPRO still lets the manager run this race, 0..100.
+     * Absent or non-numeric means the weekend is untouched: all 100.
+     *
+     * @param array<string, mixed> $testing
+     */
+    public static function testingLapsLeft(array $testing): int
+    {
+        $left = $testing['lapsLeft'] ?? null;
+        if (!is_numeric($left)) {
+            return 100;
+        }
+
+        return max(0, min(100, (int) $left));
     }
 
     /**

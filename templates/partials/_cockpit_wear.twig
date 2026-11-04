@@ -41,11 +41,11 @@
                 <span data-slider-value class="text-sm font-semibold text-slate-900 w-10 text-right tabular-nums">{{ cockpit_risk }}</span>
             </div>
         </div>
-        {% if cockpit_testing_track|default(null) %}
+        {% if cockpit_testing_track|default(null) and cockpit_training_laps_left|default(0) > 0 %}
             <div>
                 <label class="t-label block mb-1" for="cockpitTrainingLaps">Training laps first</label>
                 <div class="flex items-center gap-3">
-                    <input type="range" id="cockpitTrainingLaps" name="cockpit_training_laps" min="0" max="100" step="5"
+                    <input type="range" id="cockpitTrainingLaps" name="cockpit_training_laps" min="0" max="{{ cockpit_training_laps_left }}" step="5"
                            value="{{ cockpit_training_laps }}"
                            data-cockpit-wear-slider
                            class="range">
@@ -53,6 +53,8 @@
                 </div>
                 <p class="t-caption mt-1">Run at {{ cockpit_testing_track }}, the testing track, before this race.</p>
             </div>
+        {% elseif cockpit_testing_track|default(null) %}
+            <p class="t-caption">No testing laps left this race, so none are counted.</p>
         {% else %}
             <p class="t-caption">Testing is closed, so no training laps are counted.</p>
         {% endif %}
