@@ -14,7 +14,7 @@
     {% set wear_txt = 'Car updated' %}
 {% elseif wear_advice.swap is not empty %}
     {% set wear_cls = 'text-red-700' %}
-    {% set wear_txt = wear_advice.swap|length ~ ' reach 100 %' %}
+    {% set wear_txt = wear_advice.swap|length ~ (wear_advice.swap|length == 1 ? ' reaches 100 %' : ' reach 100 %') %}
 {% elseif wear_advice.risky is not empty %}
     {% set wear_cls = 'text-amber-700' %}
     {% set wear_txt = wear_advice.risky|length ~ ' at risk' %}

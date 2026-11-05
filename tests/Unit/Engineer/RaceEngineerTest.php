@@ -2351,7 +2351,7 @@ final class RaceEngineerTest extends TestCase
         $this->assertSame('/cockpit#cockpit-wear', $smoke['anchor']);
         $this->assertSame('car', $smoke['step']);
         $this->assertArrayNotHasKey('parts', $lines);
-        $this->assertArrayNotHasKey('upgrades', $lines);
+        $this->assertSame('No upgrade this race', $lines['upgrades']['answer']);
         $this->assertSame(['Brakes'], RaceEngineer::letSmoke($in));
         $this->assertSame('car', RaceEngineer::STEPS['smoke']);
     }
@@ -2529,8 +2529,8 @@ final class RaceEngineerTest extends TestCase
         $this->assertSame('frees $2M this race', $smoke['figure']);
         $this->assertSame(
             'Brakes reaches 100 % on lap 48 of 60: about 13 laps of smoke (~$2M in places), 27 % chance it breaks; '
-                . 'Gearbox reaches 100 % on lap 60 of 60: about 1 lap of smoke (~$2M in places), 0 % chance it '
-                . 'breaks; a break halves the race money and upsets sponsors; fitting the Brakes next race saves $4M '
+                . 'Gearbox reaches 100 % on lap 60 of 60: about 1 lap of smoke (~$2M in places), too short to '
+                . 'break; a break halves the race money and upsets sponsors; fitting the Brakes next race saves $4M '
                 . 'in parts this season; replace the Gearbox next race',
             $smoke['reason'],
         );
@@ -2583,5 +2583,77 @@ final class RaceEngineerTest extends TestCase
         $this->assertSame([], RaceEngineer::letSmoke($in));
         $this->assertArrayNotHasKey('smoke', $lines);
         $this->assertSame('Swap Brakes → L4 (free downgrade)', $lines['parts']['answer']);
+    }
+
+    public function testWhileAPartSmokesTheUpgradesLineSaysWhyThereIsNone(): void
+    {
+        $in = $this->smoking(['Brakes' => ['saving' => 4_000_000]], plan: ['upgrades' => [$this->upgrade()]]);
+        $line = $this->line($in, 'upgrades');
+
+        $this->assertSame('No upgrade this race', $line['answer']);
+        $this->assertSame('Letting a part smoke to save money; upgrades wait for the next race', $line['reason']);
+        $this->assertSame('/season#season-upgrades', $line['anchor']);
+        $this->assertSame('ink', $line['tone']);
+        $this->assertNull($line['figure']);
+        $this->assertNull(RaceEngineer::recommendedUpgrade($in));
+    }
+
+    public function testABudgetShortPickKeepsTheLapReason(): void
+    {
+        $quoted = $this->smoking(['Brakes' => ['risk' => SmokeRisk::for(100, 10, 60), 'start' => 100.0]], o: [
+            'swapPicks' => [$this->pick('Brakes', 5, 'sidegrade', 1_200_000, 'budget_short')],
+        ]);
+        $unquoted = $this->smoking([], o: [
+            'swapPicks' => [$this->pick('Brakes', 5, 'sidegrade', 1_200_000, 'budget_short')],
+        ]);
+
+        $this->assertSame(
+            'Reaches 100 % on lap 1 of 60: likely to break and retire; budget short: cheapest option that keeps '
+                . 'your car in place',
+            $this->line($quoted, 'parts')['reason'],
+        );
+        $this->assertSame('red', $this->line($quoted, 'parts')['tone']);
+        $this->assertSame(
+            'Budget short: cheapest option that keeps your car in place',
+            $this->line($unquoted, 'parts')['reason'],
+        );
+    }
+
+    public function testASmokeTooShortToBreakSaysSo(): void
+    {
+        $gearbox = ['risk' => SmokeRisk::for(75, 25, 60), 'start' => 75.0];
+        $alone = $this->smoking(['Gearbox' => $gearbox], -500_000, [['part' => 'Gearbox', 'cost' => 800_000]]);
+
+        $this->assertSame(
+            'Reaches 100 % on lap 60 of 60: about 1 lap of smoke (~$2M in places); too short to break; '
+                . 'replace it next race',
+            $this->line($alone, 'smoke')['reason'],
+        );
+    }
+
+    public function testSeveralSmokersKeepTheBreakClauseUnlessNoneCanBreak(): void
+    {
+        $replaced = [['part' => 'Brakes', 'cost' => 1_200_000], ['part' => 'Gearbox', 'cost' => 800_000]];
+        $gearbox = ['risk' => SmokeRisk::for(75, 25, 60), 'start' => 75.0];
+        $mixed = $this->smoking(['Brakes' => [], 'Gearbox' => $gearbox], -2_500_000, $replaced);
+        $short = $this->smoking(
+            ['Brakes' => $gearbox, 'Gearbox' => $gearbox],
+            -2_500_000,
+            $replaced,
+        );
+
+        $this->assertSame(
+            'Brakes reaches 100 % on lap 48 of 60: about 13 laps of smoke (~$2M in places), 27 % chance it breaks; '
+                . 'Gearbox reaches 100 % on lap 60 of 60: about 1 lap of smoke (~$2M in places), too short to break; '
+                . 'a break halves the race money and upsets sponsors; replace the Brakes next race; '
+                . 'replace the Gearbox next race',
+            $this->line($mixed, 'smoke')['reason'],
+        );
+        $this->assertSame(
+            'Brakes reaches 100 % on lap 60 of 60: about 1 lap of smoke (~$2M in places), too short to break; '
+                . 'Gearbox reaches 100 % on lap 60 of 60: about 1 lap of smoke (~$2M in places), too short to break; '
+                . 'replace the Brakes next race; replace the Gearbox next race',
+            $this->line($short, 'smoke')['reason'],
+        );
     }
 }

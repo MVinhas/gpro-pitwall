@@ -503,9 +503,11 @@ final class RaceEngineer
         }
 
         $breaks = false;
+        $lapped = false;
         $reasons = [];
         foreach ($forced as $part) {
             $risk = $in->smoke[$part]['risk'] ?? null;
+            $lapped = $lapped || $risk !== null;
             $name = count($swapped) > 1 ? $part : null;
             $breaks = $breaks || ($risk?->likelyBreak() ?? false);
             $reasons[] = $risk?->describe($name)
@@ -520,6 +522,7 @@ final class RaceEngineer
             implode('; ', $reasons) . $unlock,
             $forcedSwapCost === null ? null : Money::short($forcedSwapCost + $unlockCost),
             $breaks || $short ? 'red' : 'amber',
+            $lapped,
         );
     }
 
@@ -719,8 +722,9 @@ final class RaceEngineer
      */
     private static function smokeReason(array $quote, ?string $part): string
     {
-        return self::smokeClause($quote, $part) . '; ' . self::pct($quote) . ' chance it breaks, which '
-            . self::SMOKE_BREAK . '; ' . self::smokeTail($quote, $part);
+        $odds = self::breaks($quote) ? self::odds($quote) . ', which ' . self::SMOKE_BREAK : self::odds($quote);
+
+        return self::smokeClause($quote, $part) . '; ' . $odds . '; ' . self::smokeTail($quote, $part);
     }
 
     /**
@@ -730,12 +734,15 @@ final class RaceEngineer
     {
         $clauses = [];
         $tails = [];
+        $breaks = false;
         foreach ($quotes as $part => $quote) {
-            $clauses[] = self::smokeClause($quote, $part) . ', ' . self::pct($quote) . ' chance it breaks';
+            $clauses[] = self::smokeClause($quote, $part) . ', ' . self::odds($quote);
             $tails[] = self::smokeTail($quote, $part);
+            $breaks = $breaks || self::breaks($quote);
         }
+        $break = $breaks ? '; a break ' . self::SMOKE_BREAK : '';
 
-        return implode('; ', $clauses) . '; a break ' . self::SMOKE_BREAK . '; ' . implode('; ', $tails);
+        return implode('; ', $clauses) . $break . '; ' . implode('; ', $tails);
     }
 
     /**
@@ -753,9 +760,25 @@ final class RaceEngineer
     /**
      * @param SmokeQuote $quote
      */
-    private static function pct(array $quote): string
+    private static function pct(array $quote): int
     {
-        return (int) round($quote['risk']->breakChance * 100) . ' %';
+        return (int) round($quote['risk']->breakChance * 100);
+    }
+
+    /**
+     * @param SmokeQuote $quote
+     */
+    private static function breaks(array $quote): bool
+    {
+        return self::pct($quote) > 0;
+    }
+
+    /**
+     * @param SmokeQuote $quote
+     */
+    private static function odds(array $quote): string
+    {
+        return self::breaks($quote) ? self::pct($quote) . ' % chance it breaks' : 'too short to break';
     }
 
     /**
@@ -794,7 +817,7 @@ final class RaceEngineer
     /**
      * The parts line, with the reasons of the season picks for $parts after today's reason. A pick that only
      * had a budget-short option left replaces the reason: that is what the manager has to know. Next to an
-     * unlock swap it is appended instead.
+     * unlock swap, or after the lap a part reaches 100 % ($keepReason), it is appended instead.
      *
      * @param list<string> $parts
      * @return Line
@@ -806,6 +829,7 @@ final class RaceEngineer
         string $reason,
         ?string $figure,
         string $tone,
+        bool $keepReason = false,
     ): array {
         $reasons = [];
         foreach ([...$in->swapPicks, ...$in->unlockPicks] as $pick) {
@@ -817,7 +841,7 @@ final class RaceEngineer
 
         $unlocking = array_intersect(array_column($in->unlockPicks, 'part'), $parts) !== [];
         if (in_array('budget_short', $reasons, true)) {
-            $reason = $unlocking
+            $reason = $unlocking || $keepReason
                 ? $reason . '; ' . lcfirst(SwapLevelPicker::REASONS['budget_short'])
                 : SwapLevelPicker::REASONS['budget_short'];
             $tone = $tone === 'red' ? 'red' : 'amber';
@@ -1102,7 +1126,18 @@ final class RaceEngineer
     private static function upgrades(EngineerInputs $in): ?array
     {
         $plan = $in->plan;
-        if ($in->carUpdated || $plan === null || !isset($plan['upgrades']) || self::letSmoke($in) !== []) {
+        if ($in->carUpdated || $plan === null) {
+            return null;
+        }
+        if (self::letSmoke($in) !== []) {
+            return self::line(
+                'upgrades',
+                'No upgrade this race',
+                'Letting a part smoke to save money; upgrades wait for the next race',
+                self::UPGRADES_ANCHOR,
+            );
+        }
+        if (!isset($plan['upgrades'])) {
             return null;
         }
 
@@ -1172,7 +1207,7 @@ final class RaceEngineer
      */
     public static function recommendedUpgrade(EngineerInputs $in): ?array
     {
-        if ($in->carUpdated || $in->plan === null) {
+        if ($in->carUpdated || $in->plan === null || self::letSmoke($in) !== []) {
             return null;
         }
         foreach (self::worthBuying($in, $in->plan['upgrades'] ?? []) as $upgrade) {

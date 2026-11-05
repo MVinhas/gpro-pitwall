@@ -174,6 +174,9 @@ class RaceEngineerService
             $inputs = self::withTestingCall($inputs, $call)->withTestingSkip($skip, $laps);
         }
 
+        // Quoted at pass 1's CTR: a part let smoke takes the upgrade out of the update the second pass plans.
+        $inputs = $inputs->withSmoke($this->smokeQuotes($ctx, $inputs, $basis, $c));
+
         // Under a plan the advice waits for the plan it is checked against, below.
         $tyres = $plan === null ? $this->tyreAdvice($c, null, $ctx) : null;
         if ($plan !== null && $basis !== null) {
@@ -188,8 +191,10 @@ class RaceEngineerService
             $outlook = ['committed' => (int) $ctx['outlook']['committed'] + $tyreExtra] + $ctx['outlook'];
             $saved = $plan;
             if (!$locked) {
-                $plan = $this->withUpgrades($plan, $inputs, $objective, $outlook, $ctx['cash'], $basis, $c);
-                $inputs = $inputs->withPlan($plan);
+                if (RaceEngineer::letSmoke($inputs) === []) {
+                    $plan = $this->withUpgrades($plan, $inputs, $objective, $outlook, $ctx['cash'], $basis, $c);
+                    $inputs = $inputs->withPlan($plan);
+                }
                 ['card' => $plan, 'saved' => $saved]
                     = $this->afterTheUpdate($ctx, $plan, $basis, $inputs, $c, $energy, $tyreExtra);
                 $inputs = $inputs->withPlan($plan);
@@ -204,7 +209,6 @@ class RaceEngineerService
             }
         }
 
-        $inputs = $inputs->withSmoke($this->smokeQuotes($ctx, $inputs, $basis, $c));
         $lines = RaceEngineer::brief($inputs->withTyreAdvice($tyres));
 
         return [

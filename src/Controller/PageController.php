@@ -127,6 +127,31 @@ class PageController
     }
 
     /**
+     * When each part the Cockpit must swap reaches 100 %, read from its full wear row: the advisor's row drops
+     * the testing wear its end already counts, which would spread that wear over the race laps.
+     *
+     * @param list<array{part: string}> $swap
+     * @param array<string, array{start: int|float, end: int|float, training?: int|float}> $parts
+     * @return array<string, string>
+     */
+    public static function wearSmoke(array $swap, array $parts, ?int $laps): array
+    {
+        if ($laps === null) {
+            return [];
+        }
+
+        $smoke = [];
+        foreach ($swap as $row) {
+            $risk = isset($parts[$row['part']]) ? SmokeRisk::forRow($parts[$row['part']], $laps) : null;
+            if ($risk !== null) {
+                $smoke[$row['part']] = $risk->describe();
+            }
+        }
+
+        return $smoke;
+    }
+
+    /**
      * Nothing stored for this token yet (never synced, or a new token): a team
      * screen would otherwise read the empty office as "no driver" or "no tyre
      * supplier". Training takes typed-in stats and Recruitment reads the shared
@@ -660,15 +685,11 @@ class PageController
                         $viewData['wear_parts']      = $wear['parts'];
                         $viewData['wear_track_name'] = $wear['track_name'] ?? $trackName;
                         $viewData['wear_laps']       = $wear['laps'] ?? null;
-                        $viewData['wear_smoke']      = [];
-                        if (is_int($viewData['wear_laps'])) {
-                            foreach ($advice['swap'] as $row) {
-                                $smoke = SmokeRisk::forRow($row, $viewData['wear_laps']);
-                                if ($smoke !== null) {
-                                    $viewData['wear_smoke'][$row['part']] = $smoke->describe();
-                                }
-                            }
-                        }
+                        $viewData['wear_smoke']      = self::wearSmoke(
+                            $advice['swap'],
+                            $wear['parts'],
+                            is_int($viewData['wear_laps']) ? $viewData['wear_laps'] : null,
+                        );
                         $viewData['wear_driver']     = $this->mapper->mapDriver($pilot);
 
                         // Only parts that reach 100 % (smoke, and a likely

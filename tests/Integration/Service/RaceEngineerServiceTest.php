@@ -2635,7 +2635,6 @@ final class RaceEngineerServiceTest extends TestCase
         self::assertStringStartsWith('saves ~', (string) $byKey['smoke']['figure']);
         self::assertStringEndsWith('; no replacement is due before the season ends', $byKey['smoke']['reason']);
         self::assertArrayNotHasKey('parts', $byKey);
-        self::assertArrayNotHasKey('upgrades', $byKey);
     }
 
     public function testUnknownDivisionOffersNoSmoke(): void
@@ -2678,6 +2677,37 @@ final class RaceEngineerServiceTest extends TestCase
         self::assertIsInt($unlockedEnvelope);
         self::assertGreaterThan(0, $lockedEnvelope);
         self::assertLessThanOrEqual(1_000_000, abs($lockedEnvelope - $unlockedEnvelope));
+    }
+
+    public function testAValueSmokerKeepsTheUpgradeOutOfTheSavedPlan(): void
+    {
+        $this->seedPromotionFixture();
+        $this->seedSmokeTrack();
+        $cockpitWith = function (int $brakes): array {
+            $demand = ['power' => 5, 'handling' => 3, 'acceleration' => 2];
+            $cockpit = $this->smokeCockpit(10, $brakes, ['cash' => 20_000_000], [
+                'season_calendar' => [
+                    ['race' => 9, 'track_name' => 'Gamma'] + $demand,
+                    ['race' => 10, 'track_name' => 'Gamma'] + $demand,
+                ],
+            ]);
+            $cockpit['car'][CarWearService::PARTS_MAP['Engine']['options']][]
+                = ['value' => ['value' => 1, 'cost' => 300_000], 'newLvl' => '3'];
+
+            return $cockpit;
+        };
+
+        $healthy = array_column($this->service->forCockpit(self::USER, $cockpitWith(10))['lines'], null, 'key');
+        $upgraded = array_column($this->savedPlan()['rows'][0]['replaced'] ?? [], 'part');
+        $smoking = array_column($this->service->forCockpit(self::USER, $cockpitWith(93))['lines'], null, 'key');
+        $saved = $this->savedPlan();
+
+        self::assertSame('Upgrade Engine to L3', $healthy['upgrades']['answer'], 'the fixture must recommend one');
+        self::assertContains('Engine', $upgraded);
+        self::assertSame('Let the Brakes smoke this race', $smoking['smoke']['answer']);
+        self::assertSame('No upgrade this race', $smoking['upgrades']['answer']);
+        self::assertNotContains('Engine', array_column($saved['rows'][0]['replaced'], 'part'));
+        self::assertArrayNotHasKey('upgrades', $saved);
     }
 
     private function seedSmokeTrack(): void

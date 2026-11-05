@@ -94,8 +94,8 @@ final class WearAdvisorService
         if ($buckets[self::STATUS_SWAP] !== []) {
             $n = count($buckets[self::STATUS_SWAP]);
             return $n === 1
-                ? '1 part will not survive the race — swap it.'
-                : $n . ' parts will not survive the race — swap them.';
+                ? '1 part reaches 100 % this race.'
+                : $n . ' parts reach 100 % this race.';
         }
         if ($buckets[self::STATUS_RISKY] !== []) {
             return 'No mandatory swaps, but some parts will finish in the red.';

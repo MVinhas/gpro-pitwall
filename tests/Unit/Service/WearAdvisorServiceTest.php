@@ -78,13 +78,13 @@ final class WearAdvisorServiceTest extends TestCase
         $one = $this->svc->classify([
             'Engine' => ['level' => 1, 'start' => 0, 'est' => 100.0, 'end' => 100.0],
         ]);
-        $this->assertStringContainsString('1 part', $one['headline']);
+        $this->assertSame('1 part reaches 100 % this race.', $one['headline']);
 
         $two = $this->svc->classify([
             'Engine'  => ['level' => 1, 'start' => 0, 'est' => 100.0, 'end' => 100.0],
             'Gearbox' => ['level' => 1, 'start' => 0, 'est' => 100.0, 'end' => 100.0],
         ]);
-        $this->assertStringContainsString('2 parts', $two['headline']);
+        $this->assertSame('2 parts reach 100 % this race.', $two['headline']);
     }
 
     public function testHeadlineForRiskyOnly(): void
