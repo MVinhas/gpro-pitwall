@@ -6,6 +6,7 @@ namespace App\Tests\Unit\Controller;
 
 use App\Controller\PageController;
 use App\Service\RaceEngineerService;
+use App\Support\RaceSettings;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -233,5 +234,76 @@ final class PageControllerTest extends TestCase
 
         $this->assertStringContainsString('[Engineer] RuntimeException', $logged);
         $this->assertStringNotContainsString('boom', $logged);
+    }
+
+    public function testTestingLapsOverrideDeclined(): void
+    {
+        $this->assertSame(
+            'Testing declined on the Engineer',
+            PageController::testingLapsOverride(true, 'skip', 'Pro', false, []),
+        );
+    }
+
+    public function testTestingLapsOverrideDeclinedIsAdminOnly(): void
+    {
+        $this->assertNull(PageController::testingLapsOverride(false, 'skip', 'Pro', false, []));
+    }
+
+    public function testTestingLapsOverrideRookieIsAdminOnly(): void
+    {
+        $this->assertSame('No testing in Rookie', PageController::testingLapsOverride(true, null, 'Rookie', false, []));
+        $this->assertNull(PageController::testingLapsOverride(false, null, 'Rookie', false, []));
+    }
+
+    public function testTestingLapsOverrideBlockedAfterUpdateForEveryone(): void
+    {
+        $start = ['Chassis' => 40, 'Brakes' => 92, 'Gearbox' => 95];
+
+        $this->assertSame(
+            'Testing blocked: Brakes at 92 %',
+            PageController::testingLapsOverride(false, null, 'Pro', true, $start),
+        );
+    }
+
+    public function testTestingLapsOverrideBlockRoundsWearUp(): void
+    {
+        $this->assertSame(
+            'Testing blocked: Brakes at 91 %',
+            PageController::testingLapsOverride(false, null, 'Pro', true, ['Brakes' => 90.4]),
+        );
+        $this->assertNull(PageController::testingLapsOverride(false, null, 'Pro', true, ['Brakes' => 90]));
+    }
+
+    public function testTestingLapsOverrideNotBeforeUpdate(): void
+    {
+        $this->assertNull(PageController::testingLapsOverride(false, null, 'Pro', false, ['Brakes' => 92]));
+    }
+
+    public function testTestingLapsOverrideDeclinedWinsOverTheBlock(): void
+    {
+        $this->assertSame(
+            'Testing declined on the Engineer',
+            PageController::testingLapsOverride(true, 'skip', 'Pro', true, ['Brakes' => 92]),
+        );
+    }
+
+    public function testDeclinedTestingZeroesLapsAndKeepsTheSessionValue(): void
+    {
+        $session = [];
+        RaceSettings::resolve($session, RaceSettings::TRAINING_LAPS, 40, 100);
+
+        $laps = PageController::resolveTestingLaps($session, 15, 'Testing declined on the Engineer');
+
+        $this->assertSame(0, $laps);
+        $this->assertSame(40, RaceSettings::remembered($session, RaceSettings::TRAINING_LAPS));
+    }
+
+    public function testWithoutAnOverrideTheRequestedLapsAreRememberedAsBefore(): void
+    {
+        $session = [];
+
+        $this->assertSame(15, PageController::resolveTestingLaps($session, 15, null));
+        $this->assertSame(15, RaceSettings::remembered($session, RaceSettings::TRAINING_LAPS));
+        $this->assertSame(15, PageController::resolveTestingLaps($session, null, null));
     }
 }

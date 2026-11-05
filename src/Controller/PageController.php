@@ -348,12 +348,8 @@ class PageController
             case 'Race Engineer':
             case 'Cockpit':
                 $cockpitRisk = RaceSettings::resolve($_SESSION, RaceSettings::CTR, $request->get('cockpit_risk'), 100);
-                $cockpitTrainingLaps = RaceSettings::resolve(
-                    $_SESSION,
-                    RaceSettings::TRAINING_LAPS,
-                    $request->get('cockpit_training_laps'),
-                    TrainingWearProjectionService::MAX_LAPS,
-                );
+                // Resolved below, once the testing override is known: an override must not take the request's value.
+                $cockpitTrainingLaps = 0;
                 $viewData['cockpit_risk'] = $cockpitRisk;
                 $viewData['cockpit_training_laps'] = $cockpitTrainingLaps;
                 $isCockpit = $activeMainTab === 'Cockpit';
@@ -462,6 +458,45 @@ class PageController
                     }
                     $viewData['cockpit_testing_track'] = $testingTrack;
                     $viewData['cockpit_training_laps_left'] = $testingLapsLeft;
+
+                    // Start wear and the division are known before the projection, so the override can decide
+                    // the lap count the projection runs with; no second wear pass is needed.
+                    $menu = $this->apiClient->getMenu();
+                    $division = $this->divisionFromMenu($menu);
+                    $lapsOverride = null;
+                    if ($testingTrack !== null) {
+                        $testingChoice = null;
+                        if ($isAdmin) {
+                            try {
+                                $testingChoice = $this->raceEngineer->choicesFor(
+                                    (int) $user['id'],
+                                    (int) ($office['seasonNb'] ?? 0),
+                                    (int) ($office['raceNb'] ?? 0),
+                                )['testing'] ?? null;
+                            } catch (\Throwable $e) {
+                                error_log('[Cockpit] ' . $e::class);
+                            }
+                        }
+                        $startWear = [];
+                        foreach (CarWearService::PARTS_MAP as $label => $map) {
+                            $startWear[$label] = (int) ($carData[$map['wear']] ?? 0);
+                        }
+                        $lapsOverride = self::testingLapsOverride(
+                            $isAdmin,
+                            $testingChoice,
+                            $division,
+                            in_array($office['doneCarRepair'] ?? null, ['1', 1], true),
+                            $startWear,
+                        );
+                    }
+                    $cockpitTrainingLaps = self::resolveTestingLaps(
+                        $_SESSION,
+                        $request->get('cockpit_training_laps'),
+                        $lapsOverride,
+                    );
+                    if ($lapsOverride !== null) {
+                        $viewData['cockpit_laps_note'] = $lapsOverride;
+                    }
                     if ($testingTrack === null) {
                         $cockpitTrainingLaps = 0;
                     } else {
@@ -486,8 +521,6 @@ class PageController
                             $this->mapper->mapDriver($pilot),
                             $cockpitRisk,
                         );
-                    $menu = $this->apiClient->getMenu();
-                    $division = $this->divisionFromMenu($menu);
                     // Every sync fetches the office; the menu only once a season.
                     $cash = (int) ($office['cash'] ?? $menu['cash'] ?? 0);
 
@@ -1014,6 +1047,59 @@ class PageController
         $name = (string) ($testing['trackName'] ?? '');
 
         return $name !== '' ? $name : null;
+    }
+
+    /**
+     * Why the Cockpit counts no testing laps this weekend, or null when a session can run. The Engineer's decline
+     * and Rookie are the manager's own pages, so admin-only; GPRO's 90 % block is a rule, so it shows for everyone
+     * once the car update is in (before it, the update may still replace the part).
+     *
+     * @param array<string, float|int> $startWear part label => start wear %
+     */
+    public static function testingLapsOverride(
+        bool $isAdmin,
+        ?string $testingChoice,
+        ?string $division,
+        bool $carUpdated,
+        array $startWear,
+    ): ?string {
+        if ($isAdmin && $testingChoice === 'skip') {
+            return 'Testing declined on the Engineer';
+        }
+        if ($isAdmin && $division === 'Rookie') {
+            return 'No testing in Rookie';
+        }
+        if ($carUpdated) {
+            foreach ($startWear as $part => $wear) {
+                $percent = WearAdvisorService::percent((float) $wear);
+                if ($percent > 90) {
+                    return 'Testing blocked: ' . $part . ' at ' . $percent . ' %';
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Under an override no session runs: zero laps, and the session keeps the slider value the manager had
+     * set, which comes back if the override goes away.
+     *
+     * @param array<mixed>|null $session
+     * @param-out array<mixed> $session
+     */
+    public static function resolveTestingLaps(?array &$session, mixed $requested, ?string $override): int
+    {
+        if ($override !== null) {
+            return 0;
+        }
+
+        return RaceSettings::resolve(
+            $session,
+            RaceSettings::TRAINING_LAPS,
+            $requested,
+            TrainingWearProjectionService::MAX_LAPS,
+        );
     }
 
     /**
