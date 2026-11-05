@@ -46,7 +46,7 @@
             <div class="card-bd space-y-4">
                 <div>
                     <p class="text-sm font-medium text-slate-900">{{ plan.headline }}</p>
-                    <p class="t-caption mt-0.5">Wear % after each race. A part at 100 breaks.</p>
+                    <p class="t-caption mt-0.5">Wear % after each race. A part at 100 % smokes and loses time.</p>
                 </div>
 
                 {# Race columns step in by width so Part (with its verdict under
@@ -166,7 +166,7 @@
                 </details>
 
                 {% embed 'partials/_how.twig' %}{% block how %}
-                    <p>Each race adds the track's wear for that part, scaled by your driver's concentration, talent and experience, and by clear track risk, which wears lower-level parts faster. Each race is rounded to a whole percent, as GPRO reports it. A part at 100% breaks, so it must be replaced before that race.</p>
+                    <p>Each race adds the track's wear for that part, scaled by your driver's concentration, talent and experience, and by clear track risk, which wears lower-level parts faster. Each race is rounded to a whole percent, as GPRO reports it. A part at 100 % smokes and loses time, and breaks if it smokes long enough, so the plan replaces it before that race.</p>
                 {% endblock %}{% endembed %}
             </div>
         {% endif %}
