@@ -34,9 +34,9 @@
     {% include 'partials/_chevron.twig' with { group: 'wear' } only %}
 </summary>
 <div class="px-4 pb-4 sm:px-6 sm:pb-6 space-y-4">
-    {% if car_updated %}
+{% if car_updated %}
         <p class="text-sm text-slate-600">One update per race; no more part changes until the next race.</p>
-    {% endif %}
+{% endif %}
     <form method="GET" action="" class="space-y-2" data-cockpit-wear-form>
         <div>
             <label class="t-label block mb-1" for="cockpitRisk">Clear track risk</label>
