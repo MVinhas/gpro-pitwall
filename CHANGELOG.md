@@ -6,6 +6,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.31] - 2026-11-05
+
+### Added
+- The race engineer's testing and training lines now take the manager's call: "I'll do it" spends the money even when the engineer would skip (and says by how much it goes over the budget), "Decline" keeps it in the budget, and Undo goes back to the engineer's advice. The choice is kept for this race only (schema 21, `user_weekend_choice`), and the CTR, swaps and upgrades are planned on it.
+- GPRO's testing rules: no testing while a part is above 90 % wear (under Promote the engineer offers the swap that unlocks the session, in the same car update), never in Rookie, and in Amateur under Stay the default is to skip it, because without a technical director testing turns into few car points.
+
+### Changed
+- When no testing session will run (declined, blocked, Rookie or skipped by the engineer), the engineer plans with no testing wear. The Cockpit's testing-laps slider shows 0 with a note when the session is declined, in Rookie, or blocked after the car update; when the engineer skips on its own, the line asks the manager to press Decline so the Cockpit stops counting the laps.
+
 ## [1.21.30] - 2026-11-04
 
 ### Changed
