@@ -8,8 +8,10 @@ use App\Cache\Adapter\NullCache;
 use App\Database\DatabaseSeeder;
 use App\Engineer\CtrCeiling;
 use App\Engineer\CtrPlanner;
+use App\Engineer\CtrPolicy;
 use App\Engineer\RaceEngineer;
 use App\Engineer\SeasonBudget;
+use App\Engineer\SeasonObjective;
 use App\Engineer\SwapLevelPicker;
 use App\Engineer\SwapSeason;
 use App\Engineer\UpgradeRanker;
@@ -1761,6 +1763,179 @@ final class RaceEngineerServiceTest extends TestCase
         self::assertSame(['Engine'], array_column($saved['plan']['swap_picks'] ?? [], 'part'));
         self::assertCount(1, $ranked);
         self::assertSame(['Brakes'], $ranked[0]);
+    }
+
+    public function testFollowingTheAdviceKeepsTheCtr(): void
+    {
+        $this->seedPromotionFixture();
+        $this->seedWearTracks();
+        $this->paceTrack('Gamma', 5.0, 1600.0);
+        $this->service->pin(self::USER, self::SEASON, 'stay');
+
+        $lines = $this->service->forCockpit(
+            self::USER,
+            $this->followCockpit(['Engine' => [2, 95], 'Brakes' => [1, 50]], 5_000_000),
+        )['lines'];
+        $advised = $this->savedPlan();
+        $byKey = array_column($lines, null, 'key');
+        self::assertSame('Swap Engine → L1 (free downgrade)', $byKey['parts']['answer']);
+        self::assertSame('Upgrade Brakes to L2', $byKey['upgrades']['answer']);
+        // The free downgrade's 30 % start meets the limit in race 11; a new L1 at 0 % would last to race 12.
+        self::assertSame([['part' => 'Engine', 'cost' => 100_000]], $advised['rows'][1]['replaced']);
+        self::assertSame([], $advised['rows'][2]['replaced']);
+
+        // The batch bought: the Engine on its free L1 at 30 %, the Brakes on a new L2 for $150k.
+        $this->service->forCockpit(self::USER, $this->followCockpit(
+            ['Engine' => [1, 30], 'Brakes' => [2, 0]],
+            5_000_000 - 150_000,
+            ['doneCarRepair' => '1'],
+        ));
+        $followed = $this->savedPlan();
+
+        self::assertLessThanOrEqual(1, abs($advised['ctr'] - $followed['ctr']));
+    }
+
+    public function testPromotePushKeepsItsSwapAfterPassTwo(): void
+    {
+        $this->seedPromotionFixture();
+        $this->seedWearTracks();
+        $this->service->pin(self::USER, self::SEASON, 'promote');
+        $engine = ['level' => 1, 'start' => 60, 'est' => 0.0, 'end' => 0.0, 'track_base' => 8.0];
+
+        $this->service->forCockpit(self::USER, $this->pushCockpit($engine));
+        $advised = $this->savedPlan();
+        // The Engine is bought fresh at $200k, the push's swap.
+        $this->service->forCockpit(self::USER, $this->pushCockpit(
+            ['start' => 0] + $engine,
+            ['doneCarRepair' => '1', 'cash' => 5_000_000 - 200_000],
+        ));
+        $followed = $this->savedPlan();
+
+        self::assertSame('push', $advised['mode']);
+        self::assertSame([['part' => 'Engine', 'cost' => 200_000]], $advised['swaps']);
+        self::assertSame([['part' => 'Engine', 'cost' => 200_000]], $advised['rows'][0]['replaced']);
+        self::assertSame('nurse', $followed['mode']);
+        self::assertSame($followed['ctr'], $advised['ctr']);
+        self::assertSame($followed['safety'], $advised['safety']);
+    }
+
+    public function testLockedCarRunsOnePass(): void
+    {
+        $this->seedPromotionFixture();
+        $this->seedWearTracks();
+        $this->service->pin(self::USER, self::SEASON, 'promote');
+        $engine = ['level' => 1, 'start' => 60, 'est' => 0.0, 'end' => 0.0, 'track_base' => 8.0];
+        $cockpit = $this->pushCockpit($engine, ['doneCarRepair' => '1']);
+
+        $this->service->forCockpit(self::USER, $cockpit);
+        $saved = $this->savedPlan();
+
+        $wear = $this->wearService();
+        $base = $wear->trackBaseWearByName(['Gamma'])['Gamma'];
+        $alone = (new CtrPlanner(new CtrCeiling($wear), new SeasonBudget($wear)))->plan(
+            SeasonObjective::PROMOTE,
+            [
+                ['race' => 10, 'track_name' => 'Gamma', 'base' => $base],
+                ['race' => 11, 'track_name' => 'Gamma', 'base' => $base],
+            ],
+            $cockpit['wear']['parts'],
+            (new CarWearPlannerService($wear))->partPrices($cockpit['car']),
+            $wear->driverFactor($cockpit['driver']),
+            5_000_000,
+            $saved['rows'][0]['running'],
+            $saved['rows'][0]['income'],
+            $saved['season_start'],
+            carLocked: true,
+            policy: new CtrPolicy(35, true, null, 0, 0.0, false, false),
+        );
+
+        self::assertSame(
+            ['ctr' => $alone['ctr'], 'cushion' => $alone['cushion'], 'target' => $alone['target'],
+                'envelope' => $alone['envelope']],
+            ['ctr' => $saved['ctr'], 'cushion' => $saved['cushion'], 'target' => $saved['target'],
+                'envelope' => $saved['envelope']],
+        );
+    }
+
+    /**
+     * The Promote push fixture: an Engine at $200k and Brakes at 10 % over two Gamma races.
+     *
+     * @param array<string, mixed> $engine
+     * @param array<string, mixed> $office
+     * @return array<string, mixed>
+     */
+    private function pushCockpit(array $engine, array $office = []): array
+    {
+        $parts = [
+            'Engine' => $engine,
+            'Brakes' => ['level' => 1, 'start' => 10, 'est' => 0.0, 'end' => 0.0, 'track_base' => 8.0],
+        ];
+        $car = $this->pricedCar(200_000);
+        $car[CarWearService::PARTS_MAP['Engine']['wear']] = $engine['start'];
+        $car[CarWearService::PARTS_MAP['Brakes']['wear']] = 10;
+
+        return $this->cockpit([
+            'office' => $this->office($office),
+            'ctr' => 0,
+            'car' => $car,
+            'season_calendar' => [['race' => 10, 'track_name' => 'Gamma'], ['race' => 11, 'track_name' => 'Gamma']],
+            'track_name' => 'Gamma',
+            'wear' => ['track_name' => 'Gamma', 'laps' => 50, 'parts' => $parts],
+            'wear_advice' => $this->adviceAt(0, $parts),
+            'track_pha' => ['power' => 5, 'handling' => 3, 'acceleration' => 2],
+            'car_pha' => ['power' => 80, 'handling' => 80, 'acceleration' => 80],
+            'group_car_levels' => [],
+            'training_wear' => [],
+        ]);
+    }
+
+    /**
+     * A Stay car over three Gamma races: Engine and Brakes at the given level and start wear. The Engine offers
+     * a free downgrade to L1 at 30 %, a new L1 for $100k and a new L2 for $400k; the Brakes a new L1 for $200k
+     * and an L2 upgrade for $150k. The car is 2nd of 10 in its group, so Stay may take the free downgrade.
+     *
+     * @param array{Engine: array{int, int}, Brakes: array{int, int}} $state part => [level, start]
+     * @param array<string, mixed> $office
+     * @return array<string, mixed>
+     */
+    private function followCockpit(array $state, int $cash, array $office = []): array
+    {
+        $map = CarWearService::PARTS_MAP;
+        $car = $this->pricedCar(100_000);
+        $car[$map['Brakes']['options']][0]['value']['cost'] = 200_000;
+        $car[$map['Engine']['options']][] = ['value' => ['value' => 1, 'cost' => 400_000], 'newLvl' => '2'];
+        $car[$map['Engine']['options']][] = ['value' => ['value' => -1, 'cost' => 0], 'newLvl' => '1', 'newWear' => '30'];
+        $car[$map['Brakes']['options']][] = ['value' => ['value' => 1, 'cost' => 150_000], 'newLvl' => '2'];
+        $parts = [];
+        foreach ($state as $label => [$level, $start]) {
+            $car[$map[$label]['lvl']] = $level;
+            $car[$map[$label]['wear']] = $start;
+            $parts[$label] = ['level' => $level, 'start' => $start, 'est' => 0.0, 'end' => 0.0, 'track_base' => 8.0];
+        }
+        $managers = [];
+        for ($rank = 0; $rank < 10; $rank++) {
+            $managers[] = ['IDM' => $rank === 1 ? 7 : 100 + $rank, 'carLevel' => 5, 'carLevelRank' => $rank];
+        }
+        $demand = ['power' => 5, 'handling' => 3, 'acceleration' => 2];
+
+        return $this->cockpit([
+            'office' => $this->office(['cash' => $cash] + $office),
+            'ctr' => 0,
+            'car' => $car,
+            'money_levels' => ['managers' => $managers],
+            'season_calendar' => [
+                ['race' => 10, 'track_name' => 'Gamma'] + $demand,
+                ['race' => 11, 'track_name' => 'Gamma'] + $demand,
+                ['race' => 12, 'track_name' => 'Gamma'] + $demand,
+            ],
+            'track_name' => 'Gamma',
+            'wear' => ['track_name' => 'Gamma', 'laps' => 50, 'parts' => $parts],
+            'wear_advice' => $this->adviceAt(0, $parts),
+            'track_pha' => ['power' => 5, 'handling' => 3, 'acceleration' => 2],
+            'car_pha' => ['power' => 80, 'handling' => 80, 'acceleration' => 80],
+            'group_car_levels' => [],
+            'training_wear' => [],
+        ]);
     }
 
     public function testAFailingSwapPickIsLoggedAndThePartsLineKeepsTodaysWording(): void
