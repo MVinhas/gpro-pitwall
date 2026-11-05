@@ -670,6 +670,48 @@ final class CtrPlannerTest extends TestCase
         );
     }
 
+    public function testALockedStayCarKeepsANearLimitPartBelowTheLimit(): void
+    {
+        // Engine 80 + 10 x 1.02^c ends this race at 98.8 % at CTR 32 and reaches 100 % from CTR 33.
+        $parts = [
+            'Engine' => ['level' => 1, 'start' => 80.0, 'track_base' => 10.0],
+            'Chassis' => ['level' => 1, 'start' => 0.0, 'track_base' => 10.0],
+        ];
+        $plan = fn (bool $locked): array => $this->plan(
+            SeasonObjective::STAY,
+            50_000_000,
+            parts: $parts,
+            carLocked: $locked,
+            policy: self::policy(1_000_000),
+        );
+
+        $this->assertSame(100, $plan(false)['ctr']);
+        $locked = $plan(true);
+        $this->assertSame(32, $locked['ctr']);
+        $this->assertSame(32, $locked['safety']);
+        $this->assertSame([], $locked['rows'][0]['replaced']);
+    }
+
+    public function testALockedStayCarIsNotCappedByAPartPastTheLimitAtZero(): void
+    {
+        // The Engine smokes this race whatever the CTR; the Chassis ends below 100 even at CTR 100.
+        $parts = [
+            'Engine' => ['level' => 1, 'start' => 95.0, 'track_base' => 10.0],
+            'Chassis' => ['level' => 1, 'start' => 0.0, 'track_base' => 10.0],
+        ];
+
+        $plan = $this->plan(
+            SeasonObjective::STAY,
+            50_000_000,
+            parts: $parts,
+            carLocked: true,
+            policy: self::policy(1_000_000),
+        );
+
+        $this->assertSame(0, $plan['safety']);
+        $this->assertSame(100, $plan['ctr']);
+    }
+
     public function testALockedHealthyCarNeverPushesOnASwapItCannotBuy(): void
     {
         $parts = [

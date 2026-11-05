@@ -1783,6 +1783,11 @@ final class RaceEngineerServiceTest extends TestCase
         // The free downgrade's 30 % start meets the limit in race 11; a new L1 at 0 % would last to race 12.
         self::assertSame([['part' => 'Engine', 'cost' => 100_000]], $advised['rows'][1]['replaced']);
         self::assertSame([], $advised['rows'][2]['replaced']);
+        // The first row is the batch itself, so its balance is the cash less it.
+        $first = $advised['rows'][0];
+        self::assertSame([['part' => 'Engine', 'cost' => 0], ['part' => 'Brakes', 'cost' => 150_000]], $first['replaced']);
+        self::assertSame(150_000, $first['repairs']);
+        self::assertSame(5_000_000 - $first['repairs'] - $first['running'] + $first['income'], $first['balance']);
 
         // The batch bought: the Engine on its free L1 at 30 %, the Brakes on a new L2 for $150k.
         $this->service->forCockpit(self::USER, $this->followCockpit(
@@ -1793,6 +1798,29 @@ final class RaceEngineerServiceTest extends TestCase
         $followed = $this->savedPlan();
 
         self::assertLessThanOrEqual(1, abs($advised['ctr'] - $followed['ctr']));
+    }
+
+    public function testTheAdvisedCtrKeepsTheFreeDowngradeBelowTheLimitThisRace(): void
+    {
+        $this->seedPromotionFixture();
+        $this->seedWearTracks();
+        $this->paceTrack('Gamma', 5.0, 1600.0);
+        $this->service->pin(self::USER, self::SEASON, 'stay');
+
+        // Master's higher energy cap leaves room for a CTR at which the L1 Engine at 30 % would smoke this race.
+        $lines = $this->service->forCockpit(self::USER, $this->followCockpit(
+            ['Engine' => [2, 95], 'Brakes' => [1, 50]],
+            5_000_000,
+            division: 'Master',
+            brakesPrice: 1_000_000,
+        ))['lines'];
+        $ctr = $this->savedPlan()['ctr'];
+        $wear = $this->wearService();
+        $end = 30 + round($wear->raceWear(8.0, 1, $wear->driverFactor($this->cockpit()['driver']), $ctr), 1);
+
+        self::assertSame('Swap Engine → L1 (free downgrade)', array_column($lines, null, 'key')['parts']['answer']);
+        self::assertGreaterThan(0, $ctr);
+        self::assertLessThan(WearAdvisorService::THRESHOLD_SWAP, WearAdvisorService::percent($end));
     }
 
     public function testPromotePushKeepsItsSwapAfterPassTwo(): void
@@ -1813,7 +1841,9 @@ final class RaceEngineerServiceTest extends TestCase
 
         self::assertSame('push', $advised['mode']);
         self::assertSame([['part' => 'Engine', 'cost' => 200_000]], $advised['swaps']);
-        self::assertSame([['part' => 'Engine', 'cost' => 200_000]], $advised['rows'][0]['replaced']);
+        $first = $advised['rows'][0];
+        self::assertSame([['part' => 'Engine', 'cost' => 200_000]], $first['replaced']);
+        self::assertSame(5_000_000 - $first['repairs'] - $first['running'] + $first['income'], $first['balance']);
         self::assertSame('nurse', $followed['mode']);
         self::assertSame($followed['ctr'], $advised['ctr']);
         self::assertSame($followed['safety'], $advised['safety']);
@@ -1891,18 +1921,24 @@ final class RaceEngineerServiceTest extends TestCase
 
     /**
      * A Stay car over three Gamma races: Engine and Brakes at the given level and start wear. The Engine offers
-     * a free downgrade to L1 at 30 %, a new L1 for $100k and a new L2 for $400k; the Brakes a new L1 for $200k
-     * and an L2 upgrade for $150k. The car is 2nd of 10 in its group, so Stay may take the free downgrade.
+     * a free downgrade to L1 at 30 %, a new L1 for $100k and a new L2 for $400k; the Brakes a new L1 ($200k
+     * unless given) and an L2 upgrade for $150k. The car is 2nd of 10 in its group, so Stay may take the free
+     * downgrade.
      *
      * @param array{Engine: array{int, int}, Brakes: array{int, int}} $state part => [level, start]
      * @param array<string, mixed> $office
      * @return array<string, mixed>
      */
-    private function followCockpit(array $state, int $cash, array $office = []): array
-    {
+    private function followCockpit(
+        array $state,
+        int $cash,
+        array $office = [],
+        string $division = 'Amateur',
+        int $brakesPrice = 200_000,
+    ): array {
         $map = CarWearService::PARTS_MAP;
         $car = $this->pricedCar(100_000);
-        $car[$map['Brakes']['options']][0]['value']['cost'] = 200_000;
+        $car[$map['Brakes']['options']][0]['value']['cost'] = $brakesPrice;
         $car[$map['Engine']['options']][] = ['value' => ['value' => 1, 'cost' => 400_000], 'newLvl' => '2'];
         $car[$map['Engine']['options']][] = ['value' => ['value' => -1, 'cost' => 0], 'newLvl' => '1', 'newWear' => '30'];
         $car[$map['Brakes']['options']][] = ['value' => ['value' => 1, 'cost' => 150_000], 'newLvl' => '2'];
@@ -1920,6 +1956,7 @@ final class RaceEngineerServiceTest extends TestCase
 
         return $this->cockpit([
             'office' => $this->office(['cash' => $cash] + $office),
+            'division' => $division,
             'ctr' => 0,
             'car' => $car,
             'money_levels' => ['managers' => $managers],

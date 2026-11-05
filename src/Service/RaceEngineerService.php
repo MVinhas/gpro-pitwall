@@ -176,14 +176,16 @@ class RaceEngineerService
             $plan = self::payingTyreExtra($plan, $tyreExtra);
             $inputs = $inputs->withPlan($plan);
             $outlook = ['committed' => (int) $ctx['outlook']['committed'] + $tyreExtra] + $ctx['outlook'];
+            $saved = $plan;
             if (!$locked) {
                 $plan = $this->withUpgrades($plan, $inputs, $objective, $outlook, $ctx['cash'], $basis, $c);
                 $inputs = $inputs->withPlan($plan);
-                $plan = $this->afterTheUpdate($ctx, $plan, $basis, $inputs, $c, $energy, $tyreExtra);
+                ['card' => $plan, 'saved' => $saved]
+                    = $this->afterTheUpdate($ctx, $plan, $basis, $inputs, $c, $energy, $tyreExtra);
                 $inputs = $inputs->withPlan($plan);
             }
             try {
-                $this->budgets->save($userId, $season, $ctx['raceNb'], $plan);
+                $this->budgets->save($userId, $season, $ctx['raceNb'], $saved);
             } catch (\Throwable $e) {
                 // Saving only feeds the Season screen; the advice stands without it.
                 error_log('[Engineer] ' . $e::class);
@@ -1162,15 +1164,16 @@ class RaceEngineerService
      * upgrade, each new at 0 % except a free downgrade, which keeps the wear GPRO reports for it. Planned with
      * the update spent, as the next render will plan it, so the CTR holds when the advice is followed. The CTR,
      * its targets and the rows come from that car; the picks, swaps, push and upgrades stay pass 1's, and so does
-     * this race's replacement in the first row. The envelope adds back what the lines draw for the batch, so they
-     * still draw it from the envelope they are shown.
+     * the card's first row, whose replacements the parts line names. The saved plan's first row lists the batch at
+     * what each part costs, so it reconciles with a balance already net of it. The envelope adds back what the
+     * lines draw for the batch, so they still draw it from the envelope they are shown.
      *
      * @param Context $ctx
      * @param Plan $plan
      * @param PlanBasis $basis
      * @param array<string, mixed> $c
      * @param EnergyCap $energy
-     * @return Plan
+     * @return array{card: Plan, saved: Plan}
      */
     private function afterTheUpdate(
         array $ctx,
@@ -1205,7 +1208,7 @@ class RaceEngineerService
             ];
         }
         if ($batch === []) {
-            return $plan;
+            return ['card' => $plan, 'saved' => $plan];
         }
 
         $updated = $basis;
@@ -1255,7 +1258,14 @@ class RaceEngineerService
         $merged['envelope'] = $second['envelope'] + RaceEngineer::pickSpend($inputs)
             + max(0, $upgrade['net_cost'] ?? 0);
 
-        return $merged;
+        $bought = [];
+        foreach ($batch as $part => $buy) {
+            $bought[] = ['part' => $part, 'cost' => $buy['spend']];
+        }
+        $saved = $merged;
+        $saved['rows'][0] = ['replaced' => $bought, 'repairs' => $spend] + $second['rows'][0];
+
+        return ['card' => $merged, 'saved' => $saved];
     }
 
     /**

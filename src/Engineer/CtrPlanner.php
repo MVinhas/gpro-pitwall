@@ -41,10 +41,11 @@ final readonly class CtrPlanner
      * value that fits; above the safety ceiling it must also be a real push. Stay weighs every CTR that fits and
      * buys no replacement it cannot price: the lowest one whose higher candidates aren't clearly better value
      * (CtrValue), or the highest one in safety mode near the relegation line. It reads no current CTR, so the advice
-     * holds still when the manager follows it. The cushion is the committed cost plus the average repairs of the
-     * races after this one at the CTR being judged, so each candidate carries its own cushion and end target: this
-     * race's forced swaps are bought before the race, so counting them would make the cushion drop once the manager
-     * follows the advice.
+     * holds still when the manager follows it. With the car locked, Stay weighs only the CTRs at which every part
+     * that can finish this race below the limit does (CtrCeiling::forSurvivors). The cushion is the committed cost
+     * plus the average repairs of the races after this one at the CTR being judged, so each candidate carries its
+     * own cushion and end target: this race's forced swaps are bought before the race, so counting them would make
+     * the cushion drop once the manager follows the advice.
      * The target kind is settled once, at CTR 0, and the plan names the reserve or the start as its end target only
      * when the chosen CTR's cushion is below it.
      *
@@ -148,7 +149,9 @@ final readonly class CtrPlanner
             $gain = [];
             $repairs = [];
             $unpricedAtZero = self::unpriced($forecastAt(0)['partial']);
-            for ($c = 0; $c <= self::MAX_CTR; $c++) {
+            // Locked, a part reaching the limit this race can't be swapped and the forecast charges nothing for it.
+            $highest = $carLocked ? $this->ceiling->forSurvivors($parts, $driverFactor, $limit) : self::MAX_CTR;
+            for ($c = 0; $c <= $highest; $c++) {
                 $forecast = $forecastAt($c);
                 // An unpriced replacement is charged $0, so a CTR that buys one would look free.
                 $buysUnpriced = $c > 0 && array_diff(self::unpriced($forecast['partial']), $unpricedAtZero) !== [];
