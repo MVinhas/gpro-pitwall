@@ -1514,11 +1514,11 @@ final class RaceEngineerServiceTest extends TestCase
         self::assertArrayNotHasKey('upgrades', $this->budgets->find(self::USER, self::SEASON)['plan'] ?? []);
     }
 
-    public function testOnlyOneMeansDone(): void
+    public function testOnlyAnAffirmativeFlagMeansDone(): void
     {
         $this->seedPromotionFixture();
 
-        foreach (['0', 0, null, 'missing', 'yes', true, '01'] as $flag) {
+        foreach (['0', 0, null, 'missing', 'no', false, '01'] as $flag) {
             $office = $this->office($flag === 'missing' ? [] : ['doneCarRepair' => $flag]);
             $result = $this->service->forCockpit(self::USER, $this->cockpit([
                 'office' => $office,

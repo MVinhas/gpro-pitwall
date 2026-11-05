@@ -31,6 +31,7 @@ use App\Repository\StandingsRepository;
 use App\Repository\TrackRepository;
 use App\Repository\WeekendChoiceRepository;
 use App\Repository\WeekendStateRepository;
+use App\Support\OfficeFlags;
 use App\Support\TrackName;
 
 /**
@@ -132,7 +133,7 @@ class RaceEngineerService
         $ctx = $this->context($userId, $c);
         $objective = $ctx['objective'];
         $season = $ctx['season'];
-        $locked = self::done(self::arr($c['office'] ?? null), 'doneCarRepair');
+        $locked = OfficeFlags::done(self::arr($c['office'] ?? null), 'doneCarRepair');
 
         if ($stale) {
             return [
@@ -779,8 +780,8 @@ class RaceEngineerService
             testingLaps: (int) ($c['training_laps'] ?? 0),
             division: self::stringOrNull($c['division'] ?? null),
             carUpdated: $carLocked,
-            tested: self::done($office, 'doneTesting'),
-            driverTrained: self::done($office, 'doneDriTrain'),
+            tested: OfficeFlags::done($office, 'doneTesting'),
+            driverTrained: OfficeFlags::done($office, 'doneDriTrain'),
             stuckSmoke: $stuckSmoke,
             energyCap: $energy['cap'],
             energyEstimate: $energy['estimate'],
@@ -790,16 +791,6 @@ class RaceEngineerService
             season: $season,
             race: $raceNb,
         );
-    }
-
-    /**
-     * GPRO's per-race "done" flags arrive as "1"/"0"; only a literal one counts.
-     *
-     * @param array<string, mixed> $office
-     */
-    private static function done(array $office, string $flag): bool
-    {
-        return ($office[$flag] ?? null) === '1' || ($office[$flag] ?? null) === 1;
     }
 
     /**
@@ -1033,7 +1024,7 @@ class RaceEngineerService
         $office = self::arr($c['office'] ?? null);
         $division = self::stringOrNull($c['division'] ?? null);
         $driEnergy = is_numeric($office['driEnergy'] ?? null) ? (int) $office['driEnergy'] : null;
-        $q2Done = self::done($office, 'doneQ2');
+        $q2Done = OfficeFlags::done($office, 'doneQ2');
         $stamina = (int) (self::arr($c['driver'] ?? null)['stamina'] ?? 0);
 
         $next = null;

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Sync;
 
+use App\Support\OfficeFlags;
+
 /**
  * Decides which GPRO endpoints a sync should spend API calls on. The freshly
  * fetched office is the change detector against the previously archived one,
@@ -141,7 +143,7 @@ final class SyncPlanner
         $previous = $ctx->previousOffice ?? [];
         $planned = [];
         foreach (self::FLAG_TRIGGERS as $flag => $endpoints) {
-            if (!self::truthy($previous[$flag] ?? null) && self::truthy($ctx->office[$flag] ?? null)) {
+            if (!OfficeFlags::done($previous, $flag) && OfficeFlags::done($ctx->office, $flag)) {
                 $planned = [...$planned, ...$endpoints];
             }
         }
@@ -170,7 +172,7 @@ final class SyncPlanner
             static fn (string $e): bool => match ($e) {
                 Endpoint::DRIVER => self::hasId($office, 'driId'),
                 Endpoint::TD => self::hasId($office, 'tdId'),
-                Endpoint::TRACK => !self::truthy($office['endOfSeason'] ?? null),
+                Endpoint::TRACK => !OfficeFlags::done($office, 'endOfSeason'),
                 default => true,
             },
         ));
@@ -228,10 +230,5 @@ final class SyncPlanner
     private static function hasId(array $office, string $key): bool
     {
         return !in_array(self::text($office, $key), ['', '0'], true);
-    }
-
-    private static function truthy(mixed $value): bool
-    {
-        return filter_var($value, FILTER_VALIDATE_BOOLEAN);
     }
 }

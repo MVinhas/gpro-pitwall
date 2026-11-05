@@ -11,6 +11,7 @@ use App\Repository\UserRepository;
 use App\Support\DeferredRender;
 use App\Support\Env;
 use App\Support\HarvestOwed;
+use App\Support\OfficeFlags;
 use App\Support\RaceSettings;
 use App\Support\RaceWindow;
 use App\Support\RecruitmentQuery;
@@ -485,7 +486,7 @@ class PageController
                             $isAdmin,
                             $testingChoice,
                             $division,
-                            in_array($office['doneCarRepair'] ?? null, ['1', 1], true),
+                            OfficeFlags::done($office, 'doneCarRepair'),
                             $startWear,
                         );
                     }
