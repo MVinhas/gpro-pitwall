@@ -6,6 +6,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.32] - 2026-11-05
+
+### Fixed
+- The race engineer's advice holds when the manager follows it: it now plans the CTR a second time, on the car as it will be after the swaps, unlock swaps and upgrade it recommends (a free downgrade keeps its new wear), so buying them no longer moves the CTR on the next render.
+- The money cushion is priced at the CTR being judged instead of the safety ceiling, so fresh parts no longer reserve a season of repairs nobody will run. The Promote reserve and the Stay season start are still kept when a push lowers the cushion.
+- With the car already updated, a Stay plan never picks a CTR at which a part that can finish reaches the 99 % limit this race; a part already past it at CTR 0 smokes whatever the CTR and is left out.
+- GPRO's car rank and car level are 0-based in the API: the engineer's quartile and top-three tests, its brief, the Cockpit's swap-level band and the Strategy tab's car rank now use GPRO's own numbers (rank 0 is 1st, carLevel 0 is level 1).
+- GPRO's `doneTesting` is a count of testing laps, not a yes/no flag: any laps run now mean the session ran, so the engineer stops offering and charging it, and the sync refreshes the car after more laps. One parser reads every office flag, and `yes`/`on`/`true` also count as done.
+- The Cockpit's wear card says "Car updated" once the car is updated: no more swap options, one line that no part changes are possible until the next race, parts that will reach 100 % still listed, and the card no longer opens itself.
+- The testing-laps slider moves in steps of 1, so the last laps before the limit are reachable.
+- The Season screen's upgrades card says "Car already updated" while the car is locked instead of disappearing, and its budget table's first row lists what the advice buys, so the row adds up.
+
 ## [1.21.31] - 2026-11-05
 
 ### Added
