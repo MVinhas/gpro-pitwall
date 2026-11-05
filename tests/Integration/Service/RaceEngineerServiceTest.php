@@ -500,7 +500,7 @@ final class RaceEngineerServiceTest extends TestCase
         self::assertSame($firstOfTheSeason, $afterACheaperEntry);
     }
 
-    public function testASkippedSessionNamesTheCockpitTrainingLaps(): void
+    public function testASkippedSessionNoLongerNamesTheCockpitTrainingLaps(): void
     {
         $this->seedPromotionFixture();
         $testingWith = function (int $laps): array {
@@ -524,9 +524,9 @@ final class RaceEngineerServiceTest extends TestCase
         $none = $testingWith(0);
 
         self::assertSame('Skip testing at Silverstone', $counted['answer']);
-        self::assertStringEndsWith('(it counts 100 laps of wear)', $counted['reason']);
-        self::assertSame('/cockpit#cockpit-wear', $counted['anchor']);
-        self::assertStringNotContainsString('training laps', $none['reason']);
+        self::assertStringNotContainsString('training laps', $counted['reason']);
+        self::assertSame('/cockpit#cockpit-testing', $counted['anchor']);
+        self::assertSame($none['reason'], $counted['reason']);
     }
 
     public function testNoStoredRowsStillReturnsLines(): void

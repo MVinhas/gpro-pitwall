@@ -57,6 +57,11 @@ final readonly class EngineerInputs
      * @param list<string> $stuckSmoke parts that reach 100% this race even at CTR 0, while the car is updated
      * @param ?int $energyCap the highest CTR the driver's energy allows, on every path with or without a plan
      * @param ?int $energyStart the driver's expected energy at the race start, when the office reports it
+     * @param ?string $trainingChoice the manager's call for this race's training: 'do', 'skip' or none
+     * @param ?string $testingChoice the manager's call for this race's testing: 'do', 'skip' or none
+     * @param ?TestingGate $testingGate null derives open or closed from the session and its target
+     * @param list<SwapPick> $unlockPicks the swaps that take the parts blocking testing below 90 %
+     * @param bool $unlockUnaffordable the gate is blocked because the unlock swaps plus the session don't fit
      */
     public function __construct(
         public array $objective,
@@ -89,6 +94,13 @@ final readonly class EngineerInputs
         public ?int $energyCap = null,
         public bool $energyEstimate = false,
         public ?int $energyStart = null,
+        public ?string $trainingChoice = null,
+        public ?string $testingChoice = null,
+        public ?TestingGate $testingGate = null,
+        public array $unlockPicks = [],
+        public int $season = 0,
+        public int $race = 0,
+        public bool $unlockUnaffordable = false,
     ) {
     }
 
@@ -106,6 +118,19 @@ final readonly class EngineerInputs
     public function withSwapPicks(array $picks): self
     {
         return clone($this, ['swapPicks' => $picks]);
+    }
+
+    /**
+     * @param list<SwapPick> $picks
+     */
+    public function withUnlockPicks(array $picks): self
+    {
+        return clone($this, ['unlockPicks' => $picks]);
+    }
+
+    public function withTestingGate(TestingGate $gate, bool $unlockUnaffordable = false): self
+    {
+        return clone($this, ['testingGate' => $gate, 'unlockUnaffordable' => $unlockUnaffordable]);
     }
 
     /**
