@@ -1009,13 +1009,19 @@ final class RaceEngineerTest extends TestCase
         $this->assertSame('Nothing to do', $this->line($this->inputs(['testingTarget' => null]), 'testing')['answer']);
     }
 
-    public function testSkippedTestingNoLongerMentionsCockpitLaps(): void
+    public function testAnEngineerSkipAsksForADeclineWhileTheCockpitCountsLaps(): void
     {
         $line = $this->line($this->inputs(['outlook' => $this->outlook(100_000), 'testingLaps' => 100]), 'testing');
+        $noLaps = $this->line($this->inputs(['outlook' => $this->outlook(100_000)]), 'testing');
 
         $this->assertSame('Skip testing at Silverstone', $line['answer']);
-        $this->assertSame('Free cash does not cover it', $line['reason']);
+        $this->assertSame(
+            'Free cash does not cover it; press Decline so the Cockpit stops counting 100 testing laps',
+            $line['reason'],
+        );
         $this->assertSame('/cockpit#cockpit-testing', $line['anchor']);
+        $this->assertNull($line['choice']['chosen']);
+        $this->assertSame('Free cash does not cover it', $noLaps['reason']);
     }
 
     public function testTestingSkippedWhenUnaffordable(): void
@@ -2094,5 +2100,139 @@ final class RaceEngineerTest extends TestCase
             'testingChoice' => 'do',
         ])));
         $this->assertFalse(RaceEngineer::testingDrawn($this->planned($plan, ['tested' => true])));
+    }
+
+    public function testAnAmateurStaySkipAsksForADeclineWhileTheCockpitCountsLaps(): void
+    {
+        $line = $this->line($this->amateur(SeasonObjective::STAY, ['testingLaps' => 40]), 'testing');
+
+        $this->assertSame(
+            'Testing is weak in Amateur without a technical director; it pays mainly the season before a promotion'
+                . ' push; press Decline so the Cockpit stops counting 40 testing laps',
+            $line['reason'],
+        );
+    }
+
+    public function testTheManagersCallNeverAsksForADecline(): void
+    {
+        $o = ['outlook' => $this->outlook(100_000), 'testingLaps' => 100];
+        $skip = $this->line($this->inputs($o + ['testingChoice' => 'skip']), 'testing');
+        $do = $this->line($this->inputs($o + ['testingChoice' => 'do']), 'testing');
+        $drawn = $this->line($this->inputs(['testingLaps' => 100]), 'testing');
+
+        $this->assertSame('Your call; the money stays in the budget', $skip['reason']);
+        $this->assertSame("Your call; your balance doesn't cover it", $do['reason']);
+        $this->assertSame('Free cash covers it; tunes for Monza (race 10)', $drawn['reason']);
+    }
+
+    public function testABlockedSessionBeforeTheCarUpdateAsksToZeroTheCockpitLaps(): void
+    {
+        $gate = $this->gate(TestingGate::BLOCKED, [['part' => 'Brakes', 'wear' => 92]]);
+        $line = $this->line($this->inputs(['testingGate' => $gate, 'testingLaps' => 100]), 'testing');
+        $byBudget = $this->line(
+            $this->inputs(['testingLaps' => 100])->withTestingGate($gate, true),
+            'testing',
+        );
+        $noLaps = $this->line($this->inputs(['testingGate' => $gate]), 'testing');
+
+        $this->assertSame(
+            'Brakes at 92 %; GPRO allows no testing above 90 %; set training laps to 0 on the Cockpit'
+                . ' (it counts 100 laps of wear)',
+            $line['reason'],
+        );
+        $this->assertSame(
+            "Brakes at 92 %; GPRO allows no testing above 90 %; the swap plus the session doesn't fit the budget;"
+                . ' set training laps to 0 on the Cockpit (it counts 100 laps of wear)',
+            $byBudget['reason'],
+        );
+        $this->assertSame('Brakes at 92 %; GPRO allows no testing above 90 %', $noLaps['reason']);
+        $this->assertArrayNotHasKey('choice', $line);
+    }
+
+    public function testNoLapsNoteWhereTheCockpitAlreadyCountsNone(): void
+    {
+        $blocked = $this->gate(TestingGate::BLOCKED, [['part' => 'Brakes', 'wear' => 92]]);
+        $updated = $this->line(
+            $this->inputs(['testingGate' => $blocked, 'testingLaps' => 100, 'carUpdated' => true]),
+            'testing',
+        );
+        $rookie = $this->line(
+            $this->inputs(['testingGate' => $this->gate(TestingGate::ROOKIE), 'testingLaps' => 100]),
+            'testing',
+        );
+
+        $this->assertSame('Brakes at 92 %; GPRO allows no testing above 90 %', $updated['reason']);
+        $this->assertSame("Testing doesn't pay in Rookie", $rookie['reason']);
+    }
+
+    public function testAPassOneSkipHoldsOnTheReplanWithoutTestingWear(): void
+    {
+        // The replan's envelope covers the session only because it dropped the session's own wear.
+        $in = $this->planned(['envelope' => 2_300_000], [
+            'testingCost' => RaceEngineer::TESTING_SESSION_COST,
+            'testingSkip' => 'Only $800k left in the budget',
+            'testingLaps' => 100,
+        ]);
+        $line = $this->line($in, 'testing');
+
+        $this->assertSame('Skip testing at Silverstone', $line['answer']);
+        $this->assertSame(
+            'Only $800k left in the budget; press Decline so the Cockpit stops counting 100 testing laps',
+            $line['reason'],
+        );
+        $this->assertFalse(RaceEngineer::testingDrawn($in));
+        $this->assertSame(2_300_000 - 85_000, RaceEngineer::upgradeBudget($in));
+    }
+
+    public function testAPassOneSkipGivesWayToTheManagersCall(): void
+    {
+        $o = ['testingCost' => RaceEngineer::TESTING_SESSION_COST, 'testingSkip' => 'Only $800k left in the budget'];
+        $do = $this->planned(['envelope' => 2_300_000], $o + ['testingChoice' => 'do']);
+
+        $this->assertTrue(RaceEngineer::testingDrawn($do));
+        $this->assertSame(['Your call', 'ink'], [$this->line($do, 'testing')['reason'], $this->line($do, 'testing')['tone']]);
+    }
+
+    public function testTestingSkipIsTheEngineersOwnSkipReason(): void
+    {
+        $o = ['testingCost' => RaceEngineer::TESTING_SESSION_COST, 'testingLaps' => 100];
+        $short = $this->planned(['envelope' => 800_000], $o);
+        $covered = $this->planned(['envelope' => 2_300_000], $o);
+
+        $this->assertSame('Only $715k left in the budget', RaceEngineer::testingSkip($short));
+        $this->assertSame(
+            'Testing is weak in Amateur without a technical director; it pays mainly the season before a promotion push',
+            RaceEngineer::testingSkip($this->amateur(SeasonObjective::STAY)),
+        );
+        $this->assertNull(RaceEngineer::testingSkip($covered));
+        $this->assertNull(RaceEngineer::testingSkip($this->planned(['envelope' => 800_000], $o + ['testingChoice' => 'skip'])));
+        $this->assertNull(RaceEngineer::testingSkip($this->planned(['envelope' => 800_000], $o + [
+            'testingGate' => $this->gate(TestingGate::BLOCKED, $this->brakesAndEngine()),
+        ])));
+        $this->assertNull(RaceEngineer::testingSkip($this->planned(['envelope' => 800_000], $o + ['tested' => true])));
+    }
+
+    public function testABudgetShortUnlockPickKeepsTheUnlockClause(): void
+    {
+        $gate = $this->gate(TestingGate::UNLOCK, [['part' => 'Brakes', 'wear' => 92]]);
+        $alone = $this->planned(['envelope' => 3_000_000])
+            ->withTestingGate($gate)
+            ->withUnlockPicks([$this->pick('Brakes', 5, 'sidegrade', 400_000, 'budget_short', 400_000)]);
+        $replaced = [['part' => 'Cooling', 'cost' => 200_000]];
+        $withForced = $this->planned(['envelope' => 3_000_000, 'rows' => $this->rowsReplacing($replaced)])
+            ->withTestingGate($gate)
+            ->withUnlockPicks([$this->pick('Brakes', 5, 'sidegrade', 400_000, 'budget_short', 400_000)]);
+        $line = $this->line($alone, 'parts');
+
+        $this->assertSame(
+            'To unlock testing (it is at 92 %); budget short: cheapest option that keeps your car in place',
+            $line['reason'],
+        );
+        $this->assertSame('amber', $line['tone']);
+        $this->assertSame(
+            'Would break this race if kept; brakes to unlock testing (it is at 92 %); budget short: cheapest option'
+                . ' that keeps your car in place',
+            $this->line($withForced, 'parts')['reason'],
+        );
     }
 }

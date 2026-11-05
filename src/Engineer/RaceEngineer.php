@@ -520,7 +520,8 @@ final class RaceEngineer
 
     /**
      * The parts line, with the reasons of the season picks for $parts after today's reason. A pick that only
-     * had a budget-short option left replaces the reason: that is what the manager has to know.
+     * had a budget-short option left replaces the reason: that is what the manager has to know. Next to an
+     * unlock swap it is appended instead.
      *
      * @param list<string> $parts
      * @return Line
@@ -541,8 +542,11 @@ final class RaceEngineer
         }
         $reasons = array_values(array_unique($reasons));
 
+        $unlocking = array_intersect(array_column($in->unlockPicks, 'part'), $parts) !== [];
         if (in_array('budget_short', $reasons, true)) {
-            $reason = SwapLevelPicker::REASONS['budget_short'];
+            $reason = $unlocking
+                ? $reason . '; ' . lcfirst(SwapLevelPicker::REASONS['budget_short'])
+                : SwapLevelPicker::REASONS['budget_short'];
             $tone = $tone === 'red' ? 'red' : 'amber';
         } elseif ($reasons !== []) {
             $reason .= '; ' . implode('; ', array_map(
@@ -662,7 +666,12 @@ final class RaceEngineer
             return self::line('testing', 'No testing in Rookie', "Testing doesn't pay in Rookie", $anchor);
         }
         if ($gate->state === TestingGate::BLOCKED) {
-            return self::line('testing', 'Testing blocked', self::blockedReason($in, $gate), $anchor);
+            // Once the car is updated the Cockpit zeroes the laps itself; before, it keeps them for a possible unlock.
+            $laps = !$in->carUpdated && $in->testingLaps > 0
+                ? '; set training laps to 0 on the Cockpit (it counts ' . $in->testingLaps . ' laps of wear)'
+                : '';
+
+            return self::line('testing', 'Testing blocked', self::blockedReason($in, $gate) . $laps, $anchor);
         }
 
         $where = $in->testingTrack === null ? 'Test this week' : 'Test at ' . $in->testingTrack;
@@ -681,10 +690,13 @@ final class RaceEngineer
         if ($in->testingChoice === 'skip') {
             return self::line('testing', $skip, self::SKIP_CALL, $anchor, $figure, choice: $choice);
         }
-        if (self::testingSpend($in) === null) {
-            $reason = self::amateurStay($in) ? self::AMATEUR_TESTING : self::skipReason($in, self::STAGE_TESTING);
+        $own = self::testingSkip($in);
+        if ($own !== null) {
+            $laps = $in->testingLaps > 0
+                ? '; press Decline so the Cockpit stops counting ' . $in->testingLaps . ' testing laps'
+                : '';
 
-            return self::line('testing', $skip, $reason, $anchor, $figure, choice: $choice);
+            return self::line('testing', $skip, $own . $laps, $anchor, $figure, choice: $choice);
         }
 
         $unlock = $gate->state === TestingGate::UNLOCK
@@ -746,8 +758,30 @@ final class RaceEngineer
         return match ($in->testingChoice) {
             'do' => $cost,
             'skip' => null,
-            default => !self::amateurStay($in) && self::affords($in, $cost, self::STAGE_TESTING) ? $cost : null,
+            default => $in->testingSkip === null
+                && !self::amateurStay($in)
+                && self::affords($in, $cost, self::STAGE_TESTING) ? $cost : null,
         };
+    }
+
+    /**
+     * Why the engineer skips a session GPRO would run when the manager left it the call; null when it tests,
+     * when the manager decided, or when no session can run.
+     */
+    public static function testingSkip(EngineerInputs $in): ?string
+    {
+        if (
+            $in->testingChoice !== null
+            || $in->tested
+            || $in->testingTarget === null
+            || !self::gate($in)->runs()
+            || self::testingSpend($in) !== null
+        ) {
+            return null;
+        }
+
+        return $in->testingSkip
+            ?? (self::amateurStay($in) ? self::AMATEUR_TESTING : self::skipReason($in, self::STAGE_TESTING));
     }
 
     public static function testingDrawn(EngineerInputs $in): bool

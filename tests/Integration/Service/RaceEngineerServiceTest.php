@@ -501,7 +501,7 @@ final class RaceEngineerServiceTest extends TestCase
         self::assertSame($firstOfTheSeason, $afterACheaperEntry);
     }
 
-    public function testASkippedSessionNoLongerNamesTheCockpitTrainingLaps(): void
+    public function testASkippedSessionAsksForADeclineWhileTheCockpitCountsLaps(): void
     {
         $this->seedPromotionFixture();
         $testingWith = function (int $laps): array {
@@ -525,9 +525,11 @@ final class RaceEngineerServiceTest extends TestCase
         $none = $testingWith(0);
 
         self::assertSame('Skip testing at Silverstone', $counted['answer']);
-        self::assertStringNotContainsString('training laps', $counted['reason']);
         self::assertSame('/cockpit#cockpit-testing', $counted['anchor']);
-        self::assertSame($none['reason'], $counted['reason']);
+        self::assertSame(
+            $none['reason'] . '; press Decline so the Cockpit stops counting 100 testing laps',
+            $counted['reason'],
+        );
     }
 
     public function testNoStoredRowsStillReturnsLines(): void
@@ -1901,7 +1903,11 @@ final class RaceEngineerServiceTest extends TestCase
         $byKey = array_column($lines, null, 'key');
 
         self::assertSame('Testing blocked', $byKey['testing']['answer']);
-        self::assertSame('Brakes at 92 %; GPRO allows no testing above 90 %', $byKey['testing']['reason']);
+        self::assertSame(
+            'Brakes at 92 %; GPRO allows no testing above 90 %; set training laps to 0 on the Cockpit'
+                . ' (it counts 100 laps of wear)',
+            $byKey['testing']['reason'],
+        );
         self::assertStringNotContainsString('Brakes', $byKey['parts']['answer']);
     }
 
@@ -1919,7 +1925,8 @@ final class RaceEngineerServiceTest extends TestCase
 
         self::assertSame('Testing blocked', $byKey['testing']['answer']);
         self::assertSame(
-            "Brakes at 92 %; GPRO allows no testing above 90 %; the swap plus the session doesn't fit the budget",
+            "Brakes at 92 %; GPRO allows no testing above 90 %; the swap plus the session doesn't fit the budget;"
+                . ' set training laps to 0 on the Cockpit (it counts 100 laps of wear)',
             $byKey['testing']['reason'],
         );
         self::assertStringNotContainsString('Brakes', $byKey['parts']['answer']);
@@ -1989,6 +1996,118 @@ final class RaceEngineerServiceTest extends TestCase
         self::assertNull($choice['chosen']);
         self::assertSame(9, $choice['race']);
         self::assertSame('do', ($testingAt(8)['choice'] ?? [])['chosen'] ?? null);
+    }
+
+    public function testAnEngineerSkipHoldsOnThePlanWithoutTestingWear(): void
+    {
+        $this->seedPromotionFixture();
+        $this->seedLowWearTrack();
+        $this->service->pin(self::USER, self::SEASON, 'promote');
+        $spent = new \ArrayObject();
+
+        // 90 + 8 laps of testing forces the $1.5M Engine, leaving no $1M for the session; without the session's
+        // wear the Engine stays, and the larger envelope must not bring the session back.
+        $lines = $this->engineer(ranker: $this->spentRanker($spent))->forCockpit(
+            self::USER,
+            $this->testingCockpit($this->testedParts(90, 10, 8.0), [
+                'car' => $this->pricedCar(1_500_000),
+                'menu' => ['IDM' => 7, 'cash' => 3_000_000],
+            ]),
+        )['lines'];
+        $byKey = array_column($lines, null, 'key');
+        $plan = $this->budgets->find(self::USER, self::SEASON)['plan'] ?? null;
+
+        self::assertSame('Skip testing at Silverstone', $byKey['testing']['answer']);
+        self::assertSame(
+            'Only $140k left in the budget; press Decline so the Cockpit stops counting 100 testing laps',
+            $byKey['testing']['reason'],
+        );
+        self::assertArrayHasKey('choice', $byKey['testing']);
+        self::assertNull($byKey['testing']['choice']['chosen']);
+        self::assertSame('Nothing to swap', $byKey['parts']['answer']);
+        self::assertIsArray($plan);
+        self::assertSame([], $plan['rows'][0]['replaced']);
+        self::assertSame([0], $spent->getArrayCopy());
+    }
+
+    public function testALockedCarWithoutAPlanIsBlockedByAPartTheCockpitWouldSwap(): void
+    {
+        $this->seedLowWearTrack();
+        $parts = [
+            'Engine' => ['level' => 1, 'start' => 10, 'training' => 0.0, 'race' => 0.5, 'track_base' => 0.5,
+                'est' => 0.5, 'end' => 10.5],
+            'Brakes' => ['level' => 1, 'start' => 95, 'training' => 0.0, 'race' => 6.0, 'track_base' => 6.0,
+                'est' => 6.0, 'end' => 101.0],
+        ];
+
+        // No stored season for user 99, so no plan; the car update is spent, so the Brakes stay on the car.
+        $lines = $this->service->forCockpit(99, $this->testingCockpit($parts, [
+            'office' => ['seasonNb' => self::SEASON, 'raceNb' => 10, 'doneCarRepair' => '1'],
+        ]))['lines'];
+        $testing = array_column($lines, null, 'key')['testing'];
+
+        self::assertSame('Testing blocked', $testing['answer']);
+        self::assertSame('Brakes at 95 %; GPRO allows no testing above 90 %', $testing['reason']);
+    }
+
+    public function testAnUnlockWithoutAPlanIsBlocked(): void
+    {
+        $this->seedLowWearTrack();
+        $this->service->pin(99, self::SEASON, 'promote');
+
+        // No stored season for user 99: no plan to price the Brakes swap, so nothing can unlock the session.
+        $lines = $this->service->forCockpit(99, $this->testingCockpit(
+            $this->testedParts(10, 92),
+            ['menu' => ['IDM' => 7, 'cash' => 50_000_000]],
+        ))['lines'];
+        $byKey = array_column($lines, null, 'key');
+
+        self::assertSame('Testing blocked', $byKey['testing']['answer']);
+        self::assertSame(
+            'Brakes at 92 %; GPRO allows no testing above 90 %; set training laps to 0 on the Cockpit'
+                . ' (it counts 100 laps of wear)',
+            $byKey['testing']['reason'],
+        );
+        self::assertArrayNotHasKey('choice', $byKey['testing']);
+        self::assertStringNotContainsString('Brakes', $byKey['parts']['answer']);
+    }
+
+    public function testAnUnlockThePickerCannotJudgeIsBlocked(): void
+    {
+        $this->seedPromotionFixture();
+        $this->seedLowWearTrack();
+        $this->service->pin(self::USER, self::SEASON, 'promote');
+        $failing = new readonly class ($this->wearService()) extends SwapLevelPicker {
+            public function __construct(CarWearService $wear)
+            {
+                parent::__construct(new SeasonBudget($wear), []);
+            }
+
+            public function pick(SwapSeason $s, string $part, int $currentLevel, array $candidates, array $paidPrice): ?array
+            {
+                throw new \DomainException('secret detail');
+            }
+        };
+        $log = tempnam(sys_get_temp_dir(), 'engineer-log');
+        self::assertIsString($log);
+        $prior = ini_set('error_log', $log);
+
+        try {
+            $lines = $this->engineer(picker: $failing)->forCockpit(
+                self::USER,
+                $this->testingCockpit($this->testedParts(10, 92), ['menu' => ['IDM' => 7, 'cash' => 50_000_000]]),
+            )['lines'];
+        } finally {
+            ini_set('error_log', $prior === false ? '' : $prior);
+        }
+        unlink($log);
+        $byKey = array_column($lines, null, 'key');
+
+        self::assertSame('Testing blocked', $byKey['testing']['answer']);
+        self::assertStringStartsWith('Brakes at 92 %; GPRO allows no testing above 90 %;', $byKey['testing']['reason']);
+        self::assertStringNotContainsString("doesn't fit the budget", $byKey['testing']['reason']);
+        self::assertStringNotContainsString('Brakes', $byKey['parts']['answer']);
+        self::assertArrayNotHasKey('swap_picks', $this->budgets->find(self::USER, self::SEASON)['plan'] ?? []);
     }
 
     /**

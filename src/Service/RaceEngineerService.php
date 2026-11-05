@@ -153,11 +153,14 @@ class RaceEngineerService
         $call = $this->testingCall($ctx, $c, $plan, $basis, $inputs, $locked, $choices['testing'] ?? null);
         $inputs = self::withTestingCall($inputs, $call);
         if (self::testingWontHappen($inputs) && self::hasTestingWear($c)) {
-            // The gate and the unlock call stay pass 1's: they read the wear as given, before testing is dropped.
+            // The gate, the unlock call and the engineer's own skip stay pass 1's: they read the wear as given,
+            // before testing is dropped, and the Cockpit still counts its laps.
+            $skip = RaceEngineer::testingSkip($inputs);
+            $laps = $inputs->testingLaps;
             $c = $this->withoutTestingWear($c);
             ['basis' => $basis, 'plan' => $plan, 'inputs' => $inputs]
                 = $this->pass($ctx, $c, $rounds, $energy, $locked, $choices);
-            $inputs = self::withTestingCall($inputs, $call);
+            $inputs = self::withTestingCall($inputs, $call)->withTestingSkip($skip, $laps);
         }
 
         // Under a plan the advice waits for the plan it is checked against, below.
@@ -248,8 +251,9 @@ class RaceEngineerService
 
     /**
      * GPRO's testing gate on the wear as given, and under Promote the swaps that unlock it. Unlock swaps need a
-     * plan to be priced; unless the manager chose to test, they must leave the session affordable, or the gate
-     * is blocked by the budget. A blocking part the picker can't judge leaves no swap to name, so it blocks too.
+     * plan to be priced, so without one the gate is blocked; unless the manager chose to test, they must leave
+     * the session affordable, or the gate is blocked by the budget. A blocking part the picker can't judge
+     * leaves no swap to name, so it blocks too.
      *
      * @param Context $ctx
      * @param array<string, mixed> $c
@@ -272,16 +276,17 @@ class RaceEngineerService
             $ctx['objective']['objective'] ?? SeasonObjective::STAY,
             $locked,
             array_map(static fn (array $part): float => (float) $part['start'], $this->wearParts($c) ?? []),
-            array_column($plan === null ? $inputs->wearAdvice['swap'] ?? [] : $plan['rows'][0]['replaced'], 'part'),
+            // A spent car update replaces nothing, whatever the Cockpit's swap advice says.
+            $locked ? [] : array_column(
+                $plan === null ? $inputs->wearAdvice['swap'] ?? [] : $plan['rows'][0]['replaced'],
+                'part',
+            ),
         );
-        if (
-            $gate->state !== TestingGate::UNLOCK
-            || $choice === 'skip'
-            || $plan === null
-            || $basis === null
-            || $locked
-        ) {
+        if ($gate->state !== TestingGate::UNLOCK || $choice === 'skip' || $locked) {
             return ['gate' => $gate, 'picks' => [], 'unaffordable' => false];
+        }
+        if ($plan === null || $basis === null) {
+            return ['gate' => $gate->blocked(), 'picks' => [], 'unaffordable' => false];
         }
 
         $blocking = array_column($gate->blocking, 'part');

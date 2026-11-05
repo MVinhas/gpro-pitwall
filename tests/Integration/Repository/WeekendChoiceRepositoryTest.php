@@ -93,4 +93,20 @@ final class WeekendChoiceRepositoryTest extends TestCase
         $indexes = $this->db->query("PRAGMA index_list('user_weekend_choice')")->fetchAll(PDO::FETCH_COLUMN, 1);
         $this->assertContains('idx_user_weekend_choice', $indexes);
     }
+
+    public function testMigrationCreatesTheTableOnAVersion20Database(): void
+    {
+        $this->db->exec('DROP TABLE user_weekend_choice');
+        $this->db->exec('PRAGMA user_version = 20');
+
+        $this->seeder->migrate();
+
+        $tables = $this->db->query("SELECT name FROM sqlite_master WHERE type = 'table'")->fetchAll(PDO::FETCH_COLUMN);
+        $this->assertContains('user_weekend_choice', $tables);
+        $indexes = $this->db->query("PRAGMA index_list('user_weekend_choice')")->fetchAll(PDO::FETCH_COLUMN, 1);
+        $this->assertContains('idx_user_weekend_choice', $indexes);
+        $this->assertSame(21, (int) $this->db->query('PRAGMA user_version')->fetchColumn());
+        $this->repo->save(7, 108, 9, 'testing', 'do');
+        $this->assertSame(['testing' => 'do'], $this->repo->choices(7, 108, 9));
+    }
 }
