@@ -409,6 +409,22 @@ final class CtrPlannerTest extends TestCase
         $this->assertSame(CtrPlanner::PROMOTE_RESERVE, 0.5);
     }
 
+    public function testAPushThatLowersItsOwnCushionKeepsHalfTheStart(): void
+    {
+        // CTR 0 replaces the engine in a later race, so its cushion covers half the start; a push replaces it now.
+        $worn = ['Engine' => ['level' => 1, 'start' => 70.0, 'track_base' => 10.0]];
+
+        $plan = $this->plan(SeasonObjective::PROMOTE, 150_000, seasonStart: 100_000, parts: $worn);
+
+        $this->assertGreaterThanOrEqual(50_000, $this->cushionAt(0, $worn, 3, 150_000, 0, 0));
+        $this->assertSame('push', $plan['mode']);
+        $this->assertLessThan(50_000, $plan['cushion']);
+        $this->assertSame(50_000, $plan['target']);
+        $this->assertSame('reserve', $plan['target_kind']);
+        $this->assertSame(0, $plan['envelope']);
+        $this->assertGreaterThanOrEqual(50_000, $plan['rows'][array_key_last($plan['rows'])]['balance']);
+    }
+
     public function testPromoteKeepsTheCushionWhenItIsAboveHalfTheStart(): void
     {
         // $60,000 committed puts the cushion above half the start even at CTR 0, which repairs nothing.

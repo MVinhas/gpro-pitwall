@@ -46,8 +46,9 @@ final readonly class CtrPlanner
      * plus the average repairs of the races after this one at the CTR being judged, so each candidate carries its
      * own cushion and end target: this race's forced swaps are bought before the race, so counting them would make
      * the cushion drop once the manager follows the advice.
-     * The target kind is settled once, at CTR 0, and the plan names the reserve or the start as its end target only
-     * when the chosen CTR's cushion is below it.
+     * The end target at a CTR is its cushion or the floor (half the season start for Promote, the start otherwise),
+     * whichever is higher; the floor is dropped as out of reach when even CTR 0 cannot end the season above it. The
+     * plan names the reserve or the start as its end target only when the chosen CTR's cushion is below it.
      *
      * @param list<array{race: int, track_name: ?string, base: ?array<string, float>}> $rounds next race first
      * @param array<string, array{level: int, start: int|float, track_base: int|float, training?: int|float}> $parts
@@ -120,20 +121,22 @@ final readonly class CtrPlanner
         $atZero = $cushionAt(0);
         $floor = null;
         $targetKind = 'cushion';
+        // A CTR that replaces a part this race drops that replacement from its own cushion, so the floor is kept
+        // even when CTR 0's cushion covers it.
         if ($objective === SeasonObjective::PROMOTE) {
             $reserve = $seasonStart === null ? 0 : (int) ceil($seasonStart * self::PROMOTE_RESERVE);
-            if ($reserve > $atZero) {
+            if ($reserve > 0) {
                 $floor = $reserve;
                 $targetKind = 'reserve';
-                if (self::headroom($forecastAt(0)['rows'], $atZero, $reserve) < 0) {
+                if (self::headroom($forecastAt(0)['rows'], $atZero, max($reserve, $atZero)) < 0) {
                     $floor = null;
                     $targetKind = 'reserve_out_of_reach';
                 }
             }
-        } elseif ($seasonStart !== null && $seasonStart > $atZero) {
+        } elseif ($seasonStart !== null) {
             $floor = $seasonStart;
             $targetKind = 'start';
-            if ($stay && self::headroom($forecastAt(0)['rows'], $atZero, $seasonStart) < 0) {
+            if ($stay && self::headroom($forecastAt(0)['rows'], $atZero, max($seasonStart, $atZero)) < 0) {
                 $floor = null;
                 $targetKind = 'start_out_of_reach';
             }
