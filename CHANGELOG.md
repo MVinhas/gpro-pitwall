@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.33] - 2026-11-05
+
+### Fixed
+- A part at 100 % wear smokes and loses time; it only breaks and retires the car if the smoke starts early. The Cockpit, the Car Wear tab, the planner headline and the race engineer stop saying such a part "won't finish": they say it reaches 100 %, and the Cockpit wear rows and the engineer name the lap it gets there ("Reaches 100 % on lap 63 of 71: smokes about 9 laps"), red when it is likely to break and retire, amber when it only smokes.
+
+### Added
+- Race engineer (admin): "Let the Brakes smoke this race" when letting a late smoker run one more race saves money over the season (the part fitted a race later may last to season end, and on the last race no replacement is due) or when the cash can't cover the swaps. The line prices the smoke in places lost and the chance it breaks (half the race money), and is never offered for a part likely to break, a free swap, a locked car, or a part that would block an open testing session; no upgrade is recommended that race.
+
 ## [1.21.32] - 2026-11-05
 
 ### Fixed
