@@ -59,6 +59,17 @@ final readonly class GroupStanding
     }
 
     /**
+     * GPRO's level 1 is 0 in the API (all-level-1 cars report carLevel 0), so the displayed level is one above.
+     */
+    public static function level(mixed $carLevel): ?int
+    {
+        return is_numeric($carLevel) ? (int) $carLevel + 1 : null;
+    }
+
+    /**
+     * Both carLevel and carLevelRank are 0-based in the /MoneyLevels payload: the best car of a group has rank 0.
+     * The returned level and rank are the 1-based ones GPRO shows.
+     *
      * @param array<string, mixed> $moneyLevels the /MoneyLevels payload
      * @param array<string, mixed> $menu the /Menu payload
      * @return CarStanding|null
@@ -76,8 +87,8 @@ final readonly class GroupStanding
             }
 
             return [
-                'level' => (int) $manager['carLevel'],
-                'rank' => (int) $manager['carLevelRank'],
+                'level' => (int) self::level($manager['carLevel']),
+                'rank' => (int) $manager['carLevelRank'] + 1,
                 'of' => count($managers),
             ];
         }

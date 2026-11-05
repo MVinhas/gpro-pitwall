@@ -1611,6 +1611,24 @@ final class RaceEngineerTest extends TestCase
         $this->assertSame('/season#season-upgrades', $line['anchor']);
     }
 
+    public function testStayWithNoUpgradeThatPaysSaysNothingWorthBuying(): void
+    {
+        $in = $this->withUpgrades(
+            [$this->upgrade('Engine', 4, 300_000), $this->upgrade('Brakes', 5, 150_000)],
+            [
+                'objective' => $this->objective(SeasonObjective::STAY),
+                'carStanding' => ['level' => 6, 'rank' => 11, 'of' => 37],
+            ],
+        );
+        $line = $this->line($in, 'upgrades');
+
+        $this->assertSame('Nothing worth buying', $line['answer']);
+        $this->assertSame(
+            'Stay: no upgrade pays for itself while your car is out of the group\'s weakest quarter',
+            $line['reason'],
+        );
+    }
+
     public function testStayInTheWeakestQuarterKeepsTheUpgradeAdvice(): void
     {
         foreach ([31, null] as $rank) {

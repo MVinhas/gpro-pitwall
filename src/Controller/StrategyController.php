@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controller;
 
+use App\Engineer\GroupStanding;
 use App\Http\Request;
 use App\Http\Sections;
 use App\Security\Authorize;
@@ -457,7 +458,7 @@ class StrategyController
         $idealTemp = $supplierInfo['temp'] ?? null;
 
         $myIdm = (int)($menu['IDM'] ?? 0);
-        $car    = self::groupStanding($myIdm, $moneyLevels['managers'] ?? [], 'carLevel');
+        $car    = self::carStanding($myIdm, $moneyLevels['managers'] ?? []);
         $driver = self::groupStanding($myIdm, $groupStaff['managers'] ?? [], 'driOA');
 
         return [
@@ -553,6 +554,21 @@ class StrategyController
     {
         $tier = strtolower(trim(explode('-', $group, 2)[0]));
         return $tier === 'rookie' || $tier === 'amateur';
+    }
+
+    /**
+     * The car's standing in the group, on GPRO's 1-based level (API level 0 is level 1, which
+     * groupStanding() would otherwise drop as an inactive manager).
+     *
+     * @param list<array<string, mixed>> $managers
+     * @return array{rank: ?int, total: ?int, above: ?bool, below: ?bool}
+     */
+    public static function carStanding(int $myIdm, array $managers): array
+    {
+        return self::groupStanding($myIdm, array_map(
+            static fn(array $m): array => ['carLevel' => GroupStanding::level($m['carLevel'] ?? null)] + $m,
+            $managers,
+        ), 'carLevel');
     }
 
     /**

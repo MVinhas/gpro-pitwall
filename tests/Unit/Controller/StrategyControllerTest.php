@@ -255,6 +255,20 @@ final class StrategyControllerTest extends TestCase
         $this->assertTrue($r['below']);
     }
 
+    public function testCarLevelZeroManagerIsRanked(): void
+    {
+        $managers = [
+            ['IDM' => 7, 'carLevel' => 0],
+            ['IDM' => 1, 'carLevel' => 0],
+            ['IDM' => 2, 'carLevel' => 0],
+            ['IDM' => 3, 'carLevel' => 1],
+        ];
+        $r = StrategyController::carStanding(7, $managers);
+        $this->assertNotNull($r['rank']);
+        $this->assertSame(4, $r['total']);
+        $this->assertSame(2, $r['rank']);
+    }
+
     public function testPickBestCompoundDryRaceExcludesRainEvenWhenCheapest(): void
     {
         // Rain is the cheapest on paper, but it's the wrong tyre type for a

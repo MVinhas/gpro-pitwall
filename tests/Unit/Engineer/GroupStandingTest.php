@@ -6,6 +6,7 @@ namespace App\Tests\Unit\Engineer;
 
 use App\Engineer\GroupStanding;
 use App\Engineer\SeasonObjective;
+use App\Engineer\StrengthFloor;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -161,14 +162,52 @@ final class GroupStandingTest extends TestCase
     {
         $managers = [];
         for ($i = 0; $i < 40; $i++) {
-            $managers[] = ['IDM' => 1000 + $i, 'cash' => 0, 'carLevelRank' => $i + 1, 'carLevel' => 1];
+            $managers[] = ['IDM' => 1000 + $i, 'cash' => 0, 'carLevelRank' => $i, 'carLevel' => 0];
         }
-        $managers[26] = ['IDM' => 7, 'cash' => 500, 'carLevelRank' => 27, 'carLevel' => 6];
+        $managers[26] = ['IDM' => 7, 'cash' => 500, 'carLevelRank' => 26, 'carLevel' => 5];
 
         $this->assertSame(
             ['level' => 6, 'rank' => 27, 'of' => 40],
             GroupStanding::car(['managers' => $managers], ['IDM' => 7]),
         );
+    }
+
+    /**
+     * @return array{managers: list<array<string, mixed>>}
+     */
+    private static function moneyLevels(int $carLevel, int $carLevelRank): array
+    {
+        $managers = [['IDM' => 7, 'carLevel' => $carLevel, 'carLevelRank' => $carLevelRank]];
+        for ($i = 1; $i < 37; $i++) {
+            $managers[] = ['IDM' => 1000 + $i, 'carLevel' => 1, 'carLevelRank' => $i];
+        }
+
+        return ['managers' => $managers];
+    }
+
+    public function testCarRankZeroIsFirst(): void
+    {
+        $car = GroupStanding::car(self::moneyLevels(7, 0), ['IDM' => 7]);
+
+        $this->assertSame(['level' => 8, 'rank' => 1, 'of' => 37], $car);
+        $this->assertTrue(StrengthFloor::fromGroup($car)->topThree());
+    }
+
+    public function testCarRankThreeIsFourthAndNotTopThree(): void
+    {
+        $car = GroupStanding::car(self::moneyLevels(7, 3), ['IDM' => 7]);
+
+        $this->assertNotNull($car);
+        $this->assertSame(4, $car['rank']);
+        $this->assertFalse(StrengthFloor::fromGroup($car)->topThree());
+    }
+
+    public function testLevelIsOneBased(): void
+    {
+        $this->assertSame(1, GroupStanding::level(0));
+        $this->assertSame(6, GroupStanding::level('5'));
+        $this->assertNull(GroupStanding::level(null));
+        $this->assertNull(GroupStanding::level('x'));
     }
 
     public function testCarStandingNeedsAnOwnNumericRow(): void

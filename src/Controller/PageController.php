@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controller;
 
+use App\Engineer\GroupStanding;
 use App\Http\Request;
 use App\Http\Sections;
 use App\Repository\DivisionMetadataRepository;
@@ -537,9 +538,9 @@ class PageController
 
                     $moneyLevels = $this->apiClient->getMoneyLevels();
                     $groupCarLevels = array_values(array_filter(array_map(
-                        static fn(array $m): int => (int) ($m['carLevel'] ?? 0),
+                        static fn(array $m): ?int => GroupStanding::level($m['carLevel'] ?? null),
                         $moneyLevels['managers'] ?? [],
-                    ), static fn(int $lvl): bool => $lvl > 0));
+                    ), static fn(?int $lvl): bool => $lvl !== null));
 
                     if ($isCockpit) {
                         $viewData['testing_projection'] = $this->testingProjection->project([
