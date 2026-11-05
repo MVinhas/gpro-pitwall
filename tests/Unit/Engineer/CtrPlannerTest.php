@@ -425,6 +425,20 @@ final class CtrPlannerTest extends TestCase
         $this->assertGreaterThanOrEqual(50_000, $plan['rows'][array_key_last($plan['rows'])]['balance']);
     }
 
+    public function testAShortPlanWhoseCushionCoversTheFloorNamesTheCushion(): void
+    {
+        // $100,000 committed with no cash misses the cushion at CTR 0; the floor below it is not what is out of reach.
+        $promote = $this->plan(SeasonObjective::PROMOTE, 0, 100_000, seasonStart: 100_000);
+        $stay = $this->plan(SeasonObjective::STAY, 0, 100_000, seasonStart: 50_000);
+
+        foreach (['promote' => $promote, 'stay' => $stay] as $label => $plan) {
+            $this->assertSame('short', $plan['mode'], $label);
+            $this->assertGreaterThanOrEqual(100_000, $plan['cushion'], $label);
+            $this->assertSame('cushion', $plan['target_kind'], $label);
+            $this->assertSame($plan['cushion'], $plan['target'], $label);
+        }
+    }
+
     public function testPromoteKeepsTheCushionWhenItIsAboveHalfTheStart(): void
     {
         // $60,000 committed puts the cushion above half the start even at CTR 0, which repairs nothing.

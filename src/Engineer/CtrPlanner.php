@@ -47,8 +47,9 @@ final readonly class CtrPlanner
      * own cushion and end target: this race's forced swaps are bought before the race, so counting them would make
      * the cushion drop once the manager follows the advice.
      * The end target at a CTR is its cushion or the floor (half the season start for Promote, the start otherwise),
-     * whichever is higher; the floor is dropped as out of reach when even CTR 0 cannot end the season above it. The
-     * plan names the reserve or the start as its end target only when the chosen CTR's cushion is below it.
+     * whichever is higher. A floor above CTR 0's cushion is dropped as out of reach when even CTR 0 cannot end the
+     * season above it. The plan names the reserve or the start as its end target only when the chosen CTR's cushion
+     * is below it.
      *
      * @param list<array{race: int, track_name: ?string, base: ?array<string, float>}> $rounds next race first
      * @param array<string, array{level: int, start: int|float, track_base: int|float, training?: int|float}> $parts
@@ -128,7 +129,7 @@ final readonly class CtrPlanner
             if ($reserve > 0) {
                 $floor = $reserve;
                 $targetKind = 'reserve';
-                if (self::headroom($forecastAt(0)['rows'], $atZero, max($reserve, $atZero)) < 0) {
+                if ($reserve > $atZero && self::headroom($forecastAt(0)['rows'], $atZero, $reserve) < 0) {
                     $floor = null;
                     $targetKind = 'reserve_out_of_reach';
                 }
@@ -136,7 +137,11 @@ final readonly class CtrPlanner
         } elseif ($seasonStart !== null) {
             $floor = $seasonStart;
             $targetKind = 'start';
-            if ($stay && self::headroom($forecastAt(0)['rows'], $atZero, max($seasonStart, $atZero)) < 0) {
+            if (
+                $stay
+                && $seasonStart > $atZero
+                && self::headroom($forecastAt(0)['rows'], $atZero, $seasonStart) < 0
+            ) {
                 $floor = null;
                 $targetKind = 'start_out_of_reach';
             }
