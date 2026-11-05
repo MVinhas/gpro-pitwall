@@ -10,6 +10,15 @@ namespace App\Engineer;
  * @phpstan-import-type StaffStanding from GroupStanding
  * @phpstan-import-type TyreAdvice from TyreSupplierAdvisor
  * @phpstan-import-type CarStanding from GroupStanding
+ * @phpstan-type SmokePrice array{time: int, break: int, total: int}
+ * @phpstan-type SmokeQuote array{
+ *     risk: SmokeRisk,
+ *     start: float,
+ *     price: ?SmokePrice,
+ *     saving: ?int,
+ *     cost: ?int,
+ *     last: bool
+ * }
  * @phpstan-type Outlook array{known: bool, committed: ?int, income: ?int, free_cash: ?int, end_committed: ?int}
  * @phpstan-type PartAdvice array{part: string, level: int, start: int, est: float, end: float}
  * @phpstan-import-type PickReason from SwapLevelPicker
@@ -55,7 +64,7 @@ final readonly class EngineerInputs
      * @param list<SwapPick> $swapPicks the season-long level picked for each swapped part that has one
      * @param int $testingLaps the Cockpit's training laps; a replan without testing wear keeps the Cockpit's count
      * @param ?TyreAdvice $tyreAdvice set only while GPRO's tyre contract window is open and unsigned
-     * @param list<string> $stuckSmoke parts that reach 100% this race even at CTR 0, while the car is updated
+     * @param list<string> $stuckSmoke parts that reach 100 % this race even at CTR 0, while the car is updated
      * @param ?int $energyCap the highest CTR the driver's energy allows, on every path with or without a plan
      * @param ?int $energyStart the driver's expected energy at the race start, when the office reports it
      * @param ?string $trainingChoice the manager's call for this race's training: 'do', 'skip' or none
@@ -65,6 +74,8 @@ final readonly class EngineerInputs
      * @param bool $unlockUnaffordable the gate is blocked because the unlock swaps plus the session don't fit
      * @param ?string $testingSkip why the engineer skipped the session on its own before testing wear was dropped;
      *                             the replan keeps that verdict, since its larger envelope assumes no session
+     * @param array<string, SmokeQuote> $smoke when each forced or stuck part reaches 100 % this race, and what
+     *                                         its smoke costs against what fitting it a race later saves
      */
     public function __construct(
         public array $objective,
@@ -105,6 +116,7 @@ final readonly class EngineerInputs
         public int $race = 0,
         public bool $unlockUnaffordable = false,
         public ?string $testingSkip = null,
+        public array $smoke = [],
     ) {
     }
 
@@ -140,6 +152,14 @@ final readonly class EngineerInputs
     public function withTestingSkip(?string $reason, int $testingLaps): self
     {
         return clone($this, ['testingSkip' => $reason, 'testingLaps' => $testingLaps]);
+    }
+
+    /**
+     * @param array<string, SmokeQuote> $smoke
+     */
+    public function withSmoke(array $smoke): self
+    {
+        return clone($this, ['smoke' => $smoke]);
     }
 
     /**

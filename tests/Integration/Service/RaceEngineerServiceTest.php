@@ -1563,13 +1563,12 @@ final class RaceEngineerServiceTest extends TestCase
 
         self::assertSame('CTR 0', $byKey['ctr']['answer']);
         self::assertSame(
-            'Engine reaches 100% this race and the car is already updated: CTR 0 keeps its wear lowest',
+            'Engine reaches 100 % this race and the car is already updated: CTR 0 keeps its wear lowest',
             $byKey['ctr']['reason'],
         );
         self::assertSame('Car updated', $byKey['parts']['answer']);
         self::assertSame(
-            'Engine reaches 100% this race: expect smoke and lost time, and a retirement if it comes early; '
-                . 'no more changes until the next race',
+            'Engine reaches 100 % on lap 32 of 50: smokes about 19 laps; no more changes until the next race',
             $byKey['parts']['reason'],
         );
         self::assertSame('amber', $byKey['parts']['tone']);
@@ -1591,12 +1590,11 @@ final class RaceEngineerServiceTest extends TestCase
 
         self::assertSame('amber', $byKey['parts']['tone']);
         self::assertSame(
-            'Engine reaches 100% this race: expect smoke and lost time, and a retirement if it comes early; '
-                . 'no more changes until the next race',
+            'Engine reaches 100 % on lap 32 of 50: smokes about 19 laps; no more changes until the next race',
             $byKey['parts']['reason'],
         );
         self::assertSame(
-            'Engine reaches 100% this race and the car is already updated: CTR 0 keeps its wear lowest',
+            'Engine reaches 100 % this race and the car is already updated: CTR 0 keeps its wear lowest',
             $byKey['ctr']['reason'],
         );
     }
@@ -2602,6 +2600,126 @@ final class RaceEngineerServiceTest extends TestCase
              VALUES (:name, 50, :lap, :speed, 250.0, 2.0, 3.0, 0.3, 0.4, 'Normal', 'Normal', 'Normal', 20.0, 40, 30, 10)
              ON CONFLICT(name) DO UPDATE SET lap_length = excluded.lap_length, avg_speed = excluded.avg_speed"
         )->execute([':name' => $name, ':lap' => $lapLength, ':speed' => $avgSpeed]);
+    }
+
+    public function testShortCashLetsTheLateSmokerSmokeAndSwapsTheEarlyOne(): void
+    {
+        $this->seedPromotionFixture();
+        $this->seedSmokeTrack();
+
+        $result = $this->service->forCockpit(self::USER, $this->smokeCockpit(99, 93, ['cash' => 100_000]));
+        $byKey = array_column($result['lines'], null, 'key');
+
+        self::assertSame('short', $this->savedPlan()['mode'] ?? null);
+        self::assertSame('Let the Brakes smoke this race', $byKey['smoke']['answer']);
+        self::assertSame('frees $1M this race', $byKey['smoke']['figure']);
+        self::assertStringStartsWith('Reaches 100 % on lap 44 of 50: about 7 laps of smoke', $byKey['smoke']['reason']);
+        self::assertStringEndsWith('; replace it next race', $byKey['smoke']['reason']);
+        self::assertStringStartsWith('Swap Engine', $byKey['parts']['answer']);
+        self::assertStringNotContainsString('Brakes', $byKey['parts']['answer']);
+        self::assertSame('red', $byKey['parts']['tone']);
+        self::assertSame('car', $byKey['smoke']['step']);
+    }
+
+    public function testLastRaceLetsALateSmokerSmokeWithCashToSpare(): void
+    {
+        $this->seedPromotionFixture();
+        $this->seedSmokeTrack();
+
+        $byKey = array_column($this->service->forCockpit(self::USER, $this->smokeCockpit(10, 93, ['cash' => 20_000_000], [
+            'season_calendar' => [['race' => 9, 'track_name' => 'Gamma'], ['race' => 10, 'track_name' => 'Gamma']],
+        ]))['lines'], null, 'key');
+
+        self::assertNotSame('short', $this->savedPlan()['mode'] ?? null);
+        self::assertSame('Let the Brakes smoke this race', $byKey['smoke']['answer']);
+        self::assertStringStartsWith('saves ~', (string) $byKey['smoke']['figure']);
+        self::assertStringEndsWith('; no replacement is due before the season ends', $byKey['smoke']['reason']);
+        self::assertArrayNotHasKey('parts', $byKey);
+        self::assertArrayNotHasKey('upgrades', $byKey);
+    }
+
+    public function testUnknownDivisionOffersNoSmoke(): void
+    {
+        $this->seedPromotionFixture();
+        $this->seedSmokeTrack();
+
+        $byKey = array_column($this->service->forCockpit(
+            self::USER,
+            $this->smokeCockpit(99, 93, ['cash' => 100_000], ['division' => null]),
+        )['lines'], null, 'key');
+
+        self::assertArrayNotHasKey('smoke', $byKey);
+        self::assertStringStartsWith('Swap Engine, Brakes', $byKey['parts']['answer']);
+    }
+
+    public function testTheStuckSmokeEnvelopeStaysWithinTheDeferredSwapsCost(): void
+    {
+        $this->seedPromotionFixture();
+        $this->seedSmokeTrack();
+        $service = $this->engineer(ranker: $this->spentRanker(new \ArrayObject()));
+        $envelopeWith = function (string $done) use ($service): array {
+            $lines = $service->forCockpit(self::USER, $this->smokeCockpit(
+                10,
+                95,
+                ['cash' => 20_000_000, 'doneCarRepair' => $done],
+            ))['lines'];
+
+            return [array_column($lines, null, 'key'), $this->savedPlan()['envelope'] ?? null];
+        };
+
+        [$locked, $lockedEnvelope] = $envelopeWith('1');
+        [$unlocked, $unlockedEnvelope] = $envelopeWith('0');
+
+        self::assertSame('Car updated', $locked['parts']['answer']);
+        self::assertStringStartsWith('Brakes reaches 100 % on lap 32 of 50', $locked['parts']['reason']);
+        self::assertSame('Safe to spend', $locked['cash']['answer']);
+        self::assertSame('Safe to spend', $unlocked['cash']['answer']);
+        self::assertIsInt($lockedEnvelope);
+        self::assertIsInt($unlockedEnvelope);
+        self::assertGreaterThan(0, $lockedEnvelope);
+        self::assertLessThanOrEqual(1_000_000, abs($lockedEnvelope - $unlockedEnvelope));
+    }
+
+    private function seedSmokeTrack(): void
+    {
+        $this->seedWearTracks();
+        $this->paceTrack('Gamma', 5.0, 200.0);
+    }
+
+    /**
+     * Engine and Brakes at level 2, which wears 8 % a race on Gamma at any CTR, each replaced for $1M, over
+     * races 10 and 11 on a paced Gamma.
+     *
+     * @param array<string, mixed> $office
+     * @param array<string, mixed> $extra
+     * @return array<string, mixed>
+     */
+    private function smokeCockpit(int $engine, int $brakes, array $office = [], array $extra = []): array
+    {
+        $parts = [
+            'Engine' => ['level' => 2, 'start' => $engine, 'est' => 0.0, 'end' => 0.0, 'track_base' => 8.0],
+            'Brakes' => ['level' => 2, 'start' => $brakes, 'est' => 0.0, 'end' => 0.0, 'track_base' => 8.0],
+        ];
+        $car = $this->pricedCar(1_000_000);
+        foreach ($parts as $label => $part) {
+            $car[CarWearService::PARTS_MAP[$label]['lvl']] = 2;
+            $car[CarWearService::PARTS_MAP[$label]['wear']] = $part['start'];
+            $car[CarWearService::PARTS_MAP[$label]['options']][0]['newLvl'] = '2';
+        }
+
+        return $this->cockpit(array_merge([
+            'office' => $this->office($office),
+            'ctr' => 0,
+            'car' => $car,
+            'season_calendar' => [['race' => 10, 'track_name' => 'Gamma'], ['race' => 11, 'track_name' => 'Gamma']],
+            'track_name' => 'Gamma',
+            'wear' => ['track_name' => 'Gamma', 'laps' => 50, 'parts' => $parts],
+            'wear_advice' => $this->adviceAt(0, $parts),
+            'track_pha' => ['power' => 5, 'handling' => 3, 'acceleration' => 2],
+            'car_pha' => ['power' => 80, 'handling' => 80, 'acceleration' => 80],
+            'group_car_levels' => [],
+            'training_wear' => [],
+        ], $extra));
     }
 
     public function testOfficeEnergyAndQ2ReachThePlan(): void

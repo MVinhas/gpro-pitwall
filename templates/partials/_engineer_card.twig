@@ -4,7 +4,7 @@
 {% if engineer is defined and engineer is not empty %}
     {% set objective = engineer.objective %}
     {% set step_titles = {car: 'Step 1 · Update the car', prep: 'Step 2 · Testing and training', race: 'Step 3 · Race settings'} %}
-    {% set labels = {ctr: 'CTR', parts: 'parts', risk: 'risk settings', tyres: 'tyre supplier'} %}
+    {% set labels = {ctr: 'CTR', parts: 'parts', smoke: 'letting a part smoke', risk: 'risk settings', tyres: 'tyre supplier'} %}
     <section class="card" aria-labelledby="engineer-title">
         <div class="card-hd flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div class="min-w-0">

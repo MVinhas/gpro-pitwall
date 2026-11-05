@@ -727,6 +727,7 @@ class PageController
                             'group_staff'      => $this->apiClient->getCachedGroupStaff(),
                             'wear_advice'      => $viewData['wear_advice'] ?? null,
                             'swap_plan'        => $viewData['swap_plan'] ?? null,
+                            'swap_advice'      => $viewData['swap_advice'] ?? null,
                             'training_picks'   => $viewData['training_picks'] ?? [],
                             'testing_targets'  => $viewData['testing_targets'] ?? [],
                             'testing_open'     => $testingTrack !== null,
