@@ -652,6 +652,7 @@ class PageController
                     if (!isset($wear['error'])) {
                         $advice = $this->wearAdvisor->classify($wear['parts']);
                         $viewData['wear_advice'] = $advice;
+                        $viewData['car_updated'] = OfficeFlags::done($office, 'doneCarRepair');
 
                         // Full per-part table + the inputs behind it. The wear
                         // card only lists parts at risk, so without these the

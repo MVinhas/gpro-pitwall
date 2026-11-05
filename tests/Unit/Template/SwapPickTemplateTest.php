@@ -155,4 +155,28 @@ final class SwapPickTemplateTest extends TestCase
         $this->assertMatchesRegularExpression('#<p class="notice notice-warn notice-slim\s*" data-plan-over-cash>#', $html);
         $this->assertStringContainsString('This plan costs more than the $1,000,000 you have.', $html);
     }
+
+    public function testAnUpdatedCarOffersNoSwaps(): void
+    {
+        $brakes = self::plan([self::option(6, 1, 'upgrade', 900_000, true)], true, 'Most PHA the season budget allows');
+        $flagged = ['part' => 'Brakes', 'level' => 5, 'start' => 95, 'est' => 9.0, 'end' => 104.0];
+        $pha = ['power' => 80.0, 'handling' => 80.0, 'acceleration' => 80.0];
+        $side = ['pha' => $pha, 'fit' => 90.0, 'match' => 'none'];
+
+        $html = $this->twig()->render('partials/_cockpit_wear.twig', [
+            'car_updated' => true,
+            'wear_advice' => ['swap' => [$flagged], 'risky' => [], 'watch' => [], 'headline' => ''],
+            'swap_advice' => ['Brakes' => $brakes],
+            'swap_plan' => ['cost' => 900_000, 'track' => $pha, 'before' => $side, 'after' => $side],
+            'cockpit_cash' => 1_000_000,
+            'cockpit_risk' => 30,
+            'cockpit_training_laps' => 0,
+        ]);
+
+        $this->assertStringContainsString('Car updated', $html);
+        $this->assertStringContainsString('One update per race; no more part changes until the next race.', $html);
+        $this->assertStringContainsString('Reaches 100 %', $html);
+        $this->assertStringNotContainsString('data-plan-option', $html);
+        $this->assertStringNotContainsString('data-plan-summary', $html);
+    }
 }
