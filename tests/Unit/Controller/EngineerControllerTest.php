@@ -47,4 +47,28 @@ final class EngineerControllerTest extends TestCase
             $this->assertSame(403, $e->getStatusCode());
         }
     }
+
+    public function testSetChoiceNonAdminGets403AndNothingIsWritten(): void
+    {
+        $service = $this->createMock(RaceEngineerService::class);
+        $service->expects($this->never())->method('choose');
+
+        $users = $this->createStub(UserRepository::class);
+        $users->method('findById')->willReturn(['id' => 7, 'is_admin' => 0]);
+        $_SESSION = ['user_id' => 7];
+
+        $controller = new EngineerController($service, new Authorize($users));
+
+        try {
+            $controller->setChoice(new Request([], [
+                'season' => '107',
+                'race' => '8',
+                'item' => 'testing',
+                'choice' => 'do',
+            ], [], []));
+            $this->fail('expected a 403');
+        } catch (HttpException $e) {
+            $this->assertSame(403, $e->getStatusCode());
+        }
+    }
 }

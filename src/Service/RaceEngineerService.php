@@ -28,6 +28,7 @@ use App\Repository\SeasonBudgetRepository;
 use App\Repository\SeasonObjectiveRepository;
 use App\Repository\StandingsRepository;
 use App\Repository\TrackRepository;
+use App\Repository\WeekendChoiceRepository;
 use App\Repository\WeekendStateRepository;
 use App\Support\TrackName;
 
@@ -113,6 +114,7 @@ class RaceEngineerService
         private readonly IdealPilotService $idealPilot,
         private readonly CtrModelService $ctrModel,
         private readonly float $ctrGainFraction,
+        private readonly ?WeekendChoiceRepository $choices = null,
     ) {
     }
 
@@ -233,6 +235,36 @@ class RaceEngineerService
         $this->pins->save($userId, $season, $objective);
 
         return true;
+    }
+
+    public function choose(int $userId, int $season, int $race, string $item, string $choice): bool
+    {
+        if (
+            $this->choices === null
+            || !in_array($item, ['testing', 'training'], true)
+            || !in_array($choice, ['do', 'skip', 'clear'], true)
+            || $season < 1
+            || $race < 1
+            || $race > SeasonObjective::RACES
+        ) {
+            return false;
+        }
+
+        if ($choice === 'clear') {
+            $this->choices->clear($userId, $season, $race, $item);
+        } else {
+            $this->choices->save($userId, $season, $race, $item, $choice);
+        }
+
+        return true;
+    }
+
+    /**
+     * @return array{testing?: string, training?: string}
+     */
+    public function choicesFor(int $userId, int $season, int $race): array
+    {
+        return $this->choices?->choices($userId, $season, $race) ?? [];
     }
 
     /**

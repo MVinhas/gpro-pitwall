@@ -19,6 +19,7 @@ use App\Repository\SeasonBudgetRepository;
 use App\Repository\SeasonObjectiveRepository;
 use App\Repository\StandingsRepository;
 use App\Repository\TrackRepository;
+use App\Repository\WeekendChoiceRepository;
 use App\Repository\WeekendStateRepository;
 use App\Security\ApiTokenCrypto;
 use App\Service\BoostFuelService;
@@ -52,6 +53,7 @@ final class RaceEngineerServiceTest extends TestCase
     private WeekendStateRepository $weekends;
     private EconomyLedgerRepository $ledger;
     private SeasonBudgetRepository $budgets;
+    private WeekendChoiceRepository $choices;
     private RaceEngineerService $service;
 
     protected function setUp(): void
@@ -72,6 +74,7 @@ final class RaceEngineerServiceTest extends TestCase
         $this->weekends = new WeekendStateRepository($this->db);
         $this->ledger = new EconomyLedgerRepository($this->db);
         $this->budgets = new SeasonBudgetRepository($this->db);
+        $this->choices = new WeekendChoiceRepository($this->db);
 
         $this->service = $this->engineer();
 
@@ -95,6 +98,7 @@ final class RaceEngineerServiceTest extends TestCase
         ?UpgradeRanker $ranker = null,
         ?SwapLevelPicker $picker = null,
         ?RaceTelemetryRepository $telemetry = null,
+        bool $withChoices = true,
     ): RaceEngineerService {
         $wear = $this->wearService();
         $contribution = [
@@ -130,6 +134,7 @@ final class RaceEngineerServiceTest extends TestCase
             $this->idealPilot(193),
             new CtrModelService(new RaceTelemetryRepository($this->db), new RaceHistoryRepository($this->db), new NullCache()),
             self::CTR_GAIN_FRACTION,
+            $withChoices ? $this->choices : null,
         );
     }
 
@@ -221,6 +226,45 @@ final class RaceEngineerServiceTest extends TestCase
 
         self::assertSame('promote', $rookie['objective']);
         self::assertSame('stay', $amateur['objective']);
+    }
+
+    public function testChooseRejectsUnknownItemOrChoice(): void
+    {
+        self::assertFalse($this->service->choose(self::USER, self::SEASON, 8, 'fuel', 'do'));
+        self::assertFalse($this->service->choose(self::USER, self::SEASON, 8, 'testing', 'maybe'));
+        self::assertSame([], $this->choices->choices(self::USER, self::SEASON, 8));
+    }
+
+    public function testChooseRejectsRaceOutOfRange(): void
+    {
+        self::assertFalse($this->service->choose(self::USER, self::SEASON, 0, 'testing', 'do'));
+        self::assertFalse($this->service->choose(self::USER, self::SEASON, 18, 'testing', 'do'));
+        self::assertFalse($this->service->choose(self::USER, 0, 8, 'testing', 'do'));
+        self::assertSame([], $this->choices->choices(self::USER, self::SEASON, 0));
+        self::assertSame([], $this->choices->choices(self::USER, self::SEASON, 18));
+    }
+
+    public function testChooseSavesAndClearDeletes(): void
+    {
+        self::assertTrue($this->service->choose(self::USER, self::SEASON, 8, 'testing', 'do'));
+        self::assertTrue($this->service->choose(self::USER, self::SEASON, 8, 'training', 'skip'));
+        self::assertSame(['testing' => 'do', 'training' => 'skip'], $this->service->choicesFor(self::USER, self::SEASON, 8));
+
+        self::assertTrue($this->service->choose(self::USER, self::SEASON, 8, 'testing', 'clear'));
+        self::assertSame(['training' => 'skip'], $this->service->choicesFor(self::USER, self::SEASON, 8));
+    }
+
+    public function testChoiceForAnotherRaceIsIgnored(): void
+    {
+        self::assertTrue($this->service->choose(self::USER, self::SEASON, 8, 'testing', 'do'));
+        self::assertSame([], $this->service->choicesFor(self::USER, self::SEASON, 9));
+    }
+
+    public function testChoicesForIsEmptyWithoutARepository(): void
+    {
+        $this->choices->save(self::USER, self::SEASON, 8, 'testing', 'do');
+
+        self::assertSame([], $this->engineer(withChoices: false)->choicesFor(self::USER, self::SEASON, 8));
     }
 
     public function testPinValues(): void
