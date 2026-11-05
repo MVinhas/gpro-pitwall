@@ -29,4 +29,24 @@ final readonly class EngineerController
         header('Location: /engineer');
         exit;
     }
+
+    public function setChoice(Request $request): void
+    {
+        $user = $this->authorize->requireAdmin();
+        $season = (string) $request->post('season');
+        $race = (string) $request->post('race');
+
+        if (ctype_digit($season) && ctype_digit($race)) {
+            $this->engineer->choose(
+                (int) $user['id'],
+                (int) $season,
+                (int) $race,
+                (string) $request->post('item'),
+                (string) $request->post('choice'),
+            );
+        }
+
+        header('Location: /engineer');
+        exit;
+    }
 }

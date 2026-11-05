@@ -47,9 +47,24 @@
                         </p>
                         {% if line.reason %}<p class="mt-0.5 text-xs text-slate-600">{{ line.reason }}</p>{% endif %}
                     </div>
-                    {% if line.action or line.anchor %}
-                        <div class="flex shrink-0 items-center gap-3">
+                    {% if line.action or line.anchor or line.choice is defined %}
+                        <div class="flex shrink-0 flex-wrap items-center gap-3">
                             {% if line.anchor %}<a href="{{ line.anchor }}" class="text-xs font-medium text-blue-600 hover:underline">Details<span class="sr-only"> for {{ labels[line.key] ?? line.key }}</span></a>{% endif %}
+                            {% if line.choice is defined %}
+                                {% set choice_buttons = line.choice.chosen is null
+                                    ? [{value: 'do', label: "I'll do it"}, {value: 'skip', label: 'Decline'}]
+                                    : [{value: 'clear', label: 'Undo'}] %}
+                                {% for button in choice_buttons %}
+                                    <form method="post" action="/engineer/choice">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                        <input type="hidden" name="season" value="{{ line.choice.season }}">
+                                        <input type="hidden" name="race" value="{{ line.choice.race }}">
+                                        <input type="hidden" name="item" value="{{ line.choice.item }}">
+                                        <input type="hidden" name="choice" value="{{ button.value }}">
+                                        <button type="submit" class="btn btn-sm btn-secondary">{{ button.label }}<span class="sr-only"> for {{ line.choice.item }}</span></button>
+                                    </form>
+                                {% endfor %}
+                            {% endif %}
                             {% if line.action %}<a href="{{ line.action.href }}" class="btn btn-sm btn-secondary">{{ line.action.label }}</a>{% endif %}
                         </div>
                     {% endif %}

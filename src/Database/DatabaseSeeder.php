@@ -16,7 +16,7 @@ class DatabaseSeeder
      * calls migrate() on every request; this version lets a warm database skip
      * the entire DDL + scan + legacy-encryption pass.
      */
-    private const int SCHEMA_VERSION = 20;
+    private const int SCHEMA_VERSION = 21;
 
     /**
      * @param array<string, string> $statsSchema
@@ -73,6 +73,7 @@ class DatabaseSeeder
         $this->createSeasonObjectiveTable();
         $this->migrateSeasonObjectiveToStay();
         $this->createSeasonBudgetTable();
+        $this->createWeekendChoiceTable();
         $this->dropDeprecatedTables();
 
 
@@ -875,6 +876,29 @@ class DatabaseSeeder
         $this->db->exec(
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_user_season_budget
              ON user_season_budget (user_id, season)"
+        );
+    }
+
+    /**
+     * Whether the manager will do or skip a weekend's testing and training. A decision, not derived from the
+     * archive, so it cannot be rebuilt.
+     */
+    private function createWeekendChoiceTable(): void
+    {
+        $this->db->exec(
+            "CREATE TABLE IF NOT EXISTS user_weekend_choice (
+                user_id INTEGER NOT NULL,
+                season INTEGER NOT NULL,
+                race INTEGER NOT NULL,
+                item TEXT NOT NULL CHECK (item IN ('testing', 'training')),
+                choice TEXT NOT NULL CHECK (choice IN ('do', 'skip')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )"
+        );
+        $this->db->exec(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_user_weekend_choice
+             ON user_weekend_choice (user_id, season, race, item)"
         );
     }
 

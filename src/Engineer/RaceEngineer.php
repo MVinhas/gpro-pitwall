@@ -20,8 +20,10 @@ use App\Support\Ordinal;
  *     anchor: ?string,
  *     tone: string,
  *     action: ?array{label: string, href: string},
- *     step: 'season'|'car'|'prep'|'race'
+ *     step: 'season'|'car'|'prep'|'race',
+ *     choice?: Choice
  * }
+ * @phpstan-type Choice array{item: string, chosen: ?string, season: int, race: int}
  */
 final class RaceEngineer
 {
@@ -42,6 +44,9 @@ final class RaceEngineer
     private const string STAGE_TRAINING = 'training';
     private const string STAGE_TESTING = 'testing';
     private const string UPGRADES_ANCHOR = '/season#season-upgrades';
+    private const string SKIP_CALL = 'Your call; the money stays in the budget';
+    private const string AMATEUR_TESTING = 'Testing is weak in Amateur without a technical director; it pays mainly '
+        . 'the season before a promotion push';
 
     /** Which step of the weekend each line belongs to; brief() keeps lines of one step together. */
     public const array STEPS = [
@@ -452,14 +457,30 @@ final class RaceEngineer
         $replaced = $plan === null ? [] : $plan['rows'][0]['replaced'];
         $forced = array_column($plan === null ? $in->wearAdvice['swap'] ?? [] : $replaced, 'part');
         $forcedSwapCost = $plan === null ? $in->forcedSwapCost : self::pickedCost($in, $replaced);
+        $unlocked = array_column($in->unlockPicks, 'part');
+        $unlockCost = array_sum(array_column($in->unlockPicks, 'cost'));
+        $swapped = [...$forced, ...$unlocked];
+        $clauses = self::unlockClauses($in, count($swapped) > 1);
+        $unlock = $clauses === [] ? '' : '; ' . implode('; ', $clauses);
 
         if ($plan !== null && $plan['mode'] === 'push' && $plan['swaps'] !== []) {
             return self::pickedLine(
                 $in,
-                $forced,
-                'Swap ' . self::swapNames($in, $forced),
-                'Lets you push to CTR ' . $plan['ctr'],
-                Money::short($forcedSwapCost ?? 0),
+                $swapped,
+                'Swap ' . self::swapNames($in, $swapped),
+                'Lets you push to CTR ' . $plan['ctr'] . $unlock,
+                Money::short(($forcedSwapCost ?? 0) + $unlockCost),
+                'ink',
+            );
+        }
+
+        if ($forced === [] && $unlocked !== []) {
+            return self::pickedLine(
+                $in,
+                $swapped,
+                'Swap ' . self::swapNames($in, $swapped),
+                ucfirst(implode('; ', $clauses)),
+                Money::short($unlockCost),
                 'ink',
             );
         }
@@ -473,17 +494,34 @@ final class RaceEngineer
 
         return self::pickedLine(
             $in,
-            $forced,
-            'Swap ' . self::swapNames($in, $forced),
-            'Would break this race if kept',
-            $forcedSwapCost === null ? null : Money::short($forcedSwapCost),
+            $swapped,
+            'Swap ' . self::swapNames($in, $swapped),
+            'Would break this race if kept' . $unlock,
+            $forcedSwapCost === null ? null : Money::short($forcedSwapCost + $unlockCost),
             $tone,
         );
     }
 
     /**
+     * Why each unlock swap is on the parts line; the part is named when the line swaps more than one.
+     *
+     * @return list<string>
+     */
+    private static function unlockClauses(EngineerInputs $in, bool $named): array
+    {
+        $wear = array_column(self::gate($in)->blocking, 'wear', 'part');
+
+        return array_map(static function (array $pick) use ($wear, $named): string {
+            $at = isset($wear[$pick['part']]) ? ' (it is at ' . $wear[$pick['part']] . ' %)' : '';
+
+            return ($named ? lcfirst($pick['part']) . ' ' : '') . 'to unlock testing' . $at;
+        }, $in->unlockPicks);
+    }
+
+    /**
      * The parts line, with the reasons of the season picks for $parts after today's reason. A pick that only
-     * had a budget-short option left replaces the reason: that is what the manager has to know.
+     * had a budget-short option left replaces the reason: that is what the manager has to know. Next to an
+     * unlock swap it is appended instead.
      *
      * @param list<string> $parts
      * @return Line
@@ -497,15 +535,18 @@ final class RaceEngineer
         string $tone,
     ): array {
         $reasons = [];
-        foreach ($in->swapPicks as $pick) {
+        foreach ([...$in->swapPicks, ...$in->unlockPicks] as $pick) {
             if (in_array($pick['part'], $parts, true)) {
                 $reasons[] = $pick['reason'];
             }
         }
         $reasons = array_values(array_unique($reasons));
 
+        $unlocking = array_intersect(array_column($in->unlockPicks, 'part'), $parts) !== [];
         if (in_array('budget_short', $reasons, true)) {
-            $reason = SwapLevelPicker::REASONS['budget_short'];
+            $reason = $unlocking
+                ? $reason . '; ' . lcfirst(SwapLevelPicker::REASONS['budget_short'])
+                : SwapLevelPicker::REASONS['budget_short'];
             $tone = $tone === 'red' ? 'red' : 'amber';
         } elseif ($reasons !== []) {
             $reason .= '; ' . implode('; ', array_map(
@@ -522,7 +563,7 @@ final class RaceEngineer
      */
     private static function swapNames(EngineerInputs $in, array $parts): string
     {
-        $picks = array_column($in->swapPicks, null, 'part');
+        $picks = array_column([...$in->swapPicks, ...$in->unlockPicks], null, 'part');
 
         return implode(', ', array_map(static function (string $part) use ($picks): string {
             $pick = $picks[$part] ?? null;
@@ -573,23 +614,32 @@ final class RaceEngineer
             );
         }
 
+        $anchor = '/cockpit#cockpit-training';
+        $figure = Money::short($pick['cost']);
+        $train = 'Train ' . $pick['name'];
+        $skip = 'Skip ' . $pick['name'] . ' training';
+        $choice = self::choice($in, 'training', $in->trainingChoice);
+
+        if ($in->trainingChoice === 'do') {
+            [$reason, $tone] = self::doReason($in, $pick['cost'], self::STAGE_TRAINING);
+
+            return self::line('training', $train, $reason, $anchor, $figure, $tone, choice: $choice);
+        }
+        if ($in->trainingChoice === 'skip') {
+            return self::line('training', $skip, self::SKIP_CALL, $anchor, $figure, choice: $choice);
+        }
         if (!self::affords($in, $pick['cost'], self::STAGE_TRAINING)) {
             return self::line(
                 'training',
-                'Skip ' . $pick['name'] . ' training',
+                $skip,
                 self::skipReason($in, self::STAGE_TRAINING),
-                '/cockpit#cockpit-training',
-                Money::short($pick['cost']),
+                $anchor,
+                $figure,
+                choice: $choice,
             );
         }
 
-        return self::line(
-            'training',
-            'Train ' . $pick['name'],
-            self::affordReason($in),
-            '/cockpit#cockpit-training',
-            Money::short($pick['cost']),
-        );
+        return self::line('training', $train, self::affordReason($in), $anchor, $figure, choice: $choice);
     }
 
     /**
@@ -606,53 +656,158 @@ final class RaceEngineer
             );
         }
 
+        $anchor = '/cockpit#cockpit-testing';
         $target = $in->testingTarget;
-        if (!$in->testingOpen || $target === null) {
-            return self::line('testing', self::NOTHING, 'No testing session is open', '/cockpit#cockpit-testing');
+        $gate = self::gate($in);
+        if ($gate->state === TestingGate::CLOSED || $target === null) {
+            return self::line('testing', self::NOTHING, 'No testing session is open', $anchor);
+        }
+        if ($gate->state === TestingGate::ROOKIE) {
+            return self::line('testing', 'No testing in Rookie', "Testing doesn't pay in Rookie", $anchor);
+        }
+        if ($gate->state === TestingGate::BLOCKED) {
+            // Once the car is updated the Cockpit zeroes the laps itself; before, it keeps them for a possible unlock.
+            $laps = !$in->carUpdated && $in->testingLaps > 0
+                ? '; set training laps to 0 on the Cockpit (it counts ' . $in->testingLaps . ' laps of wear)'
+                : '';
+
+            return self::line('testing', 'Testing blocked', self::blockedReason($in, $gate) . $laps, $anchor);
         }
 
-        $anchor = '/cockpit#cockpit-testing';
         $where = $in->testingTrack === null ? 'Test this week' : 'Test at ' . $in->testingTrack;
         $skip = $in->testingTrack === null ? 'Skip testing this week' : 'Skip testing at ' . $in->testingTrack;
         $tunes = 'tunes for ' . ($target['track_name'] ?? 'race ' . $target['race'])
             . ($target['track_name'] === null ? '' : ' (race ' . $target['race'] . ')');
         $cost = $in->testingCost;
+        $figure = Money::short($cost);
+        $choice = self::choice($in, 'testing', $in->testingChoice);
 
-        if (self::testingSpend($in) === null) {
-            // The Cockpit's training laps feed the wear every plan reads; a skipped session should stop them.
-            return $in->testingLaps > 0
-                ? self::line(
-                    'testing',
-                    $skip,
-                    self::skipReason($in, self::STAGE_TESTING) . '; set training laps to 0 on the Cockpit (it counts '
-                        . $in->testingLaps . ' laps of wear)',
-                    '/cockpit#cockpit-wear',
-                    Money::short($cost),
-                )
-                : self::line(
-                    'testing',
-                    $skip,
-                    self::skipReason($in, self::STAGE_TESTING),
-                    $anchor,
-                    Money::short($cost),
-                );
+        if ($in->testingChoice === 'do') {
+            [$reason, $tone] = self::doReason($in, $cost, self::STAGE_TESTING);
+
+            return self::line('testing', $where, $reason, $anchor, $figure, $tone, choice: $choice);
+        }
+        if ($in->testingChoice === 'skip') {
+            return self::line('testing', $skip, self::SKIP_CALL, $anchor, $figure, choice: $choice);
+        }
+        $own = self::testingSkip($in);
+        if ($own !== null) {
+            $laps = $in->testingLaps > 0
+                ? '; press Decline so the Cockpit stops counting ' . $in->testingLaps . ' testing laps'
+                : '';
+
+            return self::line('testing', $skip, $own . $laps, $anchor, $figure, choice: $choice);
         }
 
-        return self::line('testing', $where, self::affordReason($in) . '; ' . $tunes, $anchor, Money::short($cost));
+        $unlock = $gate->state === TestingGate::UNLOCK
+            ? ' after swapping ' . implode(' and ', array_map('lcfirst', array_column($gate->blocking, 'part')))
+            : '';
+
+        return self::line(
+            'testing',
+            $where,
+            self::affordReason($in) . $unlock . '; ' . $tunes,
+            $anchor,
+            $figure,
+            choice: $choice,
+        );
+    }
+
+    private static function blockedReason(EngineerInputs $in, TestingGate $gate): string
+    {
+        $parts = array_map(
+            static fn (array $b): string => $b['part'] . ' at ' . $b['wear'] . ' %',
+            $gate->blocking,
+        );
+
+        return implode(', ', $parts) . '; GPRO allows no testing above 90 %'
+            . ($in->unlockUnaffordable ? "; the swap plus the session doesn't fit the budget" : '');
     }
 
     /**
-     * What the testing line spends: the session cost when a session is open, aimed and affordable; null when
-     * the line spends nothing.
+     * The reason and tone of a line the manager chose to spend on: an overrun of the budget is flagged.
+     *
+     * @return array{string, string}
+     */
+    private static function doReason(EngineerInputs $in, int $cost, string $stage): array
+    {
+        if ($in->plan === null) {
+            return self::affords($in, $cost, $stage)
+                ? ['Your call', 'ink']
+                : ["Your call; your balance doesn't cover it", 'amber'];
+        }
+
+        $over = $cost - self::envelopeLeft($in, $stage);
+
+        return $over > 0
+            ? ['Your call; ' . Money::short($over) . ' over the budget, so upgrades get nothing', 'amber']
+            : ['Your call', 'ink'];
+    }
+
+    /**
+     * What the testing line spends: the session cost when GPRO lets the car test and the manager chose it, or
+     * left it to the engineer and it is affordable; null when the line spends nothing.
      */
     private static function testingSpend(EngineerInputs $in): ?int
     {
         $cost = $in->testingCost;
-        if ($in->tested || !$in->testingOpen || $in->testingTarget === null) {
+        if ($in->tested || $in->testingTarget === null || !self::gate($in)->runs()) {
             return null;
         }
 
-        return self::affords($in, $cost, self::STAGE_TESTING) ? $cost : null;
+        return match ($in->testingChoice) {
+            'do' => $cost,
+            'skip' => null,
+            default => $in->testingSkip === null
+                && !self::amateurStay($in)
+                && self::affords($in, $cost, self::STAGE_TESTING) ? $cost : null,
+        };
+    }
+
+    /**
+     * Why the engineer skips a session GPRO would run when the manager left it the call; null when it tests,
+     * when the manager decided, or when no session can run.
+     */
+    public static function testingSkip(EngineerInputs $in): ?string
+    {
+        if (
+            $in->testingChoice !== null
+            || $in->tested
+            || $in->testingTarget === null
+            || !self::gate($in)->runs()
+            || self::testingSpend($in) !== null
+        ) {
+            return null;
+        }
+
+        return $in->testingSkip
+            ?? (self::amateurStay($in) ? self::AMATEUR_TESTING : self::skipReason($in, self::STAGE_TESTING));
+    }
+
+    public static function testingDrawn(EngineerInputs $in): bool
+    {
+        return self::testingSpend($in) !== null;
+    }
+
+    /**
+     * What the plan's envelope has left when testing is judged, after the season picks and training; negative
+     * when a chosen course overran it.
+     */
+    public static function testingHeadroom(EngineerInputs $in): int
+    {
+        return self::envelopeLeft($in, self::STAGE_TESTING);
+    }
+
+    private static function gate(EngineerInputs $in): TestingGate
+    {
+        return $in->testingGate ?? new TestingGate(
+            $in->testingOpen && $in->testingTarget !== null ? TestingGate::OPEN : TestingGate::CLOSED,
+        );
+    }
+
+    private static function amateurStay(EngineerInputs $in): bool
+    {
+        return $in->division === 'Amateur' && self::objectiveIs($in, SeasonObjective::STAY);
     }
 
     /**
@@ -819,7 +974,8 @@ final class RaceEngineer
 
     /**
      * What the season picks for the parts the plan replaces add to it: each pick's net cost over the
-     * same-level part the plan already pays for. A pick that saves money frees nothing up front.
+     * same-level part the plan already pays for, plus the swaps that unlock testing. A pick that saves money
+     * frees nothing up front.
      */
     private static function forcedPickSpend(EngineerInputs $in): int
     {
@@ -829,6 +985,9 @@ final class RaceEngineer
             if (in_array($pick['part'], $planned, true)) {
                 $spend += max(0, $pick['net_cost']);
             }
+        }
+        foreach ($in->unlockPicks as $pick) {
+            $spend += max(0, $pick['net_cost']);
         }
 
         return $spend;
@@ -858,11 +1017,16 @@ final class RaceEngineer
     {
         $left = self::afterPicks($in);
         $pick = $in->trainingPick;
-        if ($stage === self::STAGE_TESTING && !$in->driverTrained && $pick !== null && $pick['cost'] <= $left) {
-            $left -= $pick['cost'];
+        if ($stage !== self::STAGE_TESTING || $in->driverTrained || $pick === null) {
+            return $left;
         }
+        $drawn = match ($in->trainingChoice) {
+            'do' => true,
+            'skip' => false,
+            default => $pick['cost'] <= $left,
+        };
 
-        return $left;
+        return $drawn ? $left - $pick['cost'] : $left;
     }
 
     private static function affords(EngineerInputs $in, int $cost, string $stage): bool
@@ -929,6 +1093,7 @@ final class RaceEngineer
 
     /**
      * @param ?array{label: string, href: string} $action
+     * @param ?Choice $choice
      * @return Line
      */
     private static function line(
@@ -939,8 +1104,9 @@ final class RaceEngineer
         ?string $figure = null,
         string $tone = 'ink',
         ?array $action = null,
+        ?array $choice = null,
     ): array {
-        return [
+        $line = [
             'key' => $key,
             'answer' => $answer,
             'figure' => $figure,
@@ -950,5 +1116,15 @@ final class RaceEngineer
             'action' => $action,
             'step' => self::STEPS[$key],
         ];
+
+        return $choice === null ? $line : $line + ['choice' => $choice];
+    }
+
+    /**
+     * @return Choice
+     */
+    private static function choice(EngineerInputs $in, string $item, ?string $chosen): array
+    {
+        return ['item' => $item, 'chosen' => $chosen, 'season' => $in->season, 'race' => $in->race];
     }
 }

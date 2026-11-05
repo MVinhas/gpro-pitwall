@@ -20,6 +20,7 @@ use App\Engineer\SeasonObjective;
 use App\Engineer\SeasonStart;
 use App\Engineer\StrengthFloor;
 use App\Engineer\SwapSeason;
+use App\Engineer\TestingGate;
 use App\Engineer\TyreSupplierAdvisor;
 use App\Engineer\UpgradeRanker;
 use App\Repository\EconomyLedgerRepository;
@@ -28,6 +29,7 @@ use App\Repository\SeasonBudgetRepository;
 use App\Repository\SeasonObjectiveRepository;
 use App\Repository\StandingsRepository;
 use App\Repository\TrackRepository;
+use App\Repository\WeekendChoiceRepository;
 use App\Repository\WeekendStateRepository;
 use App\Support\TrackName;
 
@@ -75,6 +77,7 @@ use App\Support\TrackName;
  *     }>
  * }
  * @phpstan-type EnergyCap array{cap: int, estimate: bool, start: ?int}
+ * @phpstan-type TestingCall array{gate: TestingGate, picks: list<SwapPick>, unaffordable: bool}
  * @phpstan-type Context array{
  *     season: int,
  *     raceNb: int,
@@ -113,6 +116,8 @@ class RaceEngineerService
         private readonly IdealPilotService $idealPilot,
         private readonly CtrModelService $ctrModel,
         private readonly float $ctrGainFraction,
+        private readonly ?WeekendChoiceRepository $choices = null,
+        private readonly WearAdvisorService $wearAdvisor = new WearAdvisorService(),
     ) {
     }
 
@@ -139,37 +144,31 @@ class RaceEngineerService
             ];
         }
 
+        $choices = $this->choicesFor($userId, $season, $ctx['raceNb']);
         $rounds = $this->rounds($c);
         $energy = $this->energyCap($ctx, $rounds, $c);
-        $basis = $this->planBasis($ctx['outlook'], $ctx['raceNb'], $rounds, $c);
-        $plan = $basis === null ? null : $this->plan($ctx, $basis, $this->policy($ctx, $basis, $c, $energy), $locked);
-        $inputs = $this->inputs(
-            $objective,
-            $ctx['outlook'],
-            $ctx['cash'],
-            $ctx['raceNb'],
-            $rounds,
-            $plan,
-            $c,
-            $locked,
-            $energy,
-        );
+        ['basis' => $basis, 'plan' => $plan, 'inputs' => $inputs]
+            = $this->pass($ctx, $c, $rounds, $energy, $locked, $choices);
+
+        $call = $this->testingCall($ctx, $c, $plan, $basis, $inputs, $locked, $choices['testing'] ?? null);
+        $inputs = self::withTestingCall($inputs, $call);
+        if (self::testingWontHappen($inputs) && self::hasTestingWear($c)) {
+            // The gate, the unlock call and the engineer's own skip stay pass 1's: they read the wear as given,
+            // before testing is dropped, and the Cockpit still counts its laps.
+            $skip = RaceEngineer::testingSkip($inputs);
+            $laps = $inputs->testingLaps;
+            $c = $this->withoutTestingWear($c);
+            ['basis' => $basis, 'plan' => $plan, 'inputs' => $inputs]
+                = $this->pass($ctx, $c, $rounds, $energy, $locked, $choices);
+            $inputs = self::withTestingCall($inputs, $call)->withTestingSkip($skip, $laps);
+        }
 
         // Under a plan the advice waits for the plan it is checked against, below.
         $tyres = $plan === null ? $this->tyreAdvice($c, null, $ctx) : null;
-        if ($plan !== null) {
-            $picks = [];
-            if (!$locked) {
-                try {
-                    $picks = $this->swapPicks($plan, $this->swapSeasonFrom($ctx, $plan, $basis, $c), $c);
-                } catch (\Throwable $e) {
-                    // The picks only name a level; the parts line keeps its wording without them.
-                    error_log('[Engineer] ' . $e::class);
-                }
-            }
-            if ($picks !== []) {
-                $plan['swap_picks'] = $picks;
-                $inputs = $inputs->withPlan($plan)->withSwapPicks($picks);
+        if ($plan !== null && $basis !== null) {
+            if ($call['picks'] !== []) {
+                $plan['swap_picks'] = [...$inputs->swapPicks, ...$call['picks']];
+                $inputs = $inputs->withPlan($plan);
             }
             $tyres = $this->tyreAdvice($c, $plan, $ctx);
             $tyreExtra = self::tyrePickExtra($tyres, $ctx['outlook_ledger']);
@@ -197,6 +196,189 @@ class RaceEngineerService
             'tyres' => $tyres === null ? null : self::tyrePanel($tyres),
             'car_updated' => $locked,
         ];
+    }
+
+    /**
+     * One planning pass over $c: the basis, the plan with its forced swaps' season picks, and the inputs.
+     *
+     * @param Context $ctx
+     * @param array<string, mixed> $c
+     * @param list<Round> $rounds
+     * @param EnergyCap $energy
+     * @param array{testing?: string, training?: string} $choices
+     * @return array{basis: ?PlanBasis, plan: ?Plan, inputs: EngineerInputs}
+     */
+    private function pass(array $ctx, array $c, array $rounds, array $energy, bool $locked, array $choices): array
+    {
+        $basis = $this->planBasis($ctx['outlook'], $ctx['raceNb'], $rounds, $c);
+        $plan = $basis === null ? null : $this->plan($ctx, $basis, $this->policy($ctx, $basis, $c, $energy), $locked);
+        $inputs = $this->inputs(
+            $ctx['objective'],
+            $ctx['outlook'],
+            $ctx['cash'],
+            $ctx['raceNb'],
+            $rounds,
+            $plan,
+            $c,
+            $locked,
+            $energy,
+            $choices,
+            $ctx['season'],
+        );
+        if ($plan === null || $locked) {
+            return ['basis' => $basis, 'plan' => $plan, 'inputs' => $inputs];
+        }
+
+        $picks = [];
+        try {
+            $picks = $this->picksFor(
+                array_column($plan['rows'][0]['replaced'], 'part'),
+                $plan,
+                $this->swapSeasonFrom($ctx, $plan, $basis, $c),
+                $c,
+            );
+        } catch (\Throwable $e) {
+            // The picks only name a level; the parts line keeps its wording without them.
+            error_log('[Engineer] ' . $e::class);
+        }
+        if ($picks !== []) {
+            $plan['swap_picks'] = $picks;
+            $inputs = $inputs->withPlan($plan)->withSwapPicks($picks);
+        }
+
+        return ['basis' => $basis, 'plan' => $plan, 'inputs' => $inputs];
+    }
+
+    /**
+     * GPRO's testing gate on the wear as given, and under Promote the swaps that unlock it. Unlock swaps need a
+     * plan to be priced, so without one the gate is blocked; unless the manager chose to test, they must leave
+     * the session affordable, or the gate is blocked by the budget. A blocking part the picker can't judge
+     * leaves no swap to name, so it blocks too.
+     *
+     * @param Context $ctx
+     * @param array<string, mixed> $c
+     * @param ?Plan $plan
+     * @param ?PlanBasis $basis
+     * @return TestingCall
+     */
+    private function testingCall(
+        array $ctx,
+        array $c,
+        ?array $plan,
+        ?array $basis,
+        EngineerInputs $inputs,
+        bool $locked,
+        ?string $choice,
+    ): array {
+        $gate = TestingGate::decide(
+            $inputs->testingOpen && $inputs->testingTarget !== null,
+            $inputs->division,
+            $ctx['objective']['objective'] ?? SeasonObjective::STAY,
+            $locked,
+            array_map(static fn (array $part): float => (float) $part['start'], $this->wearParts($c) ?? []),
+            // A spent car update replaces nothing, whatever the Cockpit's swap advice says.
+            $locked ? [] : array_column(
+                $plan === null ? $inputs->wearAdvice['swap'] ?? [] : $plan['rows'][0]['replaced'],
+                'part',
+            ),
+        );
+        if ($gate->state !== TestingGate::UNLOCK || $choice === 'skip' || $locked) {
+            return ['gate' => $gate, 'picks' => [], 'unaffordable' => false];
+        }
+        if ($plan === null || $basis === null) {
+            return ['gate' => $gate->blocked(), 'picks' => [], 'unaffordable' => false];
+        }
+
+        $blocking = array_column($gate->blocking, 'part');
+        $picks = [];
+        try {
+            $picks = $this->picksFor($blocking, $plan, $this->swapSeasonFrom($ctx, $plan, $basis, $c), $c);
+        } catch (\Throwable $e) {
+            error_log('[Engineer] ' . $e::class);
+        }
+        if (array_diff($blocking, array_column($picks, 'part')) !== []) {
+            return ['gate' => $gate->blocked(), 'picks' => [], 'unaffordable' => false];
+        }
+        if (
+            $choice !== 'do'
+            && RaceEngineer::testingHeadroom($inputs->withUnlockPicks($picks)) < RaceEngineer::TESTING_SESSION_COST
+        ) {
+            return ['gate' => $gate->blocked(), 'picks' => [], 'unaffordable' => true];
+        }
+
+        return ['gate' => $gate, 'picks' => $picks, 'unaffordable' => false];
+    }
+
+    /**
+     * @param TestingCall $call
+     */
+    private static function withTestingCall(EngineerInputs $inputs, array $call): EngineerInputs
+    {
+        return $inputs->withTestingGate($call['gate'], $call['unaffordable'])->withUnlockPicks($call['picks']);
+    }
+
+    private static function testingWontHappen(EngineerInputs $in): bool
+    {
+        return $in->testingChoice === 'skip'
+            || $in->testingGate === null
+            || !$in->testingGate->runs()
+            || ($in->testingChoice === null && !RaceEngineer::testingDrawn($in));
+    }
+
+    /**
+     * @param array<string, mixed> $c
+     */
+    private static function hasTestingWear(array $c): bool
+    {
+        foreach (self::arr(self::arr($c['wear'] ?? null)['parts'] ?? null) as $part) {
+            $training = self::arr($part)['training'] ?? null;
+            if (is_numeric($training) && (float) $training > 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * $c as the Cockpit would compute it with no testing laps: each part's testing wear taken out of its
+     * projection, and the forced swaps classified again from that. The Cockpit's swap plan priced the old forced
+     * set, so it goes when that set changes.
+     *
+     * @param array<string, mixed> $c
+     * @return array<string, mixed>
+     */
+    private function withoutTestingWear(array $c): array
+    {
+        $wear = self::arr($c['wear'] ?? null);
+        $parts = [];
+        $classify = [];
+        foreach (self::arr($wear['parts'] ?? null) as $label => $part) {
+            $part = self::arr($part);
+            $training = is_numeric($part['training'] ?? null) ? (float) $part['training'] : 0.0;
+            $part = [
+                'training' => 0.0,
+                'est' => round((float) ($part['est'] ?? 0) - $training, 1),
+                'end' => round((float) ($part['end'] ?? 0) - $training, 1),
+            ] + $part;
+            $parts[$label] = $part;
+            $classify[$label] = [
+                'level' => (int) ($part['level'] ?? 0),
+                'start' => (float) ($part['start'] ?? 0),
+                'est' => $part['est'],
+                'end' => $part['end'],
+            ];
+        }
+        $advice = $this->wearAdvisor->classify($classify);
+        $wasForced = array_column(self::list(self::arr($c['wear_advice'] ?? null)['swap'] ?? null), 'part');
+
+        return [
+            'wear' => ['parts' => $parts] + $wear,
+            'training_wear' => [],
+            'wear_advice' => $advice,
+            'training_laps' => 0,
+            'swap_plan' => array_column($advice['swap'], 'part') === $wasForced ? $c['swap_plan'] ?? null : null,
+        ] + $c;
     }
 
     /**
@@ -233,6 +415,36 @@ class RaceEngineerService
         $this->pins->save($userId, $season, $objective);
 
         return true;
+    }
+
+    public function choose(int $userId, int $season, int $race, string $item, string $choice): bool
+    {
+        if (
+            $this->choices === null
+            || !in_array($item, ['testing', 'training'], true)
+            || !in_array($choice, ['do', 'skip', 'clear'], true)
+            || $season < 1
+            || $race < 1
+            || $race > SeasonObjective::RACES
+        ) {
+            return false;
+        }
+
+        if ($choice === 'clear') {
+            $this->choices->clear($userId, $season, $race, $item);
+        } else {
+            $this->choices->save($userId, $season, $race, $item, $choice);
+        }
+
+        return true;
+    }
+
+    /**
+     * @return array{testing?: string, training?: string}
+     */
+    public function choicesFor(int $userId, int $season, int $race): array
+    {
+        return $this->choices?->choices($userId, $season, $race) ?? [];
     }
 
     /**
@@ -372,14 +584,15 @@ class RaceEngineerService
     }
 
     /**
-     * The season-long level for each part the plan replaces before the next race, judged at the plan's CTR.
+     * The season-long level for each of $names swapped before the next race, judged at the plan's CTR.
      * A part the picker can't judge is left out.
      *
+     * @param list<string> $names
      * @param Plan $plan
      * @param array<string, mixed> $c
      * @return list<SwapPick>
      */
-    private function swapPicks(array $plan, SwapSeason $season, array $c): array
+    private function picksFor(array $names, array $plan, SwapSeason $season, array $c): array
     {
         $parts = $this->wearParts($c);
         $trackPha = self::pha($c['track_pha'] ?? null);
@@ -401,7 +614,7 @@ class RaceEngineerService
             ];
         }
         return $this->picksAt(
-            self::flagged(array_column($plan['rows'][0]['replaced'], 'part'), $adviseParts),
+            self::flagged($names, $adviseParts),
             $adviseParts,
             $season,
             $trackPha,
@@ -496,6 +709,7 @@ class RaceEngineerService
      * @param array<string, mixed> $c
      * @param bool $carLocked This race's car update is spent: nothing can be swapped before the race.
      * @param EnergyCap $energy
+     * @param array{testing?: string, training?: string} $choices
      */
     private function inputs(
         array $objective,
@@ -507,6 +721,8 @@ class RaceEngineerService
         array $c,
         bool $carLocked,
         array $energy,
+        array $choices,
+        int $season,
     ): EngineerInputs {
         $parts = $this->wearParts($c);
         /** @var ?WearAdvice $wearAdvice */
@@ -569,6 +785,10 @@ class RaceEngineerService
             energyCap: $energy['cap'],
             energyEstimate: $energy['estimate'],
             energyStart: $energy['start'],
+            trainingChoice: $choices['training'] ?? null,
+            testingChoice: $choices['testing'] ?? null,
+            season: $season,
+            race: $raceNb,
         );
     }
 
@@ -926,7 +1146,7 @@ class RaceEngineerService
                 $basis['prices'],
                 array_diff_key(
                     $this->planner->upgradeOptions(self::arr($c['car'] ?? null)),
-                    array_flip(array_column($inputs->swapPicks, 'part')),
+                    array_flip(array_column([...$inputs->swapPicks, ...$inputs->unlockPicks], 'part')),
                 ),
                 $basis['driverFactor'],
                 $cash,
