@@ -43,7 +43,7 @@
         {% endif %}
 
         {% set pha_attention = pha.match == 'none' %}
-        {% set wear_attention = wear_advice is defined and (wear_advice.swap is not empty or wear_advice.risky is not empty) %}
+        {% set wear_attention = wear_advice is defined and (wear_advice.swap is not empty or wear_advice.risky is not empty) and not car_updated|default(false) %}
         {% set weather_attention = weather is defined and (weather.q1_wet or weather.q2_wet or weather.race_start_wet) %}
         {% set sponsor_attention = spon_contested or spon_attention %}
 

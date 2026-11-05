@@ -1,12 +1,17 @@
 {# The ranking the engineer saved with the season plan, best first; shown only beside the budget it was ranked against. #}
-{% if budget and budget.view.upgrades is not null %}
+{% if budget and (budget.view.upgrades is not null or budget.view.upgrades_locked) %}
     <section id="season-upgrades" class="card scroll-mt-16" aria-labelledby="season-upgrades-title">
         <div class="card-hd">
             <h2 id="season-upgrades-title" class="t-heading">Upgrades to season end</h2>
             <p class="t-caption mt-1">{{ budget.view.as_of }}</p>
         </div>
         <div class="card-bd space-y-4">
-            {% if budget.view.upgrades is empty and budget.view.upgrades_short %}
+            {% if budget.view.upgrades_locked %}
+                {% include 'partials/_empty.twig' with {
+                    title: 'Car already updated',
+                    body: 'The ranking returns next race.'
+                } only %}
+            {% elseif budget.view.upgrades is empty and budget.view.upgrades_short %}
                 {% include 'partials/_empty.twig' with {
                     title: 'No upgrade fits the budget',
                     body: 'The season plan already runs short.'

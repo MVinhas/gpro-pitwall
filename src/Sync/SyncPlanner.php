@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Sync;
 
+use App\Support\OfficeFlags;
+
 /**
  * Decides which GPRO endpoints a sync should spend API calls on. The freshly
  * fetched office is the change detector against the previously archived one,
@@ -32,7 +34,7 @@ final class SyncPlanner
     /** Fetched for the last completed season, which never changes. */
     private const array SEASON_PHASE2 = [Endpoint::SF_HISTORY, Endpoint::CCP_HISTORY];
 
-    /** @var array<string, list<string>> done-flag => endpoints it unlocks when it flips to true */
+    /** @var array<string, list<string>> done-flag => endpoints it unlocks when its value changes and reads done */
     private const array FLAG_TRIGGERS = [
         'doneDriTrain' => [Endpoint::DRIVER],
         'doneCarRepair' => [Endpoint::CAR],
@@ -141,7 +143,9 @@ final class SyncPlanner
         $previous = $ctx->previousOffice ?? [];
         $planned = [];
         foreach (self::FLAG_TRIGGERS as $flag => $endpoints) {
-            if (!self::truthy($previous[$flag] ?? null) && self::truthy($ctx->office[$flag] ?? null)) {
+            // doneTesting is a lap count, so a session that goes on from 34 to 100 laps changes the car again.
+            $changed = self::text($previous, $flag) !== self::text($ctx->office, $flag);
+            if ($changed && OfficeFlags::done($ctx->office, $flag)) {
                 $planned = [...$planned, ...$endpoints];
             }
         }
@@ -170,7 +174,7 @@ final class SyncPlanner
             static fn (string $e): bool => match ($e) {
                 Endpoint::DRIVER => self::hasId($office, 'driId'),
                 Endpoint::TD => self::hasId($office, 'tdId'),
-                Endpoint::TRACK => !self::truthy($office['endOfSeason'] ?? null),
+                Endpoint::TRACK => !OfficeFlags::done($office, 'endOfSeason'),
                 default => true,
             },
         ));
@@ -228,10 +232,5 @@ final class SyncPlanner
     private static function hasId(array $office, string $key): bool
     {
         return !in_array(self::text($office, $key), ['', '0'], true);
-    }
-
-    private static function truthy(mixed $value): bool
-    {
-        return filter_var($value, FILTER_VALIDATE_BOOLEAN);
     }
 }

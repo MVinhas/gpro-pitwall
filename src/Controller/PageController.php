@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controller;
 
+use App\Engineer\GroupStanding;
 use App\Http\Request;
 use App\Http\Sections;
 use App\Repository\DivisionMetadataRepository;
@@ -11,6 +12,7 @@ use App\Repository\UserRepository;
 use App\Support\DeferredRender;
 use App\Support\Env;
 use App\Support\HarvestOwed;
+use App\Support\OfficeFlags;
 use App\Support\RaceSettings;
 use App\Support\RaceWindow;
 use App\Support\RecruitmentQuery;
@@ -485,7 +487,7 @@ class PageController
                             $isAdmin,
                             $testingChoice,
                             $division,
-                            in_array($office['doneCarRepair'] ?? null, ['1', 1], true),
+                            OfficeFlags::done($office, 'doneCarRepair'),
                             $startWear,
                         );
                     }
@@ -535,10 +537,7 @@ class PageController
                     }
 
                     $moneyLevels = $this->apiClient->getMoneyLevels();
-                    $groupCarLevels = array_values(array_filter(array_map(
-                        static fn(array $m): int => (int) ($m['carLevel'] ?? 0),
-                        $moneyLevels['managers'] ?? [],
-                    ), static fn(int $lvl): bool => $lvl > 0));
+                    $groupCarLevels = GroupStanding::levels($moneyLevels);
 
                     if ($isCockpit) {
                         $viewData['testing_projection'] = $this->testingProjection->project([
@@ -650,6 +649,7 @@ class PageController
                     if (!isset($wear['error'])) {
                         $advice = $this->wearAdvisor->classify($wear['parts']);
                         $viewData['wear_advice'] = $advice;
+                        $viewData['car_updated'] = OfficeFlags::done($office, 'doneCarRepair');
 
                         // Full per-part table + the inputs behind it. The wear
                         // card only lists parts at risk, so without these the

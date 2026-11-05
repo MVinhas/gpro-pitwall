@@ -136,7 +136,7 @@ final class SwapLevelPickerTest extends TestCase
      * @param list<array{level: int, cost: int, is_free: bool, start: float, fit: float}> $candidates
      * @param array<int, ?int> $paidPrice
      * @return array{level: int, kind: string, cost: int, season_pha: float, net_cost: int, affordable: bool,
-     *   reason: string}|null
+     *   reason: string, start: float, price: int}|null
      */
     private function pick(SwapSeason $season, array $candidates, array $paidPrice = self::PAID_PRICE): ?array
     {
@@ -158,7 +158,24 @@ final class SwapLevelPickerTest extends TestCase
             'net_cost' => 200_000,
             'affordable' => true,
             'reason' => 'most_pha',
+            'start' => 0.0,
+            'price' => 500_000,
         ], $pick);
+    }
+
+    public function testPickCarriesStartAndPaidPrice(): void
+    {
+        $candidates = [$this->freeDowngrade(40.0), $this->paid(2), $this->paid(3), $this->paid(4), $this->paid(5)];
+
+        $free = $this->pick($this->season(SeasonObjective::STAY, new StrengthFloor(5, 40), 10_000_000), $candidates);
+        $this->assertSame('free_downgrade', $free['kind'] ?? null);
+        $this->assertSame(40.0, $free['start'] ?? null);
+        $this->assertSame(self::PAID_PRICE[2], $free['price'] ?? null);
+
+        $paid = $this->pick($this->season(SeasonObjective::PROMOTE, new StrengthFloor(5, 40), 10_000_000), $candidates);
+        $this->assertSame('upgrade', $paid['kind'] ?? null);
+        $this->assertSame(0.0, $paid['start'] ?? null);
+        $this->assertSame(self::PAID_PRICE[5], $paid['price'] ?? null);
     }
 
     public function testAnUnaffordableUpgradeFallsBackToTheSidegrade(): void
@@ -190,6 +207,8 @@ final class SwapLevelPickerTest extends TestCase
             'net_cost' => -300_000,
             'affordable' => true,
             'reason' => 'stay_cheapest',
+            'start' => 40.0,
+            'price' => 200_000,
         ], $pick);
     }
 

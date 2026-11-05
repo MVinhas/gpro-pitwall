@@ -31,6 +31,7 @@ use App\Repository\StandingsRepository;
 use App\Repository\TrackRepository;
 use App\Repository\WeekendChoiceRepository;
 use App\Repository\WeekendStateRepository;
+use App\Support\OfficeFlags;
 use App\Support\TrackName;
 
 /**
@@ -95,6 +96,11 @@ class RaceEngineerService
     private const string AUTO = 'auto';
     private const array TYRE_DIVISIONS = ['Pro', 'Master', 'Elite'];
     private const array TYRE_WEAR_SCALE = ['Very Low' => 1, 'Low' => 2, 'Medium' => 3, 'High' => 4, 'Very High' => 5];
+    /** The plan keys the second planning pass, on the car after its update, decides. */
+    private const array FROM_PASS_TWO = [
+        'ctr', 'ctr_kind', 'safety', 'target', 'target_kind', 'cushion', 'shortfall', 'partial', 'value',
+        'energy_cap', 'energy_estimate', 'energy_start', 'refused_swap_cost', 'infeasible', 'rows', 'envelope',
+    ];
 
     public function __construct(
         private readonly SeasonObjectiveRepository $pins,
@@ -132,7 +138,7 @@ class RaceEngineerService
         $ctx = $this->context($userId, $c);
         $objective = $ctx['objective'];
         $season = $ctx['season'];
-        $locked = self::done(self::arr($c['office'] ?? null), 'doneCarRepair');
+        $locked = OfficeFlags::done(self::arr($c['office'] ?? null), 'doneCarRepair');
 
         if ($stale) {
             return [
@@ -175,12 +181,18 @@ class RaceEngineerService
             $plan = self::payingTyreExtra($plan, $tyreExtra);
             $inputs = $inputs->withPlan($plan);
             $outlook = ['committed' => (int) $ctx['outlook']['committed'] + $tyreExtra] + $ctx['outlook'];
+            $saved = $plan;
             if (!$locked) {
                 $plan = $this->withUpgrades($plan, $inputs, $objective, $outlook, $ctx['cash'], $basis, $c);
                 $inputs = $inputs->withPlan($plan);
+                ['card' => $plan, 'saved' => $saved]
+                    = $this->afterTheUpdate($ctx, $plan, $basis, $inputs, $c, $energy, $tyreExtra);
+                $inputs = $inputs->withPlan($plan);
+            } else {
+                $saved['upgrades_locked'] = true;
             }
             try {
-                $this->budgets->save($userId, $season, $ctx['raceNb'], $plan);
+                $this->budgets->save($userId, $season, $ctx['raceNb'], $saved);
             } catch (\Throwable $e) {
                 // Saving only feeds the Season screen; the advice stands without it.
                 error_log('[Engineer] ' . $e::class);
@@ -670,6 +682,8 @@ class RaceEngineerService
                     'cost' => $pick['cost'],
                     'net_cost' => $pick['net_cost'],
                     'reason' => $pick['reason'],
+                    'start' => $pick['start'],
+                    'price' => $pick['price'],
                 ];
             }
         }
@@ -779,8 +793,8 @@ class RaceEngineerService
             testingLaps: (int) ($c['training_laps'] ?? 0),
             division: self::stringOrNull($c['division'] ?? null),
             carUpdated: $carLocked,
-            tested: self::done($office, 'doneTesting'),
-            driverTrained: self::done($office, 'doneDriTrain'),
+            tested: OfficeFlags::done($office, 'doneTesting'),
+            driverTrained: OfficeFlags::done($office, 'doneDriTrain'),
             stuckSmoke: $stuckSmoke,
             energyCap: $energy['cap'],
             energyEstimate: $energy['estimate'],
@@ -790,16 +804,6 @@ class RaceEngineerService
             season: $season,
             race: $raceNb,
         );
-    }
-
-    /**
-     * GPRO's per-race "done" flags arrive as "1"/"0"; only a literal one counts.
-     *
-     * @param array<string, mixed> $office
-     */
-    private static function done(array $office, string $flag): bool
-    {
-        return ($office[$flag] ?? null) === '1' || ($office[$flag] ?? null) === 1;
     }
 
     /**
@@ -1033,7 +1037,7 @@ class RaceEngineerService
         $office = self::arr($c['office'] ?? null);
         $division = self::stringOrNull($c['division'] ?? null);
         $driEnergy = is_numeric($office['driEnergy'] ?? null) ? (int) $office['driEnergy'] : null;
-        $q2Done = self::done($office, 'doneQ2');
+        $q2Done = OfficeFlags::done($office, 'doneQ2');
         $stamina = (int) (self::arr($c['driver'] ?? null)['stamina'] ?? 0);
 
         $next = null;
@@ -1159,6 +1163,118 @@ class RaceEngineerService
         }
 
         return $plan;
+    }
+
+    /**
+     * The plan again on the car as it will be once the manager buys what the card advises this race: each
+     * replaced part at its pick's level (or its own level without one), every unlock swap, and the recommended
+     * upgrade, each new at 0 % except a free downgrade, which keeps the wear GPRO reports for it. Planned with
+     * the update spent, as the next render will plan it, so the CTR holds when the advice is followed. The CTR,
+     * its targets and the rows come from that car; the picks, swaps, push and upgrades stay pass 1's, and so does
+     * the card's first row, whose replacements the parts line names. The saved plan's first row lists the batch at
+     * what each part costs, and its envelope is the second pass's own, so both reconcile with balances already net
+     * of the batch. The card's envelope adds back what the lines draw for the batch, so they still draw it from the
+     * envelope they are shown.
+     *
+     * @param Context $ctx
+     * @param Plan $plan
+     * @param PlanBasis $basis
+     * @param array<string, mixed> $c
+     * @param EnergyCap $energy
+     * @return array{card: Plan, saved: Plan}
+     */
+    private function afterTheUpdate(
+        array $ctx,
+        array $plan,
+        array $basis,
+        EngineerInputs $inputs,
+        array $c,
+        array $energy,
+        int $tyreExtra,
+    ): array {
+        $picks = array_column([...$inputs->swapPicks, ...$inputs->unlockPicks], null, 'part');
+        $batch = [];
+        foreach ($plan['rows'][0]['replaced'] as $swap) {
+            $part = $swap['part'];
+            $batch[$part] = isset($picks[$part]) ? self::bought($picks[$part]) : [
+                'level' => $basis['parts'][$part]['level'],
+                'start' => 0.0,
+                'price' => $basis['prices'][$part] ?? null,
+                'spend' => $swap['cost'],
+            ];
+        }
+        foreach ($picks as $part => $pick) {
+            $batch[$part] ??= self::bought($pick);
+        }
+        $upgrade = RaceEngineer::recommendedUpgrade($inputs);
+        if ($upgrade !== null) {
+            $batch[$upgrade['part']] = [
+                'level' => $upgrade['to'],
+                'start' => 0.0,
+                'price' => $upgrade['price'],
+                'spend' => $upgrade['price'],
+            ];
+        }
+        if ($batch === []) {
+            return ['card' => $plan, 'saved' => $plan];
+        }
+
+        $updated = $basis;
+        $spend = 0;
+        foreach ($batch as $part => $buy) {
+            $spend += $buy['spend'];
+            if (isset($updated['parts'][$part])) {
+                $updated['parts'][$part] = ['level' => $buy['level'], 'start' => $buy['start']]
+                    + $updated['parts'][$part];
+                $updated['prices'][$part] = $buy['price'];
+            }
+        }
+        $after = ['cash' => $ctx['cash'] - $spend] + $ctx;
+        $second = self::payingTyreExtra(
+            $this->plan($after, $updated, $this->policy($after, $updated, $c, $energy), true),
+            $tyreExtra,
+        );
+
+        $merged = $plan;
+        unset($merged['infeasible']);
+        foreach (self::FROM_PASS_TWO as $key) {
+            if (array_key_exists($key, $second)) {
+                $merged[$key] = $second[$key];
+            }
+        }
+        $merged['rows'][0] = ['replaced' => $plan['rows'][0]['replaced'], 'repairs' => $plan['rows'][0]['repairs']]
+            + $second['rows'][0];
+        // Locked, the second pass can't push: the swap pass 1 buys stays a push.
+        $merged['mode'] = match (true) {
+            $second['mode'] === 'short' => 'short',
+            $plan['mode'] === 'push' => 'push',
+            default => $second['mode'],
+        };
+
+        $bought = [];
+        foreach ($batch as $part => $buy) {
+            $bought[] = ['part' => $part, 'cost' => $buy['spend']];
+        }
+        $saved = $merged;
+        $saved['rows'][0] = ['replaced' => $bought, 'repairs' => $spend] + $second['rows'][0];
+        $merged['envelope'] = $second['envelope'] + RaceEngineer::pickSpend($inputs)
+            + max(0, $upgrade['net_cost'] ?? 0);
+
+        return ['card' => $merged, 'saved' => $saved];
+    }
+
+    /**
+     * @param SwapPick $pick
+     * @return array{level: int, start: float, price: ?int, spend: int}
+     */
+    private static function bought(array $pick): array
+    {
+        return [
+            'level' => $pick['level'],
+            'start' => $pick['kind'] === 'free_downgrade' ? $pick['start'] : 0.0,
+            'price' => $pick['price'],
+            'spend' => $pick['cost'],
+        ];
     }
 
     /**

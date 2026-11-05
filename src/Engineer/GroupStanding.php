@@ -59,6 +59,36 @@ final readonly class GroupStanding
     }
 
     /**
+     * GPRO's level 1 is 0 in the API (all-level-1 cars report carLevel 0), so the displayed level is one above.
+     */
+    public static function level(mixed $carLevel): ?int
+    {
+        return is_numeric($carLevel) ? (int) $carLevel + 1 : null;
+    }
+
+    /**
+     * The 1-based car level of every manager in the group whose carLevel is known.
+     *
+     * @param array<string, mixed> $moneyLevels the /MoneyLevels payload
+     * @return list<int>
+     */
+    public static function levels(array $moneyLevels): array
+    {
+        $levels = [];
+        foreach (self::managers($moneyLevels) as $manager) {
+            $level = self::level($manager['carLevel'] ?? null);
+            if ($level !== null) {
+                $levels[] = $level;
+            }
+        }
+
+        return $levels;
+    }
+
+    /**
+     * Both carLevel and carLevelRank are 0-based in the /MoneyLevels payload: the best car of a group has rank 0.
+     * The returned level and rank are the 1-based ones GPRO shows.
+     *
      * @param array<string, mixed> $moneyLevels the /MoneyLevels payload
      * @param array<string, mixed> $menu the /Menu payload
      * @return CarStanding|null
@@ -71,13 +101,14 @@ final readonly class GroupStanding
                 continue;
             }
 
-            if (!is_numeric($manager['carLevel'] ?? null) || !is_numeric($manager['carLevelRank'] ?? null)) {
+            $level = self::level($manager['carLevel'] ?? null);
+            if ($level === null || !is_numeric($manager['carLevelRank'] ?? null)) {
                 return null;
             }
 
             return [
-                'level' => (int) $manager['carLevel'],
-                'rank' => (int) $manager['carLevelRank'],
+                'level' => $level,
+                'rank' => (int) $manager['carLevelRank'] + 1,
                 'of' => count($managers),
             ];
         }

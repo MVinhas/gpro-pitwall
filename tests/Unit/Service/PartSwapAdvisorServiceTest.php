@@ -236,7 +236,7 @@ final class PartSwapAdvisorServiceTest extends TestCase
         [$track, $car, $carData] = $this->seasonScenario();
         $svc = $this->withPicker([
             'level' => 7, 'kind' => 'upgrade', 'cost' => 1_500_000, 'season_pha' => 9.0, 'net_cost' => 1,
-            'affordable' => true, 'reason' => 'most_pha',
+            'affordable' => true, 'reason' => 'most_pha', 'start' => 0.0, 'price' => 1_500_000,
         ]);
 
         $out = $svc->advise(
@@ -283,7 +283,7 @@ final class PartSwapAdvisorServiceTest extends TestCase
         [$track, $car, $carData] = $this->seasonScenario();
         $svc = $this->withPicker([
             'level' => 7, 'kind' => 'upgrade', 'cost' => 1_500_000, 'season_pha' => 9.0, 'net_cost' => 1,
-            'affordable' => true, 'reason' => 'most_pha',
+            'affordable' => true, 'reason' => 'most_pha', 'start' => 0.0, 'price' => 1_500_000,
         ]);
 
         $out = $svc->advise($this->flaggedEngine(), $carData, $this->wearParts(), [], $track, $car, 0, [], 10_000_000);
@@ -1012,7 +1012,7 @@ final class PartSwapAdvisorServiceTest extends TestCase
         $calls = new ArrayObject();
         $pick = static fn (int $net): array => [
             'level' => 7, 'kind' => 'upgrade', 'cost' => 1_500_000, 'season_pha' => 2.0, 'net_cost' => $net,
-            'affordable' => true, 'reason' => 'most_pha',
+            'affordable' => true, 'reason' => 'most_pha', 'start' => 0.0, 'price' => 1_500_000,
         ];
         $svc = $this->advisorWith($this->spyPicker($calls, ['Engine' => $pick(400_000), 'Gearbox' => $pick(-50_000)]));
         $options = [$this->rawOption(6, 900_000, 6), $this->rawOption(7, 1_500_000, 7)];

@@ -9,7 +9,10 @@
    fits on one screen and is picked in place. #}
 {% set wear_cls = 'text-slate-700' %}
 {% set wear_txt = 'All OK' %}
-{% if wear_advice.swap is not empty %}
+{% set car_updated = car_updated|default(false) %}
+{% if car_updated %}
+    {% set wear_txt = 'Car updated' %}
+{% elseif wear_advice.swap is not empty %}
     {% set wear_cls = 'text-red-700' %}
     {% set wear_txt = wear_advice.swap|length ~ " won't finish" %}
 {% elseif wear_advice.risky is not empty %}
@@ -31,6 +34,9 @@
     {% include 'partials/_chevron.twig' with { group: 'wear' } only %}
 </summary>
 <div class="px-4 pb-4 sm:px-6 sm:pb-6 space-y-4">
+{% if car_updated %}
+        <p class="text-sm text-slate-600">One update per race; no more part changes until the next race.</p>
+{% endif %}
     <form method="GET" action="" class="space-y-2" data-cockpit-wear-form>
         <div>
             <label class="t-label block mb-1" for="cockpitRisk">Clear track risk</label>
@@ -45,7 +51,7 @@
             <div>
                 <label class="t-label block mb-1" for="cockpitTrainingLaps">Training laps first</label>
                 <div class="flex items-center gap-3">
-                    <input type="range" id="cockpitTrainingLaps" name="cockpit_training_laps" min="0" max="{{ cockpit_training_laps_left }}" step="5"
+                    <input type="range" id="cockpitTrainingLaps" name="cockpit_training_laps" min="0" max="{{ cockpit_training_laps_left }}" step="1"
                            value="{{ cockpit_training_laps }}"
                            data-cockpit-wear-slider
                            class="range"{{ cockpit_laps_note|default(null) ? ' disabled' : '' }}>
@@ -85,15 +91,15 @@
                     {% for p in wear_advice.swap %}
                         {% include 'partials/_cockpit_wear_row.twig' with {
                             p: p,
-                            plan: swap_advice[p.part]|default(null),
+                            plan: car_updated ? null : swap_advice[p.part]|default(null),
                             badge_class: 'bg-red-100 text-red-800',
-                            badge_text: 'Replace',
+                            badge_text: car_updated ? 'Reaches 100 %' : 'Replace',
                         } only %}
                     {% endfor %}
                     {% for p in wear_advice.risky %}
                         {% include 'partials/_cockpit_wear_row.twig' with {
                             p: p,
-                            plan: swap_advice[p.part]|default(null),
+                            plan: car_updated ? null : swap_advice[p.part]|default(null),
                             badge_class: 'bg-amber-100 text-amber-800',
                             badge_text: 'At risk',
                         } only %}
@@ -103,7 +109,7 @@
         </div>
     {% endif %}
 
-    {% if swap_plan is defined %}
+    {% if swap_plan is defined and not car_updated %}
         {% set match_labels = { perfect: 'Perfect match', top: 'Top match', none: 'No match' } %}
         <div class="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-3"
              data-plan-summary

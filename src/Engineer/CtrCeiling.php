@@ -45,6 +45,20 @@ final readonly class CtrCeiling
     }
 
     /**
+     * Highest Clear Track Risk at which every part that can end this race below $limit still does, with the
+     * race's update spent. A part past $limit even at CTR 0 reaches it whatever the CTR, so it caps nothing; with
+     * no other part the ceiling is 100.
+     *
+     * @param array<string, array<string, mixed>> $parts label => {level, start, track_base, training?}
+     */
+    public function forSurvivors(array $parts, float $driverFactor, int $limit): int
+    {
+        $stuck = array_flip($this->pastLimitAtZero($parts, $driverFactor, $limit));
+
+        return $this->for(array_diff_key($parts, $stuck), $driverFactor, $limit, true);
+    }
+
+    /**
      * Labels of the parts that reach $limit even at CTR 0: they stay past it whatever the CTR.
      *
      * @param array<string, array<string, mixed>> $parts label => {level, start, track_base, training?}

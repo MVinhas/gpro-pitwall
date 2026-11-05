@@ -21,7 +21,7 @@ use InvalidArgumentException;
  *   cushion: int, season_start: ?int,
  *   envelope: int, shortfall: ?int, rows: list<BudgetRow>, partial: list<string>, race: int, infeasible?: bool,
  *   energy_cap: int, energy_estimate: bool, energy_start: ?int, value: ?CtrValueFigures,
- *   upgrades?: list<Upgrade>}
+ *   upgrades?: list<Upgrade>, upgrades_locked?: bool}
  */
 final readonly class CtrPlanner
 {
@@ -37,13 +37,19 @@ final readonly class CtrPlanner
     /**
      * The Clear Track Risk to advise, never above the driver's energy cap. A CTR fits the budget when its season
      * forecast keeps every race's balance at or above its target: the cushion, and at the last race the end target
-     * (the season start for Stay when it is above the cushion). Promote takes the highest value that fits; above
-     * the safety ceiling it must also be a real push. Stay weighs every CTR that fits and buys no replacement it
-     * cannot price: the lowest one whose higher candidates aren't clearly better value (CtrValue), or the highest
-     * one in safety mode near the relegation line. It reads no current CTR, so the advice holds still when the
-     * manager follows it. The cushion is the committed cost plus the average repairs of the races after this one at
-     * the safety CTR: this race's forced swaps are bought before the race, so counting them would make the cushion
-     * drop once the manager follows the advice.
+     * (the season start for Stay when it is above the cushion at the CTR being judged). Promote takes the highest
+     * value that fits; above the safety ceiling it must also be a real push. Stay weighs every CTR that fits and
+     * buys no replacement it cannot price: the lowest one whose higher candidates aren't clearly better value
+     * (CtrValue), or the highest one in safety mode near the relegation line. It reads no current CTR, so the advice
+     * holds still when the manager follows it. With the car locked, Stay weighs only the CTRs at which every part
+     * that can finish this race below the limit does (CtrCeiling::forSurvivors). The cushion is the committed cost
+     * plus the average repairs of the races after this one at the CTR being judged, so each candidate carries its
+     * own cushion and end target: this race's forced swaps are bought before the race, so counting them would make
+     * the cushion drop once the manager follows the advice.
+     * The end target at a CTR is its cushion or the floor (half the season start for Promote, the start otherwise),
+     * whichever is higher. A floor above CTR 0's cushion is dropped as out of reach when even CTR 0 cannot end the
+     * season above it. The plan names the reserve or the start as its end target only when the chosen CTR's cushion
+     * is below it.
      *
      * @param list<array{race: int, track_name: ?string, base: ?array<string, float>}> $rounds next race first
      * @param array<string, array{level: int, start: int|float, track_base: int|float, training?: int|float}> $parts
@@ -106,32 +112,42 @@ final readonly class CtrPlanner
             );
         };
 
-        $atSafety = $forecastAt($safety)['rows'];
-        $later = array_slice($atSafety, 1);
-        $cushion = $committed + ($later === []
-            ? 0
-            : intdiv(array_sum(array_column($later, 'repairs')), count($later)));
+        /** @var array<int, int> $cushions */
+        $cushions = [];
+        /** @var Closure(int): int $cushionAt */
+        $cushionAt = function (int $ctr) use (&$cushions, $forecastAt, $committed): int {
+            return $cushions[$ctr] ??= $committed + self::averageRepairs(array_slice($forecastAt($ctr)['rows'], 1));
+        };
 
-        $target = $cushion;
+        $atZero = $cushionAt(0);
+        $floor = null;
         $targetKind = 'cushion';
+        // A CTR that replaces a part this race drops that replacement from its own cushion, so the floor is kept
+        // even when CTR 0's cushion covers it.
         if ($objective === SeasonObjective::PROMOTE) {
             $reserve = $seasonStart === null ? 0 : (int) ceil($seasonStart * self::PROMOTE_RESERVE);
-            if ($reserve > $cushion) {
-                $target = $reserve;
+            if ($reserve > 0) {
+                $floor = $reserve;
                 $targetKind = 'reserve';
-                if (self::headroom($forecastAt(0)['rows'], $cushion, $reserve) < 0) {
-                    $target = $cushion;
+                if ($reserve > $atZero && self::headroom($forecastAt(0)['rows'], $atZero, $reserve) < 0) {
+                    $floor = null;
                     $targetKind = 'reserve_out_of_reach';
                 }
             }
-        } elseif ($seasonStart !== null && $seasonStart > $cushion) {
-            $target = $seasonStart;
+        } elseif ($seasonStart !== null) {
+            $floor = $seasonStart;
             $targetKind = 'start';
-            if ($stay && self::headroom($forecastAt(0)['rows'], $cushion, $target) < 0) {
-                $target = $cushion;
+            if (
+                $stay
+                && $seasonStart > $atZero
+                && self::headroom($forecastAt(0)['rows'], $atZero, $seasonStart) < 0
+            ) {
+                $floor = null;
                 $targetKind = 'start_out_of_reach';
             }
         }
+        /** @var Closure(int): int $targetAt */
+        $targetAt = static fn (int $ctr): int => $floor === null ? $cushionAt($ctr) : max($floor, $cushionAt($ctr));
 
         $forced = $this->ceiling->pastLimitAtZero($parts, $driverFactor, $limit);
 
@@ -141,11 +157,13 @@ final readonly class CtrPlanner
             $gain = [];
             $repairs = [];
             $unpricedAtZero = self::unpriced($forecastAt(0)['partial']);
-            for ($c = 0; $c <= self::MAX_CTR; $c++) {
+            // Locked, a part reaching the limit this race can't be swapped and the forecast charges nothing for it.
+            $highest = $carLocked ? $this->ceiling->forSurvivors($parts, $driverFactor, $limit) : self::MAX_CTR;
+            for ($c = 0; $c <= $highest; $c++) {
                 $forecast = $forecastAt($c);
                 // An unpriced replacement is charged $0, so a CTR that buys one would look free.
                 $buysUnpriced = $c > 0 && array_diff(self::unpriced($forecast['partial']), $unpricedAtZero) !== [];
-                if (!$buysUnpriced && self::withinBudget($forecast, $c, $cushion, $target)) {
+                if (!$buysUnpriced && self::withinBudget($forecast, $c, $cushionAt($c), $targetAt($c))) {
                     $gain[$c] = $c * $policy->gainPerPoint;
                     $repairs[$c] = array_sum(array_column($forecast['rows'], 'repairs'));
                 }
@@ -179,9 +197,9 @@ final readonly class CtrPlanner
                 ];
             }
         } else {
-            $highest = function (int $from) use ($forecastAt, $safety, $forced, $prices, $cushion, $target): ?int {
+            $highest = function (int $from) use ($forecastAt, $cushionAt, $targetAt, $safety, $forced, $prices): ?int {
                 for ($c = $from; $c >= 0; $c--) {
-                    if ($this->passes($forecastAt($c), $c, $safety, $forced, $prices, $cushion, $target)) {
+                    if ($this->passes($forecastAt($c), $c, $safety, $forced, $prices, $cushionAt($c), $targetAt($c))) {
                         return $c;
                     }
                 }
@@ -197,6 +215,9 @@ final readonly class CtrPlanner
 
         if ($ctr === null) {
             $chosen = $forecastAt(0);
+            $cushion = $cushionAt(0);
+            $target = $targetAt(0);
+            $targetKind = self::namedKind($targetKind, $floor, $cushion);
 
             return $this->result(
                 0,
@@ -221,6 +242,9 @@ final readonly class CtrPlanner
         }
 
         $chosen = $forecastAt($ctr);
+        $cushion = $cushionAt($ctr);
+        $target = $targetAt($ctr);
+        $targetKind = self::namedKind($targetKind, $floor, $cushion);
         $mode = $ctr > $safety ? 'push' : 'nurse';
         $swaps = $this->unforced($chosen['rows'][0]['replaced'], $forced);
 
@@ -252,6 +276,25 @@ final readonly class CtrPlanner
             $energyStart,
             $value,
         );
+    }
+
+    /**
+     * @param list<BudgetRow> $rows
+     */
+    private static function averageRepairs(array $rows): int
+    {
+        return $rows === [] ? 0 : intdiv(array_sum(array_column($rows, 'repairs')), count($rows));
+    }
+
+    /**
+     * A reserve or start the chosen CTR's cushion already covers is not the end target worth naming: the cushion is.
+     *
+     * @param 'cushion'|'start'|'start_out_of_reach'|'reserve'|'reserve_out_of_reach' $kind
+     * @return 'cushion'|'start'|'start_out_of_reach'|'reserve'|'reserve_out_of_reach'
+     */
+    private static function namedKind(string $kind, ?int $floor, int $cushion): string
+    {
+        return $floor !== null && $cushion >= $floor ? 'cushion' : $kind;
     }
 
     /**

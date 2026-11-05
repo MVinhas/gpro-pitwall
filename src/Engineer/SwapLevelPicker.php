@@ -13,9 +13,9 @@ use App\Service\WearAdvisorService;
  * @phpstan-type PickKind 'free_downgrade'|'downgrade'|'sidegrade'|'upgrade'
  * @phpstan-type PickReason 'most_pha'|'top3_keep'|'top3_pays'|'budget_short'|'stay_cheapest'|'stay_hold'
  * @phpstan-type Pick array{level: int, kind: PickKind, cost: int, season_pha: float, net_cost: int,
- *   affordable: bool, reason: PickReason}
+ *   affordable: bool, reason: PickReason, start: float, price: int}
  * @phpstan-type Option array{level: int, kind: PickKind, cost: int, free: bool, season_pha: float, net_cost: int,
- *   affordable: bool, fit: float, rows: list<BudgetRow>}
+ *   affordable: bool, fit: float, rows: list<BudgetRow>, start: float, price: int}
  */
 readonly class SwapLevelPicker
 {
@@ -47,7 +47,8 @@ readonly class SwapLevelPicker
      * paid price, whose forecast is infeasible, or that would reach the plan's wear limit in this race, is
      * dropped. The objective and the car's group rank decide which downgrades may be taken; among the
      * affordable rest Stay takes the cheapest over the season and the others the most season PHA. With nothing
-     * affordable, the free option goes first, then the smallest shortfall. Null when no candidate is left.
+     * affordable, the free option goes first, then the smallest shortfall. Null when no candidate is left. The
+     * pick carries the chosen candidate's start wear and the paid price of a new part at its level.
      *
      * @param list<Candidate> $candidates
      * @param array<int, ?int> $paidPrice level → price of a new part at that level
@@ -93,6 +94,8 @@ readonly class SwapLevelPicker
                 'affordable' => UpgradeRanker::paysUpFront($s->plan, $forecast['rows'], $candidate['cost']),
                 'fit' => $candidate['fit'],
                 'rows' => $forecast['rows'],
+                'start' => $candidate['start'],
+                'price' => $price,
             ];
         }
 
@@ -110,6 +113,8 @@ readonly class SwapLevelPicker
             'net_cost' => $option['net_cost'],
             'affordable' => $option['affordable'],
             'reason' => $reason,
+            'start' => $option['start'],
+            'price' => $option['price'],
         ];
     }
 
