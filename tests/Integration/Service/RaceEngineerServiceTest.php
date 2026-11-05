@@ -9,6 +9,7 @@ use App\Database\DatabaseSeeder;
 use App\Engineer\CtrCeiling;
 use App\Engineer\CtrPlanner;
 use App\Engineer\CtrPolicy;
+use App\Engineer\Money;
 use App\Engineer\RaceEngineer;
 use App\Engineer\SeasonBudget;
 use App\Engineer\SeasonObjective;
@@ -1788,6 +1789,10 @@ final class RaceEngineerServiceTest extends TestCase
         self::assertSame([['part' => 'Engine', 'cost' => 0], ['part' => 'Brakes', 'cost' => 150_000]], $first['replaced']);
         self::assertSame(150_000, $first['repairs']);
         self::assertSame(5_000_000 - $first['repairs'] - $first['running'] + $first['income'], $first['balance']);
+        self::assertSame(
+            max(0, CtrPlanner::headroom($advised['rows'], $advised['cushion'], $advised['target'])),
+            $advised['envelope'],
+        );
 
         // The batch bought: the Engine on its free L1 at 30 %, the Brakes on a new L2 for $150k.
         $this->service->forCockpit(self::USER, $this->followCockpit(
@@ -1821,6 +1826,68 @@ final class RaceEngineerServiceTest extends TestCase
         self::assertSame('Swap Engine → L1 (free downgrade)', array_column($lines, null, 'key')['parts']['answer']);
         self::assertGreaterThan(0, $ctr);
         self::assertLessThan(WearAdvisorService::THRESHOLD_SWAP, WearAdvisorService::percent($end));
+    }
+
+    public function testAnUnlockPickEntersTheBatchAndTheSavedPlanReconciles(): void
+    {
+        $this->seedPromotionFixture();
+        $this->seedLowWearTrack();
+        $this->service->pin(self::USER, self::SEASON, 'promote');
+
+        $lines = $this->engineer(ranker: $this->spentRanker(new \ArrayObject()))->forCockpit(
+            self::USER,
+            $this->testingCockpit($this->testedParts(10, 92), ['menu' => ['IDM' => 7, 'cash' => 50_000_000]]),
+        )['lines'];
+        $saved = $this->savedPlan();
+        $pick = $saved['swap_picks'][0];
+
+        self::assertStringStartsWith(
+            'To unlock testing (it is at 92 %)',
+            array_column($lines, null, 'key')['parts']['reason'],
+        );
+        self::assertSame('Brakes', $pick['part']);
+        self::assertGreaterThan(0, $pick['net_cost']);
+        self::assertSame([['part' => 'Brakes', 'cost' => $pick['cost']]], $saved['rows'][0]['replaced']);
+        self::assertSame($pick['cost'], $saved['rows'][0]['repairs']);
+        // The Season screen's spare figure is what the saved rows leave, with the unlock swap already paid.
+        self::assertSame(
+            max(0, CtrPlanner::headroom($saved['rows'], $saved['cushion'], $saved['target'])),
+            $saved['envelope'],
+        );
+        // The card adds the swap back and draws it again, so its cash line shows the same money.
+        self::assertSame(Money::short($saved['envelope']), array_column($lines, null, 'key')['cash']['figure']);
+    }
+
+    public function testAnUpgradeOnAPartReplacedWithoutAPickIsBoughtOnce(): void
+    {
+        $this->seedPromotionFixture();
+        $this->seedWearTracks();
+        $this->service->pin(self::USER, self::SEASON, 'promote');
+        $noPick = new readonly class ($this->wearService()) extends SwapLevelPicker {
+            public function __construct(CarWearService $wear)
+            {
+                parent::__construct(new SeasonBudget($wear), []);
+            }
+
+            public function pick(SwapSeason $s, string $part, int $currentLevel, array $candidates, array $paidPrice): ?array
+            {
+                return null;
+            }
+        };
+        $cockpit = $this->upgradeCockpit(0);
+        $cockpit['wear']['parts']['Engine']['start'] = 95;
+        $cockpit['wear_advice'] = $this->adviceAt(0, $cockpit['wear']['parts']);
+
+        $lines = $this->engineer(picker: $noPick)->forCockpit(self::USER, $cockpit)['lines'];
+        $saved = $this->savedPlan();
+        $first = $saved['rows'][0];
+
+        self::assertSame('Upgrade Engine to L2', array_column($lines, null, 'key')['upgrades']['answer']);
+        self::assertArrayNotHasKey('swap_picks', $saved);
+        // The L2 upgrade is the Engine's new part: one purchase at its price, not the L1 replacement as well.
+        self::assertSame([['part' => 'Engine', 'cost' => 300_000]], $first['replaced']);
+        self::assertSame(300_000, $first['repairs']);
+        self::assertSame(5_000_000 - $first['repairs'] - $first['running'] + $first['income'], $first['balance']);
     }
 
     public function testPromotePushKeepsItsSwapAfterPassTwo(): void

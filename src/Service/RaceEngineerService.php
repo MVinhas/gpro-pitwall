@@ -96,6 +96,11 @@ class RaceEngineerService
     private const string AUTO = 'auto';
     private const array TYRE_DIVISIONS = ['Pro', 'Master', 'Elite'];
     private const array TYRE_WEAR_SCALE = ['Very Low' => 1, 'Low' => 2, 'Medium' => 3, 'High' => 4, 'Very High' => 5];
+    /** The plan keys the second planning pass, on the car after its update, decides. */
+    private const array FROM_PASS_TWO = [
+        'ctr', 'ctr_kind', 'safety', 'target', 'target_kind', 'cushion', 'shortfall', 'partial', 'value',
+        'energy_cap', 'energy_estimate', 'energy_start', 'refused_swap_cost', 'infeasible', 'rows', 'envelope',
+    ];
 
     public function __construct(
         private readonly SeasonObjectiveRepository $pins,
@@ -1165,8 +1170,9 @@ class RaceEngineerService
      * the update spent, as the next render will plan it, so the CTR holds when the advice is followed. The CTR,
      * its targets and the rows come from that car; the picks, swaps, push and upgrades stay pass 1's, and so does
      * the card's first row, whose replacements the parts line names. The saved plan's first row lists the batch at
-     * what each part costs, so it reconciles with a balance already net of it. The envelope adds back what the
-     * lines draw for the batch, so they still draw it from the envelope they are shown.
+     * what each part costs, and its envelope is the second pass's own, so both reconcile with balances already net
+     * of the batch. The card's envelope adds back what the lines draw for the batch, so they still draw it from the
+     * envelope they are shown.
      *
      * @param Context $ctx
      * @param Plan $plan
@@ -1227,36 +1233,21 @@ class RaceEngineerService
             $tyreExtra,
         );
 
-        $rows = $second['rows'];
-        $rows[0] = ['replaced' => $plan['rows'][0]['replaced'], 'repairs' => $plan['rows'][0]['repairs']]
-            + $second['rows'][0];
         $merged = $plan;
-        $merged['ctr'] = $second['ctr'];
-        $merged['ctr_kind'] = $second['ctr_kind'];
-        $merged['safety'] = $second['safety'];
-        $merged['target'] = $second['target'];
-        $merged['target_kind'] = $second['target_kind'];
-        $merged['cushion'] = $second['cushion'];
-        $merged['shortfall'] = $second['shortfall'];
-        $merged['partial'] = $second['partial'];
-        $merged['value'] = $second['value'];
-        $merged['energy_cap'] = $second['energy_cap'];
-        $merged['energy_estimate'] = $second['energy_estimate'];
-        $merged['energy_start'] = $second['energy_start'];
-        $merged['refused_swap_cost'] = $second['refused_swap_cost'];
         unset($merged['infeasible']);
-        if (isset($second['infeasible'])) {
-            $merged['infeasible'] = $second['infeasible'];
+        foreach (self::FROM_PASS_TWO as $key) {
+            if (array_key_exists($key, $second)) {
+                $merged[$key] = $second[$key];
+            }
         }
-        $merged['rows'] = $rows;
+        $merged['rows'][0] = ['replaced' => $plan['rows'][0]['replaced'], 'repairs' => $plan['rows'][0]['repairs']]
+            + $second['rows'][0];
         // Locked, the second pass can't push: the swap pass 1 buys stays a push.
         $merged['mode'] = match (true) {
             $second['mode'] === 'short' => 'short',
             $plan['mode'] === 'push' => 'push',
             default => $second['mode'],
         };
-        $merged['envelope'] = $second['envelope'] + RaceEngineer::pickSpend($inputs)
-            + max(0, $upgrade['net_cost'] ?? 0);
 
         $bought = [];
         foreach ($batch as $part => $buy) {
@@ -1264,6 +1255,8 @@ class RaceEngineerService
         }
         $saved = $merged;
         $saved['rows'][0] = ['replaced' => $bought, 'repairs' => $spend] + $second['rows'][0];
+        $merged['envelope'] = $second['envelope'] + RaceEngineer::pickSpend($inputs)
+            + max(0, $upgrade['net_cost'] ?? 0);
 
         return ['card' => $merged, 'saved' => $saved];
     }
