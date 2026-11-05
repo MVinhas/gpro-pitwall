@@ -11,7 +11,7 @@ namespace App\Service;
  */
 final class WearAdvisorService
 {
-    /** End-of-race wear (%) at which the part smokes and loses time; 99% is still safe. */
+    /** End-of-race wear (%) at which the part reaches 100 % (smoke, and a likely retirement if it comes early); 99% is still safe. */
     public const int THRESHOLD_SWAP = 100;
 
     /** End-of-race wear (%) at or above which the part is dangerously close. */

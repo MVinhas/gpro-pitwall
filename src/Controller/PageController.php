@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Engineer\GroupStanding;
+use App\Engineer\SmokeRisk;
 use App\Http\Request;
 use App\Http\Sections;
 use App\Repository\DivisionMetadataRepository;
@@ -659,12 +660,22 @@ class PageController
                         $viewData['wear_parts']      = $wear['parts'];
                         $viewData['wear_track_name'] = $wear['track_name'] ?? $trackName;
                         $viewData['wear_laps']       = $wear['laps'] ?? null;
+                        $viewData['wear_smoke']      = [];
+                        if (is_int($viewData['wear_laps'])) {
+                            foreach ($advice['swap'] as $row) {
+                                $smoke = SmokeRisk::forRow($row, $viewData['wear_laps']);
+                                if ($smoke !== null) {
+                                    $viewData['wear_smoke'][$row['part']] = $smoke->describe();
+                                }
+                            }
+                        }
                         $viewData['wear_driver']     = $this->mapper->mapDriver($pilot);
 
-                        // Only parts that cannot finish the race get a
-                        // replacement plan. A part merely finishing in the red
-                        // still finishes, and recommending a swap for it turned
-                        // the cockpit into a shopping list.
+                        // Only parts that reach 100 % (smoke, and a likely
+                        // retirement if it comes early) get a replacement
+                        // plan. A part merely ending in the red doesn't, and
+                        // recommending a swap for it turned the cockpit into
+                        // a shopping list.
                         $forcedSwaps = $advice['swap'];
                         if ($forcedSwaps !== []) {
                             // The same season the engineer judges its swaps

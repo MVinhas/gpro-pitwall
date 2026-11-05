@@ -440,7 +440,7 @@ final readonly class CarWearPlannerService
         if ($now > 0) {
             return [
                 self::STATUS_NOW,
-                $now === 1 ? "1 part won't finish the next race." : "{$now} parts won't finish the next race.",
+                $now === 1 ? '1 part reaches 100 % in the next race.' : "{$now} parts reach 100 % in the next race.",
             ];
         }
 
