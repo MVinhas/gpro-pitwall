@@ -67,6 +67,25 @@ final readonly class GroupStanding
     }
 
     /**
+     * The 1-based car level of every manager in the group whose carLevel is known.
+     *
+     * @param array<string, mixed> $moneyLevels the /MoneyLevels payload
+     * @return list<int>
+     */
+    public static function levels(array $moneyLevels): array
+    {
+        $levels = [];
+        foreach (self::managers($moneyLevels) as $manager) {
+            $level = self::level($manager['carLevel'] ?? null);
+            if ($level !== null) {
+                $levels[] = $level;
+            }
+        }
+
+        return $levels;
+    }
+
+    /**
      * Both carLevel and carLevelRank are 0-based in the /MoneyLevels payload: the best car of a group has rank 0.
      * The returned level and rank are the 1-based ones GPRO shows.
      *

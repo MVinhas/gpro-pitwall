@@ -210,6 +210,21 @@ final class GroupStandingTest extends TestCase
         $this->assertNull(GroupStanding::level('x'));
     }
 
+    public function testGroupLevelsAreOneBasedAndSkipUnknownCars(): void
+    {
+        $money = ['managers' => [
+            ['IDM' => 1, 'carLevel' => 0],
+            ['IDM' => 2, 'carLevel' => '5'],
+            ['IDM' => 3],
+            ['IDM' => 4, 'carLevel' => null],
+            'not a manager',
+            ['IDM' => 5, 'carLevel' => 3],
+        ]];
+
+        $this->assertSame([1, 6, 4], GroupStanding::levels($money));
+        $this->assertSame([], GroupStanding::levels([]));
+    }
+
     public function testCarStandingNeedsAnOwnNumericRow(): void
     {
         $money = ['managers' => [['IDM' => 7, 'carLevel' => 6], ['IDM' => 8, 'carLevel' => 5, 'carLevelRank' => 2]]];

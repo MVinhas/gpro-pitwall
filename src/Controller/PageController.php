@@ -537,10 +537,7 @@ class PageController
                     }
 
                     $moneyLevels = $this->apiClient->getMoneyLevels();
-                    $groupCarLevels = array_values(array_filter(array_map(
-                        static fn(array $m): ?int => GroupStanding::level($m['carLevel'] ?? null),
-                        $moneyLevels['managers'] ?? [],
-                    ), static fn(?int $lvl): bool => $lvl !== null));
+                    $groupCarLevels = GroupStanding::levels($moneyLevels);
 
                     if ($isCockpit) {
                         $viewData['testing_projection'] = $this->testingProjection->project([
