@@ -671,6 +671,8 @@ class RaceEngineerService
                     'cost' => $pick['cost'],
                     'net_cost' => $pick['net_cost'],
                     'reason' => $pick['reason'],
+                    'start' => $pick['start'],
+                    'price' => $pick['price'],
                 ];
             }
         }

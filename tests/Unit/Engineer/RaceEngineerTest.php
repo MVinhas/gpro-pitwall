@@ -1439,7 +1439,8 @@ final class RaceEngineerTest extends TestCase
     }
 
     /**
-     * @return array{part: string, level: int, kind: string, cost: int, net_cost: int, reason: string}
+     * @return array{part: string, level: int, kind: string, cost: int, net_cost: int, reason: string, start: float,
+     *   price: int}
      */
     private function pick(
         string $part,
@@ -1451,7 +1452,7 @@ final class RaceEngineerTest extends TestCase
     ): array {
         return [
             'part' => $part, 'level' => $level, 'kind' => $kind, 'cost' => $cost, 'net_cost' => $net,
-            'reason' => $reason,
+            'reason' => $reason, 'start' => 0.0, 'price' => $cost,
         ];
     }
 
@@ -1478,6 +1479,7 @@ final class RaceEngineerTest extends TestCase
         $this->assertSame('Train Talent course', $this->line($in, 'training')['answer']);
         $this->assertSame('Only $15k left in the budget', $this->line($in, 'testing')['reason']);
         $this->assertSame(15_000, RaceEngineer::upgradeBudget($in));
+        $this->assertSame(500_000, RaceEngineer::pickSpend($in));
     }
 
     public function testAPickThatSavesMoneyAddsNothingToTheEnvelope(): void
@@ -1575,6 +1577,30 @@ final class RaceEngineerTest extends TestCase
         $this->assertSame('/season#season-upgrades', $line['anchor']);
         $this->assertSame('ink', $line['tone']);
         $this->assertNull($line['action']);
+    }
+
+    public function testRecommendedUpgradeIsTheOneTheLineNames(): void
+    {
+        $engine = $this->upgrade('Engine', 4, 800_000);
+        $in = $this->withUpgrades(
+            [$this->upgrade('Brakes', 5, 400_000, false), $engine],
+            plan: ['rows' => $this->plan()['rows'] + [1 => [], 2 => []]],
+        );
+
+        $this->assertSame('Upgrade Engine to L4', $this->line($in, 'upgrades')['answer']);
+        $this->assertSame($engine, RaceEngineer::recommendedUpgrade($in));
+
+        $this->assertNull(RaceEngineer::recommendedUpgrade(
+            $this->withUpgrades([$this->upgrade()], ['carUpdated' => true]),
+        ));
+        $stay = $this->stayUpgradeInputs(
+            SeasonObjective::STAY,
+            27,
+            [$this->upgrade('Engine', 4, 300_000), $this->upgrade('Brakes', 5, 150_000)],
+            37,
+        );
+        $this->assertSame('Nothing worth buying', $this->line($stay, 'upgrades')['answer']);
+        $this->assertNull(RaceEngineer::recommendedUpgrade($stay));
     }
 
     /**

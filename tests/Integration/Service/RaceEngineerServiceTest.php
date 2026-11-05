@@ -1704,9 +1704,10 @@ final class RaceEngineerServiceTest extends TestCase
 
         $saved = $this->budgets->find(self::USER, self::SEASON);
         self::assertNotNull($saved);
+        // The saved JSON drops a start's zero fraction.
         self::assertSame(
             [['part' => 'Engine', 'level' => 1, 'kind' => 'sidegrade', 'cost' => 100_000, 'net_cost' => 0,
-                'reason' => 'stay_hold']],
+                'reason' => 'stay_hold', 'start' => 0, 'price' => 100_000]],
             $saved['plan']['swap_picks'] ?? null,
         );
         self::assertSame('Swap Engine → L1 (same level)', array_column($lines, null, 'key')['parts']['answer']);

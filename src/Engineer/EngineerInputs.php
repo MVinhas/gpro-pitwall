@@ -13,7 +13,8 @@ namespace App\Engineer;
  * @phpstan-type Outlook array{known: bool, committed: ?int, income: ?int, free_cash: ?int, end_committed: ?int}
  * @phpstan-type PartAdvice array{part: string, level: int, start: int, est: float, end: float}
  * @phpstan-import-type PickReason from SwapLevelPicker
- * @phpstan-type SwapPick array{part: string, level: int, kind: string, cost: int, net_cost: int, reason: PickReason}
+ * @phpstan-type SwapPick array{part: string, level: int, kind: string, cost: int, net_cost: int, reason: PickReason,
+ *   start: float, price: int}
  * @phpstan-type WearAdvice array{
  *     swap: list<PartAdvice>,
  *     risky: list<PartAdvice>,

@@ -851,33 +851,28 @@ final class RaceEngineer
             );
         }
 
-        if (
-            self::objectiveIs($in, SeasonObjective::STAY)
-            && StrengthFloor::fromGroup($in->carStanding)->outOfBottomQuarter()
-        ) {
-            $upgrades = array_values(array_filter($upgrades, static fn (array $u): bool => $u['net_cost'] <= 0));
-            if ($upgrades === []) {
-                return self::line(
-                    'upgrades',
-                    'Nothing worth buying',
-                    'Stay: no upgrade pays for itself while your car is out of the group\'s weakest quarter',
-                    self::UPGRADES_ANCHOR,
-                );
-            }
+        $upgrades = self::worthBuying($in, $upgrades);
+        if ($upgrades === []) {
+            return self::line(
+                'upgrades',
+                'Nothing worth buying',
+                'Stay: no upgrade pays for itself while your car is out of the group\'s weakest quarter',
+                self::UPGRADES_ANCHOR,
+            );
         }
 
-        $races = count($plan['rows']);
-        foreach ($upgrades as $upgrade) {
-            if ($upgrade['affordable']) {
-                return self::line(
-                    'upgrades',
-                    'Upgrade ' . $upgrade['part'] . ' to L' . $upgrade['to'],
-                    'Most PHA per $ over the ' . $races . ($races === 1 ? ' race' : ' races') . ' left'
-                        . self::carClause($in),
-                    self::UPGRADES_ANCHOR,
-                    $upgrade['net_cost'] > 0 ? Money::short($upgrade['net_cost']) . ' net' : 'no extra cost',
-                );
-            }
+        $upgrade = self::recommendedUpgrade($in);
+        if ($upgrade !== null) {
+            $races = count($plan['rows']);
+
+            return self::line(
+                'upgrades',
+                'Upgrade ' . $upgrade['part'] . ' to L' . $upgrade['to'],
+                'Most PHA per $ over the ' . $races . ($races === 1 ? ' race' : ' races') . ' left'
+                    . self::carClause($in),
+                self::UPGRADES_ANCHOR,
+                $upgrade['net_cost'] > 0 ? Money::short($upgrade['net_cost']) . ' net' : 'no extra cost',
+            );
         }
 
         $best = $upgrades[0];
@@ -894,6 +889,45 @@ final class RaceEngineer
                 . ($budget > 0 ? '; ' . Money::short($budget) . ' left' : '; nothing left'),
             self::UPGRADES_ANCHOR,
         );
+    }
+
+    /**
+     * The upgrade the upgrades line recommends: the first affordable one the objective lets the car buy. Null
+     * when the car is updated, there is no ranking, or nothing worth buying fits.
+     *
+     * @return ?Upgrade
+     */
+    public static function recommendedUpgrade(EngineerInputs $in): ?array
+    {
+        if ($in->carUpdated || $in->plan === null) {
+            return null;
+        }
+        foreach (self::worthBuying($in, $in->plan['upgrades'] ?? []) as $upgrade) {
+            if ($upgrade['affordable']) {
+                return $upgrade;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The ranking the objective lets the car buy from: under Stay, while the car is out of the group's weakest
+     * quarter, only the upgrades that pay for themselves.
+     *
+     * @param list<Upgrade> $upgrades
+     * @return list<Upgrade>
+     */
+    private static function worthBuying(EngineerInputs $in, array $upgrades): array
+    {
+        if (
+            !self::objectiveIs($in, SeasonObjective::STAY)
+            || !StrengthFloor::fromGroup($in->carStanding)->outOfBottomQuarter()
+        ) {
+            return $upgrades;
+        }
+
+        return array_values(array_filter($upgrades, static fn (array $u): bool => $u['net_cost'] <= 0));
     }
 
     private static function carClause(EngineerInputs $in): string
@@ -977,7 +1011,7 @@ final class RaceEngineer
      * same-level part the plan already pays for, plus the swaps that unlock testing. A pick that saves money
      * frees nothing up front.
      */
-    private static function forcedPickSpend(EngineerInputs $in): int
+    public static function pickSpend(EngineerInputs $in): int
     {
         $planned = self::planned($in);
         $spend = 0;
@@ -998,7 +1032,7 @@ final class RaceEngineer
      */
     private static function afterPicks(EngineerInputs $in): int
     {
-        return ($in->plan['envelope'] ?? 0) - self::forcedPickSpend($in);
+        return ($in->plan['envelope'] ?? 0) - self::pickSpend($in);
     }
 
     /**
