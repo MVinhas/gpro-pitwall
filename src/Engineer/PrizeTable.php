@@ -27,4 +27,16 @@ final class PrizeTable
 
         return (int) round(($first - $last) / (self::PLACES - 1));
     }
+
+    public static function at(?string $division, int $pos): int
+    {
+        if ($division === null || !isset(self::PRIZES[$division])) {
+            return 0;
+        }
+
+        [$first, $last] = self::PRIZES[$division];
+        $pos = max(1, min(self::PLACES, $pos));
+
+        return (int) round($first - ($first - $last) * ($pos - 1) / (self::PLACES - 1));
+    }
 }

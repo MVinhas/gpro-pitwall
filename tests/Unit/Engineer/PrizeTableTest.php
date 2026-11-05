@@ -21,4 +21,15 @@ final class PrizeTableTest extends TestCase
         $this->assertSame(0, PrizeTable::perPlace(null));
         $this->assertSame(0, PrizeTable::perPlace('Nowhere'));
     }
+
+    public function test_at_falls_linearly_and_clamps_the_position(): void
+    {
+        $this->assertSame(12_000_000, PrizeTable::at('Amateur', 1));
+        $this->assertSame(6_000_000, PrizeTable::at('Amateur', 40));
+        $this->assertSame(9_076_923, PrizeTable::at('Amateur', 20));
+        $this->assertSame(12_000_000, PrizeTable::at('Amateur', 0));
+        $this->assertSame(6_000_000, PrizeTable::at('Amateur', 45));
+        $this->assertSame(0, PrizeTable::at(null, 5));
+        $this->assertSame(0, PrizeTable::at('Nowhere', 5));
+    }
 }
