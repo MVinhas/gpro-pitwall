@@ -14,7 +14,7 @@
     {% set wear_txt = 'Car updated' %}
 {% elseif wear_advice.swap is not empty %}
     {% set wear_cls = 'text-red-700' %}
-    {% set wear_txt = wear_advice.swap|length ~ " won't finish" %}
+    {% set wear_txt = wear_advice.swap|length ~ (wear_advice.swap|length == 1 ? ' reaches 100 %' : ' reach 100 %') %}
 {% elseif wear_advice.risky is not empty %}
     {% set wear_cls = 'text-amber-700' %}
     {% set wear_txt = wear_advice.risky|length ~ ' at risk' %}
@@ -71,7 +71,7 @@
         <noscript><button type="submit" class="btn btn-sm btn-secondary w-full">Update</button></noscript>
     </form>
 
-    {# Only parts at risk of not finishing are listed. "Watch" parts finish
+    {# Only parts at or near 100 % are listed. "Watch" parts finish
        comfortably, so a row for each of them was pure noise — the summary
        verdict chip still counts them. #}
     {% if wear_advice.swap is empty and wear_advice.risky is empty %}
@@ -92,6 +92,7 @@
                         {% include 'partials/_cockpit_wear_row.twig' with {
                             p: p,
                             plan: car_updated ? null : swap_advice[p.part]|default(null),
+                            smoke: wear_smoke[p.part]|default(null),
                             badge_class: 'bg-red-100 text-red-800',
                             badge_text: car_updated ? 'Reaches 100 %' : 'Replace',
                         } only %}

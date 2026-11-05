@@ -234,7 +234,7 @@ final class CarWearPlannerServiceTest extends TestCase
         $this->assertFalse($plan['races'][1]['has_data']);
     }
 
-    public function testHeadlineCountsPartsThatWontFinishTheNextRace(): void
+    public function testHeadlineCountsPartsThatReach100PercentInTheNextRace(): void
     {
         $plan = $this->planner()->plan(
             [['race' => 14, 'track_name' => 'A', 'ctr' => 0, 'base' => self::base(10.0)]],
@@ -246,7 +246,7 @@ final class CarWearPlannerServiceTest extends TestCase
         );
 
         $this->assertSame(CarWearPlannerService::STATUS_NOW, $plan['status']);
-        $this->assertSame("2 parts won't finish the next race.", $plan['headline']);
+        $this->assertSame("2 parts reach 100 % in the next race.", $plan['headline']);
     }
 
     public function testHeadlineNamesPartsThatWearOutLater(): void

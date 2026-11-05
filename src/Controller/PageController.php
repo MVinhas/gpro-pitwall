@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Engineer\GroupStanding;
+use App\Engineer\SmokeRisk;
 use App\Http\Request;
 use App\Http\Sections;
 use App\Repository\DivisionMetadataRepository;
@@ -123,6 +124,31 @@ class PageController
 
             return null;
         }
+    }
+
+    /**
+     * When each part the Cockpit must swap reaches 100 %, read from its full wear row: the advisor's row drops
+     * the testing wear its end already counts, which would spread that wear over the race laps.
+     *
+     * @param list<array{part: string}> $swap
+     * @param array<string, array{start: int|float, end: int|float, training?: int|float}> $parts
+     * @return array<string, string>
+     */
+    public static function wearSmoke(array $swap, array $parts, ?int $laps): array
+    {
+        if ($laps === null) {
+            return [];
+        }
+
+        $smoke = [];
+        foreach ($swap as $row) {
+            $risk = isset($parts[$row['part']]) ? SmokeRisk::forRow($parts[$row['part']], $laps) : null;
+            if ($risk !== null) {
+                $smoke[$row['part']] = $risk->describe();
+            }
+        }
+
+        return $smoke;
     }
 
     /**
@@ -659,12 +685,18 @@ class PageController
                         $viewData['wear_parts']      = $wear['parts'];
                         $viewData['wear_track_name'] = $wear['track_name'] ?? $trackName;
                         $viewData['wear_laps']       = $wear['laps'] ?? null;
+                        $viewData['wear_smoke']      = self::wearSmoke(
+                            $advice['swap'],
+                            $wear['parts'],
+                            is_int($viewData['wear_laps']) ? $viewData['wear_laps'] : null,
+                        );
                         $viewData['wear_driver']     = $this->mapper->mapDriver($pilot);
 
-                        // Only parts that cannot finish the race get a
-                        // replacement plan. A part merely finishing in the red
-                        // still finishes, and recommending a swap for it turned
-                        // the cockpit into a shopping list.
+                        // Only parts that reach 100 % (smoke, and a likely
+                        // retirement if it comes early) get a replacement
+                        // plan. A part merely ending in the red doesn't, and
+                        // recommending a swap for it turned the cockpit into
+                        // a shopping list.
                         $forcedSwaps = $advice['swap'];
                         if ($forcedSwaps !== []) {
                             // The same season the engineer judges its swaps
@@ -716,6 +748,7 @@ class PageController
                             'group_staff'      => $this->apiClient->getCachedGroupStaff(),
                             'wear_advice'      => $viewData['wear_advice'] ?? null,
                             'swap_plan'        => $viewData['swap_plan'] ?? null,
+                            'swap_advice'      => $viewData['swap_advice'] ?? null,
                             'training_picks'   => $viewData['training_picks'] ?? [],
                             'testing_targets'  => $viewData['testing_targets'] ?? [],
                             'testing_open'     => $testingTrack !== null,

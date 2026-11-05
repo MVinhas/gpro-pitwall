@@ -306,4 +306,19 @@ final class PageControllerTest extends TestCase
         $this->assertSame(15, RaceSettings::remembered($session, RaceSettings::TRAINING_LAPS));
         $this->assertSame(15, PageController::resolveTestingLaps($session, null, null));
     }
+
+    public function testTheCockpitSmokeLapCountsTrainingWear(): void
+    {
+        $swap = [['part' => 'Engine', 'level' => 1, 'start' => 85, 'est' => 20.0, 'end' => 105.0]];
+        $parts = ['Engine' => [
+            'level' => 1, 'start' => 85, 'training' => 10.0, 'race' => 10.0, 'track_base' => 10.0,
+            'est' => 20.0, 'end' => 105.0,
+        ]];
+
+        $this->assertSame(
+            ['Engine' => 'Reaches 100 % on lap 30 of 60: likely to break and retire'],
+            PageController::wearSmoke($swap, $parts, 60),
+        );
+        $this->assertSame([], PageController::wearSmoke($swap, $parts, null));
+    }
 }

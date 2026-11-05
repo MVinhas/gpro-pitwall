@@ -16,8 +16,12 @@ use App\Engineer\Money;
 use App\Engineer\PlaceGap;
 use App\Engineer\PrizeTable;
 use App\Engineer\RaceEngineer;
+use App\Engineer\SeasonBudget;
 use App\Engineer\SeasonObjective;
 use App\Engineer\SeasonStart;
+use App\Engineer\SmokeCost;
+use App\Engineer\SmokeDeferral;
+use App\Engineer\SmokeRisk;
 use App\Engineer\StrengthFloor;
 use App\Engineer\SwapSeason;
 use App\Engineer\TestingGate;
@@ -54,6 +58,7 @@ use App\Support\TrackName;
  * @phpstan-import-type TestingTarget from EngineerInputs
  * @phpstan-import-type WearAdvice from EngineerInputs
  * @phpstan-import-type SwapPick from EngineerInputs
+ * @phpstan-import-type SmokeQuote from EngineerInputs
  * @phpstan-import-type TyreAdvice from TyreSupplierAdvisor
  * @phpstan-import-type TyreVerdict from TyreSupplierAdvisor
  * @phpstan-type TyrePanel array{
@@ -169,6 +174,9 @@ class RaceEngineerService
             $inputs = self::withTestingCall($inputs, $call)->withTestingSkip($skip, $laps);
         }
 
+        // Quoted at pass 1's CTR: a part let smoke takes the upgrade out of the update the second pass plans.
+        $inputs = $inputs->withSmoke($this->smokeQuotes($ctx, $inputs, $basis, $c));
+
         // Under a plan the advice waits for the plan it is checked against, below.
         $tyres = $plan === null ? $this->tyreAdvice($c, null, $ctx) : null;
         if ($plan !== null && $basis !== null) {
@@ -183,8 +191,10 @@ class RaceEngineerService
             $outlook = ['committed' => (int) $ctx['outlook']['committed'] + $tyreExtra] + $ctx['outlook'];
             $saved = $plan;
             if (!$locked) {
-                $plan = $this->withUpgrades($plan, $inputs, $objective, $outlook, $ctx['cash'], $basis, $c);
-                $inputs = $inputs->withPlan($plan);
+                if (RaceEngineer::letSmoke($inputs) === []) {
+                    $plan = $this->withUpgrades($plan, $inputs, $objective, $outlook, $ctx['cash'], $basis, $c);
+                    $inputs = $inputs->withPlan($plan);
+                }
                 ['card' => $plan, 'saved' => $saved]
                     = $this->afterTheUpdate($ctx, $plan, $basis, $inputs, $c, $energy, $tyreExtra);
                 $inputs = $inputs->withPlan($plan);
@@ -1073,12 +1083,7 @@ class RaceEngineerService
     private function policy(array $ctx, array $basis, array $c, array $energy): CtrPolicy
     {
         $division = self::stringOrNull($c['division'] ?? null);
-        try {
-            $gap = $this->ctrModel->placeGap($ctx['season']);
-        } catch (\Throwable $e) {
-            error_log('[Engineer] ' . $e::class);
-            $gap = PlaceGap::fallback();
-        }
+        $gap = $this->placeGap($ctx['season']);
 
         $places = 0.0;
         $placesNext = null;
@@ -1118,6 +1123,124 @@ class RaceEngineerService
             $paceKnown && $perPlace > 0,
             CtrPolicy::safetyFor($numbers['projected_pos'], $numbers['relegation_pos']),
         );
+    }
+
+    private function placeGap(int $season): PlaceGap
+    {
+        try {
+            return $this->ctrModel->placeGap($season);
+        } catch (\Throwable $e) {
+            error_log('[Engineer] ' . $e::class);
+
+            return PlaceGap::fallback();
+        }
+    }
+
+    /**
+     * When each forced or stuck part reaches 100 % at the CTR the card shows, what its smoke costs in places
+     * and in an expected break, and what fitting it a race later saves over the season. A failure costs the
+     * card only its smoke quotes.
+     *
+     * @param Context $ctx
+     * @param ?PlanBasis $basis
+     * @param array<string, mixed> $c
+     * @return array<string, SmokeQuote>
+     */
+    private function smokeQuotes(array $ctx, EngineerInputs $inputs, ?array $basis, array $c): array
+    {
+        try {
+            return $this->quoteSmoke($ctx, $inputs, $basis, $c);
+        } catch (\Throwable $e) {
+            error_log('[Engineer] ' . $e::class);
+
+            return [];
+        }
+    }
+
+    /**
+     * @param Context $ctx
+     * @param ?PlanBasis $basis
+     * @param array<string, mixed> $c
+     * @return array<string, SmokeQuote>
+     */
+    private function quoteSmoke(array $ctx, EngineerInputs $inputs, ?array $basis, array $c): array
+    {
+        $parts = $this->wearParts($c);
+        $name = self::stringOrNull($c['track_name'] ?? null);
+        $track = $name === null ? null : $this->tracks->findByName($name);
+        $laps = (int) ($track['laps'] ?? 0);
+        if ($parts === null || $track === null || $laps <= 0) {
+            return [];
+        }
+
+        $plan = $inputs->plan;
+        /** @var list<array{part: string}> $forced */
+        $forced = $plan === null ? $inputs->wearAdvice['swap'] ?? [] : $plan['rows'][0]['replaced'];
+        $names = array_values(array_unique([...array_column($forced, 'part'), ...$inputs->stuckSmoke]));
+        $ctr = $plan === null
+            ? min($inputs->ctrCeiling ?? $inputs->currentCtr, $inputs->energyCap ?? 100)
+            : $plan['ctr'];
+
+        $division = self::stringOrNull($c['division'] ?? null);
+        $pace = CtrPace::secondsPerPointPerLap(
+            (float) ($track['lap_length'] ?? 0.0),
+            (float) ($track['avg_speed'] ?? 0.0),
+            $this->ctrGainFraction,
+        );
+        $secondsPerPlace = $this->placeGap($ctx['season'])->secondsPerPlace($division, $laps);
+        $perPlace = PrizeTable::perPlace($division);
+        $pos = $ctx['objective']['numbers']['projected_pos'] ?? null;
+        $prize = $pos === null ? 0 : PrizeTable::at($division, $pos);
+        $priced = $pace > 0 && $secondsPerPlace > 0 && $perPlace > 0 && $prize > 0;
+
+        $driverFactor = $this->wear->driverFactor(self::arr($c['driver'] ?? null));
+        $advice = self::arr($c['swap_advice'] ?? null);
+        $last = $basis !== null && count($basis['rounds']) === 1;
+        $quotes = [];
+        foreach ($names as $part) {
+            $row = $parts[$part] ?? null;
+            if ($row === null) {
+                continue;
+            }
+            $start = (float) $row['start'] + (float) ($row['training'] ?? 0);
+            $raceWear = $this->wear->raceWear((float) $row['track_base'], (int) $row['level'], $driverFactor, $ctr);
+            $risk = SmokeRisk::for($start, round($raceWear, 1), $laps);
+            if ($risk === null) {
+                continue;
+            }
+            $quotes[$part] = [
+                'risk' => $risk,
+                'start' => $start,
+                'price' => $priced ? SmokeCost::price($risk, $pace, $secondsPerPlace, $perPlace, $prize) : null,
+                'saving' => $basis === null || !isset($basis['parts'][$part]) ? null : SmokeDeferral::saving(
+                    new SeasonBudget($this->wear),
+                    $basis['rounds'],
+                    $part,
+                    $basis['parts'][$part],
+                    $basis['prices'][$part] ?? null,
+                    $basis['driverFactor'],
+                    $ctr,
+                ),
+                'cost' => self::recommendedCost($advice[$part] ?? null),
+                'last' => $last,
+            ];
+        }
+
+        return $quotes;
+    }
+
+    /**
+     * What the Cockpit's recommended replacement for a part costs; null when it has none.
+     */
+    private static function recommendedCost(mixed $advice): ?int
+    {
+        foreach (self::list(self::arr($advice)['options'] ?? null) as $option) {
+            if (($option['recommended'] ?? false) === true && is_numeric($option['cost'] ?? null)) {
+                return (int) $option['cost'];
+            }
+        }
+
+        return null;
     }
 
     /**

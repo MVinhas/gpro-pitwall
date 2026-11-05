@@ -43,7 +43,7 @@ use App\Engineer\SwapSeason;
  * Each option still carries its `tier`/`match` for display.
  *
  * `options[0]` is the recommendation, and it is what the UI pre-selects: the
- * advisor is only ever handed parts that cannot finish the race, so there is
+ * advisor is only ever handed parts that reach 100 % (smoke, and a likely retirement if it comes early), so there is
  * no do-nothing option to weigh it against. Without a season the
  * recommendation stays within one level of the current part; higher levels
  * are listed but never pre-selected.

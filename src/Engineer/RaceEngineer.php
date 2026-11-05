@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Engineer;
 
+use App\Service\WearAdvisorService;
 use App\Support\Ordinal;
 
 /**
@@ -11,6 +12,7 @@ use App\Support\Ordinal;
  * @phpstan-import-type CtrValueFigures from CtrPlanner
  * @phpstan-import-type Upgrade from UpgradeRanker
  * @phpstan-import-type SwapPick from EngineerInputs
+ * @phpstan-import-type SmokeQuote from EngineerInputs
  * @phpstan-import-type TyreAdvice from TyreSupplierAdvisor
  * @phpstan-type Line array{
  *     key: string,
@@ -28,6 +30,9 @@ use App\Support\Ordinal;
 final class RaceEngineer
 {
     private const string SMOKE_COST = 'expect smoke and lost time, and a retirement if it comes early';
+    private const string SMOKE_BREAK = 'halves the race money and upsets sponsors';
+    /** GPRO blocks testing above 90 %: a part let smoke from above it would cost the session. */
+    private const int TESTING_WEAR_LIMIT = 90;
 
     /** Tunable: how much a Stay weekend lowers the advisor's overtake risk. */
     public const int STAY_OVERTAKE_STEP = 15;
@@ -56,6 +61,7 @@ final class RaceEngineer
         'staff' => 'season',
         'stale' => 'season',
         'parts' => 'car',
+        'smoke' => 'car',
         'upgrades' => 'car',
         'training' => 'prep',
         'testing' => 'prep',
@@ -90,6 +96,7 @@ final class RaceEngineer
             self::cash($in),
             self::staff($in),
             self::parts($in),
+            self::smoke($in),
             self::upgrades($in),
             self::training($in),
             self::testing($in),
@@ -344,7 +351,7 @@ final class RaceEngineer
             return null;
         }
 
-        return self::smoke($in->stuckSmoke) . ' and the car is already updated: CTR 0 keeps '
+        return self::reaches($in->stuckSmoke) . ' and the car is already updated: CTR 0 keeps '
             . self::possessive($in->stuckSmoke) . ' wear lowest';
     }
 
@@ -421,9 +428,9 @@ final class RaceEngineer
     /**
      * @param list<string> $parts
      */
-    private static function smoke(array $parts): string
+    private static function reaches(array $parts): string
     {
-        return implode(', ', $parts) . (count($parts) === 1 ? ' reaches' : ' reach') . ' 100% this race';
+        return implode(', ', $parts) . (count($parts) === 1 ? ' reaches' : ' reach') . ' 100 % this race';
     }
 
     /**
@@ -435,44 +442,31 @@ final class RaceEngineer
     }
 
     /**
-     * @return Line
+     * Null when every forced part is let smoke and nothing unlocks testing: the smoke line stands in for it.
+     *
+     * @return ?Line
      */
-    private static function parts(EngineerInputs $in): array
+    private static function parts(EngineerInputs $in): ?array
     {
         if ($in->carUpdated) {
-            $reason = $in->stuckSmoke === [] ? null : self::smoke($in->stuckSmoke) . ': ' . self::SMOKE_COST;
-
-            return self::line(
-                'parts',
-                'Car updated',
-                $reason === null
-                    ? 'One update per race; the plan reads the car as it is now'
-                    : $reason . '; no more changes until the next race',
-                '/cockpit#cockpit-wear',
-                tone: $reason === null ? 'ink' : 'amber',
-            );
+            return self::updatedParts($in);
         }
 
         $plan = $in->plan;
-        $replaced = $plan === null ? [] : $plan['rows'][0]['replaced'];
-        $forced = array_column($plan === null ? $in->wearAdvice['swap'] ?? [] : $replaced, 'part');
-        $forcedSwapCost = $plan === null ? $in->forcedSwapCost : self::pickedCost($in, $replaced);
+        $smoked = self::letSmoke($in);
+        $replaced = array_values(array_filter(
+            $plan === null ? [] : $plan['rows'][0]['replaced'],
+            static fn (array $swap): bool => !in_array($swap['part'], $smoked, true),
+        ));
+        $forced = array_values(array_diff(self::forced($in), $smoked));
+        $forcedSwapCost = $plan === null
+            ? ($in->forcedSwapCost === null ? null : $in->forcedSwapCost - self::freedBy($in, $smoked))
+            : self::pickedCost($in, $replaced);
         $unlocked = array_column($in->unlockPicks, 'part');
         $unlockCost = array_sum(array_column($in->unlockPicks, 'cost'));
         $swapped = [...$forced, ...$unlocked];
         $clauses = self::unlockClauses($in, count($swapped) > 1);
         $unlock = $clauses === [] ? '' : '; ' . implode('; ', $clauses);
-
-        if ($plan !== null && $plan['mode'] === 'push' && $plan['swaps'] !== []) {
-            return self::pickedLine(
-                $in,
-                $swapped,
-                'Swap ' . self::swapNames($in, $swapped),
-                'Lets you push to CTR ' . $plan['ctr'] . $unlock,
-                Money::short(($forcedSwapCost ?? 0) + $unlockCost),
-                'ink',
-            );
-        }
 
         if ($forced === [] && $unlocked !== []) {
             return self::pickedLine(
@@ -485,21 +479,323 @@ final class RaceEngineer
             );
         }
 
-        // A part that ends the race below 100% stays on the car: a swap would only spend money.
+        if ($forced === [] && $smoked !== []) {
+            return null;
+        }
+
+        // A part that ends the race below 100 % stays on the car: a swap would only spend money.
         if ($forced === []) {
             return self::line('parts', 'Nothing to swap', 'No forced swap this race', '/cockpit#cockpit-wear');
         }
 
-        $tone = $plan === null && self::spendable($in) < ($forcedSwapCost ?? 0) ? 'red' : 'amber';
+        // A push swap let smoke no longer buys the push: the line falls back to the forced reasons.
+        $pushing = $plan !== null && $plan['mode'] === 'push'
+            && array_diff(array_column($plan['swaps'], 'part'), $smoked) !== [];
+        if ($pushing) {
+            return self::pickedLine(
+                $in,
+                $swapped,
+                'Swap ' . self::swapNames($in, $swapped),
+                'Lets you push to CTR ' . $plan['ctr'] . $unlock,
+                Money::short(($forcedSwapCost ?? 0) + $unlockCost),
+                'ink',
+            );
+        }
+
+        $breaks = false;
+        $lapped = false;
+        $reasons = [];
+        foreach ($forced as $part) {
+            $risk = $in->smoke[$part]['risk'] ?? null;
+            $lapped = $lapped || $risk !== null;
+            $name = count($swapped) > 1 ? $part : null;
+            $breaks = $breaks || ($risk?->likelyBreak() ?? false);
+            $reasons[] = $risk?->describe($name)
+                ?? ($name === null ? 'Reaches' : $name . ' reaches') . ' 100 % this race';
+        }
+        $short = $plan === null && self::spendable($in) < ($forcedSwapCost ?? 0);
 
         return self::pickedLine(
             $in,
             $swapped,
             'Swap ' . self::swapNames($in, $swapped),
-            'Would break this race if kept' . $unlock,
+            implode('; ', $reasons) . $unlock,
             $forcedSwapCost === null ? null : Money::short($forcedSwapCost + $unlockCost),
-            $tone,
+            $breaks || $short ? 'red' : 'amber',
+            $lapped,
         );
+    }
+
+    /**
+     * @return Line
+     */
+    private static function updatedParts(EngineerInputs $in): array
+    {
+        $stuck = $in->stuckSmoke;
+        if ($stuck === []) {
+            return self::line(
+                'parts',
+                'Car updated',
+                'One update per race; the plan reads the car as it is now',
+                '/cockpit#cockpit-wear',
+            );
+        }
+
+        $breaks = false;
+        $described = [];
+        foreach ($stuck as $part) {
+            $risk = $in->smoke[$part]['risk'] ?? null;
+            if ($risk === null) {
+                $described = null;
+                break;
+            }
+            $described[] = $risk->describe($part);
+            $breaks = $breaks || $risk->likelyBreak();
+        }
+        $reason = $described === null ? self::reaches($stuck) . ': ' . self::SMOKE_COST : implode('; ', $described);
+
+        return self::line(
+            'parts',
+            'Car updated',
+            $reason . '; no more changes until the next race',
+            '/cockpit#cockpit-wear',
+            tone: $described !== null && $breaks ? 'red' : 'amber',
+        );
+    }
+
+    /**
+     * The parts this race forces out: the plan's replacements, or the Cockpit's swaps without a plan.
+     *
+     * @return list<string>
+     */
+    private static function forced(EngineerInputs $in): array
+    {
+        $rows = $in->plan === null ? $in->wearAdvice['swap'] ?? [] : $in->plan['rows'][0]['replaced'];
+
+        return array_column($rows, 'part');
+    }
+
+    /**
+     * The forced parts the engineer lets smoke this race instead of swapping, in the forced order: every one
+     * whose deferral saves more than its smoke costs, then, while the forced swaps don't fit the money, the
+     * least likely to break until the shortfall is freed. A likely break, an unpriced smoke, or a part that
+     * would block an open testing session is never let smoke.
+     *
+     * @return list<string>
+     */
+    public static function letSmoke(EngineerInputs $in): array
+    {
+        if ($in->carUpdated) {
+            return [];
+        }
+
+        $testing = $in->testingOpen && $in->testingTarget !== null;
+        $candidates = [];
+        foreach (self::forced($in) as $part) {
+            $quote = $in->smoke[$part] ?? null;
+            if (
+                $quote === null
+                || $quote['risk']->likelyBreak()
+                || $quote['price'] === null
+                || ($testing && WearAdvisorService::percent($quote['start']) > self::TESTING_WEAR_LIMIT)
+            ) {
+                continue;
+            }
+            $freed = self::freed($in, $part, $quote);
+            // A free swap (a spare, a free downgrade) frees nothing and saves nothing by waiting.
+            if ($freed !== null && $freed > 0) {
+                $candidates[$part] = ['quote' => $quote, 'freed' => $freed];
+            }
+        }
+
+        $taken = array_filter($candidates, static fn (array $c): bool => self::valueSmoke($c['quote']));
+        $rest = array_diff_key($candidates, $taken);
+        uksort($rest, static fn (string $a, string $b): int => [
+            $rest[$a]['quote']['risk']->breakChance, $rest[$b]['freed'], $a,
+        ] <=> [
+            $rest[$b]['quote']['risk']->breakChance, $rest[$a]['freed'], $b,
+        ]);
+        $shortfall = self::shortfall($in) - array_sum(array_column($taken, 'freed'));
+        foreach ($rest as $part => $candidate) {
+            if ($shortfall <= 0) {
+                break;
+            }
+            $taken[$part] = $candidate;
+            $shortfall -= $candidate['freed'];
+        }
+
+        return array_values(array_filter(
+            self::forced($in),
+            static fn (string $part): bool => isset($taken[$part]),
+        ));
+    }
+
+    /**
+     * @param SmokeQuote $quote
+     */
+    private static function valueSmoke(array $quote): bool
+    {
+        return $quote['saving'] !== null && $quote['price'] !== null && $quote['saving'] > $quote['price']['total'];
+    }
+
+    /**
+     * What swapping $part would cost now, and so what letting it smoke frees: its season pick, else its
+     * replacement in the plan; without a plan, the Cockpit's recommended option.
+     *
+     * @param SmokeQuote $quote
+     */
+    private static function freed(EngineerInputs $in, string $part, array $quote): ?int
+    {
+        if ($in->plan === null) {
+            return $quote['cost'];
+        }
+        $pick = array_column($in->swapPicks, 'cost', 'part')[$part] ?? null;
+
+        return $pick ?? array_column($in->plan['rows'][0]['replaced'], 'cost', 'part')[$part] ?? null;
+    }
+
+    /**
+     * @param list<string> $parts
+     */
+    private static function freedBy(EngineerInputs $in, array $parts): int
+    {
+        $total = 0;
+        foreach ($parts as $part) {
+            $quote = $in->smoke[$part] ?? null;
+            $total += $quote === null ? 0 : self::freed($in, $part, $quote) ?? 0;
+        }
+
+        return $total;
+    }
+
+    /**
+     * How far the forced swaps overrun the money: the plan's envelope after its picks, plus what a short plan
+     * already misses its target by; without a plan, the swaps over what can be spent. Zero or less fits.
+     */
+    private static function shortfall(EngineerInputs $in): int
+    {
+        if ($in->plan !== null) {
+            $short = $in->plan['mode'] === 'short' ? $in->plan['shortfall'] ?? 0 : 0;
+
+            return $short - self::afterPicks($in);
+        }
+
+        return ($in->forcedSwapCost ?? 0) - self::spendable($in);
+    }
+
+    /**
+     * @return ?Line
+     */
+    private static function smoke(EngineerInputs $in): ?array
+    {
+        $parts = self::letSmoke($in);
+        if ($parts === []) {
+            return null;
+        }
+
+        /** @var array<string, SmokeQuote> $quotes */
+        $quotes = array_intersect_key($in->smoke, array_flip($parts));
+        $value = array_filter($quotes, self::valueSmoke(...));
+        $figure = count($value) === count($quotes)
+            ? 'saves ~' . Money::short(array_sum(array_map(
+                static fn (array $q): int => ($q['saving'] ?? 0) - ($q['price']['total'] ?? 0),
+                $quotes,
+            )))
+            : 'frees ' . Money::short(self::freedBy($in, $parts)) . ' this race';
+
+        $last = array_pop($parts);
+        $names = $parts === [] ? $last : implode(', ', $parts) . ' and ' . $last;
+        $parts[] = $last;
+
+        return self::line(
+            'smoke',
+            'Let the ' . $names . ' smoke this race',
+            count($parts) === 1 ? self::smokeReason($quotes[$last], null) : self::smokeReasons($quotes),
+            '/cockpit#cockpit-wear',
+            $figure,
+            'amber',
+        );
+    }
+
+    /**
+     * @param SmokeQuote $quote
+     */
+    private static function smokeReason(array $quote, ?string $part): string
+    {
+        $odds = self::breaks($quote) ? self::odds($quote) . ', which ' . self::SMOKE_BREAK : self::odds($quote);
+
+        return self::smokeClause($quote, $part) . '; ' . $odds . '; ' . self::smokeTail($quote, $part);
+    }
+
+    /**
+     * @param array<string, SmokeQuote> $quotes
+     */
+    private static function smokeReasons(array $quotes): string
+    {
+        $clauses = [];
+        $tails = [];
+        $breaks = false;
+        foreach ($quotes as $part => $quote) {
+            $clauses[] = self::smokeClause($quote, $part) . ', ' . self::odds($quote);
+            $tails[] = self::smokeTail($quote, $part);
+            $breaks = $breaks || self::breaks($quote);
+        }
+        $break = $breaks ? '; a break ' . self::SMOKE_BREAK : '';
+
+        return implode('; ', $clauses) . $break . '; ' . implode('; ', $tails);
+    }
+
+    /**
+     * @param SmokeQuote $quote
+     */
+    private static function smokeClause(array $quote, ?string $part): string
+    {
+        $risk = $quote['risk'];
+
+        return ($part === null ? 'Reaches' : $part . ' reaches') . ' 100 % on lap ' . $risk->lap . ' of '
+            . $risk->laps . ': about ' . $risk->smokeLaps . ($risk->smokeLaps === 1 ? ' lap' : ' laps')
+            . ' of smoke (~' . Money::short($quote['price']['time'] ?? 0) . ' in places)';
+    }
+
+    /**
+     * @param SmokeQuote $quote
+     */
+    private static function pct(array $quote): int
+    {
+        return (int) round($quote['risk']->breakChance * 100);
+    }
+
+    /**
+     * @param SmokeQuote $quote
+     */
+    private static function breaks(array $quote): bool
+    {
+        return self::pct($quote) > 0;
+    }
+
+    /**
+     * @param SmokeQuote $quote
+     */
+    private static function odds(array $quote): string
+    {
+        return self::breaks($quote) ? self::pct($quote) . ' % chance it breaks' : 'too short to break';
+    }
+
+    /**
+     * @param SmokeQuote $quote
+     */
+    private static function smokeTail(array $quote, ?string $part): string
+    {
+        $it = $part === null ? 'it' : 'the ' . $part;
+
+        return match (true) {
+            !self::valueSmoke($quote) => 'replace ' . $it . ' next race',
+            $quote['last'] => $part === null
+                ? 'no replacement is due before the season ends'
+                : 'no replacement for the ' . $part . ' is due before the season ends',
+            default => 'fitting ' . $it . ' next race saves ' . Money::short($quote['saving'] ?? 0)
+                . ' in parts this season',
+        };
     }
 
     /**
@@ -521,7 +817,7 @@ final class RaceEngineer
     /**
      * The parts line, with the reasons of the season picks for $parts after today's reason. A pick that only
      * had a budget-short option left replaces the reason: that is what the manager has to know. Next to an
-     * unlock swap it is appended instead.
+     * unlock swap, or after the lap a part reaches 100 % ($keepReason), it is appended instead.
      *
      * @param list<string> $parts
      * @return Line
@@ -533,6 +829,7 @@ final class RaceEngineer
         string $reason,
         ?string $figure,
         string $tone,
+        bool $keepReason = false,
     ): array {
         $reasons = [];
         foreach ([...$in->swapPicks, ...$in->unlockPicks] as $pick) {
@@ -544,7 +841,7 @@ final class RaceEngineer
 
         $unlocking = array_intersect(array_column($in->unlockPicks, 'part'), $parts) !== [];
         if (in_array('budget_short', $reasons, true)) {
-            $reason = $unlocking
+            $reason = $unlocking || $keepReason
                 ? $reason . '; ' . lcfirst(SwapLevelPicker::REASONS['budget_short'])
                 : SwapLevelPicker::REASONS['budget_short'];
             $tone = $tone === 'red' ? 'red' : 'amber';
@@ -829,7 +1126,18 @@ final class RaceEngineer
     private static function upgrades(EngineerInputs $in): ?array
     {
         $plan = $in->plan;
-        if ($in->carUpdated || $plan === null || !isset($plan['upgrades'])) {
+        if ($in->carUpdated || $plan === null) {
+            return null;
+        }
+        if (self::letSmoke($in) !== []) {
+            return self::line(
+                'upgrades',
+                'No upgrade this race',
+                'Letting a part smoke to save money; upgrades wait for the next race',
+                self::UPGRADES_ANCHOR,
+            );
+        }
+        if (!isset($plan['upgrades'])) {
             return null;
         }
 
@@ -899,7 +1207,7 @@ final class RaceEngineer
      */
     public static function recommendedUpgrade(EngineerInputs $in): ?array
     {
-        if ($in->carUpdated || $in->plan === null) {
+        if ($in->carUpdated || $in->plan === null || self::letSmoke($in) !== []) {
             return null;
         }
         foreach (self::worthBuying($in, $in->plan['upgrades'] ?? []) as $upgrade) {
