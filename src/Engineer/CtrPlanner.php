@@ -37,14 +37,16 @@ final readonly class CtrPlanner
     /**
      * The Clear Track Risk to advise, never above the driver's energy cap. A CTR fits the budget when its season
      * forecast keeps every race's balance at or above its target: the cushion, and at the last race the end target
-     * (the season start for Stay when it is above the cushion). Promote takes the highest value that fits; above
-     * the safety ceiling it must also be a real push. Stay weighs every CTR that fits and buys no replacement it
-     * cannot price: the lowest one whose higher candidates aren't clearly better value (CtrValue), or the highest
-     * one in safety mode near the relegation line. It reads no current CTR, so the advice holds still when the
-     * manager follows it. The cushion is the committed cost plus the average repairs of the races after this one at
-     * the CTR being judged, so each candidate carries its own cushion and end target: this race's forced swaps are
-     * bought before the race, so counting them would make the cushion drop once the manager follows the advice.
-     * The target kind is settled once, at CTR 0.
+     * (the season start for Stay when it is above the cushion at the CTR being judged). Promote takes the highest
+     * value that fits; above the safety ceiling it must also be a real push. Stay weighs every CTR that fits and
+     * buys no replacement it cannot price: the lowest one whose higher candidates aren't clearly better value
+     * (CtrValue), or the highest one in safety mode near the relegation line. It reads no current CTR, so the advice
+     * holds still when the manager follows it. The cushion is the committed cost plus the average repairs of the
+     * races after this one at the CTR being judged, so each candidate carries its own cushion and end target: this
+     * race's forced swaps are bought before the race, so counting them would make the cushion drop once the manager
+     * follows the advice.
+     * The target kind is settled once, at CTR 0, and the plan names the reserve or the start as its end target only
+     * when the chosen CTR's cushion is below it.
      *
      * @param list<array{race: int, track_name: ?string, base: ?array<string, float>}> $rounds next race first
      * @param array<string, array{level: int, start: int|float, track_base: int|float, training?: int|float}> $parts
@@ -111,14 +113,7 @@ final readonly class CtrPlanner
         $cushions = [];
         /** @var Closure(int): int $cushionAt */
         $cushionAt = function (int $ctr) use (&$cushions, $forecastAt, $committed): int {
-            if (!isset($cushions[$ctr])) {
-                $later = array_slice($forecastAt($ctr)['rows'], 1);
-                $cushions[$ctr] = $committed + ($later === []
-                    ? 0
-                    : intdiv(array_sum(array_column($later, 'repairs')), count($later)));
-            }
-
-            return $cushions[$ctr];
+            return $cushions[$ctr] ??= $committed + self::averageRepairs(array_slice($forecastAt($ctr)['rows'], 1));
         };
 
         $atZero = $cushionAt(0);
@@ -211,6 +206,7 @@ final readonly class CtrPlanner
             $chosen = $forecastAt(0);
             $cushion = $cushionAt(0);
             $target = $targetAt(0);
+            $targetKind = self::namedKind($targetKind, $floor, $cushion);
 
             return $this->result(
                 0,
@@ -237,6 +233,7 @@ final readonly class CtrPlanner
         $chosen = $forecastAt($ctr);
         $cushion = $cushionAt($ctr);
         $target = $targetAt($ctr);
+        $targetKind = self::namedKind($targetKind, $floor, $cushion);
         $mode = $ctr > $safety ? 'push' : 'nurse';
         $swaps = $this->unforced($chosen['rows'][0]['replaced'], $forced);
 
@@ -268,6 +265,25 @@ final readonly class CtrPlanner
             $energyStart,
             $value,
         );
+    }
+
+    /**
+     * @param list<BudgetRow> $rows
+     */
+    private static function averageRepairs(array $rows): int
+    {
+        return $rows === [] ? 0 : intdiv(array_sum(array_column($rows, 'repairs')), count($rows));
+    }
+
+    /**
+     * A reserve or start the chosen CTR's cushion already covers is not the end target worth naming: the cushion is.
+     *
+     * @param 'cushion'|'start'|'start_out_of_reach'|'reserve'|'reserve_out_of_reach' $kind
+     * @return 'cushion'|'start'|'start_out_of_reach'|'reserve'|'reserve_out_of_reach'
+     */
+    private static function namedKind(string $kind, ?int $floor, int $cushion): string
+    {
+        return $floor !== null && $cushion >= $floor ? 'cushion' : $kind;
     }
 
     /**

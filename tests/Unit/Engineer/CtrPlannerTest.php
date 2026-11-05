@@ -183,9 +183,18 @@ final class CtrPlannerTest extends TestCase
     {
         $fresh = ['Engine' => ['level' => 1, 'start' => 0.0, 'track_base' => 10.0]];
 
-        $plan = $this->plan(SeasonObjective::STAY, 1_000_000, 50_000, 50_000, parts: $fresh, races: 5);
+        $plan = $this->plan(
+            SeasonObjective::STAY,
+            1_000_000,
+            50_000,
+            50_000,
+            parts: $fresh,
+            races: 5,
+            policy: self::policy(5_000),
+        );
 
         $this->assertSame(100, $plan['safety']);
+        $this->assertGreaterThan(0, $plan['ctr']);
         $this->assertLessThan(100, $plan['ctr']);
         $cushion = $this->cushionAt($plan['ctr'], $fresh, 5, 1_000_000, 50_000, 50_000);
         $this->assertSame($cushion, $plan['cushion']);
@@ -223,6 +232,41 @@ final class CtrPlannerTest extends TestCase
         $this->assertGreaterThanOrEqual(0, CtrPlanner::headroom($rowsAt(80), $cushionAt(80), $cushionAt(80)));
         $this->assertLessThan(0, CtrPlanner::headroom($rowsAt(80), $cushionAt(100), $cushionAt(100)));
         $this->assertLessThan(0, CtrPlanner::headroom($rowsAt(81), $cushionAt(81), $cushionAt(81)));
+    }
+
+    public function testPromoteNamesTheCushionWhenTheChosenCtrsCushionCoversTheReserve(): void
+    {
+        // At CTR 0 nothing is repaired, so half the $100,000 start is above the cushion; CTR 100's cushion covers it.
+        $fresh = ['Engine' => ['level' => 1, 'start' => 0.0, 'track_base' => 10.0]];
+
+        $plan = $this->plan(SeasonObjective::PROMOTE, 1_000_000, seasonStart: 100_000, parts: $fresh, races: 5);
+
+        $this->assertSame(100, $plan['ctr']);
+        $this->assertSame($this->cushionAt(100, $fresh, 5, 1_000_000, 0, 0), $plan['cushion']);
+        $this->assertGreaterThanOrEqual(50_000, $plan['cushion']);
+        $this->assertSame('cushion', $plan['target_kind']);
+        $this->assertSame($plan['cushion'], $plan['target']);
+    }
+
+    public function testStayNamesTheCushionWhenTheChosenCtrsCushionCoversTheStart(): void
+    {
+        // At CTR 0 nothing is repaired, so the $50,000 start is above the cushion; CTR 100's cushion covers it.
+        $fresh = ['Engine' => ['level' => 1, 'start' => 0.0, 'track_base' => 10.0]];
+
+        $plan = $this->plan(
+            SeasonObjective::STAY,
+            1_000_000,
+            seasonStart: 50_000,
+            parts: $fresh,
+            races: 5,
+            policy: self::policy(safety: true),
+        );
+
+        $this->assertSame(100, $plan['ctr']);
+        $this->assertSame($this->cushionAt(100, $fresh, 5, 1_000_000, 0, 0), $plan['cushion']);
+        $this->assertGreaterThanOrEqual(50_000, $plan['cushion']);
+        $this->assertSame('cushion', $plan['target_kind']);
+        $this->assertSame($plan['cushion'], $plan['target']);
     }
 
     public function testSingleRaceCushionIsTheCommittedCost(): void
@@ -367,14 +411,15 @@ final class CtrPlannerTest extends TestCase
 
     public function testPromoteKeepsTheCushionWhenItIsAboveHalfTheStart(): void
     {
-        $plan = $this->plan(SeasonObjective::PROMOTE, 1_000_000, 50_000, 0, 100_000);
+        // $60,000 committed puts the cushion above half the start even at CTR 0, which repairs nothing.
+        $plan = $this->plan(SeasonObjective::PROMOTE, 1_000_000, 60_000, 0, 100_000);
 
         $this->assertGreaterThan((int) ceil(100_000 / 2), $plan['cushion']);
         $this->assertSame('cushion', $plan['target_kind']);
         $this->assertSame($plan['cushion'], $plan['target']);
         // CTR 100 swaps the engine in both later races.
         $this->assertSame(100, $plan['ctr']);
-        $this->assertSame(50_000 + 100_000, $plan['cushion']);
+        $this->assertSame(60_000 + 100_000, $plan['cushion']);
     }
 
     public function testPromoteFallsBackToTheCushionWhenHalfTheStartIsOutOfReach(): void
