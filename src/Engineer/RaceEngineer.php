@@ -468,17 +468,6 @@ final class RaceEngineer
         $clauses = self::unlockClauses($in, count($swapped) > 1);
         $unlock = $clauses === [] ? '' : '; ' . implode('; ', $clauses);
 
-        if ($plan !== null && $plan['mode'] === 'push' && $plan['swaps'] !== []) {
-            return self::pickedLine(
-                $in,
-                $swapped,
-                'Swap ' . self::swapNames($in, $swapped),
-                'Lets you push to CTR ' . $plan['ctr'] . $unlock,
-                Money::short(($forcedSwapCost ?? 0) + $unlockCost),
-                'ink',
-            );
-        }
-
         if ($forced === [] && $unlocked !== []) {
             return self::pickedLine(
                 $in,
@@ -497,6 +486,20 @@ final class RaceEngineer
         // A part that ends the race below 100 % stays on the car: a swap would only spend money.
         if ($forced === []) {
             return self::line('parts', 'Nothing to swap', 'No forced swap this race', '/cockpit#cockpit-wear');
+        }
+
+        // A push swap let smoke no longer buys the push: the line falls back to the forced reasons.
+        $pushing = $plan !== null && $plan['mode'] === 'push'
+            && array_diff(array_column($plan['swaps'], 'part'), $smoked) !== [];
+        if ($pushing) {
+            return self::pickedLine(
+                $in,
+                $swapped,
+                'Swap ' . self::swapNames($in, $swapped),
+                'Lets you push to CTR ' . $plan['ctr'] . $unlock,
+                Money::short(($forcedSwapCost ?? 0) + $unlockCost),
+                'ink',
+            );
         }
 
         $breaks = false;
@@ -596,7 +599,8 @@ final class RaceEngineer
                 continue;
             }
             $freed = self::freed($in, $part, $quote);
-            if ($freed !== null) {
+            // A free swap (a spare, a free downgrade) frees nothing and saves nothing by waiting.
+            if ($freed !== null && $freed > 0) {
                 $candidates[$part] = ['quote' => $quote, 'freed' => $freed];
             }
         }

@@ -14,7 +14,9 @@ use App\Service\WearAdvisorService;
 final class SmokeDeferral
 {
     /**
-     * Repairs with the swap now minus repairs with the swap next race; null when it can't be priced.
+     * Repairs with the swap now minus repairs with the swap next race; null when the part's price is unknown.
+     * A round whose track wear is unknown charges nothing in either run, so the saving over the known rounds
+     * stands: the real calendar nearly always has one such track.
      *
      * @param list<Round> $rounds remaining races, next race first
      * @param array{level: int, start: int|float, training?: int|float} $partData
@@ -56,7 +58,8 @@ final class SmokeDeferral
             true,
         );
 
-        if ($now['partial'] !== [] || $later['partial'] !== []) {
+        $unpriced = $part . ' price unknown';
+        if (in_array($unpriced, $now['partial'], true) || in_array($unpriced, $later['partial'], true)) {
             return null;
         }
 

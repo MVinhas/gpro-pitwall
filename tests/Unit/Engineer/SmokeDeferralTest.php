@@ -65,9 +65,26 @@ final class SmokeDeferralTest extends TestCase
         $this->assertSame(1_000_000, $this->saving(1));
     }
 
-    public function testUnknownPriceOrWearIsNull(): void
+    public function testUnknownPriceIsNull(): void
     {
         $this->assertNull($this->saving(3, null));
-        $this->assertNull($this->saving(3, 1_000_000, null));
+    }
+
+    public function testAnUnknownWearRoundChargesNothingInBothRuns(): void
+    {
+        $this->assertSame(0, $this->saving(3, 1_000_000, null));
+
+        $rounds = $this->rounds(3);
+        $rounds[] = ['race' => 4, 'track_name' => 'Hanoi', 'base' => null];
+
+        $this->assertSame(1_000_000, SmokeDeferral::saving(
+            $this->budget,
+            $rounds,
+            'Engine',
+            ['level' => 1, 'start' => 70],
+            1_000_000,
+            1.0,
+            0,
+        ));
     }
 }

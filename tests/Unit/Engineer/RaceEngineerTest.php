@@ -2535,4 +2535,53 @@ final class RaceEngineerTest extends TestCase
             $smoke['reason'],
         );
     }
+
+    public function testAPushPlanWhoseOnlySwapIsLetSmokeHasNoPartsLine(): void
+    {
+        $plan = ['mode' => 'push', 'ctr' => 60, 'swaps' => [['part' => 'Brakes', 'cost' => 1_200_000]]];
+        $lines = $this->lines($this->smoking(['Brakes' => ['saving' => 4_000_000]], plan: $plan));
+
+        $this->assertSame('Let the Brakes smoke this race', $lines['smoke']['answer']);
+        $this->assertArrayNotHasKey('parts', $lines);
+    }
+
+    public function testAPushPlanWhosePushSwapIsLetSmokeSwapsOnlyTheForcedPart(): void
+    {
+        $plan = ['mode' => 'push', 'ctr' => 60, 'swaps' => [['part' => 'Gearbox', 'cost' => 800_000]]];
+        $in = $this->smoking(
+            [
+                'Brakes' => [],
+                'Gearbox' => ['risk' => SmokeRisk::for(75, 25, 60), 'start' => 75.0, 'saving' => 4_000_000],
+            ],
+            replaced: [['part' => 'Brakes', 'cost' => 1_200_000], ['part' => 'Gearbox', 'cost' => 800_000]],
+            plan: $plan,
+        );
+        $lines = $this->lines($in);
+
+        $this->assertSame('Let the Gearbox smoke this race', $lines['smoke']['answer']);
+        $this->assertSame('Swap Brakes', $lines['parts']['answer']);
+        $this->assertSame('$1.2M', $lines['parts']['figure']);
+        $this->assertSame('Reaches 100 % on lap 48 of 60: smokes about 13 laps', $lines['parts']['reason']);
+    }
+
+    public function testASwapPickPricesWhatLettingThePartSmokeFrees(): void
+    {
+        $in = $this->smoking(['Brakes' => []], -500_000, o: [
+            'swapPicks' => [$this->pick('Brakes', 4, 'downgrade', 700_000)],
+        ]);
+
+        $this->assertSame('frees $700k this race', $this->line($in, 'smoke')['figure']);
+    }
+
+    public function testAPartWhoseSwapIsFreeIsNeverLetSmoke(): void
+    {
+        $in = $this->smoking(['Brakes' => ['saving' => 4_000_000]], -500_000, o: [
+            'swapPicks' => [$this->pick('Brakes', 4, 'free_downgrade', 0)],
+        ]);
+        $lines = $this->lines($in);
+
+        $this->assertSame([], RaceEngineer::letSmoke($in));
+        $this->assertArrayNotHasKey('smoke', $lines);
+        $this->assertSame('Swap Brakes → L4 (free downgrade)', $lines['parts']['answer']);
+    }
 }
