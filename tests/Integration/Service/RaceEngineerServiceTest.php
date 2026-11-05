@@ -1916,6 +1916,23 @@ final class RaceEngineerServiceTest extends TestCase
         self::assertSame($followed['safety'], $advised['safety']);
     }
 
+    public function testALockedCarSavesTheFlagInsteadOfARanking(): void
+    {
+        $this->seedPromotionFixture();
+        $this->seedWearTracks();
+        $this->service->pin(self::USER, self::SEASON, 'promote');
+        $engine = ['level' => 1, 'start' => 60, 'est' => 0.0, 'end' => 0.0, 'track_base' => 8.0];
+
+        $this->service->forCockpit(self::USER, $this->pushCockpit($engine, ['doneCarRepair' => '1']));
+        $locked = $this->savedPlan();
+        $this->service->forCockpit(self::USER, $this->pushCockpit($engine));
+        $open = $this->savedPlan();
+
+        self::assertTrue($locked['upgrades_locked'] ?? null);
+        self::assertArrayNotHasKey('upgrades', $locked);
+        self::assertArrayNotHasKey('upgrades_locked', $open);
+    }
+
     public function testLockedCarRunsOnePass(): void
     {
         $this->seedPromotionFixture();

@@ -188,6 +188,8 @@ class RaceEngineerService
                 ['card' => $plan, 'saved' => $saved]
                     = $this->afterTheUpdate($ctx, $plan, $basis, $inputs, $c, $energy, $tyreExtra);
                 $inputs = $inputs->withPlan($plan);
+            } else {
+                $saved['upgrades_locked'] = true;
             }
             try {
                 $this->budgets->save($userId, $season, $ctx['raceNb'], $saved);

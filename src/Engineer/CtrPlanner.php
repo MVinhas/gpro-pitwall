@@ -21,7 +21,7 @@ use InvalidArgumentException;
  *   cushion: int, season_start: ?int,
  *   envelope: int, shortfall: ?int, rows: list<BudgetRow>, partial: list<string>, race: int, infeasible?: bool,
  *   energy_cap: int, energy_estimate: bool, energy_start: ?int, value: ?CtrValueFigures,
- *   upgrades?: list<Upgrade>}
+ *   upgrades?: list<Upgrade>, upgrades_locked?: bool}
  */
 final readonly class CtrPlanner
 {

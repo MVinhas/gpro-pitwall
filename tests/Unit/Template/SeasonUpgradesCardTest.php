@@ -15,13 +15,13 @@ final class SeasonUpgradesCardTest extends TestCase
     /**
      * @param list<array<string, mixed>>|null $upgrades
      */
-    private function html(?array $upgrades, bool $withBudget = true, bool $short = false): string
+    private function html(?array $upgrades, bool $withBudget = true, bool $short = false, bool $locked = false): string
     {
         $twig = new Environment(new FilesystemLoader(dirname(__DIR__, 3) . '/templates'));
 
         return $twig->render('season/_upgrades.twig', [
             'budget' => $withBudget
-                ? ['view' => ['as_of' => 'As of race 8', 'upgrades' => $upgrades, 'upgrades_short' => $short]]
+                ? ['view' => ['as_of' => 'As of race 8', 'upgrades' => $upgrades, 'upgrades_short' => $short, 'upgrades_locked' => $locked]]
                 : null,
         ]);
     }
@@ -98,6 +98,17 @@ final class SeasonUpgradesCardTest extends TestCase
         $this->assertStringContainsString('No upgrade fits the budget', $text);
         $this->assertStringContainsString('The season plan already runs short.', $text);
         $this->assertStringNotContainsString('No upgrade adds PHA', $text);
+    }
+
+    public function testALockedCarKeepsTheCardWithAOneLineState(): void
+    {
+        $html = $this->html(null, locked: true);
+        $text = (string) preg_replace('/\s+/', ' ', strip_tags($html));
+
+        $this->assertStringContainsString('Upgrades to season end', $text);
+        $this->assertStringContainsString('Car already updated', $text);
+        $this->assertStringContainsString('The ranking returns next race.', $text);
+        $this->assertStringNotContainsString('<table', $html);
     }
 
     public function testNoCardWithoutARankingOrBudget(): void

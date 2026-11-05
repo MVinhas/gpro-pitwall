@@ -218,6 +218,30 @@ final class SeasonServiceTest extends TestCase
         $this->assertNull($budget['view']['upgrades']);
     }
 
+    public function testALockedPlanMarksTheUpgradesLocked(): void
+    {
+        $this->race(1);
+        $this->budgets->save(1, 107, 9, $this->plan(['upgrades_locked' => true]));
+
+        $view = $this->service->build(1, null)['budget']['view'] ?? [];
+
+        $this->assertTrue($view['upgrades_locked'] ?? null);
+        $this->assertArrayHasKey('upgrades', $view);
+        $this->assertNull($view['upgrades']);
+    }
+
+    public function testAPlanSavedWithoutTheFlagIsNotLocked(): void
+    {
+        $this->race(1);
+        $this->budgets->save(1, 107, 9, $this->plan());
+
+        $view = $this->service->build(1, null)['budget']['view'] ?? [];
+
+        $this->assertFalse($view['upgrades_locked'] ?? null);
+        $this->assertArrayHasKey('upgrades', $view);
+        $this->assertNull($view['upgrades']);
+    }
+
     public function testEmptyRankingShowsTheEmptyState(): void
     {
         $this->race(1);
