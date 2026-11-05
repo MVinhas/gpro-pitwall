@@ -7,12 +7,15 @@ namespace App\Support;
 final readonly class OfficeFlags
 {
     /**
-     * GPRO's per-race "done" flags arrive as "1"/"0" (or int/bool once archived); one parser for all of them.
+     * One parser for GPRO's per-race "done" flags. Most arrive as "1"/"0", but doneTesting and donePractice are lap
+     * counts ("0".."100" and "0".."8"), so any number above zero means done; archived offices may hold int/bool.
      *
      * @param array<string, mixed> $office
      */
     public static function done(array $office, string $flag): bool
     {
-        return filter_var($office[$flag] ?? null, FILTER_VALIDATE_BOOLEAN);
+        $value = $office[$flag] ?? null;
+
+        return is_numeric($value) ? (float) $value > 0 : filter_var($value, FILTER_VALIDATE_BOOLEAN);
     }
 }

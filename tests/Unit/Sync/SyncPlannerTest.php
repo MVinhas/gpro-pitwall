@@ -38,7 +38,7 @@ final class SyncPlannerTest extends TestCase
             'seasonNb' => 10, 'raceNb' => 5, 'endOfSeason' => false, 'driId' => '123', 'tdId' => '55',
             'sponsorsAlert' => '0', 'donePractice' => false, 'doneQ1' => false, 'doneQ2' => false,
             'doneRaceSetup' => false, 'doneDriTrain' => false, 'doneStaffTrain' => false,
-            'doneCarRepair' => false, 'doneFacilitiesUpdate' => false, 'doneTesting' => false,
+            'doneCarRepair' => false, 'doneFacilitiesUpdate' => false, 'doneTesting' => '0',
         ];
     }
 
@@ -77,10 +77,12 @@ final class SyncPlannerTest extends TestCase
             'doneQ2 flip' => [[], ['doneQ2' => true], $same, $ps, []],
             'doneDriTrain flip' => [[], ['doneDriTrain' => true], $same, ['DRIVER'], []],
             'doneCarRepair flip' => [[], ['doneCarRepair' => true], $same, ['CAR'], []],
-            'doneTesting flip' => [[], ['doneTesting' => true], $same, ['CAR', 'TESTING'], []],
+            'doneTesting 0 to 34 laps' => [[], ['doneTesting' => '34'], $same, ['CAR', 'TESTING'], []],
+            'doneTesting 34 to 100 laps' => [[], ['doneTesting' => '100'], self::office(['doneTesting' => '34']), ['CAR', 'TESTING'], []],
+            'doneTesting 100 laps unchanged stays quiet' => [[], ['doneTesting' => '100'], self::office(['doneTesting' => '100']), [], []],
             'doneStaffTrain flip' => [[], ['doneStaffTrain' => true], $same, ['STAFF'], []],
             'doneFacilitiesUpdate flip' => [[], ['doneFacilitiesUpdate' => true], $same, ['STAFF'], []],
-            'flag already true stays quiet' => [[], ['doneRaceSetup' => true, 'doneTesting' => true], self::office(['doneRaceSetup' => true, 'doneTesting' => true]), [], []],
+            'flag already true stays quiet' => [[], ['doneRaceSetup' => true, 'doneTesting' => '34'], self::office(['doneRaceSetup' => true, 'doneTesting' => '34']), [], []],
             'flag string "1" flips' => [[], ['doneRaceSetup' => '1'], self::office(['doneRaceSetup' => '0']), $ps, []],
             'sponsorsAlert changed' => [[], ['sponsorsAlert' => '1'], $same, ['SPONSORS'], []],
             'tdId changed to a new TD' => [[], ['tdId' => '55'], self::office(['tdId' => '']), ['TD'], []],

@@ -1504,7 +1504,7 @@ final class RaceEngineerServiceTest extends TestCase
         $this->seedPromotionFixture();
 
         $result = $this->service->forCockpit(self::USER, $this->cockpit([
-            'office' => $this->office(['doneCarRepair' => '1', 'doneTesting' => 1, 'doneDriTrain' => '1']),
+            'office' => $this->office(['doneCarRepair' => '1', 'doneTesting' => '100', 'doneDriTrain' => '1']),
             'car' => $this->pricedCar(200_000),
         ]));
         $byKey = array_column($result['lines'], null, 'key');
@@ -1521,7 +1521,7 @@ final class RaceEngineerServiceTest extends TestCase
     {
         $this->seedPromotionFixture();
 
-        foreach (['0', 0, null, 'missing', 'no', false, '01'] as $flag) {
+        foreach (['0', 0, null, 'missing', 'no', false] as $flag) {
             $office = $this->office($flag === 'missing' ? [] : ['doneCarRepair' => $flag]);
             $result = $this->service->forCockpit(self::USER, $this->cockpit([
                 'office' => $office,
@@ -2185,6 +2185,34 @@ final class RaceEngineerServiceTest extends TestCase
         // The unlock swap and the session both come out of the envelope before upgrades.
         self::assertCount(1, $spent);
         self::assertGreaterThanOrEqual(RaceEngineer::TESTING_SESSION_COST, $spent[0]);
+    }
+
+    public function testAnyTestingLapsRunMeanTheSessionRan(): void
+    {
+        $this->seedPromotionFixture();
+        $this->seedLowWearTrack();
+        $this->service->pin(self::USER, self::SEASON, 'promote');
+        $testingAt = function (string $laps): array {
+            $spent = new \ArrayObject();
+            $lines = $this->engineer(ranker: $this->spentRanker($spent))->forCockpit(
+                self::USER,
+                $this->testingCockpit($this->testedParts(10, 10), [
+                    'office' => $this->office(['doneTesting' => $laps]),
+                    'menu' => ['IDM' => 7, 'cash' => 50_000_000],
+                ]),
+            )['lines'];
+
+            return [array_column($lines, null, 'key')['testing']['answer'], $spent->getArrayCopy()];
+        };
+
+        [$untested, $untestedSpent] = $testingAt('0');
+        self::assertSame('Test at Silverstone', $untested);
+        self::assertGreaterThanOrEqual(RaceEngineer::TESTING_SESSION_COST, $untestedSpent[0]);
+
+        // GPRO counts the laps run; a session cut short at 34 has still been paid for.
+        [$tested, $testedSpent] = $testingAt('34');
+        self::assertSame('Testing done this race', $tested);
+        self::assertSame([0], $testedSpent);
     }
 
     public function testStaySameCarIsBlocked(): void

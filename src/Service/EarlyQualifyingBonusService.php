@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Service;
 
+use App\Support\OfficeFlags;
 use App\Support\SyncState;
 use DateTimeImmutable;
 use DateTimeZone;
@@ -103,8 +104,8 @@ final class EarlyQualifyingBonusService
         $sessions = SyncState::isStale($lastSyncedAt, $now, $this->raceDays)
             ? null
             : [
-                'q1' => (int) ($office['doneQ1'] ?? 0) > 0,
-                'q2' => (int) ($office['doneQ2'] ?? 0) > 0,
+                'q1' => OfficeFlags::done($office, 'doneQ1'),
+                'q2' => OfficeFlags::done($office, 'doneQ2'),
             ];
 
         $state = match (true) {

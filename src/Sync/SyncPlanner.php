@@ -34,7 +34,7 @@ final class SyncPlanner
     /** Fetched for the last completed season, which never changes. */
     private const array SEASON_PHASE2 = [Endpoint::SF_HISTORY, Endpoint::CCP_HISTORY];
 
-    /** @var array<string, list<string>> done-flag => endpoints it unlocks when it flips to true */
+    /** @var array<string, list<string>> done-flag => endpoints it unlocks when its value changes and reads done */
     private const array FLAG_TRIGGERS = [
         'doneDriTrain' => [Endpoint::DRIVER],
         'doneCarRepair' => [Endpoint::CAR],
@@ -143,7 +143,9 @@ final class SyncPlanner
         $previous = $ctx->previousOffice ?? [];
         $planned = [];
         foreach (self::FLAG_TRIGGERS as $flag => $endpoints) {
-            if (!OfficeFlags::done($previous, $flag) && OfficeFlags::done($ctx->office, $flag)) {
+            // doneTesting is a lap count, so a session that goes on from 34 to 100 laps changes the car again.
+            $changed = self::text($previous, $flag) !== self::text($ctx->office, $flag);
+            if ($changed && OfficeFlags::done($ctx->office, $flag)) {
                 $planned = [...$planned, ...$endpoints];
             }
         }
