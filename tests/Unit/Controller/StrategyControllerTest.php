@@ -264,7 +264,6 @@ final class StrategyControllerTest extends TestCase
             ['IDM' => 3, 'carLevel' => 1],
         ];
         $r = StrategyController::carStanding(7, $managers);
-        $this->assertNotNull($r['rank']);
         $this->assertSame(4, $r['total']);
         $this->assertSame(2, $r['rank']);
     }

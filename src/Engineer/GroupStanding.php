@@ -82,12 +82,13 @@ final readonly class GroupStanding
                 continue;
             }
 
-            if (!is_numeric($manager['carLevel'] ?? null) || !is_numeric($manager['carLevelRank'] ?? null)) {
+            $level = self::level($manager['carLevel'] ?? null);
+            if ($level === null || !is_numeric($manager['carLevelRank'] ?? null)) {
                 return null;
             }
 
             return [
-                'level' => (int) self::level($manager['carLevel']),
+                'level' => $level,
                 'rank' => (int) $manager['carLevelRank'] + 1,
                 'of' => count($managers),
             ];

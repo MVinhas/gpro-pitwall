@@ -1580,11 +1580,11 @@ final class RaceEngineerTest extends TestCase
     /**
      * @param list<array<string, mixed>> $upgrades
      */
-    private function stayUpgradeInputs(string $objective, ?int $rank, array $upgrades): EngineerInputs
+    private function stayUpgradeInputs(string $objective, ?int $rank, array $upgrades, int $of = 40): EngineerInputs
     {
         return $this->withUpgrades($upgrades, [
             'objective' => $this->objective($objective),
-            'carStanding' => $rank === null ? null : ['level' => 14, 'rank' => $rank, 'of' => 40],
+            'carStanding' => $rank === null ? null : ['level' => 14, 'rank' => $rank, 'of' => $of],
         ]);
     }
 
@@ -1613,20 +1613,21 @@ final class RaceEngineerTest extends TestCase
 
     public function testStayWithNoUpgradeThatPaysSaysNothingWorthBuying(): void
     {
-        $in = $this->withUpgrades(
-            [$this->upgrade('Engine', 4, 300_000), $this->upgrade('Brakes', 5, 150_000)],
-            [
-                'objective' => $this->objective(SeasonObjective::STAY),
-                'carStanding' => ['level' => 6, 'rank' => 11, 'of' => 37],
-            ],
+        $upgrades = [$this->upgrade('Engine', 4, 300_000), $this->upgrade('Brakes', 5, 150_000)];
+        $at = fn (int $rank): array => $this->line(
+            $this->stayUpgradeInputs(SeasonObjective::STAY, $rank, $upgrades, 37),
+            'upgrades',
         );
-        $line = $this->line($in, 'upgrades');
 
-        $this->assertSame('Nothing worth buying', $line['answer']);
+        // of 37: intdiv(3 * 37, 4) = 27 is the last rank outside the weakest quarter.
+        $outside = $at(27);
+        $this->assertSame('Nothing worth buying', $outside['answer']);
         $this->assertSame(
             'Stay: no upgrade pays for itself while your car is out of the group\'s weakest quarter',
-            $line['reason'],
+            $outside['reason'],
         );
+
+        $this->assertSame('Upgrade Engine to L4', $at(28)['answer']);
     }
 
     public function testStayInTheWeakestQuarterKeepsTheUpgradeAdvice(): void
