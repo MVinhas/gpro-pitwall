@@ -517,6 +517,7 @@ $container['controller.car_wear'] = new \App\Controller\CarWearController(
 );
 
 $container['repository.season_objective'] = new \App\Repository\SeasonObjectiveRepository($container['db']);
+$container['repository.weekend_choice'] = new \App\Repository\WeekendChoiceRepository($container['db']);
 $container['repository.season_budget'] = new \App\Repository\SeasonBudgetRepository($container['db']);
 
 $ctrCeiling = new \App\Engineer\CtrCeiling($container['service.car_wear']);
