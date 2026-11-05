@@ -95,16 +95,14 @@ final class CtrPlannerTest extends TestCase
     }
 
     /**
-     * The highest CTR whose forecast passes the budget check alone, scanned the plan's way.
-     *
-     * @param array<string, mixed> $plan
+     * The highest CTR whose forecast passes the budget check alone against its own cushion, scanned the plan's way.
      */
-    private function highestBudgetCandidate(array $plan, int $cash): int
+    private function highestBudgetCandidate(int $cash): int
     {
         for ($c = 100; $c >= 0; $c--) {
             $forecast = $this->budget->forecast($this->rounds(), self::ENGINE, self::PRICES, 1.0, $c, 100, $cash, 0, 0);
-            $cushion = $plan['cushion'];
-            $target = $plan['target'];
+            $cushion = $this->cushionAt($c, self::ENGINE, 3, $cash, 0, 0);
+            $target = $cushion;
             if (
                 !($forecast['infeasible'] && $c > 0)
                 && CtrPlanner::headroom($forecast['rows'], $cushion, $target) >= 0
@@ -157,6 +155,76 @@ final class CtrPlannerTest extends TestCase
         $this->assertSame($before['envelope'], $after['envelope']);
     }
 
+    /**
+     * The cushion the plan's rule prices at $ctr: the committed cost plus the average repairs of the races after
+     * the next one.
+     *
+     * @param array<string, array{level: int, start: int|float, track_base: int|float, training?: int|float}> $parts
+     */
+    private function cushionAt(int $ctr, array $parts, int $races, int $cash, int $committed, int $income): int
+    {
+        $rows = $this->budget->forecast(
+            $this->rounds($races),
+            $parts,
+            self::PRICES,
+            1.0,
+            $ctr,
+            WearAdvisorService::THRESHOLD_SWAP,
+            $cash,
+            $committed,
+            $income,
+        )['rows'];
+        $later = array_slice($rows, 1);
+
+        return $committed + intdiv(array_sum(array_column($later, 'repairs')), count($later));
+    }
+
+    public function testCushionIsPricedAtThePlannedCtrNotTheSafetyCeiling(): void
+    {
+        $fresh = ['Engine' => ['level' => 1, 'start' => 0.0, 'track_base' => 10.0]];
+
+        $plan = $this->plan(SeasonObjective::STAY, 1_000_000, 50_000, 50_000, parts: $fresh, races: 5);
+
+        $this->assertSame(100, $plan['safety']);
+        $this->assertLessThan(100, $plan['ctr']);
+        $cushion = $this->cushionAt($plan['ctr'], $fresh, 5, 1_000_000, 50_000, 50_000);
+        $this->assertSame($cushion, $plan['cushion']);
+        $this->assertSame($cushion, $plan['target']);
+        $this->assertLessThan($this->cushionAt(100, $fresh, 5, 1_000_000, 50_000, 50_000), $plan['cushion']);
+        $this->assertSame(
+            max(0, CtrPlanner::headroom($plan['rows'], $plan['cushion'], $plan['target'])),
+            $plan['envelope'],
+        );
+    }
+
+    public function testPromoteCandidateIsJudgedAgainstItsOwnCushion(): void
+    {
+        // The later races swap the engine twice up to CTR 80 and four times from CTR 81: $280,000 pays for two.
+        $fresh = ['Engine' => ['level' => 1, 'start' => 0.0, 'track_base' => 10.0]];
+        $cushionAt = fn (int $c): int => $this->cushionAt($c, $fresh, 5, 280_000, 0, 0);
+        $rowsAt = fn (int $c): array => $this->budget->forecast(
+            $this->rounds(5),
+            $fresh,
+            self::PRICES,
+            1.0,
+            $c,
+            WearAdvisorService::THRESHOLD_SWAP,
+            280_000,
+            0,
+            0,
+        )['rows'];
+
+        $plan = $this->plan(SeasonObjective::PROMOTE, 280_000, parts: $fresh, races: 5);
+
+        $this->assertSame(100, $plan['safety']);
+        $this->assertSame(80, $plan['ctr']);
+        $this->assertSame('nurse', $plan['mode']);
+        $this->assertSame($cushionAt(80), $plan['cushion']);
+        $this->assertGreaterThanOrEqual(0, CtrPlanner::headroom($rowsAt(80), $cushionAt(80), $cushionAt(80)));
+        $this->assertLessThan(0, CtrPlanner::headroom($rowsAt(80), $cushionAt(100), $cushionAt(100)));
+        $this->assertLessThan(0, CtrPlanner::headroom($rowsAt(81), $cushionAt(81), $cushionAt(81)));
+    }
+
     public function testSingleRaceCushionIsTheCommittedCost(): void
     {
         $worn = ['Engine' => ['level' => 1, 'start' => 95.0, 'track_base' => 10.0]];
@@ -170,16 +238,16 @@ final class CtrPlannerTest extends TestCase
     {
         $scenarios = [];
         foreach ([0, 40_000, 80_000, 120_000, 150_000, 250_000, 400_000, 1_000_000] as $cash) {
-            $scenarios[] = [SeasonObjective::PROMOTE, $cash, 0, 0, null];
+            $scenarios[] = [SeasonObjective::PROMOTE, $cash, 0, 0];
         }
         foreach ([300_000, 600_000, 900_000, 2_000_000] as $cash) {
-            $scenarios[] = [SeasonObjective::PROMOTE, $cash, 50_000, 30_000, null];
+            $scenarios[] = [SeasonObjective::PROMOTE, $cash, 50_000, 30_000];
         }
         $rounds = $this->rounds();
 
-        foreach ($scenarios as [$objective, $cash, $committed, $income, $start]) {
+        foreach ($scenarios as [$objective, $cash, $committed, $income]) {
             $label = "$objective cash $cash committed $committed";
-            $plan = $this->plan($objective, $cash, $committed, $income, $start);
+            $plan = $this->plan($objective, $cash, $committed, $income);
             $at = fn (int $c): array => $this->budget->forecast(
                 $rounds,
                 self::ENGINE,
@@ -192,16 +260,15 @@ final class CtrPlannerTest extends TestCase
                 $income,
             )['rows'];
 
-            $cushion = $committed + intdiv(array_sum(array_column(array_slice($at($plan['safety']), 1), 'repairs')), 2);
-            $end = $start !== null && $start > $cushion ? $start : $cushion;
-            $this->assertSame($cushion, $plan['cushion'], $label);
-            $this->assertSame($end, $plan['target'], $label);
+            $cushionAt = static fn (int $c): int => $committed
+                + intdiv(array_sum(array_column(array_slice($at($c), 1), 'repairs')), 2);
+            $this->assertSame($cushionAt($plan['ctr']), $plan['cushion'], $label);
+            $this->assertSame($cushionAt($plan['ctr']), $plan['target'], $label);
 
             $expected = null;
             for ($c = 100; $c >= 0; $c--) {
                 $rows = $at($c);
-                $ok = $rows[2]['balance'] >= $end
-                    && min(array_column($rows, 'balance')) >= $cushion
+                $ok = min(array_column($rows, 'balance')) >= $cushionAt($c)
                     && ($c <= $plan['safety'] || $rows[0]['replaced'] !== []);
                 if ($ok) {
                     $expected = $c;
@@ -279,7 +346,7 @@ final class CtrPlannerTest extends TestCase
 
     public function testStayTargetIsTheCushionWhenTheStartIsLowerOrUnknown(): void
     {
-        $low = $this->plan(SeasonObjective::STAY, 1_000_000, seasonStart: 1_000);
+        $low = $this->plan(SeasonObjective::STAY, 1_000_000, 50_000, seasonStart: 1_000);
         $this->assertSame('cushion', $low['target_kind']);
         $this->assertSame($low['cushion'], $low['target']);
 
@@ -305,7 +372,9 @@ final class CtrPlannerTest extends TestCase
         $this->assertGreaterThan((int) ceil(100_000 / 2), $plan['cushion']);
         $this->assertSame('cushion', $plan['target_kind']);
         $this->assertSame($plan['cushion'], $plan['target']);
-        $this->assertSame(50_000 + 50_000, $plan['cushion']);
+        // CTR 100 swaps the engine in both later races.
+        $this->assertSame(100, $plan['ctr']);
+        $this->assertSame(50_000 + 100_000, $plan['cushion']);
     }
 
     public function testPromoteFallsBackToTheCushionWhenHalfTheStartIsOutOfReach(): void
@@ -627,7 +696,7 @@ final class CtrPlannerTest extends TestCase
         // $120,000 covers no swap: every CTR from 25 up leaves a row under the cushion.
         $plan = $this->plan(SeasonObjective::STAY, 120_000, policy: self::policy(safety: true));
 
-        $this->assertSame($this->highestBudgetCandidate($plan, 120_000), $plan['ctr']);
+        $this->assertSame($this->highestBudgetCandidate(120_000), $plan['ctr']);
         $this->assertSame(24, $plan['ctr']);
         $this->assertSame('safety', $plan['ctr_kind']);
         $this->assertSame('nurse', $plan['mode']);
@@ -637,7 +706,7 @@ final class CtrPlannerTest extends TestCase
     {
         $plan = $this->plan(SeasonObjective::STAY, 1_000_000, policy: self::policy(safety: true));
 
-        $this->assertSame($this->highestBudgetCandidate($plan, 1_000_000), $plan['ctr']);
+        $this->assertSame($this->highestBudgetCandidate(1_000_000), $plan['ctr']);
         $this->assertSame(100, $plan['ctr']);
         $this->assertSame('push', $plan['mode']);
         $this->assertNull($plan['refused_swap_cost']);
@@ -775,11 +844,11 @@ final class CtrPlannerTest extends TestCase
             'Engine' => ['level' => 1, 'start' => 95.0, 'track_base' => 10.0],
             'Chassis' => ['level' => 1, 'start' => 0.0, 'track_base' => 10.0],
         ];
-        // Snapshot of the advice before the energy cap existed: cash, committed, income, start, parts, locked,
-        // then the CTR and mode it gave.
+        // Snapshot of the advice before the energy cap existed, re-taken when each CTR got its own cushion: cash,
+        // committed, income, start, parts, locked, then the CTR and mode it gave.
         $scenarios = [
-            [0, 0, 0, null, null, false, 0, 'short'],
-            [40_000, 0, 0, null, null, false, 0, 'short'],
+            [0, 0, 0, null, null, false, 24, 'nurse'],
+            [40_000, 0, 0, null, null, false, 24, 'nurse'],
             [80_000, 0, 0, null, null, false, 24, 'nurse'],
             [120_000, 0, 0, null, null, false, 24, 'nurse'],
             [150_000, 0, 0, null, null, false, 80, 'nurse'],
@@ -796,7 +865,7 @@ final class CtrPlannerTest extends TestCase
             [100_000, 0, 50_000, null, null, false, 80, 'nurse'],
             [0, 100_000, 0, null, null, false, 0, 'short'],
             [10_000_000, 0, 0, null, $chassis, false, 100, 'push'],
-            [400_000, 0, 0, null, $chassis, false, 24, 'nurse'],
+            [400_000, 0, 0, null, $chassis, false, 60, 'nurse'],
             [5_000_000, 0, 0, null, $stuck, true, 0, 'nurse'],
         ];
 
@@ -816,7 +885,7 @@ final class CtrPlannerTest extends TestCase
         // $1M a point makes every CTR clearly better than the one below, but from CTR 25 a swap breaks the cushion.
         $plan = $this->plan(SeasonObjective::STAY, 120_000, policy: self::policy(1_000_000));
 
-        $this->assertSame($this->highestBudgetCandidate($plan, 120_000), $plan['ctr']);
+        $this->assertSame($this->highestBudgetCandidate(120_000), $plan['ctr']);
         $this->assertSame(24, $plan['ctr']);
         $this->assertSame('value', $plan['ctr_kind']);
         $this->assertGreaterThanOrEqual(0, $plan['envelope']);

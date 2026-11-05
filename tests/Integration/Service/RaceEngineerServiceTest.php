@@ -2011,7 +2011,7 @@ final class RaceEngineerServiceTest extends TestCase
             self::USER,
             $this->testingCockpit($this->testedParts(90, 10, 8.0), [
                 'car' => $this->pricedCar(1_500_000),
-                'menu' => ['IDM' => 7, 'cash' => 3_000_000],
+                'menu' => ['IDM' => 7, 'cash' => 1_680_000],
             ]),
         )['lines'];
         $byKey = array_column($lines, null, 'key');
