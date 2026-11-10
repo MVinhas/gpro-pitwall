@@ -13,6 +13,15 @@ namespace App\Engineer;
  * @phpstan-type HiringMoney array{rows: list<BudgetRow>, cushion: int, target: int, envelope: int, spare: int}
  * @phpstan-type Pick array{id: int, name: string, rating: float, gain: ?float, oa: int, age: int, salary: int,
  *   fee: int, favourites: int, one_off: int, fits: 'plan'|'cuts'|'unknown', cut: int}
+ * @phpstan-type Current array{name: string, rating: ?float, oa: int, age: int, salary: int, races_left: int,
+ *   retiring: bool, renew_fee: ?int, renew_salary: ?int, extension_blocked: bool}
+ * @phpstan-type Extension array{fee: int, salary: int, exact: bool, fits: bool}
+ * @phpstan-type Reason 'no_driver'|'leaving_cap'|'leaving_retiring'|'better'|'extension_over_budget'|'contract'
+ *   |'extension_budget_short'|'over_cap'|'no_extension'|'retiring_later'|'none'
+ * @phpstan-type Verdict 'keep'|'extend'|'replace'|'hire'
+ * @phpstan-type DriverAdvice array{verdict: Verdict, reason: Reason, urgent: bool,
+ *   current: ?Current, over_cap: bool, cap: ?int, group_average: ?int, extension: ?Extension,
+ *   shortlist: list<Pick>, out: Out, top_out: ?string, ranked: bool, market_known: bool, finances_known: bool}
  */
 final readonly class DriverHiringAdvisor
 {
@@ -27,6 +36,68 @@ final readonly class DriverHiringAdvisor
     public const float TIE_BAND = 1.0;
     public const int SHORTLIST = 3;
     public const float MIN_RATING = 50.0;
+
+    /**
+     * @param ?Current $current null when no driver is under contract
+     * @param ?list<array<string, mixed>> $rated market rows carrying their rating; null when the market or the
+     *   baseline is missing
+     * @param list<int> $calendarTrackIds track ids of the season's remaining races
+     * @param ?HiringMoney $money
+     * @return DriverAdvice
+     */
+    public static function advise(
+        ?array $current,
+        ?array $rated,
+        bool $marketKnown,
+        array $calendarTrackIds,
+        ?int $cap,
+        ?int $groupAverage,
+        ?array $money,
+        ?int $cash,
+        bool $promote,
+        int $seasonRacesLeft,
+    ): array {
+        $out = self::noneOut();
+        $shortlist = [];
+        if ($rated !== null) {
+            ['shortlist' => $shortlist, 'out' => $out] = self::shortlist(
+                $rated,
+                $calendarTrackIds,
+                $current,
+                $cap,
+                $groupAverage,
+                $money,
+                $cash,
+                $promote,
+            );
+        }
+        $extension = self::extension($current, $cap, $money, $cash);
+        [$verdict, $reason] = self::verdict($current, $cap, $extension, $shortlist, $seasonRacesLeft);
+
+        $topOut = null;
+        foreach ($out as $key => $count) {
+            if ($count > 0 && ($topOut === null || $count > $out[$topOut])) {
+                $topOut = $key;
+            }
+        }
+
+        return [
+            'verdict' => $verdict,
+            'reason' => $reason,
+            'urgent' => $verdict === 'extend' && $current !== null && $current['races_left'] <= self::URGENT_AT,
+            'current' => $current,
+            'over_cap' => $current !== null && $cap !== null && $current['oa'] > $cap,
+            'cap' => $cap,
+            'group_average' => $groupAverage,
+            'extension' => $extension,
+            'shortlist' => $shortlist,
+            'out' => $out,
+            'top_out' => $topOut,
+            'ranked' => $rated !== null,
+            'market_known' => $marketKnown,
+            'finances_known' => $money !== null,
+        ];
+    }
 
     /**
      * @param list<array<string, mixed>> $rated market rows carrying their recruitment rating
@@ -84,8 +155,7 @@ final readonly class DriverHiringAdvisor
      */
     public static function redLines(array $candidates, ?int $cap, ?int $groupAverage): array
     {
-        $out = ['retiring' => 0, 'cap' => 0, 'age' => 0, 'offers' => 0, 'salary_average' => 0,
-            'salary_plan' => 0, 'switch_cost' => 0];
+        $out = self::noneOut();
         $open = [];
         foreach ($candidates as $candidate) {
             $line = match (true) {
@@ -209,5 +279,144 @@ final readonly class DriverHiringAdvisor
 
         return CtrPlanner::headroom($money['rows'], $money['cushion'], $money['target'])
             - CtrPlanner::headroom($lowered, $money['cushion'], $money['target']);
+    }
+
+    /**
+     * Rules apply in order, first match wins. An extension exists only for a driver it can apply to (see
+     * extension()), so "extension !== null" stands for "within the cap, not retiring, not blocked".
+     *
+     * @param ?Current $current
+     * @param ?Extension $extension
+     * @param list<Pick> $shortlist
+     * @return array{Verdict, Reason}
+     */
+    private static function verdict(
+        ?array $current,
+        ?int $cap,
+        ?array $extension,
+        array $shortlist,
+        int $seasonRacesLeft,
+    ): array {
+        if ($current === null) {
+            return ['hire', 'no_driver'];
+        }
+        $racesLeft = $current['races_left'];
+        $overCap = $cap !== null && $current['oa'] > $cap;
+        $ending = $racesLeft <= self::EXTEND_AT;
+        $gain = $shortlist[0]['gain'] ?? null;
+
+        if ($overCap && $ending) {
+            return ['replace', 'leaving_cap'];
+        }
+        if ($current['retiring'] && min($racesLeft, $seasonRacesLeft) <= self::EXTEND_AT) {
+            return ['replace', 'leaving_retiring'];
+        }
+        if ($gain !== null && $gain >= self::SWITCH_GAIN) {
+            return ['replace', 'better'];
+        }
+        if ($ending && $extension !== null) {
+            if ($extension['fits']) {
+                return ['extend', 'contract'];
+            }
+
+            return $shortlist === [] ? ['extend', 'extension_budget_short'] : ['replace', 'extension_over_budget'];
+        }
+        if ($overCap) {
+            return ['keep', 'over_cap'];
+        }
+        if ($ending && $current['extension_blocked']) {
+            return ['keep', 'no_extension'];
+        }
+
+        return $current['retiring'] ? ['keep', 'retiring_later'] : ['keep', 'none'];
+    }
+
+    /**
+     * The best SHORTLIST candidates the money allows; a candidate the money rules hold out is counted in `out`.
+     *
+     * @param list<array<string, mixed>> $rated
+     * @param list<int> $calendarTrackIds
+     * @param ?Current $current
+     * @param ?HiringMoney $money
+     * @return array{shortlist: list<Pick>, out: Out}
+     */
+    private static function shortlist(
+        array $rated,
+        array $calendarTrackIds,
+        ?array $current,
+        ?int $cap,
+        ?int $groupAverage,
+        ?array $money,
+        ?int $cash,
+        bool $promote,
+    ): array {
+        ['open' => $open, 'out' => $out] = self::redLines(
+            self::candidates($rated, $calendarTrackIds),
+            $cap,
+            $groupAverage,
+        );
+        $shortlist = [];
+        foreach (self::rank($open) as $candidate) {
+            if (count($shortlist) === self::SHORTLIST) {
+                break;
+            }
+            $pick = self::price(
+                $candidate,
+                $current['salary'] ?? 0,
+                $current['races_left'] ?? 0,
+                $money,
+                $cash,
+                $promote,
+                $current['rating'] ?? null,
+            );
+            if (is_string($pick)) {
+                $out[$pick]++;
+            } else {
+                $shortlist[] = $pick;
+            }
+        }
+
+        return ['shortlist' => $shortlist, 'out' => $out];
+    }
+
+    /**
+     * What renewing the current driver costs. Null for no driver, a driver over the cap, a retiring driver, or a
+     * contract GPRO will not extend. GPRO's own renewal offer wins over the usual multiples of today's salary.
+     *
+     * @param ?Current $current
+     * @param ?HiringMoney $money
+     * @return ?Extension
+     */
+    private static function extension(?array $current, ?int $cap, ?array $money, ?int $cash): ?array
+    {
+        if (
+            $current === null
+            || ($cap !== null && $current['oa'] > $cap)
+            || $current['retiring']
+            || $current['extension_blocked']
+        ) {
+            return null;
+        }
+        $fee = $current['renew_fee'];
+        $salary = $current['renew_salary'];
+        if ($fee === null || $fee <= 0 || $salary === null || $salary <= 0) {
+            $exact = false;
+            $fee = (int) round($current['salary'] * self::EXTENSION_FEE);
+            $salary = (int) round($current['salary'] * self::EXTENSION_SALARY);
+        } else {
+            $exact = true;
+        }
+        $fits = $money === null
+            ? $cash === null || $fee <= $cash
+            : self::drop($money, $salary - $current['salary'], $fee, $current['races_left']) <= $money['envelope'];
+
+        return ['fee' => $fee, 'salary' => $salary, 'exact' => $exact, 'fits' => $fits];
+    }
+
+    /** @return Out */
+    private static function noneOut(): array
+    {
+        return ['retiring' => 0, 'cap' => 0, 'age' => 0, 'offers' => 0, 'salary_average' => 0,
+            'salary_plan' => 0, 'switch_cost' => 0];
     }
 }
