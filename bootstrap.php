@@ -546,6 +546,7 @@ $container['service.race_engineer'] = new \App\Service\RaceEngineerService(
     $container['service.ctr_model'],
     (float) ($container['config']['secrets']['tyre_calc']['clear_track_risk_gain_lap_fraction'] ?? 0.0),
     $container['repository.weekend_choice'],
+    recruitment: $container['service.recruitment'],
 );
 
 $container['controller.page'] = new PageController(

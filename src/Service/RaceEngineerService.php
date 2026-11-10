@@ -9,6 +9,7 @@ use App\Engineer\CtrCeiling;
 use App\Engineer\CtrPace;
 use App\Engineer\CtrPlanner;
 use App\Engineer\CtrPolicy;
+use App\Engineer\DriverHiringAdvisor;
 use App\Engineer\EnergyModel;
 use App\Engineer\EngineerInputs;
 use App\Engineer\GroupStanding;
@@ -82,6 +83,32 @@ use App\Support\TrackName;
  *         season: string
  *     }>
  * }
+ * @phpstan-import-type DriverAdvice from DriverHiringAdvisor
+ * @phpstan-import-type Current from DriverHiringAdvisor
+ * @phpstan-import-type HiringMoney from DriverHiringAdvisor
+ * @phpstan-type DriverPanel array{
+ *     verdict: string,
+ *     reason: string,
+ *     answer: string,
+ *     figure: ?string,
+ *     current: ?array{name: string, rating: ?string, overall: string, age: int, salary: string, races_left: int},
+ *     group_average: ?string,
+ *     extension: ?array{fee: string, salary: string, exact: bool},
+ *     shortlist: list<array{
+ *         name: string,
+ *         rating: string,
+ *         gain: ?string,
+ *         salary: string,
+ *         to_sign: string,
+ *         age: int,
+ *         overall: int,
+ *         favourites: int,
+ *         fits: string
+ *     }>,
+ *     out: list<array{label: string, count: int}>,
+ *     notes: list<string>
+ * }
+ * @phpstan-type DriverCall array{advice: DriverAdvice, line: Line, panel: DriverPanel}
  * @phpstan-type EnergyCap array{cap: int, estimate: bool, start: ?int}
  * @phpstan-type TestingCall array{gate: TestingGate, picks: list<SwapPick>, unaffordable: bool}
  * @phpstan-type Context array{
@@ -106,6 +133,18 @@ class RaceEngineerService
         'ctr', 'ctr_kind', 'safety', 'target', 'target_kind', 'cushion', 'shortfall', 'partial', 'value',
         'energy_cap', 'energy_estimate', 'energy_start', 'refused_swap_cost', 'infeasible', 'rows', 'envelope',
     ];
+    private const string OFFER_NOTE = 'Offer a 17-race contract. Each offer costs from $500,000 and is not refunded; '
+        . 'drivers decide Mondays and Thursdays, 19:00–21:00 CET.';
+    /** Why market drivers were left out, in the order the panel lists them. */
+    private const array OUT_LABELS = [
+        'retiring' => 'Retiring',
+        'cap' => 'Over the cap',
+        'age' => 'Aged 35 or more',
+        'offers' => 'Has offers',
+        'salary_average' => "Above your group's average",
+        'salary_plan' => 'Salary over the plan',
+        'switch_cost' => 'Switch cost over the plan',
+    ];
 
     public function __construct(
         private readonly SeasonObjectiveRepository $pins,
@@ -129,6 +168,7 @@ class RaceEngineerService
         private readonly float $ctrGainFraction,
         private readonly ?WeekendChoiceRepository $choices = null,
         private readonly WearAdvisorService $wearAdvisor = new WearAdvisorService(),
+        private readonly ?RecruitmentService $recruitment = null,
     ) {
     }
 
@@ -136,7 +176,14 @@ class RaceEngineerService
      * @param array<string, mixed> $c Cockpit's already-computed values
      * @param bool $stale A race has finished since the last sync: the figures are last weekend's, so the
      *                    engineer asks for a re-sync instead of planning (or saving a plan) on them.
-     * @return array{objective: InForce, lines: list<Line>, season: int, tyres: ?TyrePanel, car_updated: bool}
+     * @return array{
+     *     objective: InForce,
+     *     lines: list<Line>,
+     *     season: int,
+     *     tyres: ?TyrePanel,
+     *     car_updated: bool,
+     *     driver: ?DriverPanel
+     * }
      */
     public function forCockpit(int $userId, array $c, bool $stale = false): array
     {
@@ -152,6 +199,7 @@ class RaceEngineerService
                 'season' => $season,
                 'tyres' => null,
                 'car_updated' => $locked,
+                'driver' => null,
             ];
         }
 
@@ -209,7 +257,10 @@ class RaceEngineerService
             }
         }
 
-        $lines = RaceEngineer::brief($inputs->withTyreAdvice($tyres));
+        $driver = $objective['over']
+            ? null
+            : $this->driverCall($c, $inputs, $ctx['cash'], $objective['objective'] === SeasonObjective::PROMOTE);
+        $lines = RaceEngineer::brief($inputs->withTyreAdvice($tyres)->withDriverAdvice($driver['advice'] ?? null));
 
         return [
             'objective' => $objective,
@@ -217,7 +268,36 @@ class RaceEngineerService
             'season' => $season,
             'tyres' => $tyres === null ? null : self::tyrePanel($tyres),
             'car_updated' => $locked,
+            'driver' => $driver['panel'] ?? null,
         ];
+    }
+
+    /**
+     * The Driver panel for a manager with no driver under contract, whose screen has no card to plan: who to
+     * sign, checked against the cash only. Null when the advice cannot be built.
+     *
+     * @param array<string, mixed> $c Cockpit's already-computed values
+     * @return ?array{line: Line, panel: DriverPanel}
+     */
+    public function driverCard(int $userId, array $c): ?array
+    {
+        if ($this->recruitment === null) {
+            return null;
+        }
+
+        try {
+            $ctx = $this->context($userId, $c);
+            $cash = $ctx['cash'];
+            $promote = $ctx['objective']['objective'] === SeasonObjective::PROMOTE;
+        } catch (\Throwable $e) {
+            // Without the stored season the shortlist still stands on the cash guard.
+            error_log('[Engineer] ' . $e::class);
+            $cash = self::cash($c);
+            $promote = false;
+        }
+        $driver = $this->driverCall($c, null, $cash, $promote);
+
+        return $driver === null ? null : ['line' => $driver['line'], 'panel' => $driver['panel']];
     }
 
     /**
@@ -481,8 +561,7 @@ class RaceEngineerService
         $menu = self::arr($c['menu'] ?? null);
         $season = (int) ($office['seasonNb'] ?? 0);
         $raceNb = (int) ($office['raceNb'] ?? 0);
-        // Every sync fetches the office; the menu only once a season.
-        $cash = (int) ($office['cash'] ?? $menu['cash'] ?? 0);
+        $cash = self::cash($c);
 
         $standingsRow = $this->standingsRow($userId, $season, $raceNb);
         $weekends = $this->weekends->forSeason($userId, $season);
@@ -531,6 +610,15 @@ class RaceEngineerService
             'outlook' => $outlook,
             'objective' => SeasonObjective::inForce($proposal, $this->pins->find($userId, $season)),
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $c
+     */
+    private static function cash(array $c): int
+    {
+        // Every sync fetches the office; the menu only once a season.
+        return (int) (self::arr($c['office'] ?? null)['cash'] ?? self::arr($c['menu'] ?? null)['cash'] ?? 0);
     }
 
     /**
@@ -942,6 +1030,264 @@ class RaceEngineerService
                 'per_race' => Money::short($row['cost']),
                 'season' => Money::short($row['season_cost']),
             ], $advice['rows']),
+        ];
+    }
+
+    /**
+     * Keep, extend, replace or hire, from the stored driver profile, the cached market and the card's plan. Null
+     * without a recruitment service, or when anything the advice reads fails (a driver under contract with no
+     * usable profile included).
+     *
+     * @param array<string, mixed> $c
+     * @param ?EngineerInputs $card the card's final inputs; null on the no-driver screen, which has neither a
+     *                              driver nor a plan
+     * @return ?DriverCall
+     */
+    private function driverCall(array $c, ?EngineerInputs $card, int $cash, bool $promote): ?array
+    {
+        $recruitment = $this->recruitment;
+        if ($recruitment === null) {
+            return null;
+        }
+
+        try {
+            $division = self::stringOrNull($c['division'] ?? null);
+            $division = $division === '' ? null : $division;
+            $office = self::arr($c['office'] ?? null);
+            $driver = $card === null ? null : self::currentDriver($recruitment, $c, $division);
+            ['ids' => $trackIds, 'left' => $seasonRacesLeft] = self::racesAhead($c, (int) ($office['raceNb'] ?? 0));
+            $rows = self::arr($c['driver_market'] ?? null)['rows'] ?? null;
+            $rows = is_array($rows) ? array_values($rows) : null;
+
+            $advice = DriverHiringAdvisor::advise(
+                $driver['current'] ?? null,
+                $rows !== null && $division !== null ? self::rated($recruitment, $rows, $division) : null,
+                $rows !== null,
+                $trackIds,
+                $division === null ? null : $recruitment->capFor($division),
+                self::groupDriverSalary($c),
+                $card === null ? null : self::hiringMoney($card),
+                $cash,
+                $promote,
+                $seasonRacesLeft,
+            );
+            $line = RaceEngineer::driverLine($advice);
+
+            return [
+                'advice' => $advice,
+                'line' => $line,
+                'panel' => self::driverPanel($advice, $line, $driver['overall'] ?? null),
+            ];
+        } catch (\Throwable $e) {
+            error_log('[Engineer] ' . $e::class);
+
+            return null;
+        }
+    }
+
+    /**
+     * What the season plan leaves for a driver change; null without a plan.
+     *
+     * @return ?HiringMoney
+     */
+    private static function hiringMoney(EngineerInputs $inputs): ?array
+    {
+        $plan = $inputs->plan;
+
+        return $plan === null ? null : [
+            'rows' => $plan['rows'],
+            'cushion' => $plan['cushion'],
+            'target' => $plan['target'],
+            'envelope' => max(0, (int) $plan['envelope']),
+            'spare' => RaceEngineer::spare($inputs),
+        ];
+    }
+
+    /**
+     * The driver under contract, from the stored profile; the office's salary and races left win over the
+     * profile's. Null when the office says there is none.
+     *
+     * @param array<string, mixed> $c
+     * @return ?array{current: Current, overall: string}
+     * @throws \UnexpectedValueException a driver is under contract but the profile is not usable
+     */
+    private static function currentDriver(RecruitmentService $recruitment, array $c, ?string $division): ?array
+    {
+        $office = self::arr($c['office'] ?? null);
+        if (array_key_exists('driId', $office)) {
+            $id = is_scalar($office['driId']) ? trim((string) $office['driId']) : '';
+            if ($id === '' || $id === '0') {
+                return null;
+            }
+        }
+        if (!is_array($c['driver_profile'] ?? null)) {
+            throw new \UnexpectedValueException('Driver profile missing');
+        }
+        $profile = self::arr($c['driver_profile']);
+
+        $rating = null;
+        if ($division !== null) {
+            try {
+                $rating = $recruitment->rateProfile($profile, $division);
+            } catch (NoBaselineException) {
+                $rating = null;
+            }
+        }
+        $overall = is_numeric($profile['overall'] ?? null) ? round((float) $profile['overall'], 1) : 0.0;
+        $name = $profile['driName'] ?? null;
+        $retiring = $profile['retiring'] ?? null;
+        $blocked = $profile['errorMsgExtend'] ?? null;
+        $overallText = number_format($overall, 1, '.', '');
+
+        return [
+            'current' => [
+                'name' => is_string($name) ? $name : '',
+                'rating' => $rating,
+                'oa' => (int) round($overall),
+                'age' => self::intOrNull($profile['age'] ?? null) ?? 0,
+                'salary' => self::intOrNull($office['driSalary'] ?? null)
+                    ?? self::intOrNull($profile['salary'] ?? null) ?? 0,
+                'races_left' => self::intOrNull($office['driRacesLeft'] ?? null)
+                    ?? self::intOrNull($profile['racesLeft'] ?? null) ?? 0,
+                'retiring' => is_numeric($retiring) && (float) $retiring > 0,
+                'renew_fee' => self::intOrNull($profile['seventeenRaceRenewFee'] ?? null),
+                'renew_salary' => self::intOrNull($profile['seventeenRaceRenewSalary'] ?? null),
+                'extension_blocked' => is_string($blocked) && trim($blocked) !== '',
+            ],
+            'overall' => str_ends_with($overallText, '.0') ? substr($overallText, 0, -2) : $overallText,
+        ];
+    }
+
+    /**
+     * The market rows rated for $division; null when the division has no baseline to rate against.
+     *
+     * @param list<mixed> $rows
+     * @return ?list<array<string, mixed>>
+     */
+    private static function rated(RecruitmentService $recruitment, array $rows, string $division): ?array
+    {
+        try {
+            return $recruitment->rated($rows, $division);
+        } catch (NoBaselineException) {
+            return null;
+        }
+    }
+
+    /**
+     * The track ids of the season's races from the next one on, and how many there are. Without a calendar the
+     * count comes from the race number and no track is known.
+     *
+     * @param array<string, mixed> $c
+     * @return array{ids: list<int>, left: int}
+     */
+    private static function racesAhead(array $c, int $raceNb): array
+    {
+        $calendar = self::list($c['season_calendar'] ?? null);
+        if ($calendar === []) {
+            return ['ids' => [], 'left' => max(0, SeasonObjective::RACES - $raceNb + 1)];
+        }
+
+        $ids = [];
+        $left = 0;
+        foreach ($calendar as $row) {
+            if ((self::intOrNull($row['race'] ?? null) ?? 0) < $raceNb) {
+                continue;
+            }
+            $left++;
+            $id = self::intOrNull($row['track_id'] ?? null);
+            if ($id !== null) {
+                $ids[] = $id;
+            }
+        }
+
+        return ['ids' => $ids, 'left' => $left];
+    }
+
+    /**
+     * The group's average driver salary, from the managers whose salary is known; null when none is.
+     *
+     * @param array<string, mixed> $c
+     */
+    private static function groupDriverSalary(array $c): ?int
+    {
+        $salaries = [];
+        foreach (self::list(self::arr($c['group_staff'] ?? null)['managers'] ?? null) as $manager) {
+            $salary = $manager['driSal'] ?? null;
+            if (is_numeric($salary) && (float) $salary > 0) {
+                $salaries[] = (float) $salary;
+            }
+        }
+
+        return $salaries === [] ? null : (int) round(array_sum($salaries) / count($salaries));
+    }
+
+    /**
+     * @param DriverAdvice $advice
+     * @param Line $line
+     * @param ?string $overall the current driver's overall as GPRO gives it
+     * @return DriverPanel
+     */
+    private static function driverPanel(array $advice, array $line, ?string $overall): array
+    {
+        $current = $advice['current'];
+        $extension = $advice['extension'];
+        $average = $advice['group_average'];
+
+        $out = [];
+        foreach (self::OUT_LABELS as $key => $label) {
+            if ($advice['out'][$key] > 0) {
+                $out[] = ['label' => $label, 'count' => $advice['out'][$key]];
+            }
+        }
+        $notes = [];
+        if ($advice['shortlist'] !== []) {
+            $notes[] = self::OFFER_NOTE;
+        }
+        if ($average === null) {
+            $notes[] = 'Group salaries unknown: salary line not applied';
+        }
+        if (!$advice['finances_known']) {
+            $notes[] = 'Finances unknown: only your cash balance was checked';
+        }
+
+        return [
+            'verdict' => $advice['verdict'],
+            'reason' => $line['reason'],
+            'answer' => $line['answer'],
+            'figure' => $line['figure'],
+            'current' => $current === null ? null : [
+                'name' => $current['name'],
+                'rating' => $current['rating'] === null ? null : number_format($current['rating'], 1),
+                'overall' => $overall ?? (string) $current['oa'],
+                'age' => $current['age'],
+                'salary' => Money::short($current['salary']),
+                'races_left' => $current['races_left'],
+            ],
+            'group_average' => $average === null ? null : Money::short($average),
+            'extension' => $extension === null ? null : [
+                'fee' => Money::short($extension['fee']),
+                'salary' => Money::short($extension['salary']),
+                'exact' => $extension['exact'],
+            ],
+            'shortlist' => array_map(static fn (array $pick): array => [
+                'name' => $pick['name'],
+                'rating' => number_format($pick['rating'], 1),
+                'gain' => $pick['gain'] === null
+                    ? null
+                    : ($pick['gain'] > 0 ? '+' : '') . number_format($pick['gain'], 1),
+                'salary' => Money::short($pick['salary']),
+                'to_sign' => Money::short($pick['one_off']),
+                'age' => $pick['age'],
+                'overall' => $pick['oa'],
+                'favourites' => $pick['favourites'],
+                'fits' => match ($pick['fits']) {
+                    'plan' => 'In the plan',
+                    'cuts' => 'Cuts ' . Money::short($pick['cut']) . ' from upgrades, training and testing',
+                    'unknown' => 'Finances unknown',
+                },
+            ], $advice['shortlist']),
+            'out' => $out,
+            'notes' => $notes,
         ];
     }
 
@@ -1630,5 +1976,10 @@ class RaceEngineerService
     private static function stringOrNull(mixed $value): ?string
     {
         return is_string($value) ? $value : null;
+    }
+
+    private static function intOrNull(mixed $value): ?int
+    {
+        return is_numeric($value) ? (int) $value : null;
     }
 }
