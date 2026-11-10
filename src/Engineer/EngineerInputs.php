@@ -9,6 +9,7 @@ namespace App\Engineer;
  * @phpstan-import-type Plan from CtrPlanner
  * @phpstan-import-type StaffStanding from GroupStanding
  * @phpstan-import-type TyreAdvice from TyreSupplierAdvisor
+ * @phpstan-import-type DriverAdvice from DriverHiringAdvisor
  * @phpstan-import-type CarStanding from GroupStanding
  * @phpstan-type SmokePrice array{time: int, break: int, total: int}
  * @phpstan-type SmokeQuote array{
@@ -69,6 +70,7 @@ final readonly class EngineerInputs
      *                             the replan keeps that verdict, since its larger envelope assumes no session
      * @param array<string, SmokeQuote> $smoke when each forced or stuck part reaches 100 % this race, and what
      *                                         its smoke costs against what fitting it a race later saves
+     * @param ?DriverAdvice $driverAdvice
      */
     public function __construct(
         public array $objective,
@@ -110,6 +112,7 @@ final readonly class EngineerInputs
         public bool $unlockUnaffordable = false,
         public ?string $testingSkip = null,
         public array $smoke = [],
+        public ?array $driverAdvice = null,
     ) {
     }
 
@@ -161,5 +164,13 @@ final readonly class EngineerInputs
     public function withTyreAdvice(?array $advice): self
     {
         return clone($this, ['tyreAdvice' => $advice]);
+    }
+
+    /**
+     * @param ?DriverAdvice $advice
+     */
+    public function withDriverAdvice(?array $advice): self
+    {
+        return clone($this, ['driverAdvice' => $advice]);
     }
 }

@@ -2656,4 +2656,381 @@ final class RaceEngineerTest extends TestCase
             $this->line($short, 'smoke')['reason'],
         );
     }
+
+    /**
+     * @param array<string, mixed> $o
+     * @return array<string, mixed>
+     */
+    private function advice(array $o = []): array
+    {
+        return $o + [
+            'verdict' => 'keep',
+            'reason' => 'none',
+            'urgent' => false,
+            'current' => [
+                'name' => 'Ana Silva', 'rating' => 80.0, 'oa' => 150, 'age' => 30, 'salary' => 1_000_000,
+                'races_left' => 6, 'retiring' => false, 'renew_fee' => null, 'renew_salary' => null,
+                'extension_blocked' => false,
+            ],
+            'over_cap' => false,
+            'cap' => 160,
+            'group_average' => 1_200_000,
+            'extension' => null,
+            'shortlist' => [],
+            'out' => [
+                'retiring' => 0, 'cap' => 0, 'age' => 0, 'offers' => 0, 'salary_average' => 0, 'salary_plan' => 0,
+                'switch_cost' => 0,
+            ],
+            'top_out' => null,
+            'ranked' => true,
+            'market_known' => true,
+            'finances_known' => true,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $o
+     * @return array<string, mixed>
+     */
+    private function candidate(array $o = []): array
+    {
+        return $o + [
+            'id' => 7, 'name' => 'Bo Costa', 'rating' => 90.0, 'gain' => 7.4, 'oa' => 155, 'age' => 27,
+            'salary' => 1_300_000, 'fee' => 400_000, 'favourites' => 0, 'one_off' => 400_000, 'fits' => 'plan',
+            'cut' => 0,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function extension(bool $exact = true): array
+    {
+        return ['fee' => 2_000_000, 'salary' => 1_100_000, 'exact' => $exact, 'fits' => true];
+    }
+
+    /**
+     * @param array<string, mixed> $current
+     * @return array<string, mixed>
+     */
+    private function racesLeft(int $races, array $current = []): array
+    {
+        $base = $this->advice()['current'];
+        assert(is_array($base));
+
+        return ['current' => ['races_left' => $races] + $current + $base];
+    }
+
+    /**
+     * @param array<string, mixed> $advice
+     */
+    private function assertDriverLine(array $advice, string $answer, ?string $figure, string $reason, string $tone): void
+    {
+        $line = RaceEngineer::driverLine($advice);
+
+        $this->assertSame('driver', $line['key']);
+        $this->assertSame($answer, $line['answer']);
+        $this->assertSame($figure, $line['figure']);
+        $this->assertSame($reason, $line['reason']);
+        $this->assertSame($tone, $line['tone']);
+        $this->assertSame('/engineer#engineer-driver', $line['anchor']);
+        $this->assertSame('season', $line['step']);
+        $this->assertNull($line['action']);
+    }
+
+    public function testKeepWhenNothingBeatsHim(): void
+    {
+        $this->assertDriverLine(
+            $this->advice(),
+            'Keep Ana Silva',
+            '6 races left',
+            'No clearly better driver you can afford',
+            'ink',
+        );
+    }
+
+    public function testKeepOverTheCapCannotBeExtended(): void
+    {
+        $this->assertDriverLine(
+            $this->advice(['reason' => 'over_cap', 'over_cap' => true] + $this->racesLeft(4)),
+            'Keep Ana Silva',
+            '4 races left',
+            'Over the 160 cap: cannot be extended, contract ends in 4 races',
+            'amber',
+        );
+    }
+
+    public function testKeepWithNoExtensionOffered(): void
+    {
+        $this->assertDriverLine(
+            $this->advice(['reason' => 'no_extension']),
+            'Keep Ana Silva',
+            '6 races left',
+            'GPRO offers no extension now',
+            'ink',
+        );
+    }
+
+    public function testKeepARetiringDriverToSeasonEnd(): void
+    {
+        $this->assertDriverLine(
+            $this->advice(['reason' => 'retiring_later']),
+            'Keep Ana Silva',
+            '6 races left',
+            'Retires at the end of the season',
+            'amber',
+        );
+    }
+
+    public function testOneRaceLeftIsSingular(): void
+    {
+        $this->assertDriverLine(
+            $this->advice($this->racesLeft(1)),
+            'Keep Ana Silva',
+            '1 race left',
+            'No clearly better driver you can afford',
+            'ink',
+        );
+        $this->assertDriverLine(
+            $this->advice(['reason' => 'over_cap', 'over_cap' => true] + $this->racesLeft(1)),
+            'Keep Ana Silva',
+            '1 race left',
+            'Over the 160 cap: cannot be extended, contract ends in 1 race',
+            'amber',
+        );
+    }
+
+    public function testExtendWhenTheContractIsRunningOut(): void
+    {
+        $this->assertDriverLine(
+            $this->advice(['verdict' => 'extend', 'reason' => 'contract', 'extension' => $this->extension()]
+                + $this->racesLeft(4)),
+            'Extend Ana Silva by 17 races',
+            '$2M + $1.1M a race',
+            '4 races left on his contract',
+            'amber',
+        );
+    }
+
+    public function testAnUrgentExtensionIsRedAndSaysLastChance(): void
+    {
+        $this->assertDriverLine(
+            $this->advice(['verdict' => 'extend', 'reason' => 'contract', 'urgent' => true,
+                'extension' => $this->extension()] + $this->racesLeft(2)),
+            'Extend Ana Silva by 17 races',
+            '$2M + $1.1M a race',
+            'Last chance: 2 races left',
+            'red',
+        );
+        $this->assertSame(
+            'Last chance: 1 race left',
+            RaceEngineer::driverLine($this->advice(['verdict' => 'extend', 'reason' => 'contract', 'urgent' => true,
+                'extension' => $this->extension()] + $this->racesLeft(1)))['reason'],
+        );
+    }
+
+    public function testAnExtensionThatDoesNotFitTheBudgetIsRed(): void
+    {
+        $this->assertDriverLine(
+            $this->advice(['verdict' => 'extend', 'reason' => 'extension_budget_short',
+                'extension' => $this->extension()]),
+            'Extend Ana Silva by 17 races',
+            '$2M + $1.1M a race',
+            'Budget short: no race without a driver',
+            'red',
+        );
+    }
+
+    public function testAnEstimatedExtensionSaysAbout(): void
+    {
+        $line = RaceEngineer::driverLine($this->advice(['verdict' => 'extend', 'reason' => 'contract',
+            'extension' => $this->extension(false)]));
+
+        $this->assertSame('about $2M + $1.1M a race', $line['figure']);
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function replaceReasons(): iterable
+    {
+        yield 'leaving_cap' => ['leaving_cap', 'Over the 160 cap: he leaves in 3 races'];
+        yield 'leaving_retiring' => ['leaving_retiring', 'He retires at the end of the season'];
+        yield 'better' => ['better', "+7.4 against your division's ideal driver"];
+        yield 'extension_over_budget' => ['extension_over_budget', 'His extension does not fit the plan'];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('replaceReasons')]
+    public function testReplaceNamesTheOutgoingAndTheIncomingDriver(string $reason, string $text): void
+    {
+        $this->assertDriverLine(
+            $this->advice(['verdict' => 'replace', 'reason' => $reason, 'shortlist' => [$this->candidate()]]
+                + $this->racesLeft(3)),
+            'Replace Ana Silva with Bo Costa',
+            '$1.3M a race',
+            $text,
+            'amber',
+        );
+    }
+
+    public function testLeavingTheCapWithOneRaceLeftIsSingular(): void
+    {
+        $line = RaceEngineer::driverLine($this->advice(['verdict' => 'replace', 'reason' => 'leaving_cap',
+            'shortlist' => [$this->candidate()]] + $this->racesLeft(1)));
+
+        $this->assertSame('Over the 160 cap: he leaves in 1 race', $line['reason']);
+    }
+
+    public function testHireSignsTheTopPickWhenThereIsNoDriver(): void
+    {
+        $this->assertDriverLine(
+            $this->advice(['verdict' => 'hire', 'reason' => 'no_driver', 'current' => null,
+                'shortlist' => [$this->candidate(), $this->candidate(['name' => 'Second'])]]),
+            'Sign Bo Costa',
+            '$1.3M a race',
+            'No driver under contract',
+            'amber',
+        );
+    }
+
+    public function testAnEmptyShortlistOnReplaceIsAmber(): void
+    {
+        $this->assertDriverLine(
+            $this->advice(['verdict' => 'replace', 'reason' => 'leaving_cap', 'top_out' => 'cap']),
+            'No driver passes your rules',
+            null,
+            "Most are over your division's cap",
+            'amber',
+        );
+    }
+
+    public function testAnEmptyShortlistOnHireIsRed(): void
+    {
+        $this->assertDriverLine(
+            $this->advice(['verdict' => 'hire', 'reason' => 'no_driver', 'current' => null, 'top_out' => 'retiring']),
+            'No driver passes your rules',
+            null,
+            'Most are retiring',
+            'red',
+        );
+    }
+
+    /**
+     * @return iterable<string, array{?string, string}>
+     */
+    public static function topOuts(): iterable
+    {
+        yield 'retiring' => ['retiring', 'Most are retiring'];
+        yield 'cap' => ['cap', "Most are over your division's cap"];
+        yield 'age' => ['age', 'Most are 35 or older'];
+        yield 'offers' => ['offers', 'Most already have offers'];
+        yield 'salary_average' => ['salary_average', "Most cost more than your group's average"];
+        yield 'salary_plan' => ['salary_plan', "Most salaries don't fit the plan"];
+        yield 'switch_cost' => ['switch_cost', 'Most cost too much to sign'];
+        yield 'nobody' => [null, 'The market has nobody for your division'];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('topOuts')]
+    public function testAnEmptyShortlistSaysWhatMostCandidatesFailed(?string $topOut, string $reason): void
+    {
+        $line = RaceEngineer::driverLine($this->advice(['verdict' => 'replace', 'reason' => 'better',
+            'top_out' => $topOut]));
+
+        $this->assertSame($reason, $line['reason']);
+    }
+
+    public function testAnUnknownMarketNeedsRecruitmentOpenedOnReplaceOrHire(): void
+    {
+        foreach (['replace', 'hire'] as $verdict) {
+            $this->assertDriverLine(
+                $this->advice(['verdict' => $verdict, 'reason' => 'better', 'market_known' => false,
+                    'ranked' => false, 'shortlist' => [$this->candidate()]]),
+                'Driver market unavailable',
+                null,
+                'Open Recruitment to retry',
+                'amber',
+            );
+        }
+    }
+
+    public function testAnUnknownMarketLeavesKeepAndExtendAlone(): void
+    {
+        $this->assertSame(
+            'Keep Ana Silva',
+            RaceEngineer::driverLine($this->advice(['market_known' => false, 'ranked' => false]))['answer'],
+        );
+        $this->assertSame(
+            'Extend Ana Silva by 17 races',
+            RaceEngineer::driverLine($this->advice(['verdict' => 'extend', 'reason' => 'contract',
+                'extension' => $this->extension(), 'market_known' => false, 'ranked' => false]))['answer'],
+        );
+    }
+
+    public function testNoBaselineSaysTheDriversAreNotRanked(): void
+    {
+        $line = RaceEngineer::driverLine($this->advice(['ranked' => false]));
+
+        $this->assertSame(
+            'No clearly better driver you can afford; no division baseline, drivers not ranked',
+            $line['reason'],
+        );
+    }
+
+    public function testUnknownFinancesAreSaidOnReplaceHireAndExtend(): void
+    {
+        $replace = RaceEngineer::driverLine($this->advice(['verdict' => 'replace', 'reason' => 'better',
+            'finances_known' => false, 'shortlist' => [$this->candidate()]]));
+        $hire = RaceEngineer::driverLine($this->advice(['verdict' => 'hire', 'reason' => 'no_driver',
+            'current' => null, 'finances_known' => false, 'shortlist' => [$this->candidate()]]));
+        $extend = RaceEngineer::driverLine($this->advice(['verdict' => 'extend', 'reason' => 'contract',
+            'finances_known' => false, 'extension' => $this->extension()] + $this->racesLeft(4)));
+        $keep = RaceEngineer::driverLine($this->advice(['finances_known' => false]));
+
+        $this->assertSame("+7.4 against your division's ideal driver; finances unknown", $replace['reason']);
+        $this->assertSame('No driver under contract; finances unknown', $hire['reason']);
+        $this->assertSame('4 races left on his contract; finances unknown', $extend['reason']);
+        $this->assertSame('No clearly better driver you can afford', $keep['reason']);
+    }
+
+    public function testTheDriverLineFollowsTheTyreLine(): void
+    {
+        $in = $this->inputs(['tyreAdvice' => $this->tyreAdvice(), 'division' => 'Pro'])
+            ->withDriverAdvice($this->advice());
+
+        $keys = array_column(RaceEngineer::brief($in), 'key');
+
+        $this->assertSame(['objective', 'tyres', 'driver'], array_slice($keys, 0, 3));
+    }
+
+    public function testTheDriverLineFollowsTheObjectiveWithoutATyreLine(): void
+    {
+        $keys = array_column(RaceEngineer::brief($this->inputs()->withDriverAdvice($this->advice())), 'key');
+
+        $this->assertSame(['objective', 'driver'], array_slice($keys, 0, 2));
+    }
+
+    public function testNoDriverAdviceMeansNoDriverLine(): void
+    {
+        $this->assertNotContains('driver', array_column(RaceEngineer::brief($this->inputs()), 'key'));
+    }
+
+    public function testASeasonOverBriefHasNoDriverLine(): void
+    {
+        $over = $this->objective(null, ['over' => true, 'reasons' => []]);
+
+        $lines = RaceEngineer::brief($this->inputs(['objective' => $over])->withDriverAdvice($this->advice()));
+
+        $this->assertSame(['objective'], array_column($lines, 'key'));
+    }
+
+    public function testSpareIsWhatIsLeftAfterEveryAdvisedSpend(): void
+    {
+        $in = $this->inputs(['plan' => $this->plan(['envelope' => 2_000_000, 'upgrades' => [
+            ['part' => 'Engine', 'from' => 4, 'to' => 5, 'price' => 600_000, 'gain' => 3.0, 'affordable' => true],
+            ['part' => 'Brakes', 'from' => 4, 'to' => 5, 'price' => 900_000, 'gain' => 2.0, 'affordable' => false],
+        ]])]);
+
+        self::assertSame(RaceEngineer::upgradeBudget($in) - 600_000, RaceEngineer::spare($in));
+        self::assertSame(0, RaceEngineer::spare($this->inputs()));
+    }
 }
