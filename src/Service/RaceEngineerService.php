@@ -287,6 +287,10 @@ class RaceEngineerService
 
         try {
             $ctx = $this->context($userId, $c);
+            // The division, the cap and the ages may still be last season's.
+            if ($ctx['objective']['over']) {
+                return null;
+            }
             $cash = $ctx['cash'];
             $promote = $ctx['objective']['objective'] === SeasonObjective::PROMOTE;
         } catch (\Throwable $e) {
@@ -1109,7 +1113,8 @@ class RaceEngineerService
      *
      * @param array<string, mixed> $c
      * @return ?array{current: Current, overall: string}
-     * @throws \UnexpectedValueException a driver is under contract but the profile is not usable
+     * @throws \UnexpectedValueException a driver is under contract but the profile is not usable, or the overall,
+     *                                   salary or races left is known from neither the office nor the profile
      */
     private static function currentDriver(RecruitmentService $recruitment, array $c, ?string $division): ?array
     {
@@ -1133,22 +1138,27 @@ class RaceEngineerService
                 $rating = null;
             }
         }
-        $overall = is_numeric($profile['overall'] ?? null) ? round((float) $profile['overall'], 1) : 0.0;
+        $overall = $profile['overall'] ?? null;
+        $salary = self::intOrNull($office['driSalary'] ?? null) ?? self::intOrNull($profile['salary'] ?? null);
+        $racesLeft = self::intOrNull($office['driRacesLeft'] ?? null)
+            ?? self::intOrNull($profile['racesLeft'] ?? null);
+        if (!is_numeric($overall) || $salary === null || $racesLeft === null) {
+            throw new \UnexpectedValueException('Driver contract figures missing');
+        }
         $name = $profile['driName'] ?? null;
         $retiring = $profile['retiring'] ?? null;
         $blocked = $profile['errorMsgExtend'] ?? null;
-        $overallText = number_format($overall, 1, '.', '');
+        $overallText = number_format(round((float) $overall, 1), 1, '.', '');
 
         return [
             'current' => [
                 'name' => is_string($name) ? $name : '',
                 'rating' => $rating,
-                'oa' => (int) round($overall),
+                // Up, so a fraction above the cap counts as over it.
+                'oa' => (int) ceil((float) $overall),
                 'age' => self::intOrNull($profile['age'] ?? null) ?? 0,
-                'salary' => self::intOrNull($office['driSalary'] ?? null)
-                    ?? self::intOrNull($profile['salary'] ?? null) ?? 0,
-                'races_left' => self::intOrNull($office['driRacesLeft'] ?? null)
-                    ?? self::intOrNull($profile['racesLeft'] ?? null) ?? 0,
+                'salary' => $salary,
+                'races_left' => $racesLeft,
                 'retiring' => is_numeric($retiring) && (float) $retiring > 0,
                 'renew_fee' => self::intOrNull($profile['seventeenRaceRenewFee'] ?? null),
                 'renew_salary' => self::intOrNull($profile['seventeenRaceRenewSalary'] ?? null),
