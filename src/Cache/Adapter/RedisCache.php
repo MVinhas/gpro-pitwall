@@ -71,4 +71,17 @@ class RedisCache implements CacheInterface
     {
         return (bool) $this->redis->exists($key);
     }
+
+    public function deleteNamespace(string $namespace): bool
+    {
+        $iterator = null;
+        do {
+            $keys = $this->redis->scan($iterator, $namespace . ':*', 200);
+            if (is_array($keys) && $keys !== []) {
+                $this->redis->del($keys);
+            }
+        } while ($iterator !== 0 && $keys !== false);
+
+        return true;
+    }
 }

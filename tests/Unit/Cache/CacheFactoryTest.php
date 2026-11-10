@@ -33,7 +33,22 @@ final class CacheFactoryTest extends TestCase
                 unlink($file);
             }
         }
+        @unlink($this->dir . '/.swept');
         rmdir($this->dir);
+    }
+
+    public function testTheFilesystemDriverSweepsWhatPastReleasesLeftBehind(): void
+    {
+        mkdir($this->dir);
+        $leftover = $this->dir . '/' . hash('sha256', 'a key from a past release') . '.cache';
+        file_put_contents($leftover, serialize(['expires' => 0, 'value' => ['raw payload']]));
+        touch($leftover, time() - 2 * 86400);
+
+        $cache = CacheFactory::create(['CACHE_DRIVER' => 'filesystem', 'CACHE_DIR' => $this->dir]);
+        $cache->set('u0123456789abcdef:office_data', ['live']);
+
+        $this->assertFileDoesNotExist($leftover);
+        $this->assertSame(['live'], $cache->get('u0123456789abcdef:office_data'));
     }
 
     /** @param array<string, mixed> $config */

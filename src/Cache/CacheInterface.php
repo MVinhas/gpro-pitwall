@@ -17,4 +17,10 @@ interface CacheInterface
 
     /** False for an expired entry, which is reaped as a side effect. */
     public function has(string $key): bool;
+
+    /**
+     * Removes every entry whose key starts with "$namespace:". False, with
+     * nothing removed, when the driver cannot tell which entries those are.
+     */
+    public function deleteNamespace(string $namespace): bool;
 }

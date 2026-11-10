@@ -25,7 +25,104 @@ final class FilesystemCacheTest extends TestCase
         foreach (glob($this->dir . '/*') ?: [] as $f) {
             @unlink($f);
         }
+        @unlink($this->dir . '/.swept');
         @rmdir($this->dir);
+    }
+
+    private const string LIVE = 'v1a2b3c4d';
+    private const string USER_A = 'v1a2b3c4d:u0123456789abcdef';
+    private const string USER_B = 'v1a2b3c4d:ufedcba9876543210';
+
+    /** Backdates every cache file currently in the directory by two days. */
+    private function ageEverything(): void
+    {
+        foreach (glob($this->dir . '/*.cache') ?: [] as $file) {
+            touch($file, time() - 2 * 86400);
+        }
+    }
+
+    public function testDeleteNamespaceRemovesOneUsersEntriesAndNothingElse(): void
+    {
+        $this->cache->set(self::USER_A . ':office_data', ['email' => 'a@example.invalid']);
+        $this->cache->set(self::USER_A . ':race_analysis_84_7', [1]);
+        $this->cache->set(self::USER_B . ':office_data', ['keep']);
+        $this->cache->set(self::LIVE . ':market_file_Pro', ['shared']);
+        $this->cache->set(self::LIVE . ':login:1.1.1.1', 3);
+
+        $this->assertTrue($this->cache->deleteNamespace(self::USER_A));
+
+        $this->assertFalse($this->cache->has(self::USER_A . ':office_data'));
+        $this->assertFalse($this->cache->has(self::USER_A . ':race_analysis_84_7'));
+        $this->assertSame(['keep'], $this->cache->get(self::USER_B . ':office_data'));
+        $this->assertSame(['shared'], $this->cache->get(self::LIVE . ':market_file_Pro'));
+        $this->assertSame(3, $this->cache->get(self::LIVE . ':login:1.1.1.1'));
+    }
+
+    public function testDeletingAnOuterNamespaceTakesTheNamespacesInsideIt(): void
+    {
+        $this->cache->set(self::USER_A . ':office_data', [1]);
+        $this->cache->set(self::LIVE . ':market_file_Pro', [2]);
+        $this->cache->set('v0000000a:market_file_Pro', ['other release']);
+
+        $this->assertTrue($this->cache->deleteNamespace(self::LIVE));
+
+        $this->assertFalse($this->cache->has(self::USER_A . ':office_data'));
+        $this->assertFalse($this->cache->has(self::LIVE . ':market_file_Pro'));
+        $this->assertSame(['other release'], $this->cache->get('v0000000a:market_file_Pro'));
+    }
+
+    public function testDeleteNamespaceRefusesANameThatIsNotANamespace(): void
+    {
+        $this->cache->set('plain', 1);
+        $this->cache->set(self::USER_A . ':office_data', [1]);
+
+        $this->assertFalse($this->cache->deleteNamespace('*'));
+        $this->assertFalse($this->cache->deleteNamespace('../etc'));
+        $this->assertFalse($this->cache->deleteNamespace(''));
+        $this->assertFalse($this->cache->deleteNamespace('login'));
+
+        $this->assertSame(1, $this->cache->get('plain'));
+        $this->assertSame([1], $this->cache->get(self::USER_A . ':office_data'));
+    }
+
+    public function testStaleFilesOutsideTheLiveNamespaceAreSwept(): void
+    {
+        $this->cache->set('written_before_namespaced_files', 1);
+        $this->cache->set('v0000000a:u0123456789abcdef:office_data', ['previous release']);
+        $this->cache->set(self::USER_A . ':office_data', ['live']);
+        $this->ageEverything();
+        $this->cache->set('v0000000b:market_file_Pro', ['a release still being served']);
+
+        new FilesystemCache($this->dir, self::LIVE);
+
+        $this->assertFalse($this->cache->has('written_before_namespaced_files'));
+        $this->assertFalse($this->cache->has('v0000000a:u0123456789abcdef:office_data'));
+        $this->assertSame(['live'], $this->cache->get(self::USER_A . ':office_data'));
+        $this->assertSame(['a release still being served'], $this->cache->get('v0000000b:market_file_Pro'));
+    }
+
+    public function testTheSweepRunsAtMostOnceADay(): void
+    {
+        new FilesystemCache($this->dir, self::LIVE);
+        $this->cache->set('v0000000a:market_file_Pro', ['previous release']);
+        $this->ageEverything();
+
+        new FilesystemCache($this->dir, self::LIVE);
+        $this->assertTrue($this->cache->has('v0000000a:market_file_Pro'), 'swept again within the day');
+
+        touch($this->dir . '/.swept', time() - 2 * 86400);
+        new FilesystemCache($this->dir, self::LIVE);
+        $this->assertFalse($this->cache->has('v0000000a:market_file_Pro'));
+    }
+
+    public function testWithoutALiveNamespaceNothingIsSwept(): void
+    {
+        $this->cache->set('anything', 1);
+        $this->ageEverything();
+
+        new FilesystemCache($this->dir);
+
+        $this->assertSame(1, $this->cache->get('anything'));
     }
 
     public function testSetAndGetRoundTrip(): void

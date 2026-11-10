@@ -29,6 +29,11 @@ class NullCache implements CacheInterface
         return true;
     }
 
+    public function deleteNamespace(string $namespace): bool
+    {
+        return true;
+    }
+
     public function has(string $key): bool
     {
         return false;

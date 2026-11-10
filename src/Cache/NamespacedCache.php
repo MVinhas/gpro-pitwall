@@ -30,7 +30,13 @@ final class NamespacedCache implements CacheInterface
         // Hashed and truncated so the prefix stays short and opaque — cache
         // keys reach filenames and log lines, and a version string there is
         // just noise that also advertises the running release.
-        $this->prefix = 'v' . substr(hash('sha256', $version), 0, 8) . ':';
+        $this->prefix = self::prefixFor($version) . ':';
+    }
+
+    /** The namespace a release's keys live under, without the separator. */
+    public static function prefixFor(string $version): string
+    {
+        return 'v' . substr(hash('sha256', $version), 0, 8);
     }
 
     public function get(string $key, mixed $default = null): mixed
@@ -57,5 +63,10 @@ final class NamespacedCache implements CacheInterface
     public function has(string $key): bool
     {
         return $this->inner->has($this->prefix . $key);
+    }
+
+    public function deleteNamespace(string $namespace): bool
+    {
+        return $this->inner->deleteNamespace($this->prefix . $namespace);
     }
 }

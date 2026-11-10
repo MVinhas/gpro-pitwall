@@ -117,7 +117,16 @@ final class GproApiClient
      */
     public static function budgetKeyForToken(string $token): string
     {
-        return 'u' . self::scopeFor($token) . ':api_requests_remaining';
+        return self::cacheNamespaceFor($token) . ':api_requests_remaining';
+    }
+
+    /**
+     * The cache namespace every payload fetched with a token is filed under;
+     * deleting it removes all that the cache holds for that token.
+     */
+    public static function cacheNamespaceFor(string $token): string
+    {
+        return 'u' . self::scopeFor($token);
     }
 
     /** Prefix a per-user key with the active token's namespace. */

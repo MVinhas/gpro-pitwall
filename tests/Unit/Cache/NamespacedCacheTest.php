@@ -48,11 +48,46 @@ final class SharedMemoryCache implements CacheInterface
     {
         return array_key_exists($key, $this->store);
     }
+
+    public function deleteNamespace(string $namespace): bool
+    {
+        foreach (array_keys($this->store) as $key) {
+            if (str_starts_with($key, $namespace . ':')) {
+                unset($this->store[$key]);
+            }
+        }
+        return true;
+    }
 }
 
 #[CoversClass(NamespacedCache::class)]
 final class NamespacedCacheTest extends TestCase
 {
+    public function testDeleteNamespaceStaysInsideThisRelease(): void
+    {
+        $shared = new SharedMemoryCache();
+        $old = new NamespacedCache($shared, '1.14.0');
+        $new = new NamespacedCache($shared, '1.14.1');
+        $old->set('u0123456789abcdef:office_data', 'old release');
+        $new->set('u0123456789abcdef:office_data', 'mine');
+        $new->set('ufedcba9876543210:office_data', 'another user');
+
+        $this->assertTrue($new->deleteNamespace('u0123456789abcdef'));
+
+        $this->assertFalse($new->has('u0123456789abcdef:office_data'));
+        $this->assertSame('another user', $new->get('ufedcba9876543210:office_data'));
+        $this->assertSame('old release', $old->get('u0123456789abcdef:office_data'));
+    }
+
+    public function testThePrefixIsTheNamespaceTheFilesystemDriverKeeps(): void
+    {
+        $shared = new SharedMemoryCache();
+        (new NamespacedCache($shared, '1.14.1'))->set('k', 1);
+
+        $this->assertSame([NamespacedCache::prefixFor('1.14.1') . ':k'], array_keys($shared->store));
+        $this->assertMatchesRegularExpression('/^v[0-9a-f]{8}$/', NamespacedCache::prefixFor('1.14.1'));
+    }
+
     public function testDeployBumpMakesPreviousEntriesMiss(): void
     {
         $shared = new SharedMemoryCache();
