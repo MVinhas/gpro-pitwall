@@ -13,38 +13,33 @@ use PHPUnit\Framework\TestCase;
 final class DeferredRenderTest extends TestCase
 {
     /**
-     * @return iterable<string, array{0: bool, 1: bool, 2: string, 3: bool, 4: bool}>
+     * @return iterable<string, array{0: bool, 1: bool, 2: bool, 3: bool, 4: bool}>
      */
     public static function cases(): iterable
     {
-        // wait, syncPending, section, isWarm => defer
-        yield 'warm cockpit renders in one go'          => [false, false, 'Cockpit', true, false];
+        // wait, syncPending, readsMarket, isWarm => defer
         // A page never fetches, so the follow-up would have nothing more to
-        // show: a cold screen renders what is stored (or its empty state).
-        yield 'cold cockpit renders what is stored'     => [false, false, 'Cockpit', false, false];
-        yield 'cold strategy renders what is stored'    => [false, false, 'Race Strategy', false, false];
-        yield 'cold car wear renders what is stored'    => [false, false, 'Car Wear Planner', false, false];
-        yield 'cold testing renders what is stored'     => [false, false, 'Testing', false, false];
-        yield 'cold training renders what is stored'    => [false, false, 'Training Planner', false, false];
-        yield 'cold engineer renders what is stored'    => [false, false, 'Race Engineer', false, false];
-        yield 'a screen with no GPRO data never waits'  => [false, false, 'Division Baseline', false, false];
+        // show: a screen that does not read the market renders what is stored.
+        yield 'warm screen renders in one go'           => [false, false, false, true, false];
+        yield 'cold screen renders what is stored'      => [false, false, false, false, false];
         // The driver market is still downloaded on a miss (no manager budget).
-        yield 'cold recruitment shows the skeleton first' => [false, false, 'Recruitment Analyzer', false, true];
-        yield 'warm recruitment renders in one go'      => [false, false, 'Recruitment Analyzer', true, false];
-        yield 'a pending sync on a warm screen renders now' => [false, true, 'Cockpit', true, false];
-        yield 'a pending sync on a cold screen defers'  => [false, true, 'Cockpit', false, true];
-        yield 'a pending sync defers any cold screen'   => [false, true, 'Division Baseline', false, true];
-        yield 'a pending sync on a warm baseline renders now' => [false, true, 'Division Baseline', true, false];
-        yield 'the follow-up request always renders'    => [true, true, 'Cockpit', false, false];
-        yield 'the follow-up request on a cold screen'  => [true, false, 'Testing', false, false];
+        yield 'cold market shows the skeleton first'    => [false, false, true, false, true];
+        yield 'warm market renders in one go'           => [false, false, true, true, false];
+        yield 'a pending sync on a warm screen renders now' => [false, true, false, true, false];
+        yield 'a pending sync on a cold screen defers'  => [false, true, false, false, true];
+        yield 'a pending sync on a cold market screen defers' => [false, true, true, false, true];
+        yield 'a pending sync on a warm market screen renders now' => [false, true, true, true, false];
+        yield 'the follow-up request always renders'    => [true, true, false, false, false];
+        yield 'the follow-up on a cold market renders'  => [true, false, true, false, false];
+        yield 'the follow-up on a cold screen renders'  => [true, false, false, false, false];
     }
 
     #[DataProvider('cases')]
-    public function testShouldDefer(bool $wait, bool $syncPending, string $section, bool $isWarm, bool $expected): void
+    public function testShouldDefer(bool $wait, bool $syncPending, bool $readsMarket, bool $isWarm, bool $expected): void
     {
         $this->assertSame(
             $expected,
-            DeferredRender::shouldDefer($wait, $syncPending, $section, static fn (): bool => $isWarm),
+            DeferredRender::shouldDefer($wait, $syncPending, $readsMarket, static fn (): bool => $isWarm),
         );
     }
 
@@ -54,19 +49,19 @@ final class DeferredRenderTest extends TestCase
             $this->fail('isWarm must not be called');
         };
 
-        $this->assertFalse(DeferredRender::shouldDefer(true, false, 'Cockpit', $probe));
-        $this->assertFalse(DeferredRender::shouldDefer(false, false, 'Division Baseline', $probe));
-        $this->assertFalse(DeferredRender::shouldDefer(false, false, 'Cockpit', $probe));
+        $this->assertFalse(DeferredRender::shouldDefer(true, false, false, $probe));
+        $this->assertFalse(DeferredRender::shouldDefer(true, true, true, $probe));
+        $this->assertFalse(DeferredRender::shouldDefer(false, false, false, $probe));
     }
 
     public function testWarmPendingRendersNow(): void
     {
-        $this->assertFalse(DeferredRender::shouldDefer(false, true, 'Cockpit', static fn (): bool => true));
+        $this->assertFalse(DeferredRender::shouldDefer(false, true, false, static fn (): bool => true));
     }
 
     public function testColdPendingDefers(): void
     {
-        $this->assertTrue(DeferredRender::shouldDefer(false, true, 'Cockpit', static fn (): bool => false));
+        $this->assertTrue(DeferredRender::shouldDefer(false, true, false, static fn (): bool => false));
     }
 
     /**

@@ -229,6 +229,7 @@ final class ManualRefreshTest extends TestCase
     {
         $this->synced();
         $this->archivePreviousWindow();
+        $this->warmDriverMarket();
 
         $html = $this->render($path);
 
@@ -241,6 +242,7 @@ final class ManualRefreshTest extends TestCase
     {
         $this->synced();
         $this->archivePreviousWindow();
+        $this->warmDriverMarket();
 
         $this->assertStringContainsString('id="pha"', $this->render('/cockpit'));
         $this->assertStringContainsString('data-result-state="results"', $this->render('/strategy'));
@@ -272,6 +274,7 @@ final class ManualRefreshTest extends TestCase
     {
         $this->synced();
         $this->archivePreviousWindow();
+        $this->warmDriverMarket();
         foreach (self::screens() as [$path]) {
             $this->render($path);
         }
@@ -279,6 +282,8 @@ final class ManualRefreshTest extends TestCase
 
         // A deploy: var/cache/ is cleared, the archive survives.
         $this->wipeCache();
+        // The shared market is not the manager's budget: the engineer downloads it behind a skeleton.
+        $this->warmDriverMarket();
 
         foreach (self::screens() as [$path]) {
             $this->assertNoFailure($this->render($path));
@@ -382,6 +387,15 @@ final class ManualRefreshTest extends TestCase
         );
         $scope = GproApiClient::scopeFor(self::TOKEN);
         $this->archive->put(self::USER_ID, $scope, $endpoint, $params, $window, 99, 4, $payload);
+    }
+
+    /** The shared driver market the engineer reads, as the hourly download caches it. */
+    private function warmDriverMarket(): void
+    {
+        (new FilesystemCache($this->cacheDir))->set('market_file_drivers', [
+            'updated_at' => '2026-11-10 12:00',
+            'rows' => [['ID' => 1, 'NAME' => 'Market Driver', 'OA' => 90, 'AGE' => 28]],
+        ], 3300);
     }
 
     private function wipeCache(): void

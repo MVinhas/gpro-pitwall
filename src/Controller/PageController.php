@@ -127,6 +127,36 @@ class PageController
     }
 
     /**
+     * Whether this screen's render reads the shared driver market, so its warm probe is the market's. The
+     * engineer reads it only for an admin with a stored office: without one it builds nothing, so a skeleton
+     * would be a wasted round trip. An office with no driver still counts: the hiring shortlist needs the market.
+     *
+     * @param array<string, mixed> $office the stored office payload
+     */
+    public static function readsDriverMarket(string $section, bool $isAdmin, array $office): bool
+    {
+        return $section === 'Recruitment Analyzer'
+            || ($section === 'Race Engineer' && $isAdmin && $office !== []);
+    }
+
+    /**
+     * The shared driver market for the engineer's driver advice: no manager budget, and a failed download only
+     * drops that advice.
+     *
+     * @return ?array{updated_at: ?string, rows: list<array<string, mixed>>}
+     */
+    public static function driverMarket(GproApiClient $api): ?array
+    {
+        try {
+            return $api->getMarketFile('drivers');
+        } catch (\Throwable $e) {
+            error_log('[Engineer] ' . $e::class);
+
+            return null;
+        }
+    }
+
+    /**
      * When each part the Cockpit must swap reaches 100 %, read from its full wear row: the advisor's row drops
      * the testing wear its end already counts, which would spread that wear over the race laps.
      *
@@ -267,14 +297,19 @@ class PageController
         // the manager's Re-sync click, so other screens render what is stored.
         $syncPending = !empty($_SESSION[AuthService::SYNC_PENDING]);
         $wait = (string) $request->get(DeferredRender::WAIT_PARAM, '') === '1';
+        $readsMarket = self::readsDriverMarket(
+            $activeMainTab,
+            $isAdmin,
+            $activeMainTab === 'Race Engineer' ? $this->apiClient->getCachedOfficeData() : [],
+        );
         $warm = null;
-        $isWarm = function () use (&$warm, $activeMainTab): bool {
-            return $warm ??= $activeMainTab === 'Recruitment Analyzer'
+        $isWarm = function () use (&$warm, $readsMarket): bool {
+            return $warm ??= $readsMarket
                 ? $this->apiClient->hasCachedMarketFile()
                 : $this->apiClient->isWarm();
         };
         $deferred = (string) $request->get('fragment', '') === ''
-            && DeferredRender::shouldDefer($wait, $syncPending, $activeMainTab, $isWarm);
+            && DeferredRender::shouldDefer($wait, $syncPending, $readsMarket, $isWarm);
 
         $freshSync = false;
         if (DeferredRender::syncsInline($syncPending, $deferred)) {
@@ -387,6 +422,12 @@ class PageController
                     // a raw "No driver under contract" exception further down.
                     if (!$this->apiClient->hasPilot()) {
                         $viewData['cockpit_error'] = StrategyController::NO_PILOT_MESSAGE;
+                        if (
+                            $isAdmin && $activeMainTab === 'Race Engineer'
+                            && (string) $request->get('fragment', '') === ''
+                        ) {
+                            $this->noDriverEngineer((int) $user['id'], $viewData);
+                        }
                         break;
                     }
 
@@ -746,6 +787,8 @@ class PageController
                         $engineer = self::buildEngineer($this->raceEngineer, (int) $user['id'], $engineerContext + [
                             'tyre_suppliers'   => $tyreSuppliers,
                             'group_staff'      => $this->apiClient->getCachedGroupStaff(),
+                            'driver_profile'   => $pilot,
+                            'driver_market'    => self::driverMarket($this->apiClient),
                             'wear_advice'      => $viewData['wear_advice'] ?? null,
                             'swap_plan'        => $viewData['swap_plan'] ?? null,
                             'swap_advice'      => $viewData['swap_advice'] ?? null,
@@ -880,6 +923,43 @@ class PageController
         }
 
         echo $this->twig->render('index.twig', $viewData);
+    }
+
+    /**
+     * Who to sign when no driver is under contract, from stored payloads only: the market is the one fetch.
+     *
+     * @param array<string, mixed> $viewData
+     */
+    private function noDriverEngineer(int $userId, array &$viewData): void
+    {
+        $office = $this->apiClient->getCachedOfficeData();
+        $menu = $this->apiClient->getCachedMenu();
+        $currentRace = (int) ($office['raceNb'] ?? 0);
+        try {
+            $seasonCalendar = $currentRace > 0
+                ? $this->seasonCalendar->season(
+                    $this->apiClient->getCachedCalendar(),
+                    $this->apiClient->getAllTracksPreview(),
+                    $currentRace,
+                )
+                : [];
+        } catch (\Throwable $e) {
+            error_log('[Engineer] ' . $e::class);
+            $seasonCalendar = [];
+        }
+
+        try {
+            $viewData['engineer_driver'] = $this->raceEngineer->driverCard($userId, [
+                'office'          => $office,
+                'menu'            => $menu,
+                'division'        => $this->divisionFromMenu($menu),
+                'group_staff'     => $this->apiClient->getCachedGroupStaff(),
+                'season_calendar' => $seasonCalendar,
+                'driver_market'   => self::driverMarket($this->apiClient),
+            ]);
+        } catch (\Throwable $e) {
+            error_log('[Engineer] ' . $e::class);
+        }
     }
 
     /**
