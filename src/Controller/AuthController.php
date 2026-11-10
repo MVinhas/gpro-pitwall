@@ -6,6 +6,7 @@ namespace App\Controller;
 
 use App\Http\Request;
 use App\Service\AuthService;
+use App\Service\EmailService;
 use Twig\Environment;
 
 class AuthController
@@ -26,6 +27,7 @@ class AuthController
             'expired' => isset($_GET['expired']),
             'csrf_token' => $_SESSION['csrf_token'] ?? '',
             'recaptcha_site_key' => $this->recaptchaSiteKey,
+            'welcome_subject' => EmailService::WELCOME_SUBJECT,
         ]);
 
         unset($_SESSION['flash']);
@@ -56,6 +58,9 @@ class AuthController
         echo $this->twig->render('auth/verify.twig', [
             'flash' => $_SESSION['flash'] ?? null,
             'csrf_token' => $_SESSION['csrf_token'] ?? '',
+            // The welcome email only exists once sign-up is complete.
+            'is_login' => !isset($_SESSION['auth_pending_registration_id']),
+            'welcome_subject' => EmailService::WELCOME_SUBJECT,
         ]);
 
         unset($_SESSION['flash']);
