@@ -1508,12 +1508,10 @@ class RaceEngineerService
         return $this->riskAdvisor->suggest(
             $driver,
             [
-                'name' => (string) ($track['name'] ?? ''),
                 'overtaking' => self::stringOrNull($track['overtaking'] ?? null),
                 'grip' => self::stringOrNull($track['grip'] ?? null),
                 'tyre_wear' => self::stringOrNull($track['tyre_wear'] ?? null),
                 'distance' => (float) ($track['distance'] ?? 0),
-                'pit_lane_loss' => (float) ($track['pit_time'] ?? 0),
             ],
             (bool) ($weather['race_start_wet'] ?? false),
             (float) ($weather['race_rain_avg'] ?? 0.0),

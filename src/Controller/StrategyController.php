@@ -313,12 +313,10 @@ class StrategyController
             $strategyResults['risk_advice'] = $this->riskAdvisor->suggest(
                 $driver,
                 [
-                    'name'          => $strategyResults['track'] ?? null,
-                    'overtaking'    => $strategyResults['overtaking'] ?? null,
-                    'grip'          => $strategyResults['track_grip'] ?? null,
-                    'tyre_wear'     => $strategyResults['track_tyre_wear'] ?? null,
-                    'distance'      => (float)($strategyResults['track_distance'] ?? 0),
-                    'pit_lane_loss' => (float)($strategyResults['track_pit_time'] ?? 0),
+                    'overtaking' => $strategyResults['overtaking'] ?? null,
+                    'grip'       => $strategyResults['track_grip'] ?? null,
+                    'tyre_wear'  => $strategyResults['track_tyre_wear'] ?? null,
+                    'distance'   => (float)($strategyResults['track_distance'] ?? 0),
                 ],
                 $raceIsWet,
                 $rain['race_rain_avg'],
@@ -380,7 +378,7 @@ class StrategyController
 
             return $strategyResults;
         } catch (\Exception $exception) {
-            error_log('[Strategy] ' . $exception::class . ': ' . $exception->getMessage());
+            error_log('[Strategy] ' . $exception::class);
 
             return ['error' => self::GENERIC_ERROR_MESSAGE];
         }

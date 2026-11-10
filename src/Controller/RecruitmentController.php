@@ -29,7 +29,7 @@ class RecruitmentController
         try {
             $this->apiClient->getMarketFile('drivers', true);
         } catch (\Throwable $exception) {
-            error_log('[Recruitment] ' . $exception::class . ': ' . $exception->getMessage());
+            error_log('[Recruitment] ' . $exception::class);
             $_SESSION['recruitment_refresh_failed'] = true;
         }
 

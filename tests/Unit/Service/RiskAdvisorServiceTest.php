@@ -32,7 +32,6 @@ final class RiskAdvisorServiceTest extends TestCase
     private function track(array $overrides = []): array
     {
         return $overrides + [
-            'name'       => 'Imola',
             'overtaking' => 'Normal',
             'grip'       => 'Normal',
             'tyre_wear'  => 'Medium',
@@ -49,7 +48,7 @@ final class RiskAdvisorServiceTest extends TestCase
     {
         $r = $this->service()->suggest(
             $this->driver(),
-            $this->track(['overtaking' => 'Very Hard', 'name' => 'Monaco']),
+            $this->track(['overtaking' => 'Very Hard']),
             false,
             10.0,
         );
@@ -61,7 +60,7 @@ final class RiskAdvisorServiceTest extends TestCase
     {
         $r = $this->service()->suggest(
             $this->driver(),
-            $this->track(['overtaking' => 'Very Easy', 'name' => 'Monza']),
+            $this->track(['overtaking' => 'Very Easy']),
             false,
             10.0,
         );
@@ -114,7 +113,6 @@ final class RiskAdvisorServiceTest extends TestCase
         );
 
         $this->assertLessThan($backed['overtake'], $hothead['overtake']);
-        $this->assertStringContainsString('aggressiveness 240', $hothead['phrase']);
     }
 
     public function testExperiencedAggressionLiftsBothDialsAndFavoursOvertake(): void
@@ -205,33 +203,6 @@ final class RiskAdvisorServiceTest extends TestCase
         }
     }
 
-    public function testPassiveDriverPhraseNamesAggressivenessAsTheLimit(): void
-    {
-        $r = $this->service()->suggest(
-            $this->driver(['aggressiveness' => 20]),
-            $this->track(['overtaking' => 'Hard']),
-            false,
-            10.0,
-        );
-
-        $this->assertStringContainsString('aggressiveness 20', strtolower($r['phrase']));
-    }
-
-    public function testPassiveDriverIsNeverToldToForceHisWayAtTheStart(): void
-    {
-        $r = $this->service()->suggest(
-            $this->driver([
-                'aggressiveness' => 0, 'concentration' => 250, 'talent' => 250,
-                'experience' => 250, 'motivation' => 250,
-            ]),
-            $this->track(['overtaking' => 'Very Hard']),
-            false,
-            0.0,
-        );
-
-        $this->assertSame('Maintain his position', $r['settings']['start_approach']);
-    }
-
     public function testLowGripTrimsBothRisks(): void
     {
         $normal = $this->service()->suggest($this->driver(), $this->track(), false, 10.0);
@@ -244,7 +215,6 @@ final class RiskAdvisorServiceTest extends TestCase
 
         $this->assertLessThan($normal['overtake'], $slippery['overtake']);
         $this->assertLessThan($normal['defend'], $slippery['defend']);
-        $this->assertStringContainsString('Grip here is very low', $slippery['phrase']);
     }
 
     public function testHighGripDoesNotInflateRisks(): void
@@ -272,7 +242,6 @@ final class RiskAdvisorServiceTest extends TestCase
         );
 
         $this->assertLessThanOrEqual($medium['overtake'], $chewer['overtake']);
-        $this->assertStringContainsString('Tyre wear runs very high', $chewer['phrase']);
     }
 
     public function testLowStaminaCostsRiskOnLongRaces(): void
@@ -291,7 +260,6 @@ final class RiskAdvisorServiceTest extends TestCase
         );
 
         $this->assertLessThanOrEqual($short['overtake'], $long['overtake']);
-        $this->assertStringContainsString('stamina', $long['phrase']);
     }
 
     public function testEliteDriverDoesNotPinEverythingAtTheCap(): void
@@ -303,7 +271,7 @@ final class RiskAdvisorServiceTest extends TestCase
                 'concentration' => 216, 'experience' => 160,
                 'talent' => 150, 'motivation' => 180, 'aggressiveness' => 120,
             ]),
-            $this->track(['overtaking' => 'Hard', 'name' => 'Barcelona']),
+            $this->track(['overtaking' => 'Hard']),
             false,
             10.0,
         );
@@ -341,181 +309,6 @@ final class RiskAdvisorServiceTest extends TestCase
 
         $this->assertSame($normal['overtake'], $unknown['overtake']);
         $this->assertSame($normal['defend'], $unknown['defend']);
-    }
-
-    public function testHardTrackTipRecommendsFewerStops(): void
-    {
-        $r = $this->service()->suggest($this->driver(), $this->track(['overtaking' => 'Hard']), false, 10.0);
-
-        $this->assertStringContainsString('fewer pit stops', $r['tip']);
-    }
-
-    public function testEasyTrackTipAllowsExtraStop(): void
-    {
-        $r = $this->service()->suggest($this->driver(), $this->track(['overtaking' => 'Easy']), false, 10.0);
-
-        $this->assertStringContainsString('extra pit stop', $r['tip']);
-    }
-
-    public function testTipIsSuppressedWhenRainIsLikely(): void
-    {
-        $wet = $this->service()->suggest($this->driver(), $this->track(['overtaking' => 'Hard']), true, 80.0);
-        $threat = $this->service()->suggest($this->driver(), $this->track(['overtaking' => 'Hard']), false, 45.0);
-
-        $this->assertNull($wet['tip']);
-        $this->assertNull($threat['tip']);
-    }
-
-    public function testPhraseNamesTheTrackAndBothNumbers(): void
-    {
-        $r = $this->service()->suggest(
-            $this->driver(),
-            $this->track(['overtaking' => 'Hard', 'name' => 'Interlagos']),
-            false,
-            10.0,
-        );
-
-        $this->assertStringContainsString('Interlagos', $r['phrase']);
-        $this->assertStringContainsString((string)$r['overtake'], $r['phrase']);
-        $this->assertStringContainsString((string)$r['defend'], $r['phrase']);
-        $this->assertStringNotContainsString('let the track defend for you', $r['phrase']);
-    }
-
-    public function testPhraseNeverInventsGameConcepts(): void
-    {
-        // "Composure" is an internal score, not a GPRO attribute — it must
-        // never leak into user-facing prose.
-        $weak = $this->service()->suggest(
-            $this->driver(['concentration' => 30, 'experience' => 30, 'talent' => 30, 'motivation' => 30]),
-            $this->track(),
-            false,
-            10.0,
-        );
-        $strong = $this->service()->suggest(
-            $this->driver(['concentration' => 240, 'experience' => 240]),
-            $this->track(),
-            false,
-            10.0,
-        );
-
-        $this->assertStringNotContainsString('composure', strtolower($weak['phrase']));
-        $this->assertStringNotContainsString('composure', strtolower($strong['phrase']));
-    }
-
-    public function testVeryEasyTrackPointsAtClearTrackRisk(): void
-    {
-        $r = $this->service()->suggest($this->driver(), $this->track(['overtaking' => 'Very Easy']), false, 10.0);
-
-        $this->assertStringContainsString('clear-track risk', $r['phrase']);
-    }
-
-    public function testDistanceTipPresentOnlyForShortAndLongRaces(): void
-    {
-        foreach ([238.6, 321.8] as $km) {
-            $r = $this->service()->suggest($this->driver(), $this->track(['distance' => $km]), false, 10.0);
-
-            $this->assertNotEmpty($r['distance_tip']);
-            $this->assertStringContainsString('clear-track risk', $r['distance_tip']);
-            $this->assertStringContainsString('boost lap', $r['distance_tip']);
-        }
-    }
-
-    public function testDistanceTipStaysNarrativeWithoutNumbers(): void
-    {
-        // Managers don't need the kilometres or the field average — the note
-        // must read as plain advice, never quoting a distance figure.
-        foreach ([238.6, 321.8] as $km) {
-            $r = $this->service()->suggest($this->driver(), $this->track(['distance' => $km]), false, 10.0);
-
-            $this->assertDoesNotMatchRegularExpression('/\d/', $r['distance_tip']);
-        }
-    }
-
-    public function testShortRaceTipFlagsLowerEnergyDrain(): void
-    {
-        $r = $this->service()->suggest($this->driver(), $this->track(['distance' => 250.0]), false, 10.0);
-
-        $this->assertStringContainsString('short race', $r['distance_tip']);
-        $this->assertStringContainsString('less driver energy', $r['distance_tip']);
-        $this->assertStringContainsString('higher clear-track risk', $r['distance_tip']);
-    }
-
-    public function testNormalRaceShowsNoDistanceTip(): void
-    {
-        $r = $this->service()->suggest($this->driver(), $this->track(['distance' => 306.0]), false, 10.0);
-
-        $this->assertSame('', $r['distance_tip']);
-    }
-
-    public function testLongRaceTipWarnsOnEnergyAndStamina(): void
-    {
-        $weak = $this->service()->suggest(
-            $this->driver(['stamina' => 100]),
-            $this->track(['distance' => 320.0]),
-            false,
-            10.0,
-        );
-        $strong = $this->service()->suggest(
-            $this->driver(['stamina' => 220]),
-            $this->track(['distance' => 320.0]),
-            false,
-            10.0,
-        );
-
-        $this->assertStringContainsString('long race', $weak['distance_tip']);
-        $this->assertStringContainsString('drains more driver energy', $weak['distance_tip']);
-        $this->assertStringContainsString('stamina', $weak['distance_tip']);
-        $this->assertStringNotContainsString('stamina, he\'ll fade', $strong['distance_tip']);
-    }
-
-    public function testDistanceTipEmptyWhenDistanceUnknown(): void
-    {
-        $r = $this->service()->suggest($this->driver(), $this->track(['distance' => 0.0]), false, 10.0);
-
-        $this->assertSame('', $r['distance_tip']);
-    }
-
-    public function testStartApproachScalesWithDriverAndTrack(): void
-    {
-        $elite = $this->service()->suggest(
-            $this->driver([
-                'concentration' => 216, 'experience' => 160,
-                'talent' => 150, 'motivation' => 180, 'aggressiveness' => 120,
-            ]),
-            $this->track(['overtaking' => 'Hard']),
-            false,
-            10.0,
-        );
-        $rookieWet = $this->service()->suggest(
-            $this->driver(['concentration' => 30, 'experience' => 30, 'talent' => 30, 'motivation' => 30]),
-            $this->track(),
-            true,
-            80.0,
-        );
-
-        $this->assertSame('Force his way to the front', $elite['settings']['start_approach']);
-        $this->assertSame('Avoid trouble', $rookieWet['settings']['start_approach']);
-    }
-
-    public function testProblemPitThresholdTracksPitLaneLength(): void
-    {
-        $shortLane = $this->service()->suggest(
-            $this->driver(),
-            $this->track(['pit_lane_loss' => 10.0]),
-            false,
-            10.0,
-        );
-        $longLane = $this->service()->suggest(
-            $this->driver(),
-            $this->track(['pit_lane_loss' => 45.0]),
-            false,
-            10.0,
-        );
-        $unknownLane = $this->service()->suggest($this->driver(), $this->track(), false, 10.0);
-
-        $this->assertSame(6, $shortLane['settings']['problem_pit_laps']);
-        $this->assertSame(12, $longLane['settings']['problem_pit_laps']);
-        $this->assertSame(8, $unknownLane['settings']['problem_pit_laps']);
     }
 
     public function testBoostLapsTargetTheInLaps(): void

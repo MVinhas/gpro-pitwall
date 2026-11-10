@@ -480,7 +480,7 @@ class PageController
                         $testingTrack = self::testingTrackName($testing);
                         $testingLapsLeft = self::testingLapsLeft($testing);
                     } catch (\Throwable $e) {
-                        error_log('[Cockpit] testing: ' . $e::class . ': ' . $e->getMessage());
+                        error_log('[Cockpit] testing: ' . $e::class);
                         $testingTrack = null;
                         $testingLapsLeft = 100;
                     }
@@ -764,7 +764,7 @@ class PageController
                         }
                     }
                 } catch (\Throwable $e) {
-                    error_log('[Cockpit] ' . $e::class . ': ' . $e->getMessage());
+                    error_log('[Cockpit] ' . $e::class);
                     $viewData['cockpit_error'] = StrategyController::GENERIC_ERROR_MESSAGE;
                 }
                 break;
@@ -927,7 +927,7 @@ class PageController
             $viewData['recruitment_no_baseline'] = true;
             return;
         } catch (\Throwable $exception) {
-            error_log('[Recruitment] ' . $exception::class . ': ' . $exception->getMessage());
+            error_log('[Recruitment] ' . $exception::class);
             $viewData['recruitment_error'] = true;
             return;
         }

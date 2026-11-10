@@ -355,7 +355,7 @@ final class StrategyControllerTest extends TestCase
 
     public function testAFailedCalculationReturnsTheGenericMessageNotRawDetails(): void
     {
-        // Internal detail (here a path) must never reach the page (A2).
+        // Internal detail (here a path) must never reach the page (A2) or the log.
         $strategy = $this->createStub(StrategyService::class);
         $strategy->method('calculateStrategy')
             ->willThrowException(new \RuntimeException('/srv/app/secret/path.php'));
@@ -365,6 +365,7 @@ final class StrategyControllerTest extends TestCase
 
         try {
             $result = $this->controller($strategy)->runCalc(new Request([], [], [], []));
+            $logged = (string) file_get_contents($this->cacheDir . '.log');
         } finally {
             ini_set('error_log', $prior === false ? '' : $prior);
             @unlink($this->cacheDir . '.log');
@@ -372,6 +373,9 @@ final class StrategyControllerTest extends TestCase
 
         $this->assertSame(StrategyController::GENERIC_ERROR_MESSAGE, $result['error'] ?? null);
         $this->assertSame([], $this->fetcher->calls);
+        // A GPRO error message can quote payload content; the log names the class only (B23).
+        $this->assertStringContainsString('[Strategy] RuntimeException', $logged);
+        $this->assertStringNotContainsString('secret/path', $logged);
     }
 
     /**

@@ -135,7 +135,7 @@ class TestingController
                 'max_laps'       => self::MAX_LAPS,
             ];
         } catch (\Throwable $e) {
-            error_log('[Testing] ' . $e::class . ': ' . $e->getMessage());
+            error_log('[Testing] ' . $e::class);
 
             return ['error' => StrategyController::GENERIC_ERROR_MESSAGE];
         }
