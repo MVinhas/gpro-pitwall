@@ -213,6 +213,9 @@ final class AdminUserService
         if (empty($target['deleted_at'])) {
             throw new RuntimeException('User is not deleted.');
         }
+        if ($this->users->isErased($targetId)) {
+            throw new RuntimeException('This account was erased by its owner and cannot be restored.');
+        }
 
         $this->users->restore($targetId);
         $this->audit->record($actorId, 'restore', $targetId, [

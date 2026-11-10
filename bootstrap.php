@@ -620,6 +620,7 @@ $container['controller.control_panel'] = new \App\Controller\ControlPanelControl
     $container['twig'],
     $container['service.authorize'],
     $container['service.auth_service'],
+    new \App\Service\AccountErasureService($container['service.user_repo'], $container['service.cache']),
 );
 
 $container['controller.recruitment'] = new RecruitmentController(

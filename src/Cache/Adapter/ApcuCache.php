@@ -43,4 +43,11 @@ class ApcuCache implements CacheInterface
     {
         return apcu_exists($key);
     }
+
+    public function deleteNamespace(string $namespace): bool
+    {
+        $deleted = apcu_delete(new \APCUIterator('/^' . preg_quote($namespace . ':', '/') . '/'));
+
+        return $deleted !== false;
+    }
 }

@@ -7,6 +7,7 @@ namespace App\Controller;
 use App\Http\Request;
 use App\Repository\UserRepository;
 use App\Security\Authorize;
+use App\Service\AccountErasureService;
 use App\Service\AuthService;
 use Twig\Environment;
 
@@ -17,6 +18,7 @@ class ControlPanelController
         private readonly Environment $twig,
         private readonly Authorize $authorize,
         private readonly AuthService $auth,
+        private readonly AccountErasureService $erasure,
     ) {
     }
 
@@ -112,7 +114,7 @@ class ControlPanelController
             exit;
         }
 
-        $this->userRepo->softDelete((int) $user['id']);
+        $this->erasure->eraseOwnAccount((int) $user['id']);
 
         // Deleted accounts must not stay logged in (and can't log back in —
         // every lookup filters deleted_at IS NULL).

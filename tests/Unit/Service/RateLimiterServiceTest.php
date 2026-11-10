@@ -87,6 +87,11 @@ final class RateLimiterServiceTest extends TestCase
             {
                 return array_key_exists($key, $this->store);
             }
+
+            public function deleteNamespace(string $namespace): bool
+            {
+                return true;
+            }
         };
 
         $limiter = new RateLimiterService($cache);

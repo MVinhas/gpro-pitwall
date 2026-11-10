@@ -136,9 +136,9 @@
                                 {{ u.username }}
                                 {% if is_self %}<span class="ml-1 text-xs text-slate-400 no-underline">(you)</span>{% endif %}
                                 {% if is_deleted %}
-                                    <span class="ml-1 inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 ring-1 ring-inset ring-red-600/20 no-underline align-middle"
-                                          title="Deleted {{ u.deleted_at }}">
-                                        Deleted {{ t.localtime(u.deleted_at, 'day') }}
+                                    <span class="ml-1 inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 ring-1 ring-inset ring-red-600/20 no-underline align-middle"
+                                          title="{{ u.erased ? 'Erased by owner' : 'Deleted' }} {{ u.deleted_at }}">
+                                        {{ u.erased ? 'Erased by owner' : 'Deleted' }} {{ t.localtime(u.deleted_at, 'day') }}
                                     </span>
                                 {% endif %}
                             </td>
@@ -165,7 +165,9 @@
                               {# items-start keeps Send code level with the Rename
                                  summary once the rename disclosure is expanded. #}
                               <div class="flex items-start justify-end gap-2">
-                                {% if is_deleted %}
+                                {% if is_deleted and u.erased %}
+                                    <span class="t-caption" title="Erased by its owner: nothing is left to restore">Cannot be restored</span>
+                                {% elseif is_deleted %}
                                     <form method="POST" action="/admin/users/restore" class="inline"
                                           data-confirm-restore="{{ u.username }}">
                                         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">

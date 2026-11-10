@@ -417,4 +417,21 @@ final class AdminUserServiceTest extends TestCase
             $pending,
         );
     }
+
+    public function testAnAccountErasedByItsOwnerCannotBeRestored(): void
+    {
+        $users = $this->createMock(UserRepository::class);
+        $users->method('findByIdIncludingDeleted')
+              ->willReturn(['id' => 5, 'username' => 'deleted-5', 'deleted_at' => '2026-11-10 10:00:00']);
+        $users->method('isErased')->willReturn(true);
+        $users->expects($this->never())->method('restore');
+
+        $audit = $this->createMock(AuditLogRepository::class);
+        $audit->expects($this->never())->method('record');
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('erased by its owner');
+
+        $this->service($users, $audit)->restore(actorId: 1, targetId: 5);
+    }
 }

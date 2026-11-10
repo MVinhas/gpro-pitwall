@@ -163,7 +163,8 @@ class UserRepository
         // deleted_at distinguishes them in the view.
         $stmt = $this->pdo->prepare(
             "SELECT id, username, is_admin, api_token,
-                    verified_at, last_synced_at, sync_status, created_at, deleted_at
+                    verified_at, last_synced_at, sync_status, created_at, deleted_at,
+                    (deleted_at IS NOT NULL AND email_encrypted = '') AS erased
              FROM users
              ORDER BY id DESC
              LIMIT :limit OFFSET :offset"
@@ -200,6 +201,71 @@ class UserRepository
             "UPDATE users SET deleted_at = :now WHERE id = :id AND deleted_at IS NULL"
         );
         $stmt->execute(['now' => date('Y-m-d H:i:s'), 'id' => $userId]);
+    }
+
+    /**
+     * What a manager's own account deletion removes. Race history, weekend
+     * snapshots and the money ledger are not here: they feed the app's models
+     * and stay, attached to a row that no longer identifies anyone.
+     */
+    private const array ERASE_STATEMENTS = [
+        'DELETE FROM user_api_archive WHERE user_id = :id',
+        'DELETE FROM user_standings WHERE user_id = :id',
+        'DELETE FROM user_projection_state WHERE user_id = :id',
+        'DELETE FROM user_season_objective WHERE user_id = :id',
+        'DELETE FROM user_season_budget WHERE user_id = :id',
+        'DELETE FROM user_weekend_choice WHERE user_id = :id',
+        'DELETE FROM user_sync_events WHERE user_id = :id',
+        'DELETE FROM persistent_tokens WHERE user_id = :id',
+        'DELETE FROM verification_tokens WHERE user_id = :id',
+        'UPDATE audit_log SET metadata_json = NULL WHERE target_user_id = :id',
+    ];
+
+    /**
+     * Erases a live account for good: its identity, its credentials and every
+     * per-user table that does not feed the models. Unlike softDelete() this
+     * cannot be restored, and the username and email are free to register
+     * again. A row that is already deleted is left as it is.
+     */
+    public function erase(int $userId): void
+    {
+        $this->pdo->beginTransaction();
+        try {
+            $placeholder = 'deleted-' . $userId;
+            $stmt = $this->pdo->prepare(
+                "UPDATE users
+                    SET username = :username, email_encrypted = '', email_hash = :hash,
+                        api_token = NULL, is_admin = 0, deleted_at = :now
+                  WHERE id = :id AND deleted_at IS NULL"
+            );
+            $stmt->execute([
+                'username' => $placeholder,
+                'hash' => $placeholder,
+                'now' => date('Y-m-d H:i:s'),
+                'id' => $userId,
+            ]);
+
+            if ($stmt->rowCount() === 1) {
+                foreach (self::ERASE_STATEMENTS as $sql) {
+                    $this->pdo->prepare($sql)->execute(['id' => $userId]);
+                }
+            }
+            $this->pdo->commit();
+        } catch (\Throwable $e) {
+            $this->pdo->rollBack();
+            throw $e;
+        }
+    }
+
+    /** True for a row erase() has been through: it has no email left to restore to. */
+    public function isErased(int $userId): bool
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT 1 FROM users WHERE id = :id AND deleted_at IS NOT NULL AND email_encrypted = ''"
+        );
+        $stmt->execute(['id' => $userId]);
+
+        return $stmt->fetchColumn() !== false;
     }
 
     public function restore(int $userId): void

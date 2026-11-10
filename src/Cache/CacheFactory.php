@@ -21,10 +21,11 @@ class CacheFactory
         // Wrapped here rather than at the call site so no future caller can
         // obtain a raw, un-namespaced driver and reintroduce the cross-deploy
         // stale-shape bug. See NamespacedCache for the full why.
-        return new NamespacedCache(
-            self::createDriver($config),
-            (string)($config['CACHE_NAMESPACE'] ?? Version::current()),
-        );
+        $version = (string)($config['CACHE_NAMESPACE'] ?? Version::current());
+
+        $driver = self::createDriver($config + ['LIVE_NAMESPACE' => NamespacedCache::prefixFor($version)]);
+
+        return new NamespacedCache($driver, $version);
     }
 
     /**
@@ -68,7 +69,9 @@ class CacheFactory
     private static function createFilesystem(array $config): CacheInterface
     {
         $dir = (string)($config['CACHE_DIR'] ?? (dirname(__DIR__, 2) . '/var/cache'));
-        return new FilesystemCache($dir);
+        $live = $config['LIVE_NAMESPACE'] ?? null;
+
+        return new FilesystemCache($dir, is_string($live) ? $live : null);
     }
 
     private static function createApcu(): CacheInterface

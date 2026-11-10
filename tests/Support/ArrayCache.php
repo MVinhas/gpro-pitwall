@@ -39,4 +39,14 @@ final class ArrayCache implements CacheInterface
     {
         return array_key_exists($key, $this->store);
     }
+
+    public function deleteNamespace(string $namespace): bool
+    {
+        foreach (array_keys($this->store) as $key) {
+            if (str_starts_with($key, $namespace . ':')) {
+                unset($this->store[$key]);
+            }
+        }
+        return true;
+    }
 }

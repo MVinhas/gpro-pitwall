@@ -42,4 +42,9 @@ final class TtlRecordingCache implements CacheInterface
     {
         return $this->inner->has($key);
     }
+
+    public function deleteNamespace(string $namespace): bool
+    {
+        return $this->inner->deleteNamespace($namespace);
+    }
 }

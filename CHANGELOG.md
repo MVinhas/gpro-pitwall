@@ -6,6 +6,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.35] - 2026-11-10
+
+### Changed
+- **Security:** Deleting your own account now erases it instead of deactivating it. Your email, username, GPRO API token, login tokens, the archive of raw GPRO payloads, cached GPRO payloads, standings snapshots, season plan and weekend choices are removed, and the account row is anonymised. Race results, weekend snapshots and the money ledger stay on that anonymous row because they feed the app's models. It cannot be restored, and the username and email are free to register again. Accounts deleted before this release are left as they were.
+- **Security:** Audit-log entries about a manager lose their details (such as a stored username) when that manager erases their account. The entry itself stays.
+- The Account page says what deletion removes, what stays and that it cannot be undone. The admin user list marks such an account "Erased by owner" and offers no restore; an admin delete is still a restorable soft delete.
+
+### Fixed
+- **Security:** The file cache kept every past release's entries on disk for good, raw GPRO payloads included, because each release reads only its own namespace. Cache files now carry their release and user scope in the file name, so one account's entries can be removed and files left by past releases are swept once a day (files younger than a day are left for a release still being served).
+- Admin user list: the "Deleted" badge ran its label into the date.
+
 ## [1.21.34] - 2026-11-10
 
 ### Added
