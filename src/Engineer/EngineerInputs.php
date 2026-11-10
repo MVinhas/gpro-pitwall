@@ -40,14 +40,7 @@ namespace App\Engineer;
  *     handling: ?int,
  *     acceleration: ?int
  * }
- * @phpstan-type Risk array{
- *     overtake: int,
- *     defend: int,
- *     phrase: string,
- *     tip: ?string,
- *     distance_tip: string,
- *     settings: array<string, mixed>
- * }
+ * @phpstan-type Risk array{overtake: int, defend: int}
  */
 final readonly class EngineerInputs
 {

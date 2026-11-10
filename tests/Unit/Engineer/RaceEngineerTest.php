@@ -83,7 +83,7 @@ final class RaceEngineerTest extends TestCase
             'testingOpen' => true,
             'testingTrack' => 'Silverstone',
             'testingCost' => 300_000,
-            'risk' => ['overtake' => 40, 'defend' => 25, 'phrase' => 'x', 'tip' => null, 'distance_tip' => '', 'settings' => []],
+            'risk' => ['overtake' => 40, 'defend' => 25],
             'boostLitres' => 24,
             'weatherStale' => false,
             'plan' => null,
@@ -1049,7 +1049,7 @@ final class RaceEngineerTest extends TestCase
 
     public function testStayOvertakeNeverGoesBelowZero(): void
     {
-        $risk = ['overtake' => 10, 'defend' => 5, 'phrase' => '', 'tip' => null, 'distance_tip' => '', 'settings' => []];
+        $risk = ['overtake' => 10, 'defend' => 5];
         $in = $this->inputs(['objective' => $this->objective(SeasonObjective::STAY), 'risk' => $risk]);
 
         $this->assertSame('Overtake 0 · Defend 5', $this->line($in, 'risk')['answer']);

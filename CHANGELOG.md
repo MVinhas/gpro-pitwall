@@ -6,6 +6,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.36] - 2026-11-10
+
+### Fixed
+- **Security:** Seven controller log lines wrote the exception message, which for a GPRO error can quote payload content such as manager names. They now log the exception class only, as the services already did. `/healthz` keeps its database and cache messages, which carry no GPRO payload.
+
+### Removed
+- Race-risk advice that was computed on every Strategy and Engineer render and never shown: the narrative phrase, the pit-count tip, the race-distance tip, and the start-approach and problem-pit suggestions. The overtake, defend and boost-lap suggestions are unchanged.
+- `docs/screenshots.md`, a landing-page re-shoot procedure that no longer matched how the screenshots are made.
+
 ## [1.21.35] - 2026-11-10
 
 ### Changed

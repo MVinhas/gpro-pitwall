@@ -135,7 +135,7 @@ class CarWearController
                     ) !== [],
             ];
         } catch (\Throwable $e) {
-            error_log('[CarWear] ' . $e::class . ': ' . $e->getMessage());
+            error_log('[CarWear] ' . $e::class);
 
             return ['error' => StrategyController::GENERIC_ERROR_MESSAGE];
         }
