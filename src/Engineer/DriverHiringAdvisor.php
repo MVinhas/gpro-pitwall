@@ -9,6 +9,10 @@ namespace App\Engineer;
  *   offers: int, retiring: bool, favourites: int}
  * @phpstan-type Out array{retiring: int, cap: int, age: int, offers: int, salary_average: int,
  *   salary_plan: int, switch_cost: int}
+ * @phpstan-import-type BudgetRow from SeasonBudget
+ * @phpstan-type HiringMoney array{rows: list<BudgetRow>, cushion: int, target: int, envelope: int, spare: int}
+ * @phpstan-type Pick array{id: int, name: string, rating: float, gain: ?float, oa: int, age: int, salary: int,
+ *   fee: int, favourites: int, one_off: int, fits: 'plan'|'cuts'|'unknown', cut: int}
  */
 final readonly class DriverHiringAdvisor
 {
@@ -133,5 +137,77 @@ final readonly class DriverHiringAdvisor
         }
 
         return $ranked;
+    }
+
+    /**
+     * What signing the candidate costs and whether the season plan can pay for it. The salary change must fit the
+     * whole envelope under either objective; the one-off on top may eat into the envelope only for Promote,
+     * otherwise it must stay within the spare money. Without a plan only the cash on hand guards the one-off.
+     *
+     * @param Candidate $candidate
+     * @param ?HiringMoney $money null when there is no season plan
+     * @return Pick|'salary_plan'|'switch_cost'
+     */
+    public static function price(
+        array $candidate,
+        int $currentSalary,
+        int $currentRacesLeft,
+        ?array $money,
+        ?int $cash,
+        bool $promote,
+        ?float $currentRating,
+    ): array|string {
+        $oneOff = self::OFFER_COST + $candidate['fee'] + intdiv($currentSalary * $currentRacesLeft, 2);
+        $fits = 'unknown';
+        $cut = 0;
+        if ($money === null) {
+            if ($cash !== null && $oneOff > $cash) {
+                return 'switch_cost';
+            }
+        } else {
+            $salaryChange = $candidate['salary'] - $currentSalary;
+            if (self::drop($money, $salaryChange, 0) > $money['envelope']) {
+                return 'salary_plan';
+            }
+            $total = self::drop($money, $salaryChange, $oneOff);
+            if ($total > ($promote ? $money['envelope'] : $money['spare'])) {
+                return 'switch_cost';
+            }
+            $fits = $total <= $money['spare'] ? 'plan' : 'cuts';
+            $cut = max(0, $total - $money['spare']);
+        }
+
+        return [
+            'id' => $candidate['id'],
+            'name' => $candidate['name'],
+            'rating' => $candidate['rating'],
+            'gain' => $currentRating === null ? null : round($candidate['rating'] - $currentRating, 1),
+            'oa' => $candidate['oa'],
+            'age' => $candidate['age'],
+            'salary' => $candidate['salary'],
+            'fee' => $candidate['fee'],
+            'favourites' => $candidate['favourites'],
+            'one_off' => $oneOff,
+            'fits' => $fits,
+            'cut' => $cut,
+        ];
+    }
+
+    /**
+     * How far a cost lowers the plan's headroom: the one-off from every row, the salary change once per race paid
+     * from row $fromRow on. Negative when the cost raises it.
+     *
+     * @param HiringMoney $money
+     */
+    public static function drop(array $money, int $salaryChange, int $oneOff, int $fromRow = 0): int
+    {
+        $lowered = [];
+        foreach ($money['rows'] as $i => $row) {
+            $row['balance'] -= $oneOff + $salaryChange * max(0, $i - $fromRow + 1);
+            $lowered[] = $row;
+        }
+
+        return CtrPlanner::headroom($money['rows'], $money['cushion'], $money['target'])
+            - CtrPlanner::headroom($lowered, $money['cushion'], $money['target']);
     }
 }

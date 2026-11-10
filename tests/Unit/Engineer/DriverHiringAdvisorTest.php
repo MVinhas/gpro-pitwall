@@ -78,4 +78,73 @@ final class DriverHiringAdvisorTest extends TestCase
 
         self::assertSame([4, 2, 5, 1, 3], array_column(DriverHiringAdvisor::rank($c), 'id'));
     }
+
+    /** @return array{rows: list<array{balance: int}>, cushion: int, target: int, envelope: int, spare: int} */
+    private function money(int $balance, int $envelope, int $spare, int $races = 10): array
+    {
+        return ['rows' => array_fill(0, $races, ['balance' => $balance]), 'cushion' => 0, 'target' => 0,
+            'envelope' => $envelope, 'spare' => $spare];
+    }
+
+    /** @param array<string, mixed> $o */
+    private function candidate(array $o = []): array
+    {
+        return DriverHiringAdvisor::candidates([$this->row($o)], [])[0];
+    }
+
+    public function testOneOffIsOfferFeeAndHalfTheOldSalaryForRacesLeft(): void
+    {
+        $pick = DriverHiringAdvisor::price($this->candidate(), 300_000, 4, null, null, false, 70.0);
+
+        self::assertIsArray($pick);
+        self::assertSame(500_000 + 200_000 + 600_000, $pick['one_off']);
+        self::assertSame(10.0, $pick['gain']);
+        self::assertSame('unknown', $pick['fits']);
+    }
+
+    public function testWithoutAPlanOnlyCashGuardsTheOneOff(): void
+    {
+        self::assertSame('switch_cost', DriverHiringAdvisor::price($this->candidate(), 0, 0, null, 699_999, false, null));
+        self::assertIsArray(DriverHiringAdvisor::price($this->candidate(), 0, 0, null, 700_000, false, null));
+    }
+
+    public function testDropCountsSalaryEveryRaceAndTheOneOffOnce(): void
+    {
+        $money = $this->money(5_000_000, 5_000_000, 5_000_000);
+
+        self::assertSame(100_000 * 10 + 700_000, DriverHiringAdvisor::drop($money, 100_000, 700_000));
+        self::assertSame(100_000 * 7, DriverHiringAdvisor::drop($money, 100_000, 0, 3));
+        self::assertLessThanOrEqual(0, DriverHiringAdvisor::drop($money, -50_000, 0));
+    }
+
+    public function testSalaryThePlanCannotCarryIsOutUnderBothObjectives(): void
+    {
+        $money = $this->money(900_000, 900_000, 900_000);
+        $dear = $this->candidate(['SAL' => 400_000]);
+
+        self::assertSame('salary_plan', DriverHiringAdvisor::price($dear, 300_000, 0, $money, null, true, null));
+        self::assertSame('salary_plan', DriverHiringAdvisor::price($dear, 300_000, 0, $money, null, false, null));
+    }
+
+    public function testPromoteMayCutOtherSpendingForTheOneOffStayMayNot(): void
+    {
+        $money = $this->money(2_000_000, 2_000_000, 300_000);
+        $same = $this->candidate(['SAL' => 300_000]);
+
+        $promote = DriverHiringAdvisor::price($same, 300_000, 0, $money, null, true, null);
+        self::assertIsArray($promote);
+        self::assertSame('cuts', $promote['fits']);
+        self::assertSame(700_000 - 300_000, $promote['cut']);
+        self::assertSame('switch_cost', DriverHiringAdvisor::price($same, 300_000, 0, $money, null, false, null));
+    }
+
+    public function testACheaperDriverInsideTheSpareFitsThePlan(): void
+    {
+        $money = $this->money(2_000_000, 2_000_000, 800_000);
+        $pick = DriverHiringAdvisor::price($this->candidate(['SAL' => 250_000]), 300_000, 0, $money, null, false, null);
+
+        self::assertIsArray($pick);
+        self::assertSame('plan', $pick['fits']);
+        self::assertSame(0, $pick['cut']);
+    }
 }
