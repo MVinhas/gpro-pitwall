@@ -142,7 +142,8 @@
             {% if strip %}
             <div class="flex flex-wrap items-center gap-x-4 gap-y-1 tabular-nums">
                 <span{% if strip.cash_rank %} class="cursor-help" title="#{{ strip.cash_rank }} of {{ strip.cash_total }} by cash in {{ strip.division ?? 'your group' }}"{% endif %}>
-                    <span class="hidden text-slate-500 sm:inline">Cash</span>
+                    {# Alone in the strip, a bare figure says nothing: keep its label on phones. #}
+                    <span class="{{ strip.division or strip.next_track ? 'hidden sm:inline ' : '' }}text-slate-500">Cash</span>
                     <span class="font-medium text-slate-900">${{ strip.cash|number_format(0, '.', ',') }}</span>
                 </span>
                 {% if strip.division %}

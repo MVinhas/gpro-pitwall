@@ -9,6 +9,9 @@ use PHPMailer\PHPMailer\Exception;
 
 class EmailService
 {
+    /** Quoted on the login and verify pages: it is where the username is written down. */
+    public const string WELCOME_SUBJECT = 'Welcome to GPRO Pitwall!';
+
     /** @param array<string, mixed> $config */
     public function __construct(private readonly array $config)
     {
@@ -68,7 +71,7 @@ class EmailService
 
     public function sendWelcomeEmail(string $toEmail, string $username): bool
     {
-        $subject = "Welcome to GPRO Pitwall!";
+        $subject = self::WELCOME_SUBJECT;
         $body = $this->renderHtml(
             "Welcome! Your account is now active. Your username — and the only way to log in — is:",
             htmlspecialchars($username, ENT_QUOTES, 'UTF-8'),

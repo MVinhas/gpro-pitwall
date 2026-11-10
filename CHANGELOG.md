@@ -6,6 +6,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.34] - 2026-11-10
+
+### Added
+- The login page says where the username is written down: one line under the Username field points at the "Welcome to GPRO Pitwall!" email. Most "the code doesn't work" reports were a mistyped username, so the code went to another account or nowhere.
+- The verify page repeats that pointer under "Didn't get the code? Resend it" when logging in. It stays hidden during sign-up, when the welcome email has not been sent yet.
+
+### Fixed
+- On phones, the status line showed a bare figure such as "$0" on its own row when cash was the only item in the strip (no division or next race yet). The "Cash" label now stays visible in that case.
+
 ## [1.21.33] - 2026-11-05
 
 ### Fixed

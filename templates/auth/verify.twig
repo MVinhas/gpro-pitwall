@@ -89,6 +89,11 @@
                     Didn't get the code? Resend it
                 </button>
             </form>
+            {% if is_login %}
+                <p class="text-xs text-slate-500">
+                    Still nothing? Check the username: it's in your "{{ welcome_subject }}" email.
+                </p>
+            {% endif %}
             <a href="/login" class="block text-xs text-slate-400 hover:text-slate-600">
                 Start over / Use different account
             </a>
