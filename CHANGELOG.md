@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.38] - 2026-11-11
+
+### Changed
+- Race engineer: the Boost line now advises 0 to 3 stints, weighing the places a stint buys (less on tracks
+  where passing is hard) against the wear it adds, in place of a fixed 3.
+
 ## [1.21.37] - 2026-11-11
 
 ### Added

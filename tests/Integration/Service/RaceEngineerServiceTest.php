@@ -6,6 +6,7 @@ namespace App\Tests\Integration\Service;
 
 use App\Cache\Adapter\NullCache;
 use App\Database\DatabaseSeeder;
+use App\Engineer\BoostPlanner;
 use App\Engineer\CtrCeiling;
 use App\Engineer\CtrPlanner;
 use App\Engineer\CtrPolicy;
@@ -126,6 +127,7 @@ final class RaceEngineerServiceTest extends TestCase
             new CtrCeiling($wear),
             new RiskAdvisorService(),
             new BoostFuelService(),
+            new BoostPlanner($wear, new SeasonBudget($wear)),
             new FuelModel(['fuel_factors' => [
                 'conc' => 0.0, 'agg' => 0.0, 'exp' => 0.0, 'te' => 0.0,
                 'eng_lvl' => 0.0, 'ele_lvl' => 0.0, 'constant' => 0.0,
@@ -301,16 +303,72 @@ final class RaceEngineerServiceTest extends TestCase
         self::assertContains('boost', $keys);
     }
 
+    /**
+     * @param array<string, mixed> $overrides
+     * @return array<string, mixed>
+     */
+    private function boostLine(array $overrides = []): array
+    {
+        $lines = $this->service->forCockpit(self::USER, $this->cockpit($overrides))['lines'];
+
+        return array_values(array_filter($lines, static fn (array $l): bool => $l['key'] === 'boost'))[0];
+    }
+
+    public function testBoostAdvisesEveryStintWhenTheWearAllowsIt(): void
+    {
+        $this->seedPromotionFixture();
+
+        $boost = $this->boostLine();
+
+        // 9 laps x 5 km x 0.3 = 13.5 L, rounded up. Level 5 parts wear the same at any CTR in this fixture.
+        self::assertSame('Boost: 3 stints · +14 L', $boost['answer']);
+        self::assertSame('No pace figure for this track; no part reaches the limit', $boost['reason']);
+    }
+
     public function testBoostLitresUseTheWetCoefficientWhenTheRaceStartsWet(): void
     {
         $this->seedPromotionFixture();
         $weather = ['q1_wet' => false, 'q2_wet' => false, 'race_rain_avg' => 60.0, 'race_start_wet' => true];
 
-        $lines = $this->service->forCockpit(self::USER, $this->cockpit(['weather' => $weather]))['lines'];
-        $boost = array_values(array_filter($lines, static fn (array $l): bool => $l['key'] === 'boost'))[0];
-
         // 9 laps x 5 km x 0.4 = 18 L
-        self::assertSame('Boost: 3 sets · +18 L', $boost['answer']);
+        self::assertSame('Boost: 3 stints · +18 L', $this->boostLine(['weather' => $weather])['answer']);
+    }
+
+    public function testBoostDropsTheStintsThatTakeAPartToTheLimit(): void
+    {
+        $this->seedPromotionFixture();
+        // Level 1 wears 1.05^CTR here: 131 times the CTR 0 wear at CTR 100, so a boosted lap costs a lot.
+        $engine = ['level' => 1, 'start' => 60, 'est' => 2.0, 'end' => 62.0, 'track_base' => 2.0];
+        $wear = ['track_name' => 'Testring', 'laps' => 50, 'parts' => ['Engine' => $engine]];
+
+        $boost = $this->boostLine(['wear' => $wear]);
+
+        self::assertNotSame('Boost: 3 stints · +14 L', $boost['answer']);
+        self::assertStringEndsWith('takes Engine to 100 %', $boost['reason']);
+    }
+
+    public function testBoostWithoutWearSaysItIsNotWeighed(): void
+    {
+        $this->seedPromotionFixture();
+
+        $boost = $this->boostLine(['wear' => null]);
+
+        self::assertSame('Boost: 3 stints · +14 L', $boost['answer']);
+        self::assertSame('Fuel for 3 stints; the wear is unknown, so it is not weighed', $boost['reason']);
+    }
+
+    public function testBoostOnAHardTrackSaysSoNextToThePlaces(): void
+    {
+        $this->seedPromotionFixture();
+        $this->db->exec("UPDATE tracks SET lap_length = 5.0, avg_speed = 180.0, overtaking = 'Very Hard'");
+
+        $boost = $this->boostLine();
+
+        self::assertSame('Boost: 3 stints · +14 L', $boost['answer']);
+        self::assertMatchesRegularExpression(
+            '/^Hard to pass here: about \d\.\d places; no part reaches the limit$/',
+            $boost['reason'],
+        );
     }
 
     public function testWithoutAnOutlookForcedSwapPartsCountAsFreshInTheCeilingAndArePricedFromTheSwapPlan(): void

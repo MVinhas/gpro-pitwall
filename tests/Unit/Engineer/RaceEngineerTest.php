@@ -84,7 +84,7 @@ final class RaceEngineerTest extends TestCase
             'testingTrack' => 'Silverstone',
             'testingCost' => 300_000,
             'risk' => ['overtake' => 40, 'defend' => 25],
-            'boostLitres' => 24,
+            'boost' => $this->boost(),
             'weatherStale' => false,
             'plan' => null,
         ];
@@ -1070,32 +1070,135 @@ final class RaceEngineerTest extends TestCase
         $this->assertSame('After you save the race setup', $this->line($in, 'boost')['answer']);
     }
 
-    public function testBoostShowsTheExtraFuelAndLinksToStrategy(): void
+    /**
+     * @param array<string, mixed> $o
+     * @return array<string, mixed>
+     */
+    private function boost(array $o = []): array
     {
-        $line = $this->line($this->inputs(), 'boost');
+        return $o + [
+            'stints' => 3, 'litres' => 24, 'weighed' => true, 'most' => true, 'pace_known' => true,
+            'hard_to_pass' => false, 'places' => 1.9, 'gain' => 290_000, 'cost' => 0, 'blocked' => null,
+        ];
+    }
 
-        $this->assertSame('Boost: 3 sets · +24 L', $line['answer']);
-        $this->assertSame(9, RaceEngineer::BOOST_SETS * RaceEngineer::BOOST_LAPS_PER_SET);
+    /**
+     * @return array<string, mixed>
+     */
+    private static function boostBlock(int $stints, string $why, ?string $part, int $gain, int $cost): array
+    {
+        return ['stints' => $stints, 'why' => $why, 'part' => $part, 'gain' => $gain, 'cost' => $cost];
+    }
+
+    /**
+     * @return iterable<string, array{array<string, mixed>, string, string}>
+     */
+    public static function boostLines(): iterable
+    {
+        $all = 'Boost: 3 stints · +24 L';
+        $one = ['stints' => 1, 'litres' => 8];
+        $two = ['stints' => 2, 'litres' => 16];
+        $none = ['stints' => 0, 'litres' => 0];
+
+        yield 'all three, most that pass' => [[], $all, 'About 1.9 places; no part reaches the limit'];
+        yield 'all three free on Stay' => [
+            ['most' => false], $all, 'About 1.9 places, and it buys no extra part this season',
+        ];
+        yield 'all three at a cost' => [
+            ['cost' => 180_000], $all, 'About $290k in prize money for $180k in parts brought forward',
+        ];
+        yield 'a part stops the second stint' => [
+            $one + ['blocked' => self::boostBlock(2, 'part', 'Gearbox', 97_000, 0)],
+            'Boost: 1 stint · +8 L',
+            'A second stint takes Gearbox to 100 %',
+        ];
+        yield 'an unpriced part stops the second stint' => [
+            $one + ['blocked' => self::boostBlock(2, 'unpriced', 'Gearbox', 97_000, 0)],
+            'Boost: 1 stint · +8 L',
+            'A second stint brings forward a Gearbox with no known price',
+        ];
+        yield 'cash stops the third stint' => [
+            $two + ['blocked' => self::boostBlock(3, 'cash', null, 97_000, 450_000)],
+            'Boost: 2 stints · +16 L',
+            "A third stint brings $450k in parts forward and the budget can't carry it",
+        ];
+        yield 'the third stint is not worth it' => [
+            $two + ['blocked' => self::boostBlock(3, 'value', null, 97_000, 450_000)],
+            'Boost: 2 stints · +16 L',
+            'A third stint gains about $97k and costs $450k in parts brought forward',
+        ];
+        yield 'no stint is worth it' => [
+            $none + ['blocked' => self::boostBlock(1, 'value', null, 33_000, 450_000)],
+            'No boost',
+            'Even one stint gains about $33k and costs $450k in parts brought forward',
+        ];
+        yield 'a part stops the first stint' => [
+            $none + ['blocked' => self::boostBlock(1, 'part', 'Engine', 33_000, 0)],
+            'No boost',
+            'Even one stint takes Engine to 100 %',
+        ];
+        yield 'no pace figure' => [
+            ['pace_known' => false, 'places' => 0.0, 'gain' => 0],
+            $all,
+            'No pace figure for this track; no part reaches the limit',
+        ];
+        yield 'no pace figure on Stay' => [
+            ['pace_known' => false, 'places' => 0.0, 'gain' => 0, 'most' => false],
+            $all,
+            'No pace figure for this track; it buys no extra part this season',
+        ];
+        yield 'no pace figure, at a cost' => [
+            ['pace_known' => false, 'places' => 0.0, 'gain' => 0, 'cost' => 180_000],
+            $all,
+            'No pace figure for this track; it brings $180k in parts forward',
+        ];
+        yield 'wear unknown' => [
+            ['weighed' => false], $all, 'Fuel for 3 stints; the wear is unknown, so it is not weighed',
+        ];
+        yield 'hard to pass, places' => [
+            ['hard_to_pass' => true], $all, 'Hard to pass here: about 1.9 places; no part reaches the limit',
+        ];
+        yield 'hard to pass, money' => [
+            ['hard_to_pass' => true, 'cost' => 180_000],
+            $all,
+            'Hard to pass here: about $290k in prize money for $180k in parts brought forward',
+        ];
+        yield 'hard to pass, value refusal' => [
+            $two + ['hard_to_pass' => true, 'blocked' => self::boostBlock(3, 'value', null, 97_000, 450_000)],
+            'Boost: 2 stints · +16 L',
+            'Hard to pass here: a third stint gains about $97k and costs $450k in parts brought forward',
+        ];
+        yield 'hard to pass says nothing about a part limit' => [
+            $one + ['hard_to_pass' => true, 'blocked' => self::boostBlock(2, 'part', 'Gearbox', 97_000, 0)],
+            'Boost: 1 stint · +8 L',
+            'A second stint takes Gearbox to 100 %',
+        ];
+        yield 'hard to pass says nothing without a pace figure' => [
+            ['hard_to_pass' => true, 'pace_known' => false, 'places' => 0.0, 'gain' => 0],
+            $all,
+            'No pace figure for this track; no part reaches the limit',
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $advice
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('boostLines')]
+    public function testBoostLineSaysHowManyStintsAndWhy(array $advice, string $answer, string $reason): void
+    {
+        $line = $this->line($this->inputs(['boost' => $this->boost($advice)]), 'boost');
+
+        $this->assertSame($answer, $line['answer']);
+        $this->assertSame($reason, $line['reason']);
         $this->assertSame(['label' => 'Laps in Strategy', 'href' => '/strategy'], $line['action']);
         $this->assertNull($line['anchor']);
     }
 
-    public function testBoostOmittedWithoutLitres(): void
+    public function testBoostOmittedWithoutAdvice(): void
     {
-        $keys = array_column(RaceEngineer::brief($this->inputs(['boostLitres' => null])), 'key');
+        $keys = array_column(RaceEngineer::brief($this->inputs(['boost' => null])), 'key');
 
         $this->assertNotContains('boost', $keys);
-    }
-
-    public function testStayGetsTheRegularBoostLine(): void
-    {
-        $stay = $this->line($this->inputs(['objective' => $this->objective(SeasonObjective::STAY)]), 'boost');
-        $promote = $this->line($this->inputs(['objective' => $this->objective(SeasonObjective::PROMOTE)]), 'boost');
-
-        $this->assertSame('Boost: 3 sets · +24 L', $stay['answer']);
-        $this->assertSame('Extra fuel for 3 sets of 3 laps; Strategy picks the laps', $stay['reason']);
-        $this->assertSame(['label' => 'Laps in Strategy', 'href' => '/strategy'], $stay['action']);
-        $this->assertSame($promote, $stay);
     }
 
     /**

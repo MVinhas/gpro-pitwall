@@ -13,6 +13,7 @@ use App\Support\Ordinal;
  * @phpstan-import-type Upgrade from UpgradeRanker
  * @phpstan-import-type SwapPick from EngineerInputs
  * @phpstan-import-type SmokeQuote from EngineerInputs
+ * @phpstan-import-type BoostAdvice from EngineerInputs
  * @phpstan-import-type TyreAdvice from TyreSupplierAdvisor
  * @phpstan-import-type DriverAdvice from DriverHiringAdvisor
  * @phpstan-type Line array{
@@ -38,9 +39,7 @@ final class RaceEngineer
     /** Tunable: how much a Stay weekend lowers the advisor's overtake risk. */
     public const int STAY_OVERTAKE_STEP = 15;
 
-    /** Boost sets per race; the caller's extra-fuel litres must use BOOST_SETS * BOOST_LAPS_PER_SET laps. */
-    public const int BOOST_SETS = 3;
-    public const int BOOST_LAPS_PER_SET = 3;
+    private const array BOOST_ORDINALS = [1 => 'Even one stint', 2 => 'A second stint', 3 => 'A third stint'];
     /** GPRO charges a flat $1M for every testing session. */
     public const int TESTING_SESSION_COST = 1_000_000;
 
@@ -1422,7 +1421,8 @@ final class RaceEngineer
      */
     private static function boost(EngineerInputs $in): ?array
     {
-        if ($in->boostLitres === null) {
+        $boost = $in->boost;
+        if ($boost === null) {
             return null;
         }
 
@@ -1430,13 +1430,63 @@ final class RaceEngineer
         if ($in->weatherStale) {
             return self::line('boost', self::STALE, 'The fuel figure reads the saved setup', action: $strategy);
         }
-        return self::line(
-            'boost',
-            'Boost: ' . self::BOOST_SETS . ' sets · +' . $in->boostLitres . ' L',
-            'Extra fuel for ' . self::BOOST_SETS . ' sets of ' . self::BOOST_LAPS_PER_SET
-                . ' laps; Strategy picks the laps',
-            action: $strategy,
-        );
+
+        $stints = $boost['stints'];
+        $answer = $stints === 0
+            ? 'No boost'
+            : 'Boost: ' . $stints . ($stints === 1 ? ' stint' : ' stints') . ' · +' . $boost['litres'] . ' L';
+
+        return self::line('boost', $answer, self::boostReason($boost), action: $strategy);
+    }
+
+    /**
+     * With every stint taken the reason says what they buy; otherwise why the next one is left out. Only a
+     * reason that quotes places or prize money says the track is hard to pass on: those figures carry the cut.
+     *
+     * @param BoostAdvice $boost
+     */
+    private static function boostReason(array $boost): string
+    {
+        if (!$boost['weighed']) {
+            return 'Fuel for ' . $boost['stints'] . ' stints; the wear is unknown, so it is not weighed';
+        }
+
+        $hard = static fn (string $reason): string => $boost['hard_to_pass']
+            ? 'Hard to pass here: ' . lcfirst($reason)
+            : $reason;
+
+        $blocked = $boost['blocked'];
+        if ($blocked !== null) {
+            $stint = self::BOOST_ORDINALS[$blocked['stints']] ?? 'Another stint';
+            $cost = Money::short($blocked['cost']);
+
+            return match ($blocked['why']) {
+                'part' => $stint . ' takes ' . $blocked['part'] . ' to 100 %',
+                'unpriced' => $stint . ' brings forward a ' . $blocked['part'] . ' with no known price',
+                'cash' => $stint . ' brings ' . $cost . " in parts forward and the budget can't carry it",
+                'value' => $hard(
+                    $stint . ' gains about ' . Money::short($blocked['gain']) . ' and costs ' . $cost
+                    . ' in parts brought forward',
+                ),
+            };
+        }
+
+        $cost = Money::short($boost['cost']);
+        if ($boost['cost'] > 0) {
+            return $boost['pace_known']
+                ? $hard('About ' . Money::short($boost['gain']) . ' in prize money for ' . $cost
+                    . ' in parts brought forward')
+                : 'No pace figure for this track; it brings ' . $cost . ' in parts forward';
+        }
+
+        $wear = $boost['most'] ? 'no part reaches the limit' : 'it buys no extra part this season';
+        if (!$boost['pace_known']) {
+            return 'No pace figure for this track; ' . $wear;
+        }
+
+        $places = 'About ' . number_format($boost['places'], 1) . ' places';
+
+        return $hard($places . ($boost['most'] ? '; ' : ', and ') . $wear);
     }
 
     /**

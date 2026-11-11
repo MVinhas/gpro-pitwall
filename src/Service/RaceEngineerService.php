@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Service;
 
 use App\Engineer\CashOutlook;
+use App\Engineer\BoostPlanner;
 use App\Engineer\CtrCeiling;
 use App\Engineer\CtrPace;
 use App\Engineer\CtrPlanner;
@@ -56,6 +57,7 @@ use App\Support\TrackName;
  *     driverFactor: float
  * }
  * @phpstan-import-type Risk from EngineerInputs
+ * @phpstan-import-type BoostAdvice from EngineerInputs
  * @phpstan-import-type TestingTarget from EngineerInputs
  * @phpstan-import-type WearAdvice from EngineerInputs
  * @phpstan-import-type SwapPick from EngineerInputs
@@ -160,6 +162,7 @@ class RaceEngineerService
         private readonly CtrCeiling $ceiling,
         private readonly RiskAdvisorService $riskAdvisor,
         private readonly BoostFuelService $boost,
+        private readonly BoostPlanner $boostPlanner,
         private readonly FuelModel $fuel,
         private readonly UpgradeRanker $ranker,
         private readonly PartSwapAdvisorService $swapAdvisor,
@@ -261,6 +264,7 @@ class RaceEngineerService
         $driver = $objective['over']
             ? null
             : $this->driverCall($c, $inputs, $ctx['cash'], $objective['objective'] === SeasonObjective::PROMOTE);
+        $inputs = $inputs->withBoost($this->boostAdvice($ctx, $inputs, $basis, $c, $locked));
         $lines = RaceEngineer::brief($inputs->withTyreAdvice($tyres)->withDriverAdvice($driver['advice'] ?? null));
 
         return [
@@ -884,7 +888,7 @@ class RaceEngineerService
             testingTrack: is_string($testingTrack) && $testingTrack !== '' ? $testingTrack : null,
             testingCost: RaceEngineer::TESTING_SESSION_COST,
             risk: $this->risk($driver, $track, $weather, $stale),
-            boostLitres: $this->boostLitres($track, $weather, $stale),
+            boost: null,
             weatherStale: $stale,
             plan: $plan,
             staffStanding: GroupStanding::staff(
@@ -1884,25 +1888,108 @@ class RaceEngineerService
     }
 
     /**
-     * @param ?array<string, mixed> $track
-     * @param ?array<string, mixed> $weather
+     * How many boost stints the next race is worth, weighed against the plan the card shows. Null hides the
+     * line: no track row, no weather yet, or no boost coefficient. A failure costs the card only this line.
+     *
+     * @param Context $ctx
+     * @param ?PlanBasis $basis
+     * @param array<string, mixed> $c
+     * @return ?BoostAdvice
      */
-    private function boostLitres(?array $track, ?array $weather, bool $stale): ?int
+    private function boostAdvice(array $ctx, EngineerInputs $inputs, ?array $basis, array $c, bool $locked): ?array
     {
-        if ($track === null || ($weather === null && !$stale)) {
+        try {
+            return $this->adviseBoost($ctx, $inputs, $basis, $c, $locked);
+        } catch (\Throwable $e) {
+            error_log('[Engineer] ' . $e::class);
+
             return null;
         }
+    }
 
+    /**
+     * @param Context $ctx
+     * @param ?PlanBasis $basis
+     * @param array<string, mixed> $c
+     * @return ?BoostAdvice
+     */
+    private function adviseBoost(array $ctx, EngineerInputs $inputs, ?array $basis, array $c, bool $locked): ?array
+    {
+        $name = self::stringOrNull($c['track_name'] ?? null);
+        $track = $name === null ? null : $this->tracks->findByName($name);
+        $weather = self::arrOrNull($c['weather'] ?? null);
+        if ($track === null || ($weather === null && !$inputs->weatherStale)) {
+            return null;
+        }
         $coeff = $track[($weather['race_start_wet'] ?? false) ? 'boost_wet' : 'boost_dry'] ?? null;
-        if (!is_numeric($coeff)) {
+        $laps = (int) ($track['laps'] ?? 0);
+        if (!is_numeric($coeff) || $laps <= 0) {
             return null;
         }
 
-        return $this->boost->extraFuel(
-            RaceEngineer::BOOST_SETS * RaceEngineer::BOOST_LAPS_PER_SET,
-            $this->fuel->lapLength($track),
-            (float) $coeff,
+        $plan = $inputs->plan;
+        $ctr = $plan === null
+            ? min($inputs->ctrCeiling ?? $inputs->currentCtr, $inputs->energyCap ?? 100)
+            : $plan['ctr'];
+        $division = self::stringOrNull($c['division'] ?? null);
+        $rating = self::stringOrNull($track['overtaking'] ?? null);
+        $places = BoostPlanner::placesPerStint(
+            $ctr,
+            CtrPace::secondsPerPointPerLap(
+                (float) ($track['lap_length'] ?? 0.0),
+                (float) ($track['avg_speed'] ?? 0.0),
+                $this->ctrGainFraction,
+            ),
+            $this->placeGap($ctx['season'])->secondsPerPlace($division, $laps),
+            $rating,
         );
+        $perPlace = PrizeTable::perPlace($division);
+
+        $parts = $this->wearParts($c);
+        $most = true;
+        if ($parts === null) {
+            $choice = [
+                'stints' => BoostPlanner::MAX_STINTS,
+                'places' => round(BoostPlanner::MAX_STINTS * $places, 1),
+                'gain' => 0,
+                'cost' => 0,
+                'blocked' => null,
+            ];
+        } elseif ($plan !== null && $basis !== null) {
+            $numbers = $ctx['objective']['numbers'];
+            $most = ($ctx['objective']['objective'] ?? SeasonObjective::STAY) !== SeasonObjective::STAY
+                || CtrPolicy::safetyFor($numbers['projected_pos'], $numbers['relegation_pos']);
+            $choice = $this->boostPlanner->plan(
+                $most,
+                $basis['rounds'],
+                $basis['parts'],
+                $basis['prices'],
+                $basis['driverFactor'],
+                $ctr,
+                $locked,
+                $laps,
+                array_column($plan['rows'], 'balance'),
+                $plan['cushion'],
+                $plan['target'],
+                $places,
+                (int) round($places * $perPlace),
+            );
+        } else {
+            $driverFactor = $this->wear->driverFactor(self::arr($c['driver'] ?? null));
+            $choice = $this->boostPlanner->withoutPlan($parts, $driverFactor, $ctr, $laps, $places);
+        }
+
+        return $choice + [
+            'litres' => $this->boost->extraFuel(
+                $choice['stints'] * BoostPlanner::LAPS_PER_STINT,
+                $this->fuel->lapLength($track),
+                (float) $coeff,
+            ),
+            'weighed' => $parts !== null,
+            'most' => $most,
+            'pace_known' => $places > 0.0 && $perPlace > 0,
+            'hard_to_pass' => BoostPlanner::hardToPass($rating),
+        ];
     }
 
     /**
