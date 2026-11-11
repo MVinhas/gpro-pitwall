@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.43] - 2026-11-11
+
+### Changed
+- Strategy no longer suggests overtake and defend risks. Managers copying the suggestion would feed the risk
+  model back its own numbers, so it could never learn which settings actually pay off. The race engineer keeps
+  the advice. Boost laps and clear track risk stay on the race sheet; the landing page,
+  its Strategy screenshots and the README no longer advertise the suggestion.
+
 ## [1.21.42] - 2026-11-11
 
 ### Changed

@@ -34,10 +34,9 @@ wait on GPRO: one whose data isn't cached yet opens as an outline and fills in w
   total time cost rather than tyre life alone. Clear Track Risk is priced as a trade:
   added wear against clear-air time gained. The **Race sheet** lists the setup part by part
   for Q1, Q2 and the race as GPRO's form does, with start fuel and the fuel for each pit stop,
-  tyres, overtake and defend risks and boost laps, plus plain-worded **push signals** for the
-  risk dial. The overtake and defend risks are learned from race outcomes (places won against
-  driver mistakes, in seconds) and blended with a rule of thumb that fades out as replays
-  accumulate; the sheet says which one you are looking at. The first pit stop can come early, even or late, and you can race on a set other
+  tyres and boost laps, plus plain-worded **push signals** for the risk dial. It leaves
+  overtake and defend risks to the manager, so the race engineer's model learns from varied
+  choices rather than its own suggestion. The first pit stop can come early, even or late, and you can race on a set other
   than the best one; the sheet and boost laps follow it. Every setting recalculates
   as it changes.
 - **Testing** — the testing track's demands vs your car, the points split across Test /

@@ -5,19 +5,15 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Engineer\GroupStanding;
-use App\Engineer\PlaceGap;
-use App\Engineer\RiskModel;
 use App\Http\Request;
 use App\Http\Sections;
 use App\Security\Authorize;
 use App\Service\StrategyService;
 use App\Service\SetupCalculatorService;
-use App\Service\CtrModelService;
 use App\Service\GproApiClient;
 use App\Service\GproDataMapper;
 use App\Service\RaceWeatherService;
 use App\Service\RiskAdvisorService;
-use App\Service\RiskModelService;
 use App\Service\PhaMatchService;
 use App\Service\CarWearService;
 use App\Service\WearAdvisorService;
@@ -53,8 +49,6 @@ class StrategyController
         private readonly PhaMatchService $phaMatch,
         private readonly CarWearService $carWear,
         private readonly Environment $twig,
-        private readonly ?RiskModelService $riskModels = null,
-        private readonly ?CtrModelService $ctrModel = null,
     ) {
     }
 
@@ -319,28 +313,9 @@ class StrategyController
             // The group feeds only power the advisory cards — never let a
             // hiccup there fail the whole strategy calc.
             $menu = $this->fetchQuietly(fn(): array => $this->api->getMenu());
-            $season = (int)($office['seasonNb'] ?? 0);
 
-            $strategyResults['risk_advice'] = $this->riskAdvisor->advise(
-                $driver,
-                [
-                    'overtaking' => $strategyResults['overtaking'] ?? null,
-                    'grip'       => $strategyResults['track_grip'] ?? null,
-                    'tyre_wear'  => $strategyResults['track_tyre_wear'] ?? null,
-                    'distance'   => (float)($strategyResults['track_distance'] ?? 0),
-                ],
-                $raceIsWet,
-                $rain['race_rain_avg'],
-                [
-                    'division' => RiskAdvisorService::divisionFromGroup((string)($menu['group'] ?? '')),
-                    'laps'     => (int)$inputs['laps'],
-                    'ctr'      => (int)$inputs['risk'],
-                    'grid'     => null,
-                ],
-                $this->riskModels?->model($season) ?? RiskModel::fallback(),
-                $this->ctrModel?->placeGap($season) ?? PlaceGap::fallback(),
-            );
-
+            // No overtake/defend suggestion here on purpose: managers copying it
+            // would leave the risk model no varied choices to learn from.
             $strategyResults['push_signals'] = $this->buildPushSignals(
                 $weatherData,
                 $carRaw,
@@ -367,7 +342,7 @@ class StrategyController
             $strategyResults['race'] = $office['raceNb'] ?? '?';
             // $raceIsWet (forecast default, user-overridable via the Race
             // weather select) keeps the verdict coherent with the setup
-            // column, risk advice and push signals on the same card.
+            // column, boost laps and push signals on the same card.
             $strategyResults['best_compound'] = self::pickBestCompound(
                 $strategyResults['tyres'] ?? [],
                 $raceIsWet,
@@ -383,7 +358,7 @@ class StrategyController
             // Boost laps follow the set the manager races on: its stop count
             // and pit laps (already shaped by the first-stop choice).
             $plannedTyre = $strategyResults['tyres'][$strategyResults['chosen_compound']] ?? null;
-            $strategyResults['risk_advice']['boost'] = $this->riskAdvisor->suggestBoostLaps(
+            $strategyResults['boost'] = $this->riskAdvisor->suggestBoostLaps(
                 (int)$inputs['laps'],
                 (int)($plannedTyre['stops'] ?? 0),
                 $raceIsWet,
