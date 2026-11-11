@@ -84,34 +84,6 @@ final class PartUpgradeAdvisorService
     }
 
     /**
-     * Would swapping `part` to `targetLevel` flip the car from "not PHA-aligned"
-     * to "aligned" against the given track? Returns false if the car already
-     * aligns, if no contribution data exists for the part, or if the new level
-     * doesn't help.
-     *
-     * @param array{power: int|float, handling: int|float, acceleration: int|float} $track
-     * @param array{power: int|float, handling: int|float, acceleration: int|float} $car
-     */
-    public function wouldAlignAt(
-        string $part,
-        int $targetLevel,
-        int $currentLevel,
-        array $track,
-        array $car,
-        bool $currentlySimilar,
-    ): bool {
-        if ($currentlySimilar || !isset($this->contribution[$part])) {
-            return false;
-        }
-        $delta = $targetLevel - $currentLevel;
-        if ($delta === 0) {
-            return false;
-        }
-        $shiftedCar = $this->carAfterSwap($car, $part, $delta);
-        return (bool) $this->pha->evaluate($track, $shiftedCar, false)['pha_similar'];
-    }
-
-    /**
      * Hypothetical car PHA after changing `part` by `delta` levels.
      * Returns the car unchanged when the part has no contribution data
      * so callers can score it without a special case.

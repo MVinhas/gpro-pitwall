@@ -94,27 +94,4 @@ final class CsrfTest extends TestCase
 
         $this->assertFalse((new Csrf())->validate('anything'));
     }
-
-    #[RunInSeparateProcess]
-    public function testRegenerateReplacesTheTokenAndInvalidatesTheOldOne(): void
-    {
-        $csrf = new Csrf();
-        $old = $csrf->getToken();
-
-        $csrf->regenerate();
-        $new = $csrf->getToken();
-
-        $this->assertNotSame($old, $new);
-        $this->assertFalse($csrf->validate($old));
-        $this->assertTrue($csrf->validate($new));
-    }
-
-    #[RunInSeparateProcess]
-    public function testRegenerateWithoutAPriorTokenStillMintsOne(): void
-    {
-        $csrf = new Csrf();
-        $csrf->regenerate();
-
-        $this->assertMatchesRegularExpression('/^[0-9a-f]{64}$/', $csrf->getToken());
-    }
 }

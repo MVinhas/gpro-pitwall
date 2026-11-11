@@ -52,9 +52,6 @@ final class Sections
         'Engineer'    => 'Race Engineer',
     ];
 
-    /** The screen a bare '/' means for a signed-in manager. */
-    public const string DEFAULT_SECTION = 'Cockpit';
-
     /** Resolve a display spelling or alias to its canonical section name. */
     public static function canonical(string $section): string
     {
