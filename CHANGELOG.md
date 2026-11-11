@@ -6,6 +6,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.42] - 2026-11-11
+
+### Changed
+- Internal simplification, no change to any screen or result. The Cockpit build moved out of the 730-line page
+  handler into its own method, with values it rebuilt several times per request now computed once;
+  `bootstrap.php` builds each shared repository and helper once instead of up to four times; the two copies of
+  the favourite-track check are one.
+
+### Removed
+- Code nothing called: `TrainingService::predictResult`, `PartUpgradeAdvisorService::wouldAlignAt`,
+  `BoostFuelService::costTable`, `TrackRepository::findBoostProfile`, `Csrf::regenerate`, the
+  `Sections::DEFAULT_SECTION` constant, and a navigation filter for a `Login` section that does not exist.
+
 ## [1.21.41] - 2026-11-11
 
 ### Changed

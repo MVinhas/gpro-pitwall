@@ -33,13 +33,4 @@ final class Csrf
 
         return hash_equals($_SESSION[self::SESSION_KEY], $token);
     }
-
-    public function regenerate(): void
-    {
-        if (session_status() !== PHP_SESSION_ACTIVE) {
-            session_start();
-        }
-
-        $_SESSION[self::SESSION_KEY] = bin2hex(random_bytes(32));
-    }
 }

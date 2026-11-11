@@ -12,54 +12,6 @@ class TrainingService
     {
     }
 
-    /**
-     * Predicts the new stats of a pilot after a specific training.
-     *
-     * @param array<string, mixed> $currentStats Pilot stats ['stamina' => 10, ...]
-     * @param string $trainingName 'Fitness', 'Yoga', etc.
-     * @return array<string, mixed> New stats and cost
-     */
-    public function predictResult(array $currentStats, string $trainingName): array
-    {
-
-        $stmt = $this->db->prepare("SELECT * FROM trainings WHERE name = :name");
-        $stmt->execute([':name' => $trainingName]);
-        $training = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        if (!$training) {
-            return $currentStats;
-        }
-
-        $newStats = $currentStats;
-        $cost = $training['cost'];
-
-        $keys = [
-            'concentration', 'talent', 'aggressiveness', 'experience',
-            'technical_insight', 'stamina', 'charisma', 'motivation', 'weight'
-        ];
-
-        foreach ($keys as $key) {
-            $dbCol = 'gain_' . $key;
-            $gain = $training[$dbCol] ?? 0;
-
-
-            if (isset($newStats[$key])) {
-                $newStats[$key] += $gain;
-
-
-                if ($newStats[$key] < 0) {
-                    $newStats[$key] = 0;
-                }
-            }
-        }
-
-        return [
-            'stats' => $newStats,
-            'cost' => $cost,
-            'diff' => $training
-        ];
-    }
-
     /** @return list<array<string, mixed>> */
     public function getAllTrainings(): array
     {

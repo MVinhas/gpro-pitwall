@@ -31,4 +31,26 @@ final class GproDataMapper
             'salary'            => $apiData['salary'] ?? 0,
         ];
     }
+
+    /**
+     * Is this one of the driver's three favourite tracks?
+     * DriProfile exposes favTrack1/2/3 as {name, id} objects.
+     *
+     * @param array<string, mixed> $pilot
+     */
+    public function isFavouriteTrack(array $pilot, int $trackId): bool
+    {
+        if ($trackId <= 0) {
+            return false;
+        }
+
+        foreach (['favTrack1', 'favTrack2', 'favTrack3'] as $key) {
+            $fav = $pilot[$key] ?? null;
+            if (is_array($fav) && (int) ($fav['id'] ?? 0) === $trackId) {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }

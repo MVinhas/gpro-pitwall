@@ -91,8 +91,6 @@ $container['twig']->addGlobal('no_data_message', \App\Controller\StrategyControl
 use App\Repository\PilotRepository;
 use App\Repository\DivisionMetadataRepository;
 use App\Repository\TrackRepository;
-use App\Repository\UserRepository;
-use App\Repository\TokenRepository;
 
 $container['repo.pilot'] = new PilotRepository($container['db']);
 $container['repo.metadata'] = new DivisionMetadataRepository($container['db']);
@@ -110,11 +108,7 @@ use App\Service\GproApiClient;
 use App\Service\GproDataMapper;
 use App\Service\SetupCalculatorService;
 use App\Service\TrainingService;
-
 use App\Service\GproSyncService;
-
-
-
 use App\Security\EmailCrypto;
 
 $container['service.email_crypto'] = new EmailCrypto(Env::required('APP_SECRET'));
@@ -201,11 +195,12 @@ $container['twig']->addGlobal(
 );
 // True when a race has finished since the last sync, so the status line can ask
 // for a re-sync before the manager plans on last race's data.
+$raceDays = \App\Support\RaceWindow::parseDays(Env::get('GPRO_RACE_DAYS', '2,5'));
 $lastSyncedAt = $currentUser['last_synced_at'] ?? null;
 $container['sync_stale'] = \App\Support\SyncState::isStale(
     is_string($lastSyncedAt) ? $lastSyncedAt : null,
     new DateTimeImmutable('now'),
-    \App\Support\RaceWindow::parseDays(Env::get('GPRO_RACE_DAYS', '2,5')),
+    $raceDays,
 );
 $container['twig']->addGlobal('sync_stale', $container['sync_stale']);
 
@@ -227,8 +222,6 @@ $container['service.recaptcha'] = new \App\Service\ReCaptchaService(
     Env::get('RECAPTCHA_SECRET_KEY', ''),
     $container['settings']['is_dev'],
 );
-
-
 
 // Server-wide outbound throttle: all GPRO calls leave from one host IP, so cap
 // the aggregate rate (token bucket shared across workers via an flock'd file in
@@ -295,9 +288,13 @@ $container['twig']->addGlobal('can_submit', $currentUser !== null);
 $container['twig']->addGlobal('api_limit', $_SESSION['api_limit'] ?? '?');
 $container['twig']->addGlobal('api_limit_updated_at', $_SESSION['api_limit_updated_at'] ?? null);
 $container['repo.race_telemetry'] = new \App\Repository\RaceTelemetryRepository($container['db']);
+$container['repo.standings'] = new \App\Repository\StandingsRepository($container['db']);
+$container['repo.weekend_state'] = new \App\Repository\WeekendStateRepository($container['db']);
+$container['repo.economy_ledger'] = new \App\Repository\EconomyLedgerRepository($container['db']);
+$telemetryMapper = new \App\Telemetry\RaceTelemetryMapper();
 $container['service.race_telemetry'] = new \App\Service\RaceTelemetryService(
     $container['repo.race_telemetry'],
-    new \App\Telemetry\RaceTelemetryMapper(),
+    $telemetryMapper,
 );
 $container['service.race_intelligence'] = new \App\Service\RaceIntelligenceService(
     $container['repo.race_telemetry'],
@@ -321,17 +318,17 @@ $container['archive.projector'] = new \App\Archive\ArchiveProjector(
     $container['repo.projection_state'],
     new \App\Archive\WeekendStateProjector(
         $container['repo.api_archive'],
-        new \App\Repository\WeekendStateRepository($container['db']),
+        $container['repo.weekend_state'],
         $container['archive.snapshots'],
     ),
     new \App\Archive\StandingsProjector(
         $container['repo.api_archive'],
-        new \App\Repository\StandingsRepository($container['db']),
+        $container['repo.standings'],
         $container['archive.snapshots'],
     ),
     new \App\Archive\LedgerProjector(
         $container['repo.api_archive'],
-        new \App\Repository\EconomyLedgerRepository($container['db']),
+        $container['repo.economy_ledger'],
         $container['archive.analyses'],
     ),
     $container['service.race_history'],
@@ -377,7 +374,7 @@ $container['service.risk_model'] = new \App\Service\RiskModelService(
 $container['service.race_replay'] = new \App\Service\RaceReplayService(
     $container['repo.race_history'],
     $container['repo.race_telemetry'],
-    new \App\Telemetry\RaceTelemetryMapper(),
+    $telemetryMapper,
     new \App\Telemetry\RaceReplayMapper(),
     $container['archive.analyses'],
 );
@@ -442,8 +439,6 @@ $container['service.strategy'] = new StrategyService(
 $container['service.setup_calculator'] = new SetupCalculatorService($container['db'], $container['config']['secrets']);
 $container['service.training'] = new TrainingService($container['db']);
 
-
-
 use App\Controller\PageController;
 use App\Controller\BaselineController;
 use App\Controller\RecruitmentController;
@@ -452,9 +447,7 @@ use App\Controller\StrategyController;
 use App\Controller\AuthController;
 
 $container['service.race_weather'] = new \App\Service\RaceWeatherService();
-$container['service.early_quali_bonus'] = new \App\Service\EarlyQualifyingBonusService(
-    \App\Support\RaceWindow::parseDays(Env::get('GPRO_RACE_DAYS', '2,5')),
-);
+$container['service.early_quali_bonus'] = new \App\Service\EarlyQualifyingBonusService($raceDays);
 $container['service.risk_advisor'] = new \App\Service\RiskAdvisorService();
 $container['service.pha_match'] = new \App\Service\PhaMatchService();
 
@@ -485,8 +478,9 @@ $container['service.upgrade_advisor'] = new \App\Service\PartUpgradeAdvisorServi
     $container['service.pha_match'],
     $container['config']['secrets']['part_pha_contribution'] ?? [],
 );
+$seasonBudget = new \App\Engineer\SeasonBudget($container['service.car_wear']);
 $container['service.swap_level_picker'] = new \App\Engineer\SwapLevelPicker(
-    new \App\Engineer\SeasonBudget($container['service.car_wear']),
+    $seasonBudget,
     $container['config']['secrets']['part_pha_contribution'] ?? [],
 );
 
@@ -538,24 +532,21 @@ $ctrCeiling = new \App\Engineer\CtrCeiling($container['service.car_wear']);
 
 $container['service.race_engineer'] = new \App\Service\RaceEngineerService(
     $container['repository.season_objective'],
-    new \App\Repository\StandingsRepository($container['db']),
-    new \App\Repository\WeekendStateRepository($container['db']),
-    new \App\Repository\EconomyLedgerRepository($container['db']),
+    $container['repo.standings'],
+    $container['repo.weekend_state'],
+    $container['repo.economy_ledger'],
     $container['repo.track'],
     $container['service.car_wear'],
     $container['service.car_wear_planner'],
-    new \App\Engineer\CtrPlanner($ctrCeiling, new \App\Engineer\SeasonBudget($container['service.car_wear'])),
+    new \App\Engineer\CtrPlanner($ctrCeiling, $seasonBudget),
     $container['repository.season_budget'],
     $ctrCeiling,
     $container['service.risk_advisor'],
     $container['service.boost_fuel'],
-    new \App\Engineer\BoostPlanner(
-        $container['service.car_wear'],
-        new \App\Engineer\SeasonBudget($container['service.car_wear']),
-    ),
+    new \App\Engineer\BoostPlanner($container['service.car_wear'], $seasonBudget),
     $container['service.fuel_model'],
     new \App\Engineer\UpgradeRanker(
-        new \App\Engineer\SeasonBudget($container['service.car_wear']),
+        $seasonBudget,
         $container['config']['secrets']['part_pha_contribution'] ?? [],
     ),
     $container['service.swap_advisor'],
@@ -687,14 +678,17 @@ $container['controller.admin_users'] = new \App\Controller\AdminUserController(
     $container['twig'],
 );
 
+$wearCalibration = new \App\Calibration\WearCalibration($container['service.car_wear']);
+$fuelCalibration = new \App\Calibration\FuelCalibration($container['service.fuel_model']);
+
 $container['service.race_weekend'] = new \App\Service\RaceWeekendService(
     $container['repo.race_history'],
-    new \App\Repository\WeekendStateRepository($container['db']),
-    new \App\Repository\StandingsRepository($container['db']),
-    new \App\Repository\EconomyLedgerRepository($container['db']),
+    $container['repo.weekend_state'],
+    $container['repo.standings'],
+    $container['repo.economy_ledger'],
     $container['repo.track'],
-    new \App\Calibration\WearCalibration($container['service.car_wear']),
-    new \App\Calibration\FuelCalibration($container['service.fuel_model']),
+    $wearCalibration,
+    $fuelCalibration,
 );
 
 $container['controller.debrief'] = new \App\Controller\DebriefController(
@@ -707,13 +701,13 @@ $container['controller.debrief'] = new \App\Controller\DebriefController(
 
 $container['service.season'] = new \App\Service\SeasonService(
     $container['repo.race_history'],
-    new \App\Repository\WeekendStateRepository($container['db']),
-    new \App\Repository\StandingsRepository($container['db']),
-    new \App\Repository\EconomyLedgerRepository($container['db']),
-    new \App\Repository\RaceTelemetryRepository($container['db']),
+    $container['repo.weekend_state'],
+    $container['repo.standings'],
+    $container['repo.economy_ledger'],
+    $container['repo.race_telemetry'],
     $container['repo.track'],
-    new \App\Calibration\WearCalibration($container['service.car_wear']),
-    new \App\Calibration\FuelCalibration($container['service.fuel_model']),
+    $wearCalibration,
+    $fuelCalibration,
     $container['repository.season_budget'],
 );
 

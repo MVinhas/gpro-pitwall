@@ -155,10 +155,7 @@ final readonly class DebriefController
         /** @var list<string> $sections */
         $sections = $this->config['app']['main_sections'] ?? [];
 
-        return array_values(array_filter(
-            $sections,
-            static fn (string $section): bool => $section !== 'Login',
-        ));
+        return $sections;
     }
 
     /**

@@ -50,6 +50,26 @@ final class PageControllerTest extends TestCase
         $this->assertSame('', PageController::resolveDefaultTrack([], 'Monte Carlo'));
     }
 
+    public function testTheRequestedTrackIsUsedByNameOrByGproId(): void
+    {
+        $tracks = [2 => 'Buenos Aires', 9 => 'Monte Carlo', 12 => 'Monza'];
+
+        $this->assertSame('Monza', PageController::resolveActiveTrack($tracks, 'Monza', 'Monte Carlo'));
+        $this->assertSame('Monza', PageController::resolveActiveTrack($tracks, '12', 'Monte Carlo'));
+    }
+
+    public function testAnAbsentOrUnknownTrackRequestFallsBackToTheNextRace(): void
+    {
+        $tracks = [2 => 'Buenos Aires', 9 => 'Monte Carlo', 12 => 'Monza'];
+
+        $this->assertSame('Monte Carlo', PageController::resolveActiveTrack($tracks, null, 'Monte Carlo'));
+        $this->assertSame('Monte Carlo', PageController::resolveActiveTrack($tracks, 'Nowhere', 'Monte Carlo'));
+        // An id with no track must not leak through as a raw number.
+        $this->assertSame('Monte Carlo', PageController::resolveActiveTrack($tracks, '999', 'Monte Carlo'));
+        $this->assertSame('Monte Carlo', PageController::resolveActiveTrack($tracks, ['x'], 'Monte Carlo'));
+        $this->assertSame('Buenos Aires', PageController::resolveActiveTrack($tracks, null, ''));
+    }
+
     public function testResolvesNextRaceTrackIdByRaceNumber(): void
     {
         $calendar = ['events' => [

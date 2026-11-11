@@ -479,7 +479,7 @@ class StrategyController
         return [
             'pha_match'     => $matchLevel !== PhaMatchService::MATCH_NONE,
             'pha_level'     => $matchLevel,
-            'favourite'     => $this->isFavouriteTrack($pilotRaw, (int)($raceSetup['trackId'] ?? 0)),
+            'favourite'     => $this->mapper->isFavouriteTrack($pilotRaw, (int)($raceSetup['trackId'] ?? 0)),
             'show_tyres'    => self::hasTyreChoice((string)($menu['group'] ?? '')),
             'tyres_weather' => $tyrePerf !== null && $tyrePerf >= 4,
             'tyre_perf'     => $tyrePerf,
@@ -632,27 +632,6 @@ class StrategyController
             'above' => $behind > $ahead,
             'below' => $ahead > $behind,
         ];
-    }
-
-    /**
-     * Is the next race on one of the driver's three favourite tracks?
-     * DriProfile exposes favTrack1/2/3 as {name, id} objects.
-     *
-     * @param array<string, mixed> $pilot
-     */
-    private function isFavouriteTrack(array $pilot, int $trackId): bool
-    {
-        if ($trackId <= 0) {
-            return false;
-        }
-
-        foreach (['favTrack1', 'favTrack2', 'favTrack3'] as $key) {
-            $fav = $pilot[$key] ?? null;
-            if (is_array($fav) && (int)($fav['id'] ?? 0) === $trackId) {
-                return true;
-            }
-        }
-        return false;
     }
 
     /**

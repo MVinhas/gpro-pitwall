@@ -57,6 +57,10 @@ class PageController
         'division_tab', 'track', 'page', 'sort', 'order',
     ];
 
+    private const array ADMIN_SECTIONS = [
+        'Race Engineer', 'Debrief', 'Season', 'Division Baseline', 'Division Differences',
+    ];
+
     /** Screens built from the manager's own synced payloads, with nothing to show without them. */
     private const array TEAM_SECTIONS = [
         'Cockpit', 'Race Engineer', 'Race Strategy', 'Testing', 'Car Wear Planner',
@@ -196,6 +200,7 @@ class PageController
 
     public function index(Request $request): void
     {
+        $fragment = (string) $request->get('fragment', '');
         $isLoggedIn = !empty($_SESSION['user_id']);
         $userId = $isLoggedIn ? (int) $_SESSION['user_id'] : 0;
         $user = $userId ? $this->userRepo->findById($userId) : null;
@@ -213,7 +218,7 @@ class PageController
             // A fragment request with no session means auth evaporated mid-page
             // (expired or revoked) — 401 instead of a landing page the caller
             // would inject into a card.
-            if ((string) $request->get('fragment', '') !== '') {
+            if ($fragment !== '') {
                 http_response_code(401);
                 header('Content-Type: application/json');
                 echo json_encode(['success' => false, 'status' => 'unauthenticated']);
@@ -252,22 +257,7 @@ class PageController
 
         $divisions    = $this->config['app']['divisions'];
         $tracks       = $this->config['app']['tracks'];
-        $mainSections = $this->config['app']['main_sections'];
-
-        if (!$isAdmin) {
-            $mainSections = array_filter(
-                $mainSections,
-                fn (string $section): bool => !in_array(
-                    $section,
-                    ['Race Engineer', 'Debrief', 'Season', 'Division Baseline', 'Division Differences'],
-                    true,
-                ),
-            );
-        }
-
-        $mainSections = array_values(
-            array_filter($mainSections, fn (string $s): bool => $s !== 'Login')
-        );
+        $mainSections = self::visibleSections($this->config['app']['main_sections'], $isAdmin);
 
         $defaultTab = 'Cockpit';
         if (!in_array($defaultTab, $mainSections, true)) {
@@ -308,7 +298,7 @@ class PageController
                 ? $this->apiClient->hasCachedMarketFile()
                 : $this->apiClient->isWarm();
         };
-        $deferred = (string) $request->get('fragment', '') === ''
+        $deferred = $fragment === ''
             && DeferredRender::shouldDefer($wait, $syncPending, $readsMarket, $isWarm);
 
         $freshSync = false;
@@ -327,26 +317,15 @@ class PageController
             $activeDivision = 'Rookie';
         }
 
-        $trackNames = array_values($tracks);
-
         // Default to the user's actual next-race track from the cached Office
         // data, not a static first-in-list value (which always read "Buenos
         // Aires"). Falls back to the first known track only pre-first-sync.
         $office = $this->apiClient->getCachedOfficeData();
-        $defaultTrack = self::resolveDefaultTrack($trackNames, (string) ($office['trackName'] ?? ''));
-
-        $activeTrack = $request->get('track', $defaultTrack);
-
-        // Resolve a numeric track id ("2") to its name first, then validate
-        // the result is a known track name. Anything else falls back to the
-        // default so the UI never displays a raw id.
-        if (is_numeric($activeTrack) && isset($tracks[(int) $activeTrack])) {
-            $activeTrack = $tracks[(int) $activeTrack];
-        }
-
-        if (!in_array($activeTrack, $trackNames, true)) {
-            $activeTrack = $defaultTrack;
-        }
+        $activeTrack = self::resolveActiveTrack(
+            $tracks,
+            $request->get('track'),
+            (string) ($office['trackName'] ?? ''),
+        );
 
         $viewData = [
             'active_main_tab' => $activeMainTab,
@@ -368,7 +347,7 @@ class PageController
 
         // A skeleton, fragment or follow-up discards its script, so only a full
         // page starts the harvest the last Re-sync (or first sync) owed.
-        if (!$deferred && !$wait && (string) $request->get('fragment', '') === '') {
+        if (!$deferred && !$wait && $fragment === '') {
             $viewData['harvest_due'] = HarvestOwed::due($this->harvest, $user);
         }
 
@@ -410,407 +389,7 @@ class PageController
         switch ($noData ? null : $activeMainTab) {
             case 'Race Engineer':
             case 'Cockpit':
-                $cockpitRisk = RaceSettings::resolve($_SESSION, RaceSettings::CTR, $request->get('cockpit_risk'), 100);
-                // Resolved below, once the testing override is known: an override must not take the request's value.
-                $cockpitTrainingLaps = 0;
-                $viewData['cockpit_risk'] = $cockpitRisk;
-                $viewData['cockpit_training_laps'] = $cockpitTrainingLaps;
-                $isCockpit = $activeMainTab === 'Cockpit';
-                try {
-                    // No driver under contract: surface the friendly "hire a
-                    // pilot" notice (with a Recruitment Analyzer link) instead of
-                    // a raw "No driver under contract" exception further down.
-                    if (!$this->apiClient->hasPilot()) {
-                        $viewData['cockpit_error'] = StrategyController::NO_PILOT_MESSAGE;
-                        if (
-                            $isAdmin && $activeMainTab === 'Race Engineer'
-                            && (string) $request->get('fragment', '') === ''
-                            && !self::engineerStale($viewData, $this->syncStale)
-                        ) {
-                            $this->noDriverEngineer((int) $user['id'], $viewData);
-                        }
-                        break;
-                    }
-
-                    $raceSetup = $this->apiClient->getRaceSetup();
-                    $carData   = $this->apiClient->getCarData();
-                    $pilot     = $this->apiClient->getMyPilotDetails();
-                    $nextRace  = $this->apiClient->getNextRaceProfile();
-                    $office    = $this->apiClient->getOfficeData();
-                    $calendar  = $this->apiClient->getCalendar();
-
-                    // RaceSetup mirrors the manager's saved setup, so its
-                    // trackName / factors / weather can lag a whole race. Office
-                    // and TrackProfile roll over the moment the new race opens,
-                    // so trust them for the track identity and demand factors;
-                    // fall back to RaceSetup only when those are absent.
-                    $trackName = (string) ($office['trackName'] ?? '');
-                    if ($trackName === '') {
-                        $trackName = (string) ($nextRace['trackName'] ?? ($raceSetup['trackName'] ?? ''));
-                    }
-                    if ($trackName === '') {
-                        $trackName = $activeTrack;
-                    }
-
-                    $trackPha = [
-                        'power'        => $nextRace['power'] ?? $raceSetup['trackPower'] ?? 0,
-                        'handling'     => $nextRace['handl'] ?? $raceSetup['trackHandl'] ?? 0,
-                        'acceleration' => $nextRace['accel'] ?? $raceSetup['trackAccel'] ?? 0,
-                    ];
-
-                    // Favourite-track check needs GPRO's track id, which
-                    // TrackProfile doesn't carry and RaceSetup carries stale.
-                    // Resolve it from the calendar by race number instead.
-                    $trackId = self::nextRaceTrackId($calendar, (int) ($office['raceNb'] ?? 0));
-                    if ($trackId <= 0) {
-                        $trackId = (int) ($raceSetup['trackId'] ?? 0);
-                    }
-
-                    // Stale weather: RaceSetup (the only weather source) still
-                    // describes the previous race. The signal is a trackId
-                    // mismatch against the authoritative Office, NOT
-                    // office.doneRaceSetup — that flag stays '0' for the whole
-                    // pre-qualifying window (the cockpit's purpose), so keying off
-                    // it raised a permanent false "setup not saved" alarm.
-                    $setupStale = self::isRaceSetupStale(
-                        (int) ($office['trackId'] ?? 0),
-                        (int) ($raceSetup['trackId'] ?? 0),
-                    );
-                    $viewData['cockpit_setup_stale'] = $setupStale;
-                    $viewData['cockpit_data_loaded'] = true;
-
-                    if ($isCockpit) {
-                        $viewData['pha'] = $this->phaMatch->evaluate(
-                            $trackPha,
-                            [
-                                'power'        => $carData['carPower'] ?? 0,
-                                'handling'     => $carData['carHandl'] ?? 0,
-                                'acceleration' => $carData['carAccel'] ?? 0,
-                            ],
-                            $this->isFavouriteTrack($pilot, $trackId),
-                        );
-                        $viewData['pha_track_name'] = $trackName;
-                    }
-
-                    // Weather lives only on RaceSetup. While stale it's the
-                    // previous race's forecast, so withhold it rather than
-                    // present it as this race's.
-                    if (!$setupStale) {
-                        $w = $raceSetup['weather'] ?? [];
-                        $viewData['weather'] = $this->raceWeather->assess($w);
-                        $viewData['weather_temps'] = [
-                            'q1' => $w['q1Temp'] ?? null,
-                            'q2' => $w['q2Temp'] ?? null,
-                        ];
-                    }
-
-                    // Resolve the track by name only. GPRO's track id is NOT
-                    // our local tracks.id (an autoincrement PK), so passing
-                    // it would let the "id = :id OR name = :name" lookup match
-                    // an unrelated row and read the wrong per-part base wear.
-                    // Feed id=0 so the lookup resolves by name alone.
-                    $wearTrack = [
-                        'id'   => 0,
-                        'name' => $trackName,
-                        'laps' => $nextRace['laps'] ?? $raceSetup['laps'] ?? null,
-                    ];
-                    // Training laps run at GPRO's testing track, rarely the
-                    // race track. While testing is closed none can be run, so
-                    // the slider gives way to a note instead of guessing.
-                    try {
-                        $testing = $this->apiClient->getTesting();
-                        $testingTrack = self::testingTrackName($testing);
-                        $testingLapsLeft = self::testingLapsLeft($testing);
-                    } catch (\Throwable $e) {
-                        error_log('[Cockpit] testing: ' . $e::class);
-                        $testingTrack = null;
-                        $testingLapsLeft = 100;
-                    }
-                    $viewData['cockpit_testing_track'] = $testingTrack;
-                    $viewData['cockpit_training_laps_left'] = $testingLapsLeft;
-
-                    // Start wear and the division are known before the projection, so the override can decide
-                    // the lap count the projection runs with; no second wear pass is needed.
-                    $menu = $this->apiClient->getMenu();
-                    $division = $this->divisionFromMenu($menu);
-                    $lapsOverride = null;
-                    if ($testingTrack !== null) {
-                        $testingChoice = null;
-                        if ($isAdmin) {
-                            try {
-                                $testingChoice = $this->raceEngineer->choicesFor(
-                                    (int) $user['id'],
-                                    (int) ($office['seasonNb'] ?? 0),
-                                    (int) ($office['raceNb'] ?? 0),
-                                )['testing'] ?? null;
-                            } catch (\Throwable $e) {
-                                error_log('[Cockpit] ' . $e::class);
-                            }
-                        }
-                        $startWear = [];
-                        foreach (CarWearService::PARTS_MAP as $label => $map) {
-                            $startWear[$label] = (int) ($carData[$map['wear']] ?? 0);
-                        }
-                        $lapsOverride = self::testingLapsOverride(
-                            $isAdmin,
-                            $testingChoice,
-                            $division,
-                            OfficeFlags::done($office, 'doneCarRepair'),
-                            $startWear,
-                        );
-                    }
-                    $cockpitTrainingLaps = self::resolveTestingLaps(
-                        $_SESSION,
-                        $request->get('cockpit_training_laps'),
-                        $lapsOverride,
-                    );
-                    if ($lapsOverride !== null) {
-                        $viewData['cockpit_laps_note'] = $lapsOverride;
-                    }
-                    if ($testingTrack === null) {
-                        $cockpitTrainingLaps = 0;
-                    } else {
-                        // Laps already run are in the car's wear; counting the
-                        // full slider again would double-count them.
-                        $cockpitTrainingLaps = min($cockpitTrainingLaps, $testingLapsLeft);
-                    }
-                    $viewData['cockpit_training_laps'] = $cockpitTrainingLaps;
-
-                    $wear = $cockpitTrainingLaps > 0 && $testingTrack !== null
-                        ? $this->trainingWear->project(
-                            $wearTrack,
-                            ['id' => 0, 'name' => $testingTrack],
-                            $carData,
-                            $this->mapper->mapDriver($pilot),
-                            $cockpitRisk,
-                            $cockpitTrainingLaps,
-                        )
-                        : $this->carWear->calculateWear(
-                            $wearTrack,
-                            $carData,
-                            $this->mapper->mapDriver($pilot),
-                            $cockpitRisk,
-                        );
-                    // Every sync fetches the office; the menu only once a season.
-                    $cash = (int) ($office['cash'] ?? $menu['cash'] ?? 0);
-
-                    if ($isCockpit) {
-                        $lastSynced = $user['last_synced_at'] ?? null;
-                        $viewData['quali_bonus'] = $this->earlyQualiBonus->assess(
-                            $office,
-                            $division,
-                            new \DateTimeImmutable('now'),
-                            is_string($lastSynced) ? $lastSynced : null,
-                        );
-                    }
-
-                    $moneyLevels = $this->apiClient->getMoneyLevels();
-                    $groupCarLevels = GroupStanding::levels($moneyLevels);
-
-                    if ($isCockpit) {
-                        $viewData['testing_projection'] = $this->testingProjection->project([
-                            'power'        => $carData['carPower'] ?? 0,
-                            'handling'     => $carData['carHandl'] ?? 0,
-                            'acceleration' => $carData['carAccel'] ?? 0,
-                        ]);
-                    }
-
-                    $currentRace = (int) ($office['raceNb'] ?? 0);
-                    if ($currentRace > 0) {
-                        $allTracks = $this->apiClient->getAllTracksPreview();
-                        $viewData['season_calendar'] = $this->seasonCalendar->season(
-                            $calendar,
-                            $allTracks,
-                            $currentRace,
-                        );
-                        $targets = $this->testingTargets->targetsFor(
-                            $currentRace,
-                            $calendar,
-                            $allTracks,
-                        );
-                        foreach ($targets as &$target) {
-                            $target['favourite'] = $target['track_id'] !== null
-                                && $this->isFavouriteTrack($pilot, $target['track_id']);
-                        }
-                        unset($target);
-                        $viewData['testing_targets'] = $targets;
-                    }
-
-                    if ($isCockpit) {
-                        $negotiations = $this->apiClient->getSponsorNegotiations();
-                        $ongoing = [];
-                        foreach ($negotiations['ongNegs'] ?? [] as $neg) {
-                            $sponsorId = (int) ($neg['sponsorId'] ?? 0);
-                            if ($sponsorId <= 0) {
-                                continue;
-                            }
-                            try {
-                                $profile = $this->apiClient->getSponsorProfile($sponsorId);
-                            } catch (\Throwable) {
-                                continue;
-                            }
-                            $advice = $this->sponsorAdvisor->adviseFor($profile);
-                            $ongoing[] = [
-                                'name'             => (string) ($neg['name'] ?? $profile['name'] ?? 'Unknown'),
-                                'progress'         => (string) ($neg['progress'] ?? '0'),
-                                'priority'         => (string) ($neg['priority'] ?? ''),
-                                'contested'        => (string) ($neg['contested'] ?? ''),
-                                'attention'        => (int) ($neg['attention'] ?? 0),
-                                'characteristics'  => $advice['characteristics'],
-                                'answers'          => $advice['answers'],
-                            ];
-                        }
-                        $viewData['sponsor_negotiations'] = [
-                            'car_spots_taken' => (int) ($negotiations['carSpotsTaken'] ?? 0),
-                            'car_spots_total' => count($negotiations['carSpots'] ?? []),
-                            'ongoing'         => $ongoing,
-                        ];
-                    }
-
-                    $trainings = $this->trainingService->getAllTrainings();
-                    if ($trainings !== []) {
-                        $ideal = $division !== null
-                            ? $this->idealPilotService->getIdealPilot($division)
-                            : null;
-                        $viewData['training_division'] = $division;
-                        $viewData['training_baseline_count'] = (int) ($ideal['count'] ?? 0);
-                        $picks = $this->trainingAdvisor->rank(
-                            $trainings,
-                            $this->mapper->mapDriver($pilot),
-                            $ideal,
-                        );
-                        if ($picks !== []) {
-                            $viewData['training_picks'] = array_slice($picks, 0, 3);
-                        }
-                    }
-
-                    $carPha = [
-                        'power'        => $carData['carPower'] ?? 0,
-                        'handling'     => $carData['carHandl'] ?? 0,
-                        'acceleration' => $carData['carAccel'] ?? 0,
-                    ];
-                    // A replacement fitted now runs the planned testing
-                    // session too, so the swap advisor has to price that
-                    // in — otherwise it recommends a part that dies
-                    // before the flag. Empty when no session is planned.
-                    $trainingWearByPart = [];
-                    foreach (isset($wear['error']) ? [] : $wear['parts'] as $label => $row) {
-                        if (isset($row['training'])) {
-                            $trainingWearByPart[(string) $label] = (float) $row['training'];
-                        }
-                    }
-                    $engineerContext = [
-                        'office'           => $office,
-                        'menu'             => $menu,
-                        'money_levels'     => $moneyLevels,
-                        'division'         => $division,
-                        'car'              => $carData,
-                        'driver'           => $this->mapper->mapDriver($pilot),
-                        'wear'             => $wear,
-                        'season_calendar'  => $viewData['season_calendar'] ?? [],
-                        'track_pha'        => $trackPha,
-                        'car_pha'          => $carPha,
-                        'group_car_levels' => $groupCarLevels,
-                        'training_wear'    => $trainingWearByPart,
-                    ];
-
-                    if (!isset($wear['error'])) {
-                        $advice = $this->wearAdvisor->classify($wear['parts']);
-                        $viewData['wear_advice'] = $advice;
-                        $viewData['car_updated'] = OfficeFlags::done($office, 'doneCarRepair');
-
-                        // Full per-part table + the inputs behind it. The wear
-                        // card only lists parts at risk, so without these the
-                        // healthy parts and the driver attributes driving the
-                        // model would have nowhere left to be seen (they used
-                        // to live on the retired Car Wear tab).
-                        $viewData['wear_parts']      = $wear['parts'];
-                        $viewData['wear_track_name'] = $wear['track_name'] ?? $trackName;
-                        $viewData['wear_laps']       = $wear['laps'] ?? null;
-                        $viewData['wear_smoke']      = self::wearSmoke(
-                            $advice['swap'],
-                            $wear['parts'],
-                            is_int($viewData['wear_laps']) ? $viewData['wear_laps'] : null,
-                        );
-                        $viewData['wear_driver']     = $this->mapper->mapDriver($pilot);
-
-                        // Only parts that reach 100 % (smoke, and a likely
-                        // retirement if it comes early) get a replacement
-                        // plan. A part merely ending in the red doesn't, and
-                        // recommending a swap for it turned the cockpit into
-                        // a shopping list.
-                        $forcedSwaps = $advice['swap'];
-                        if ($forcedSwaps !== []) {
-                            // The same season the engineer judges its swaps
-                            // over, so both name the same level. Without it the
-                            // card falls back to ranking for this race.
-                            try {
-                                $swapSeason = $this->raceEngineer->swapSeason((int) $user['id'], $engineerContext);
-                            } catch (\Throwable $e) {
-                                error_log('[Cockpit] ' . $e::class);
-                                $swapSeason = null;
-                            }
-                            $swapAdvice = $this->swapAdvisor->advise(
-                                $forcedSwaps,
-                                $carData,
-                                $wear['parts'],
-                                $this->mapper->mapDriver($pilot),
-                                $trackPha,
-                                $carPha,
-                                $cockpitRisk,
-                                $groupCarLevels,
-                                $cash,
-                                $trainingWearByPart,
-                                $swapSeason,
-                            );
-                            $viewData['swap_advice'] = $swapAdvice;
-                            $viewData['swap_plan'] = $this->swapAdvisor->summarise(
-                                $swapAdvice,
-                                $trackPha,
-                                $carPha,
-                            );
-                            // The per-option cash filter only guards one part
-                            // at a time; the cockpit warns when the whole plan
-                            // adds up to more than the manager can pay.
-                            $viewData['cockpit_cash'] = $cash;
-                        }
-                    }
-
-                    $isEngineerRequest = $isAdmin && $activeMainTab === 'Race Engineer'
-                        && (string) $request->get('fragment', '') === '';
-                    if ($isEngineerRequest) {
-                        try {
-                            $tyreSuppliers = $this->apiClient->getTyreSuppliers();
-                        } catch (\Throwable $e) {
-                            error_log('[Engineer] ' . $e::class);
-                            $tyreSuppliers = [];
-                        }
-                        $engineer = self::buildEngineer($this->raceEngineer, (int) $user['id'], $engineerContext + [
-                            'tyre_suppliers'   => $tyreSuppliers,
-                            'group_staff'      => $this->apiClient->getCachedGroupStaff(),
-                            'driver_profile'   => $pilot,
-                            'driver_market'    => self::driverMarket($this->apiClient),
-                            'wear_advice'      => $viewData['wear_advice'] ?? null,
-                            'swap_plan'        => $viewData['swap_plan'] ?? null,
-                            'swap_advice'      => $viewData['swap_advice'] ?? null,
-                            'training_picks'   => $viewData['training_picks'] ?? [],
-                            'testing_targets'  => $viewData['testing_targets'] ?? [],
-                            'testing_open'     => $testingTrack !== null,
-                            'testing_track'    => $testingTrack,
-                            'training_laps'    => $cockpitTrainingLaps,
-                            'track_name'       => $trackName,
-                            'weather'          => $viewData['weather'] ?? null,
-                            'setup_stale'      => $setupStale,
-                            'ctr'              => $cockpitRisk,
-                        ], self::engineerStale($viewData, $this->syncStale));
-                        if ($engineer !== null) {
-                            $viewData['engineer'] = $engineer;
-                        }
-                    }
-                } catch (\Throwable $e) {
-                    error_log('[Cockpit] ' . $e::class);
-                    $viewData['cockpit_error'] = StrategyController::GENERIC_ERROR_MESSAGE;
-                }
+                $this->buildCockpit($request, $user, $isAdmin, $activeMainTab, $activeTrack, $viewData);
                 break;
 
             case 'Division Baseline':
@@ -842,7 +421,6 @@ class PageController
                 // so a trained attribute kept showing its pre-training value.
                 $imported = null;
                 try {
-                    $this->apiClient->setToken($user['api_token'], (int) $user['id']);
                     $imported = $this->mapper->mapDriver(
                         $this->apiClient->getMyPilotDetails(),
                     );
@@ -877,7 +455,6 @@ class PageController
                     // First visit (or fresh session) — run the calc with the
                     // synced data + zero overrides so the user lands on a fully
                     // populated panel without having to click Calculate.
-                    $this->apiClient->setToken($user['api_token'], (int) $user['id']);
                     $result = $this->strategyController->runCalc($request);
                     if (isset($result['error'])) {
                         $viewData['strategy_error'] = $result['error'];
@@ -891,7 +468,6 @@ class PageController
                 break;
 
             case 'Car Wear Planner':
-                $this->apiClient->setToken($user['api_token'], (int) $user['id']);
                 $result = $this->carWearController->runCalc($request);
                 if (isset($result['error'])) {
                     $viewData['car_wear_error'] = $result['error'];
@@ -903,7 +479,6 @@ class PageController
             case 'Testing':
                 // Read-only tab: build straight from the warmed cache on every
                 // open. No overrides, so no session round-trip like Strategy.
-                $this->apiClient->setToken($user['api_token'], (int) $user['id']);
                 $result = $this->testingController->runCalc($request);
                 if (isset($result['error'])) {
                     $viewData['testing_error'] = $result['error'];
@@ -913,7 +488,6 @@ class PageController
                 break;
         }
 
-        $fragment = (string) $request->get('fragment', '');
         if ($fragment === 'cockpit_wear' && $activeMainTab === 'Cockpit') {
             echo $this->twig->render('partials/_cockpit_wear.twig', $viewData);
             return;
@@ -924,6 +498,419 @@ class PageController
         }
 
         echo $this->twig->render('index.twig', $viewData);
+    }
+
+    /**
+     * The Cockpit cards and, for an admin on the Race Engineer screen, the engineer built from the same reads.
+     *
+     * @param array<string, mixed> $user
+     * @param array<string, mixed> $viewData
+     */
+    private function buildCockpit(
+        Request $request,
+        array $user,
+        bool $isAdmin,
+        string $activeMainTab,
+        string $activeTrack,
+        array &$viewData,
+    ): void {
+        $cockpitRisk = RaceSettings::resolve($_SESSION, RaceSettings::CTR, $request->get('cockpit_risk'), 100);
+        // Resolved below, once the testing override is known: an override must not take the request's value.
+        $cockpitTrainingLaps = 0;
+        $viewData['cockpit_risk'] = $cockpitRisk;
+        $viewData['cockpit_training_laps'] = $cockpitTrainingLaps;
+        $isCockpit = $activeMainTab === 'Cockpit';
+        $isEngineerRequest = $isAdmin && $activeMainTab === 'Race Engineer'
+            && (string) $request->get('fragment', '') === '';
+        try {
+            // No driver under contract: surface the friendly "hire a
+            // pilot" notice (with a Recruitment Analyzer link) instead of
+            // a raw "No driver under contract" exception further down.
+            if (!$this->apiClient->hasPilot()) {
+                $viewData['cockpit_error'] = StrategyController::NO_PILOT_MESSAGE;
+                if ($isEngineerRequest && !self::engineerStale($viewData, $this->syncStale)) {
+                    $this->noDriverEngineer((int) $user['id'], $viewData);
+                }
+                return;
+            }
+
+            $raceSetup = $this->apiClient->getRaceSetup();
+            $carData   = $this->apiClient->getCarData();
+            $pilot     = $this->apiClient->getMyPilotDetails();
+            $nextRace  = $this->apiClient->getNextRaceProfile();
+            $office    = $this->apiClient->getOfficeData();
+            $calendar  = $this->apiClient->getCalendar();
+            $driver    = $this->mapper->mapDriver($pilot);
+
+            // RaceSetup mirrors the manager's saved setup, so its
+            // trackName / factors / weather can lag a whole race. Office
+            // and TrackProfile roll over the moment the new race opens,
+            // so trust them for the track identity and demand factors;
+            // fall back to RaceSetup only when those are absent.
+            $trackName = (string) ($office['trackName'] ?? '');
+            if ($trackName === '') {
+                $trackName = (string) ($nextRace['trackName'] ?? ($raceSetup['trackName'] ?? ''));
+            }
+            if ($trackName === '') {
+                $trackName = $activeTrack;
+            }
+
+            $trackPha = [
+                'power'        => $nextRace['power'] ?? $raceSetup['trackPower'] ?? 0,
+                'handling'     => $nextRace['handl'] ?? $raceSetup['trackHandl'] ?? 0,
+                'acceleration' => $nextRace['accel'] ?? $raceSetup['trackAccel'] ?? 0,
+            ];
+            $carPha = [
+                'power'        => $carData['carPower'] ?? 0,
+                'handling'     => $carData['carHandl'] ?? 0,
+                'acceleration' => $carData['carAccel'] ?? 0,
+            ];
+
+            // Favourite-track check needs GPRO's track id, which
+            // TrackProfile doesn't carry and RaceSetup carries stale.
+            // Resolve it from the calendar by race number instead.
+            $trackId = self::nextRaceTrackId($calendar, (int) ($office['raceNb'] ?? 0));
+            if ($trackId <= 0) {
+                $trackId = (int) ($raceSetup['trackId'] ?? 0);
+            }
+
+            // Stale weather: RaceSetup (the only weather source) still
+            // describes the previous race. The signal is a trackId
+            // mismatch against the authoritative Office, NOT
+            // office.doneRaceSetup — that flag stays '0' for the whole
+            // pre-qualifying window (the cockpit's purpose), so keying off
+            // it raised a permanent false "setup not saved" alarm.
+            $setupStale = self::isRaceSetupStale(
+                (int) ($office['trackId'] ?? 0),
+                (int) ($raceSetup['trackId'] ?? 0),
+            );
+            $viewData['cockpit_setup_stale'] = $setupStale;
+            $viewData['cockpit_data_loaded'] = true;
+
+            if ($isCockpit) {
+                $viewData['pha'] = $this->phaMatch->evaluate(
+                    $trackPha,
+                    $carPha,
+                    $this->mapper->isFavouriteTrack($pilot, $trackId),
+                );
+                $viewData['pha_track_name'] = $trackName;
+            }
+
+            // Weather lives only on RaceSetup. While stale it's the
+            // previous race's forecast, so withhold it rather than
+            // present it as this race's.
+            if (!$setupStale) {
+                $w = $raceSetup['weather'] ?? [];
+                $viewData['weather'] = $this->raceWeather->assess($w);
+                $viewData['weather_temps'] = [
+                    'q1' => $w['q1Temp'] ?? null,
+                    'q2' => $w['q2Temp'] ?? null,
+                ];
+            }
+
+            // Resolve the track by name only. GPRO's track id is NOT
+            // our local tracks.id (an autoincrement PK), so passing
+            // it would let the "id = :id OR name = :name" lookup match
+            // an unrelated row and read the wrong per-part base wear.
+            // Feed id=0 so the lookup resolves by name alone.
+            $wearTrack = [
+                'id'   => 0,
+                'name' => $trackName,
+                'laps' => $nextRace['laps'] ?? $raceSetup['laps'] ?? null,
+            ];
+            // Training laps run at GPRO's testing track, rarely the
+            // race track. While testing is closed none can be run, so
+            // the slider gives way to a note instead of guessing.
+            try {
+                $testing = $this->apiClient->getTesting();
+                $testingTrack = self::testingTrackName($testing);
+                $testingLapsLeft = self::testingLapsLeft($testing);
+            } catch (\Throwable $e) {
+                error_log('[Cockpit] testing: ' . $e::class);
+                $testingTrack = null;
+                $testingLapsLeft = 100;
+            }
+            $viewData['cockpit_testing_track'] = $testingTrack;
+            $viewData['cockpit_training_laps_left'] = $testingLapsLeft;
+
+            // Start wear and the division are known before the projection, so the override can decide
+            // the lap count the projection runs with; no second wear pass is needed.
+            $menu = $this->apiClient->getMenu();
+            $division = $this->divisionFromMenu($menu);
+            $lapsOverride = null;
+            if ($testingTrack !== null) {
+                $testingChoice = null;
+                if ($isAdmin) {
+                    try {
+                        $testingChoice = $this->raceEngineer->choicesFor(
+                            (int) $user['id'],
+                            (int) ($office['seasonNb'] ?? 0),
+                            (int) ($office['raceNb'] ?? 0),
+                        )['testing'] ?? null;
+                    } catch (\Throwable $e) {
+                        error_log('[Cockpit] ' . $e::class);
+                    }
+                }
+                $startWear = [];
+                foreach (CarWearService::PARTS_MAP as $label => $map) {
+                    $startWear[$label] = (int) ($carData[$map['wear']] ?? 0);
+                }
+                $lapsOverride = self::testingLapsOverride(
+                    $isAdmin,
+                    $testingChoice,
+                    $division,
+                    OfficeFlags::done($office, 'doneCarRepair'),
+                    $startWear,
+                );
+            }
+            $cockpitTrainingLaps = self::resolveTestingLaps(
+                $_SESSION,
+                $request->get('cockpit_training_laps'),
+                $lapsOverride,
+            );
+            if ($lapsOverride !== null) {
+                $viewData['cockpit_laps_note'] = $lapsOverride;
+            }
+            if ($testingTrack === null) {
+                $cockpitTrainingLaps = 0;
+            } else {
+                // Laps already run are in the car's wear; counting the
+                // full slider again would double-count them.
+                $cockpitTrainingLaps = min($cockpitTrainingLaps, $testingLapsLeft);
+            }
+            $viewData['cockpit_training_laps'] = $cockpitTrainingLaps;
+
+            $wear = $cockpitTrainingLaps > 0 && $testingTrack !== null
+                ? $this->trainingWear->project(
+                    $wearTrack,
+                    ['id' => 0, 'name' => $testingTrack],
+                    $carData,
+                    $driver,
+                    $cockpitRisk,
+                    $cockpitTrainingLaps,
+                )
+                : $this->carWear->calculateWear(
+                    $wearTrack,
+                    $carData,
+                    $driver,
+                    $cockpitRisk,
+                );
+            // Every sync fetches the office; the menu only once a season.
+            $cash = (int) ($office['cash'] ?? $menu['cash'] ?? 0);
+
+            if ($isCockpit) {
+                $lastSynced = $user['last_synced_at'] ?? null;
+                $viewData['quali_bonus'] = $this->earlyQualiBonus->assess(
+                    $office,
+                    $division,
+                    new \DateTimeImmutable('now'),
+                    is_string($lastSynced) ? $lastSynced : null,
+                );
+            }
+
+            $moneyLevels = $this->apiClient->getMoneyLevels();
+            $groupCarLevels = GroupStanding::levels($moneyLevels);
+
+            if ($isCockpit) {
+                $viewData['testing_projection'] = $this->testingProjection->project($carPha);
+            }
+
+            $currentRace = (int) ($office['raceNb'] ?? 0);
+            if ($currentRace > 0) {
+                $allTracks = $this->apiClient->getAllTracksPreview();
+                $viewData['season_calendar'] = $this->seasonCalendar->season(
+                    $calendar,
+                    $allTracks,
+                    $currentRace,
+                );
+                $targets = $this->testingTargets->targetsFor(
+                    $currentRace,
+                    $calendar,
+                    $allTracks,
+                );
+                foreach ($targets as &$target) {
+                    $target['favourite'] = $target['track_id'] !== null
+                        && $this->mapper->isFavouriteTrack($pilot, $target['track_id']);
+                }
+                unset($target);
+                $viewData['testing_targets'] = $targets;
+            }
+
+            if ($isCockpit) {
+                $viewData['sponsor_negotiations'] = $this->sponsorNegotiations();
+            }
+
+            $trainings = $this->trainingService->getAllTrainings();
+            if ($trainings !== []) {
+                $ideal = $division !== null
+                    ? $this->idealPilotService->getIdealPilot($division)
+                    : null;
+                $viewData['training_division'] = $division;
+                $viewData['training_baseline_count'] = (int) ($ideal['count'] ?? 0);
+                $picks = $this->trainingAdvisor->rank(
+                    $trainings,
+                    $driver,
+                    $ideal,
+                );
+                if ($picks !== []) {
+                    $viewData['training_picks'] = array_slice($picks, 0, 3);
+                }
+            }
+
+            // A replacement fitted now runs the planned testing
+            // session too, so the swap advisor has to price that
+            // in — otherwise it recommends a part that dies
+            // before the flag. Empty when no session is planned.
+            $trainingWearByPart = [];
+            foreach (isset($wear['error']) ? [] : $wear['parts'] as $label => $row) {
+                if (isset($row['training'])) {
+                    $trainingWearByPart[(string) $label] = (float) $row['training'];
+                }
+            }
+            $engineerContext = [
+                'office'           => $office,
+                'menu'             => $menu,
+                'money_levels'     => $moneyLevels,
+                'division'         => $division,
+                'car'              => $carData,
+                'driver'           => $driver,
+                'wear'             => $wear,
+                'season_calendar'  => $viewData['season_calendar'] ?? [],
+                'track_pha'        => $trackPha,
+                'car_pha'          => $carPha,
+                'group_car_levels' => $groupCarLevels,
+                'training_wear'    => $trainingWearByPart,
+            ];
+
+            if (!isset($wear['error'])) {
+                $advice = $this->wearAdvisor->classify($wear['parts']);
+                $viewData['wear_advice'] = $advice;
+                $viewData['car_updated'] = OfficeFlags::done($office, 'doneCarRepair');
+
+                // Full per-part table + the inputs behind it. The wear
+                // card only lists parts at risk, so without these the
+                // healthy parts and the driver attributes driving the
+                // model would have nowhere left to be seen (they used
+                // to live on the retired Car Wear tab).
+                $viewData['wear_parts']      = $wear['parts'];
+                $viewData['wear_track_name'] = $wear['track_name'] ?? $trackName;
+                $viewData['wear_laps']       = $wear['laps'] ?? null;
+                $viewData['wear_smoke']      = self::wearSmoke(
+                    $advice['swap'],
+                    $wear['parts'],
+                    is_int($viewData['wear_laps']) ? $viewData['wear_laps'] : null,
+                );
+                $viewData['wear_driver']     = $driver;
+
+                // Only parts that reach 100 % (smoke, and a likely
+                // retirement if it comes early) get a replacement
+                // plan. A part merely ending in the red doesn't, and
+                // recommending a swap for it turned the cockpit into
+                // a shopping list.
+                $forcedSwaps = $advice['swap'];
+                if ($forcedSwaps !== []) {
+                    // The same season the engineer judges its swaps
+                    // over, so both name the same level. Without it the
+                    // card falls back to ranking for this race.
+                    try {
+                        $swapSeason = $this->raceEngineer->swapSeason((int) $user['id'], $engineerContext);
+                    } catch (\Throwable $e) {
+                        error_log('[Cockpit] ' . $e::class);
+                        $swapSeason = null;
+                    }
+                    $swapAdvice = $this->swapAdvisor->advise(
+                        $forcedSwaps,
+                        $carData,
+                        $wear['parts'],
+                        $driver,
+                        $trackPha,
+                        $carPha,
+                        $cockpitRisk,
+                        $groupCarLevels,
+                        $cash,
+                        $trainingWearByPart,
+                        $swapSeason,
+                    );
+                    $viewData['swap_advice'] = $swapAdvice;
+                    $viewData['swap_plan'] = $this->swapAdvisor->summarise(
+                        $swapAdvice,
+                        $trackPha,
+                        $carPha,
+                    );
+                    // The per-option cash filter only guards one part
+                    // at a time; the cockpit warns when the whole plan
+                    // adds up to more than the manager can pay.
+                    $viewData['cockpit_cash'] = $cash;
+                }
+            }
+
+            if ($isEngineerRequest) {
+                try {
+                    $tyreSuppliers = $this->apiClient->getTyreSuppliers();
+                } catch (\Throwable $e) {
+                    error_log('[Engineer] ' . $e::class);
+                    $tyreSuppliers = [];
+                }
+                $engineer = self::buildEngineer($this->raceEngineer, (int) $user['id'], $engineerContext + [
+                    'tyre_suppliers'   => $tyreSuppliers,
+                    'group_staff'      => $this->apiClient->getCachedGroupStaff(),
+                    'driver_profile'   => $pilot,
+                    'driver_market'    => self::driverMarket($this->apiClient),
+                    'wear_advice'      => $viewData['wear_advice'] ?? null,
+                    'swap_plan'        => $viewData['swap_plan'] ?? null,
+                    'swap_advice'      => $viewData['swap_advice'] ?? null,
+                    'training_picks'   => $viewData['training_picks'] ?? [],
+                    'testing_targets'  => $viewData['testing_targets'] ?? [],
+                    'testing_open'     => $testingTrack !== null,
+                    'testing_track'    => $testingTrack,
+                    'training_laps'    => $cockpitTrainingLaps,
+                    'track_name'       => $trackName,
+                    'weather'          => $viewData['weather'] ?? null,
+                    'setup_stale'      => $setupStale,
+                    'ctr'              => $cockpitRisk,
+                ], self::engineerStale($viewData, $this->syncStale));
+                if ($engineer !== null) {
+                    $viewData['engineer'] = $engineer;
+                }
+            }
+        } catch (\Throwable $e) {
+            error_log('[Cockpit] ' . $e::class);
+            $viewData['cockpit_error'] = StrategyController::GENERIC_ERROR_MESSAGE;
+        }
+    }
+
+    /** @return array<string, mixed> */
+    private function sponsorNegotiations(): array
+    {
+        $negotiations = $this->apiClient->getSponsorNegotiations();
+        $ongoing = [];
+        foreach ($negotiations['ongNegs'] ?? [] as $neg) {
+            $sponsorId = (int) ($neg['sponsorId'] ?? 0);
+            if ($sponsorId <= 0) {
+                continue;
+            }
+            try {
+                $profile = $this->apiClient->getSponsorProfile($sponsorId);
+            } catch (\Throwable) {
+                continue;
+            }
+            $advice = $this->sponsorAdvisor->adviseFor($profile);
+            $ongoing[] = [
+                'name'             => (string) ($neg['name'] ?? $profile['name'] ?? 'Unknown'),
+                'progress'         => (string) ($neg['progress'] ?? '0'),
+                'priority'         => (string) ($neg['priority'] ?? ''),
+                'contested'        => (string) ($neg['contested'] ?? ''),
+                'attention'        => (int) ($neg['attention'] ?? 0),
+                'characteristics'  => $advice['characteristics'],
+                'answers'          => $advice['answers'],
+            ];
+        }
+
+        return [
+            'car_spots_taken' => (int) ($negotiations['carSpotsTaken'] ?? 0),
+            'car_spots_total' => count($negotiations['carSpots'] ?? []),
+            'ongoing'         => $ongoing,
+        ];
     }
 
     /**
@@ -1061,6 +1048,46 @@ class PageController
         }
 
         return $trackNames[0] ?? '';
+    }
+
+    /**
+     * The requested track as a known name. A numeric track id ("2") resolves
+     * to its name first; anything unknown falls back to the default, so the UI
+     * never displays a raw id.
+     *
+     * @param array<int, string> $tracks GPRO track id => name
+     */
+    public static function resolveActiveTrack(array $tracks, mixed $requested, string $nextTrack): string
+    {
+        $trackNames = array_values($tracks);
+        $defaultTrack = self::resolveDefaultTrack($trackNames, $nextTrack);
+        $activeTrack = $requested ?? $defaultTrack;
+
+        if (is_numeric($activeTrack) && isset($tracks[(int) $activeTrack])) {
+            $activeTrack = $tracks[(int) $activeTrack];
+        }
+
+        return is_string($activeTrack) && in_array($activeTrack, $trackNames, true)
+            ? $activeTrack
+            : $defaultTrack;
+    }
+
+    /**
+     * The screens this user's navigation offers.
+     *
+     * @param list<string> $sections
+     * @return list<string>
+     */
+    private static function visibleSections(array $sections, bool $isAdmin): array
+    {
+        if ($isAdmin) {
+            return $sections;
+        }
+
+        return array_values(array_filter(
+            $sections,
+            static fn (string $section): bool => !in_array($section, self::ADMIN_SECTIONS, true),
+        ));
     }
 
     /**
@@ -1245,26 +1272,5 @@ class PageController
     public static function isRaceSetupStale(int $officeTrackId, int $setupTrackId): bool
     {
         return $officeTrackId > 0 && $setupTrackId > 0 && $officeTrackId !== $setupTrackId;
-    }
-
-    /**
-     * Is the next race on one of the driver's three favourite tracks?
-     * DriProfile exposes favTrack1/2/3 as {name, id} objects.
-     *
-     * @param array<string, mixed> $pilot
-     */
-    private function isFavouriteTrack(array $pilot, int $trackId): bool
-    {
-        if ($trackId <= 0) {
-            return false;
-        }
-
-        foreach (['favTrack1', 'favTrack2', 'favTrack3'] as $key) {
-            $fav = $pilot[$key] ?? null;
-            if (is_array($fav) && (int) ($fav['id'] ?? 0) === $trackId) {
-                return true;
-            }
-        }
-        return false;
     }
 }

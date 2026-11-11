@@ -33,15 +33,4 @@ final class BoostFuelServiceTest extends TestCase
         $this->assertSame(0, $this->svc->extraFuel(2, 3.186, 0.0));
         $this->assertSame(0, $this->svc->extraFuel(-1, 3.186, 0.12));
     }
-
-    public function testCostTableCoversAllSets(): void
-    {
-        $table = $this->svc->costTable(4.325, 0.12);
-        $this->assertCount(BoostFuelService::MAX_SETS_PER_RACE, $table);
-        $this->assertArrayHasKey(1, $table);
-        $this->assertArrayHasKey(3, $table);
-        // Monotonically non-decreasing with more boost laps.
-        $this->assertGreaterThanOrEqual($table[1], $table[2]);
-        $this->assertGreaterThanOrEqual($table[2], $table[3]);
-    }
 }
