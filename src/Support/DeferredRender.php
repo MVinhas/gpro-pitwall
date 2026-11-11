@@ -16,20 +16,19 @@ use Closure;
  *
  * Pages never spend the manager's API budget, so only two kinds of slow work
  * remain: the first sync a never-synced account owes, and the shared driver
- * market Recruitment downloads on a miss. Every other screen renders straight
- * from what is stored, cold or not: a follow-up would have nothing more to show.
+ * market downloaded on a miss by a screen that reads it (the caller says
+ * whether this one does). Every other screen renders straight from what is
+ * stored, cold or not: a follow-up would have nothing more to show.
  */
 final class DeferredRender
 {
     public const string WAIT_PARAM = 'wait';
 
-    /** Reads the shared driver market, so the caller's warm probe is the market's for it. */
-    private const string MARKET_SECTION = 'Recruitment Analyzer';
-
     /**
+     * @param bool $readsMarket whether the screen reads the shared driver market, so $isWarm is the market's
      * @param Closure(): bool $isWarm probed only when the answer depends on it
      */
-    public static function shouldDefer(bool $wait, bool $syncPending, string $section, Closure $isWarm): bool
+    public static function shouldDefer(bool $wait, bool $syncPending, bool $readsMarket, Closure $isWarm): bool
     {
         if ($wait) {
             return false;
@@ -37,7 +36,7 @@ final class DeferredRender
         // A first sync is owed (a never-synced account). Warm, the page syncs
         // inline and renders; cold, whatever screen this is has nothing to show
         // until the sync has run, so it waits behind a skeleton.
-        if ($syncPending || $section === self::MARKET_SECTION) {
+        if ($syncPending || $readsMarket) {
             return !$isWarm();
         }
 

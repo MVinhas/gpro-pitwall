@@ -1,0 +1,101 @@
+{# Admin-only driver panel: keep, extend, replace or hire, with the shortlist behind the answer. `panel` is the
+   engineer's DriverPanel; every money and rating value arrives as a ready-to-print string. #}
+{% embed 'partials/_acc.twig' with {
+    id: 'engineer-driver',
+    title: 'Driver',
+    open_default: panel.verdict != 'keep',
+    panel: panel,
+    section_paths: section_paths
+} only %}
+    {% block verdict %}
+        <span class="text-sm font-semibold text-slate-900">{{ panel.answer }}{% if panel.figure %} · {{ panel.figure }}{% endif %}</span>
+    {% endblock %}
+    {% block body %}
+        <div class="space-y-4">
+            <p class="text-sm text-slate-600">{{ panel.reason }}</p>
+
+            {% if panel.current %}
+                <dl class="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+                    <div>
+                        <dt class="t-label">Driver</dt>
+                        <dd class="mt-0.5 font-semibold text-slate-900">{{ panel.current.name }}</dd>
+                    </div>
+                    {% if panel.current.rating is not null %}
+                        <div>
+                            <dt class="t-label">Score</dt>
+                            <dd class="mt-0.5 text-slate-900">{{ panel.current.rating }}</dd>
+                        </div>
+                    {% endif %}
+                    <div>
+                        <dt class="t-label">Overall</dt>
+                        <dd class="mt-0.5 text-slate-900">{{ panel.current.overall }}{% if panel.current.cap is not null %} · cap {{ panel.current.cap }}{% endif %}</dd>
+                    </div>
+                    <div>
+                        <dt class="t-label">Age</dt>
+                        <dd class="mt-0.5 text-slate-900">{{ panel.current.age }}</dd>
+                    </div>
+                    <div>
+                        <dt class="t-label">Salary</dt>
+                        <dd class="mt-0.5 text-slate-900">{{ panel.current.salary }}{% if panel.group_average %} · group average {{ panel.group_average }}{% endif %}</dd>
+                    </div>
+                    <div>
+                        <dt class="t-label">Contract</dt>
+                        <dd class="mt-0.5 text-slate-900">{{ panel.current.races_left }} {{ panel.current.races_left == 1 ? 'race' : 'races' }} left</dd>
+                    </div>
+                </dl>
+            {% endif %}
+
+            {% if panel.extension %}
+                <p class="text-sm text-slate-900">Extension, 17 races: {% if not panel.extension.exact %}about {% endif %}{{ panel.extension.fee }} fee, then {{ panel.extension.salary }} a race</p>
+            {% endif %}
+
+            {% if panel.shortlist %}
+                <div class="dt-scroll">
+                    <table class="dt">
+                        <thead class="bg-slate-50">
+                            <tr>
+                                <th class="dt-th">Driver</th>
+                                <th class="dt-th text-right">Score</th>
+                                <th class="dt-th text-right">Salary</th>
+                                <th class="dt-th text-right hidden sm:table-cell">To sign</th>
+                                <th class="dt-th text-right hidden md:table-cell">Age</th>
+                                <th class="dt-th text-right hidden md:table-cell">Overall</th>
+                                <th class="dt-th text-right hidden md:table-cell">Favourites</th>
+                                <th class="dt-th">Fits</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            {% for row in panel.shortlist %}
+                                <tr>
+                                    <td class="dt-td whitespace-normal font-medium">
+                                        <span class="flex flex-wrap items-baseline gap-x-2">
+                                            <span>{{ row.name }}</span>
+                                            {% if loop.first %}<span class="text-xs font-semibold text-emerald-700">Pick</span>{% endif %}
+                                        </span>
+                                    </td>
+                                    <td class="dt-td text-right">{{ row.rating }}{% if row.gain is not null %} ({{ row.gain }}){% endif %}</td>
+                                    <td class="dt-td text-right">{{ row.salary }}</td>
+                                    <td class="dt-td text-right hidden sm:table-cell">{{ row.to_sign }}</td>
+                                    <td class="dt-td text-right hidden md:table-cell">{{ row.age }}</td>
+                                    <td class="dt-td text-right hidden md:table-cell">{{ row.overall }}</td>
+                                    <td class="dt-td text-right hidden md:table-cell">{{ row.favourites }}</td>
+                                    <td class="dt-td min-w-24 whitespace-normal">{{ row.fits }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endif %}
+
+            {% for note in panel.notes %}
+                <p class="text-xs text-slate-500">{{ note }}</p>
+            {% endfor %}
+
+            {% if panel.out %}
+                <p class="text-xs text-slate-500">Left out: {% for item in panel.out %}{{ item.label }} {{ item.count }}{% if not loop.last %} · {% endif %}{% endfor %}</p>
+            {% endif %}
+
+            <a href="{{ section_paths['Recruitment Analyzer'] }}" class="inline-block text-sm font-medium text-blue-600 hover:underline">See the whole market</a>
+        </div>
+    {% endblock %}
+{% endembed %}

@@ -1,6 +1,9 @@
 <div class="space-y-6">
     {% if cockpit_error == no_pilot_message %}
         {% include 'partials/_no_pilot_notice.twig' %}
+        {% if engineer_driver is defined and engineer_driver is not null %}
+            {% include 'partials/_engineer_driver.twig' with {panel: engineer_driver.panel} %}
+        {% endif %}
     {% elseif cockpit_error %}
         <div class="notice notice-error">
             <p class="font-bold">Couldn't load the race engineer.</p>
@@ -16,5 +19,6 @@
     {% else %}
         {% include 'partials/_engineer_card.twig' %}
         {% if engineer.tyres %}{% include 'partials/_engineer_tyres.twig' %}{% endif %}
+        {% if engineer.driver %}{% include 'partials/_engineer_driver.twig' with {panel: engineer.driver} %}{% endif %}
     {% endif %}
 </div>

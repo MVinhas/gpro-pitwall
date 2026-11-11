@@ -660,7 +660,7 @@ final class GproApiClientArchiveTest extends TestCase
         $spent = count($this->fetcher->calls);
 
         $isWarm = static fn (): bool => $client->isWarm();
-        $deferred = DeferredRender::shouldDefer(false, true, 'Cockpit', $isWarm);
+        $deferred = DeferredRender::shouldDefer(false, true, false, $isWarm);
 
         $this->assertFalse($deferred, 'a warm login renders now');
         $this->assertTrue(DeferredRender::syncsInline(true, $deferred));

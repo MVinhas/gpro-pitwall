@@ -14,6 +14,7 @@ use App\Support\Ordinal;
  * @phpstan-import-type SwapPick from EngineerInputs
  * @phpstan-import-type SmokeQuote from EngineerInputs
  * @phpstan-import-type TyreAdvice from TyreSupplierAdvisor
+ * @phpstan-import-type DriverAdvice from DriverHiringAdvisor
  * @phpstan-type Line array{
  *     key: string,
  *     answer: string,
@@ -49,6 +50,7 @@ final class RaceEngineer
     private const string STAGE_TRAINING = 'training';
     private const string STAGE_TESTING = 'testing';
     private const string UPGRADES_ANCHOR = '/season#season-upgrades';
+    private const string NOT_RANKED = 'No division baseline: drivers not ranked';
     private const string SKIP_CALL = 'Your call; the money stays in the budget';
     private const string AMATEUR_TESTING = 'Testing is weak in Amateur without a technical director; it pays mainly '
         . 'the season before a promotion push';
@@ -57,6 +59,7 @@ final class RaceEngineer
     public const array STEPS = [
         'objective' => 'season',
         'tyres' => 'season',
+        'driver' => 'season',
         'cash' => 'season',
         'staff' => 'season',
         'stale' => 'season',
@@ -90,6 +93,9 @@ final class RaceEngineer
         $tyres = self::tyres($in);
         if ($tyres !== null) {
             $lines[] = $tyres;
+        }
+        if ($in->driverAdvice !== null) {
+            $lines[] = self::driverLine($in->driverAdvice);
         }
 
         $optional = [
@@ -150,6 +156,125 @@ final class RaceEngineer
             anchor: '/engineer#engineer-tyres',
             figure: Money::short($advice['cost']) . ' a race',
         );
+    }
+
+    /**
+     * @param DriverAdvice $advice
+     * @return Line
+     */
+    public static function driverLine(array $advice): array
+    {
+        $verdict = $advice['verdict'];
+        $needsShortlist = $verdict === 'replace' || $verdict === 'hire';
+        $name = $advice['current']['name'] ?? '';
+        $left = $advice['current']['races_left'] ?? 0;
+        $pick = $advice['shortlist'][0] ?? null;
+        $figure = null;
+        $suffixed = true;
+
+        if ($needsShortlist && !$advice['market_known']) {
+            $answer = 'Driver market unavailable';
+            $reason = 'Open Recruitment to retry';
+            $tone = 'amber';
+        } elseif ($needsShortlist && !$advice['ranked']) {
+            $answer = $verdict === 'hire' ? 'Sign a driver' : 'Replace ' . $name;
+            $reason = self::NOT_RANKED;
+            $tone = $verdict === 'hire' ? 'red' : 'amber';
+            $suffixed = false;
+        } elseif ($needsShortlist && $pick === null) {
+            $answer = 'No driver passes your rules';
+            $reason = match ($advice['top_out']) {
+                'retiring' => 'Most are retiring',
+                'cap' => "Most are over your division's cap",
+                'age' => 'Most are 35 or older',
+                'offers' => 'Most already have offers',
+                'salary_average' => "Most cost more than your group's average",
+                'salary_plan' => "Most salaries don't fit the plan",
+                'switch_cost' => 'Most cost too much to sign',
+                default => 'The market has nobody for your division',
+            };
+            $tone = $verdict === 'hire' ? 'red' : 'amber';
+        } elseif ($verdict === 'keep') {
+            $answer = 'Keep ' . $name;
+            $figure = self::races($left) . ' left';
+            [$reason, $tone] = match ($advice['reason']) {
+                'over_cap' => [
+                    'Over the ' . ($advice['cap'] ?? 0) . ' cap: cannot be extended, contract ends in '
+                        . self::races($left),
+                    'amber',
+                ],
+                'no_extension' => ['GPRO offers no extension now', 'ink'],
+                'retiring_later' => ['Retires at the end of the season', 'amber'],
+                default => [match (true) {
+                    !$advice['market_known'] => 'Driver market unavailable: nobody was compared',
+                    !$advice['ranked'] => self::NOT_RANKED,
+                    default => 'No clearly better driver you can afford',
+                }, 'ink'],
+            };
+            $suffixed = $advice['reason'] !== 'none';
+        } elseif ($verdict === 'extend') {
+            $answer = 'Extend ' . $name . ' by ' . DriverHiringAdvisor::CONTRACT_RACES . ' races';
+            $extension = $advice['extension'];
+            if ($extension !== null) {
+                $figure = ($extension['exact'] ? '' : 'about ') . Money::short($extension['fee']) . ' + '
+                    . Money::short($extension['salary']) . ' a race';
+            }
+            if ($advice['reason'] === 'extension_budget_short') {
+                $reason = 'Budget short: no race without a driver';
+                $tone = 'red';
+            } elseif ($advice['urgent']) {
+                $reason = 'Last chance: ' . ($left > 0 ? self::races($left) . ' left' : 'his contract has run out');
+                $tone = 'red';
+            } else {
+                $reason = self::races($left) . ' left on his contract';
+                $tone = 'amber';
+            }
+        } else {
+            $answer = ($verdict === 'hire' ? 'Sign ' : 'Replace ' . $name . ' with ') . ($pick['name'] ?? '');
+            $figure = Money::short($pick['salary'] ?? 0) . ' a race';
+            $reason = match ($advice['reason']) {
+                'leaving_cap' => 'Over the ' . ($advice['cap'] ?? 0) . ' cap: he leaves in ' . self::races($left),
+                'leaving_retiring' => 'He retires at the end of the season',
+                'better' => 'Scores ' . number_format($pick['gain'] ?? 0.0, 1) . ' points higher than ' . $name,
+                'extension_over_budget' => 'His extension does not fit the plan',
+                default => 'No driver under contract',
+            };
+            $tone = 'amber';
+        }
+
+        if ($suffixed && $advice['market_known'] && !$advice['ranked']) {
+            $reason .= '; no division baseline, drivers not ranked';
+        }
+        if ($suffixed && $verdict !== 'keep' && !$advice['finances_known']) {
+            $reason .= '; finances unknown';
+        }
+
+        return self::line(
+            'driver',
+            $answer,
+            $reason,
+            anchor: '/engineer#engineer-driver',
+            figure: $figure,
+            tone: $tone,
+        );
+    }
+
+    private static function races(int $count): string
+    {
+        return $count === 1 ? '1 race' : $count . ' races';
+    }
+
+    /**
+     * What the plan's envelope has left after everything the card advises spending on the car: the card buys one
+     * upgrade, the recommended one, and the envelope already carries its net cost (see afterTheUpdate).
+     */
+    public static function spare(EngineerInputs $in): int
+    {
+        if ($in->plan === null) {
+            return 0;
+        }
+
+        return max(0, self::upgradeBudget($in) - max(0, self::recommendedUpgrade($in)['net_cost'] ?? 0));
     }
 
     /**

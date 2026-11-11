@@ -82,6 +82,7 @@ use App\Service\TrainingAdvisorService;
 use App\Service\TrainingService;
 use App\Service\TrainingWearProjectionService;
 use App\Service\WearAdvisorService;
+use App\Support\DeferredRender;
 use App\Support\RaceWindow;
 use App\Support\SyncState;
 use App\Sync\EndpointFetcher;
@@ -128,6 +129,8 @@ final class ManualRefreshTest extends TestCase
     private PDO $db;
     private CountingGproFetcher $fetcher;
     private ApiArchiveRepository $archive;
+    /** Wire the engineer's driver advice, off by default: the archived profile carries no contract figures. */
+    private bool $driverAdvice = false;
 
     protected function setUp(): void
     {
@@ -229,6 +232,7 @@ final class ManualRefreshTest extends TestCase
     {
         $this->synced();
         $this->archivePreviousWindow();
+        $this->warmDriverMarket();
 
         $html = $this->render($path);
 
@@ -241,6 +245,7 @@ final class ManualRefreshTest extends TestCase
     {
         $this->synced();
         $this->archivePreviousWindow();
+        $this->warmDriverMarket();
 
         $this->assertStringContainsString('id="pha"', $this->render('/cockpit'));
         $this->assertStringContainsString('data-result-state="results"', $this->render('/strategy'));
@@ -272,6 +277,7 @@ final class ManualRefreshTest extends TestCase
     {
         $this->synced();
         $this->archivePreviousWindow();
+        $this->warmDriverMarket();
         foreach (self::screens() as [$path]) {
             $this->render($path);
         }
@@ -279,11 +285,54 @@ final class ManualRefreshTest extends TestCase
 
         // A deploy: var/cache/ is cleared, the archive survives.
         $this->wipeCache();
+        // A cold market would send /engineer behind a skeleton (see the cold-market test); warmed, as the hourly
+        // download leaves it, every screen renders at once.
+        $this->warmDriverMarket();
 
         foreach (self::screens() as [$path]) {
             $this->assertNoFailure($this->render($path));
         }
         $this->assertStringContainsString('id="pha"', $this->render('/cockpit'));
+        $this->assertSame([], $this->fetcher->calls);
+    }
+
+    /**
+     * The market file is the engineer's one fetch: shared, tokenless, never the manager's GPRO budget. Cold, it
+     * is downloaded by the skeleton's follow-up, not by the skeleton.
+     */
+    public function testAColdMarketIsFetchedBehindTheSkeletonWithZeroCalls(): void
+    {
+        $this->synced();
+        $this->archivePreviousWindow();
+        $market = new FilesystemCache($this->cacheDir);
+
+        $skeleton = $this->render('/engineer');
+
+        $this->assertStringContainsString('data-deferred=', $skeleton);
+        $this->assertStringNotContainsString('id="engineer-title"', $skeleton);
+        $this->assertFalse($market->has('market_file_drivers'), 'the skeleton fetched the market');
+
+        $followUp = $this->render('/engineer', [DeferredRender::WAIT_PARAM => '1']);
+
+        $this->assertStringContainsString('id="engineer-title"', $followUp);
+        $this->assertTrue($market->has('market_file_drivers'), 'the follow-up fetched the market');
+        $this->assertSame([], $this->fetcher->calls);
+    }
+
+    /** With no driver under contract, a stale sync builds no hiring advice, as it builds no engineer card. */
+    public function testTheNoDriverEngineerWaitsForAFreshSync(): void
+    {
+        $this->synced();
+        $this->archivePreviousWindow(['driId' => '0']);
+        $this->warmDriverMarket();
+        $this->driverAdvice = true;
+
+        $fresh = $this->render('/engineer');
+        $stale = $this->render('/engineer', syncStale: true);
+
+        $this->assertStringContainsString('id="engineer-driver"', $fresh);
+        $this->assertStringContainsString('No driver under contract.', $stale);
+        $this->assertStringNotContainsString('id="engineer-driver"', $stale);
         $this->assertSame([], $this->fetcher->calls);
     }
 
@@ -384,6 +433,15 @@ final class ManualRefreshTest extends TestCase
         $this->archive->put(self::USER_ID, $scope, $endpoint, $params, $window, 99, 4, $payload);
     }
 
+    /** The shared driver market the engineer reads, as the hourly download caches it. */
+    private function warmDriverMarket(): void
+    {
+        (new FilesystemCache($this->cacheDir))->set('market_file_drivers', [
+            'updated_at' => '2026-11-10 12:00',
+            'rows' => [['ID' => 1, 'NAME' => 'Market Driver', 'OA' => 90, 'AGE' => 28]],
+        ], 3300);
+    }
+
     private function wipeCache(): void
     {
         foreach (glob($this->cacheDir . '/*') ?: [] as $file) {
@@ -411,8 +469,12 @@ final class ManualRefreshTest extends TestCase
         return new GproApiClient($this->fetcher, new FilesystemCache($this->cacheDir), $this->archive);
     }
 
-    /** One request: fresh services over the shared database, cache dir and archive, as a new PHP process has. */
-    private function render(string $path): string
+    /**
+     * One request: fresh services over the shared database, cache dir and archive, as a new PHP process has.
+     *
+     * @param array<string, string> $query
+     */
+    private function render(string $path, array $query = [], bool $syncStale = false): string
     {
         $config = [
             'app' => require dirname(__DIR__, 3) . '/config/game_constants.php',
@@ -437,7 +499,7 @@ final class ManualRefreshTest extends TestCase
         $twig->addGlobal('is_logged_in', true);
         $twig->addGlobal('user', $safeUser);
         $twig->addGlobal('sync_state', SyncState::forUser($user));
-        $twig->addGlobal('sync_stale', false);
+        $twig->addGlobal('sync_stale', $syncStale);
         $twig->addGlobal('can_submit', true);
         $twig->addGlobal('api_limit', '?');
         $twig->addGlobal('api_limit_updated_at', null);
@@ -493,6 +555,8 @@ final class ManualRefreshTest extends TestCase
         $seasonBudgets = new SeasonBudgetRepository($db);
         $ctrCeiling = new CtrCeiling($carWear);
 
+        $recruitment = new RecruitmentService($config['app']['csv_to_schema_map'], [], $idealPilot);
+
         $strategy = new StrategyController(
             new StrategyService($db, FakeSecrets::ALL, $fuel),
             $client,
@@ -533,7 +597,7 @@ final class ManualRefreshTest extends TestCase
             new TestingController($client, $mapper, $setup, $carWear, []),
             new CarWearController($client, $mapper, $carWear, $carWearPlanner, $seasonCalendar),
             $mapper,
-            new RecruitmentService($config['app']['csv_to_schema_map'], [], $idealPilot),
+            $recruitment,
             $sync,
             $harvest,
             new RaceEngineerService(
@@ -561,13 +625,14 @@ final class ManualRefreshTest extends TestCase
                 $idealPilot,
                 new CtrModelService($telemetryRepo, $raceHistory, $cache),
                 0.0,
+                recruitment: $this->driverAdvice ? $recruitment : null,
             ),
-            false,
+            $syncStale,
             $twig,
             $config,
         );
 
-        $request = new Request([], [], [], ['REQUEST_URI' => $path, 'REQUEST_METHOD' => 'GET']);
+        $request = new Request($query, [], [], ['REQUEST_URI' => $path, 'REQUEST_METHOD' => 'GET']);
         ob_start();
         try {
             match ($path) {

@@ -399,6 +399,53 @@ final class RecruitmentServiceTest extends TestCase
         $this->assertSame([], $out[2]['FAV_next_names']);
     }
 
+    public function testRatedGivesTheSameRatingAsAnalyze(): void
+    {
+        $row = $this->market(['CON' => 50, 'AGE' => 24]);
+        $analysed = $this->service()->analyze($row, 'Rookie', false);
+        $rated = $this->service()->rated($row, 'Rookie');
+
+        self::assertSame($analysed[0]['rating'], $rated[0]['rating']);
+    }
+
+    public function testRatedKeepsRetiredOverCapAndLowRatedDrivers(): void
+    {
+        $rows = [
+            ...$this->market(['ID' => 1, 'RET' => 1]),
+            ...$this->market(['ID' => 2, 'OA' => 999]),
+            ...$this->market(['ID' => 3, 'CON' => 0, 'TAL' => 0, 'AGE' => 60]),
+        ];
+
+        self::assertSame([1, 2, 3], array_column($this->service()->rated($rows, 'Rookie'), 'ID'));
+    }
+
+    public function testRatedDropsRowsThatAreNotArrays(): void
+    {
+        $rows = [...$this->market(['ID' => 1]), 'junk', null];
+
+        self::assertSame([1], array_column($this->service()->rated($rows, 'Rookie'), 'ID'));
+    }
+
+    public function testAProfileRatesLikeTheSameDriverOnTheMarket(): void
+    {
+        $row = $this->market()[0];
+        $profile = [];
+        foreach (RecruitmentService::PROFILE_TO_MARKET as $profileKey => $marketKey) {
+            $profile[$profileKey] = (string) $row[$marketKey];
+        }
+
+        self::assertSame(
+            $this->service()->rated([$row], 'Rookie')[0]['rating'],
+            $this->service()->rateProfile($profile, 'Rookie'),
+        );
+    }
+
+    public function testCapForReadsTheDivisionCap(): void
+    {
+        self::assertSame(self::CAPS['Rookie'], $this->service()->capFor('Rookie'));
+        self::assertNull($this->service()->capFor('Nowhere'));
+    }
+
     public function testADivisionWithoutABaselineSaysSoInsteadOfFailingGenerically(): void
     {
         $empty = new class extends IdealPilotService {

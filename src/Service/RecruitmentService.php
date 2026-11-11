@@ -9,6 +9,20 @@ class RecruitmentService
     /** Score threshold below which a driver isn't worth showing. */
     private const float MIN_RATING = 50.0;
 
+    /** @var array<string, string> GPRO driver-profile key => market field. */
+    public const array PROFILE_TO_MARKET = [
+        'concentration' => 'CON',
+        'talent' => 'TAL',
+        'aggressiveness' => 'AGG',
+        'experience' => 'EXP',
+        'techInsight' => 'TEI',
+        'stamina' => 'STA',
+        'charisma' => 'CHA',
+        'motivation' => 'MOT',
+        'weight' => 'WEI',
+        'age' => 'AGE',
+    ];
+
     /** @var array<string, string> Market field => UI label. */
     public const array RANGE_FILTER_FIELDS = [
         'OA'  => 'Overall ability',
@@ -43,14 +57,7 @@ class RecruitmentService
      */
     public function analyze(array $market, string $targetDivision, bool $filterOffers): array
     {
-        $idealData = $this->idealPilotService->getIdealPilot($targetDivision);
-
-        if (empty($idealData['stats']) || $idealData['count'] === 0) {
-            throw new NoBaselineException("No baseline data found for division: {$targetDivision}");
-        }
-
-        /** @var array<string, int|float> $idealStats */
-        $idealStats = $idealData['stats'];
+        $idealStats = $this->idealStats($targetDivision);
         $candidates = [];
 
         foreach ($market as $raw) {
@@ -58,18 +65,64 @@ class RecruitmentService
             if (!$this->isEligible($driver, $targetDivision, $filterOffers)) {
                 continue;
             }
-            $rating = $this->calculateRating($driver, $idealStats);
+            $driver['rating'] = $this->calculateRating($driver, $idealStats);
             // Cull below 50 so the result set stays bounded — a full
             // unfiltered market (4-5k drivers) blows the 128 MB heap
             // when held in the session for sort + paginate.
-            if ($rating < self::MIN_RATING) {
+            if ($driver['rating'] < self::MIN_RATING) {
                 continue;
             }
-            $driver['rating'] = $rating;
             $candidates[] = $driver;
         }
 
         return $candidates;
+    }
+
+    /**
+     * Every market row, normalised and rated, with no eligibility or rating cut.
+     *
+     * @param array<int, mixed> $market driver rows from `GetMarketFile.asp` JSON
+     * @return list<array<string, mixed>>
+     */
+    public function rated(array $market, string $division): array
+    {
+        $idealStats = $this->idealStats($division);
+        $rows = [];
+
+        foreach ($market as $raw) {
+            if (!is_array($raw)) {
+                continue;
+            }
+            $driver = $this->normalizeDriverData($raw);
+            $driver['rating'] = $this->calculateRating($driver, $idealStats);
+            $rows[] = $driver;
+        }
+
+        return $rows;
+    }
+
+    /**
+     * Rates a GPRO driver profile on the same scale as the market rows.
+     *
+     * @param array<string, mixed> $profile
+     */
+    public function rateProfile(array $profile, string $division): float
+    {
+        $idealStats = $this->idealStats($division);
+        $raw = [];
+
+        foreach (self::PROFILE_TO_MARKET as $profileKey => $marketKey) {
+            if (array_key_exists($profileKey, $profile)) {
+                $raw[$marketKey] = $profile[$profileKey];
+            }
+        }
+
+        return $this->calculateRating($this->normalizeDriverData($raw), $idealStats);
+    }
+
+    public function capFor(string $division): ?int
+    {
+        return $this->caps[$division] ?? null;
     }
 
     /**
@@ -302,6 +355,23 @@ class RecruitmentService
         $d['ID'] = (int)($raw['ID'] ?? 0);
 
         return $d;
+    }
+
+    /**
+     * @return array<string, int|float>
+     */
+    private function idealStats(string $division): array
+    {
+        $idealData = $this->idealPilotService->getIdealPilot($division);
+
+        if (empty($idealData['stats']) || $idealData['count'] === 0) {
+            throw new NoBaselineException("No baseline data found for division: {$division}");
+        }
+
+        /** @var array<string, int|float> $stats */
+        $stats = $idealData['stats'];
+
+        return $stats;
     }
 
     /**

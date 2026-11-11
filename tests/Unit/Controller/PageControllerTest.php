@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace App\Tests\Unit\Controller;
 
+use App\Cache\Adapter\NullCache;
 use App\Controller\PageController;
+use App\Service\GproApiClient;
+use App\Service\GproFetcher;
 use App\Service\RaceEngineerService;
 use App\Support\RaceSettings;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -234,6 +237,82 @@ final class PageControllerTest extends TestCase
 
         $this->assertStringContainsString('[Engineer] RuntimeException', $logged);
         $this->assertStringNotContainsString('boom', $logged);
+    }
+
+    public function testWhichScreensReadTheDriverMarket(): void
+    {
+        $office = ['driId' => '77'];
+
+        $this->assertTrue(PageController::readsDriverMarket('Recruitment Analyzer', false, []));
+        $this->assertTrue(PageController::readsDriverMarket('Race Engineer', true, $office));
+        // No driver under contract: the hiring shortlist still needs the market.
+        $this->assertTrue(PageController::readsDriverMarket('Race Engineer', true, ['driId' => '0']));
+        $this->assertTrue(PageController::readsDriverMarket('Race Engineer', true, ['driId' => '']));
+        // Nothing stored: the engineer builds nothing, so the market is never read.
+        $this->assertFalse(PageController::readsDriverMarket('Race Engineer', true, []));
+        $this->assertFalse(PageController::readsDriverMarket('Race Engineer', false, $office));
+        $this->assertFalse(PageController::readsDriverMarket('Cockpit', true, $office));
+    }
+
+    public function testDriverMarketReturnsTheCachedOrFetchedMarket(): void
+    {
+        $api = self::marketClient(static fn (): array => [
+            'Last updated' => '2026-11-10 12:00',
+            'drivers' => [['ID' => 1, 'NAME' => 'Ada']],
+        ]);
+
+        $this->assertSame(
+            ['updated_at' => '2026-11-10 12:00', 'rows' => [['ID' => 1, 'NAME' => 'Ada']]],
+            PageController::driverMarket($api),
+        );
+    }
+
+    public function testDriverMarketFailureYieldsNullAndLogsTheClassOnly(): void
+    {
+        $api = self::marketClient(static function (): array {
+            throw new \RuntimeException('market down at secret-host');
+        });
+        $prior = ini_get('error_log');
+        $log = sys_get_temp_dir() . '/engineer-' . bin2hex(random_bytes(4)) . '.log';
+        ini_set('error_log', $log);
+
+        try {
+            $this->assertNull(PageController::driverMarket($api));
+            $logged = (string) file_get_contents($log);
+        } finally {
+            ini_set('error_log', $prior === false ? '' : $prior);
+            @unlink($log);
+        }
+
+        $this->assertStringContainsString('[Engineer] RuntimeException', $logged);
+        $this->assertStringNotContainsString('secret-host', $logged);
+    }
+
+    /** @param \Closure(): array<string, mixed> $market */
+    private static function marketClient(\Closure $market): GproApiClient
+    {
+        $fetcher = new class ($market) implements GproFetcher {
+            /** @param \Closure(): array<string, mixed> $market */
+            public function __construct(private readonly \Closure $market)
+            {
+            }
+
+            public function setToken(string $token): void
+            {
+            }
+
+            public function fetchJson(string $endpoint): array
+            {
+                throw new \LogicException('No GPRO call is expected');
+            }
+
+            public function fetchMarketFile(string $market): array
+            {
+                return ($this->market)();
+            }
+        };
+
+        return new GproApiClient($fetcher, new NullCache());
     }
 
     public function testTestingLapsOverrideDeclined(): void

@@ -6,6 +6,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.37] - 2026-11-11
+
+### Added
+- The race engineer advises on your driver: keep him, extend his contract by 17 races, replace him, or who to
+  sign when you have none. It scores market drivers with Recruitment's rating for the division you race in and
+  leaves out anyone retiring, over the division's overall cap, aged 35 or more, already holding offers, or paid
+  above your group's average driver salary. A driver who can stay is replaced only for a gain of 5 points or
+  more, and then only better drivers are listed.
+- The salary and the cost to sign (the offer, the signing fee and half the current driver's salary for each
+  race left) are checked against the season plan. Under Promote the one-off cost may cut upgrades, training and
+  testing; the salary never may.
+- A Driver panel on the Engineer tab shows the current driver against the cap and the group's average salary,
+  GPRO's own price for a 17-race extension, and the shortlist with what each driver costs. With no driver under
+  contract, the tab keeps its notice and adds the shortlist under it.
+
+### Changed
+- An admin's Engineer tab opens behind the loading skeleton when the shared driver market is not cached yet, as
+  Recruitment does. The market file is the only download; it needs no token and spends none of your GPRO API
+  calls.
+
 ## [1.21.36] - 2026-11-10
 
 ### Fixed

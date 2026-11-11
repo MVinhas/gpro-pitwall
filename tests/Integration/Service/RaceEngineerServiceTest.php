@@ -36,10 +36,12 @@ use App\Service\PartSwapAdvisorService;
 use App\Service\PartUpgradeAdvisorService;
 use App\Service\PhaMatchService;
 use App\Service\RaceEngineerService;
+use App\Service\RecruitmentService;
 use App\Service\RiskAdvisorService;
 use App\Service\WearAdvisorService;
 use PDO;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(RaceEngineerService::class)]
@@ -103,6 +105,7 @@ final class RaceEngineerServiceTest extends TestCase
         ?SwapLevelPicker $picker = null,
         ?RaceTelemetryRepository $telemetry = null,
         bool $withChoices = true,
+        ?RecruitmentService $recruitment = null,
     ): RaceEngineerService {
         $wear = $this->wearService();
         $contribution = [
@@ -139,6 +142,7 @@ final class RaceEngineerServiceTest extends TestCase
             new CtrModelService(new RaceTelemetryRepository($this->db), new RaceHistoryRepository($this->db), new NullCache()),
             self::CTR_GAIN_FRACTION,
             $withChoices ? $this->choices : null,
+            recruitment: $recruitment,
         );
     }
 
@@ -2948,5 +2952,606 @@ final class RaceEngineerServiceTest extends TestCase
             'occurred_at' => $at, 'description' => $description, 'amount' => $amount,
             'balance_after' => null, 'fingerprint' => sha1($description . $race . $amount),
         ]);
+    }
+
+    public function testTheDriverLineAndPanelAppearWithAMarket(): void
+    {
+        $this->seedPromotionFixture();
+        $service = $this->engineer(recruitment: $this->recruitment());
+
+        $card = $service->forCockpit(self::USER, $this->cockpit([
+            'driver_profile' => $this->driverProfile(),
+            'driver_market' => ['updated_at' => null, 'rows' => [
+                $this->marketRow(1),
+                $this->marketRow(2, ['AGE' => 36]),
+                $this->marketRow(3, ['OFF' => 1]),
+            ]],
+            'group_staff' => ['managers' => [['driSal' => '150000'], ['driSal' => '250000'], ['driSal' => '']]],
+        ]));
+
+        $line = array_column($card['lines'], null, 'key')['driver'] ?? null;
+        $panel = $card['driver'];
+        self::assertNotNull($line);
+        self::assertNotNull($panel);
+        self::assertSame('Replace Old Hand with Driver 1', $line['answer']);
+        self::assertSame($line['answer'], $panel['answer']);
+        self::assertSame($line['figure'], $panel['figure']);
+        self::assertSame($line['reason'], $panel['reason']);
+        self::assertSame('replace', $panel['verdict']);
+        self::assertCount(1, $panel['shortlist']);
+        $pick = $panel['shortlist'][0];
+        self::assertSame('Driver 1', $pick['name']);
+        self::assertSame('100.0', $pick['rating']);
+        self::assertSame('+14.0', $pick['gain']);
+        self::assertSame(Money::short(100_000), $pick['salary']);
+        self::assertSame(Money::short(1_000_000), $pick['to_sign']);
+        self::assertSame([
+            ['label' => 'Aged 35 or more', 'count' => 1],
+            ['label' => 'Has offers', 'count' => 1],
+        ], $panel['out']);
+        self::assertSame(Money::short(200_000), $panel['group_average']);
+        self::assertSame([
+            'name' => 'Old Hand', 'rating' => '86.0', 'overall' => '90', 'cap' => 110, 'age' => 30,
+            'salary' => Money::short(100_000), 'races_left' => 10,
+        ], $panel['current']);
+        self::assertSame([
+            'Offer a 17-race contract. Each offer costs from $500,000 and is not refunded; drivers decide Mondays '
+                . 'and Thursdays, 19:00–21:00 CET.',
+        ], $panel['notes']);
+    }
+
+    public function testTheOfficeContractFiguresWinOverTheProfiles(): void
+    {
+        $this->seedPromotionFixture();
+        $service = $this->engineer(recruitment: $this->recruitment());
+
+        $panel = $service->forCockpit(self::USER, $this->cockpit([
+            'office' => $this->office(['driId' => '42', 'driSalary' => '120000', 'driRacesLeft' => '7']),
+            'driver_profile' => $this->driverProfile(['overall' => 90.5]),
+            'driver_market' => null,
+        ]))['driver'];
+
+        self::assertNotNull($panel);
+        self::assertNotNull($panel['current']);
+        self::assertSame(Money::short(120_000), $panel['current']['salary']);
+        self::assertSame(7, $panel['current']['races_left']);
+        self::assertSame('90.5', $panel['current']['overall']);
+    }
+
+    public function testAMissingMarketKeepsTheContractVerdict(): void
+    {
+        $this->seedPromotionFixture();
+        $service = $this->engineer(recruitment: $this->recruitment());
+
+        $card = $service->forCockpit(self::USER, $this->cockpit([
+            'driver_profile' => $this->driverProfile(['racesLeft' => '3']),
+            'driver_market' => null,
+        ]));
+
+        $line = array_column($card['lines'], null, 'key')['driver'] ?? null;
+        self::assertNotNull($line);
+        self::assertStringStartsWith('Extend ', $line['answer']);
+        self::assertNotNull($card['driver']);
+        self::assertSame([], $card['driver']['shortlist']);
+        self::assertContains('Group salaries unknown: salary line not applied', $card['driver']['notes']);
+        self::assertContains('Driver market unavailable: nobody was compared', $card['driver']['notes']);
+    }
+
+    /**
+     * @return array<string, array{0: string, 1: string}>
+     */
+    public static function verdictsWithoutAShortlist(): array
+    {
+        return [
+            'keep' => ['10', 'keep'],
+            'extend' => ['3', 'extend'],
+        ];
+    }
+
+    #[DataProvider('verdictsWithoutAShortlist')]
+    public function testOnlyHireAndReplaceShowAShortlist(string $racesLeft, string $verdict): void
+    {
+        $this->seedPromotionFixture();
+        $service = $this->engineer(recruitment: $this->recruitment());
+
+        // Driver 1 scores what Old Hand does (86.0): no gain, but he passes every rule.
+        $panel = $service->forCockpit(self::USER, $this->cockpit([
+            'driver_profile' => $this->driverProfile(['racesLeft' => $racesLeft]),
+            'driver_market' => ['updated_at' => null, 'rows' => [
+                $this->marketRow(1, ['CON' => 50, 'TAL' => 50, 'AGE' => 30]),
+                $this->marketRow(2, ['AGE' => 36]),
+            ]],
+            'group_staff' => ['managers' => [['driSal' => '150000']]],
+        ]))['driver'];
+
+        self::assertNotNull($panel);
+        self::assertSame($verdict, $panel['verdict']);
+        self::assertSame([], $panel['shortlist']);
+        self::assertSame([], $panel['out']);
+        self::assertSame([], $panel['notes']);
+    }
+
+    public function testAnUnknownMarketIsNotedOnEveryVerdict(): void
+    {
+        $this->seedPromotionFixture();
+        $service = $this->engineer(recruitment: $this->recruitment());
+
+        $keep = $service->forCockpit(self::USER, $this->cockpit([
+            'driver_profile' => $this->driverProfile(),
+            'driver_market' => null,
+        ]))['driver'];
+        $hire = $service->driverCard(99, [
+            'office' => $this->office(['driId' => '0', 'cash' => 3_000_000]),
+            'division' => 'Amateur',
+            'driver_market' => null,
+        ]);
+
+        self::assertNotNull($keep);
+        self::assertSame('keep', $keep['verdict']);
+        self::assertSame('Driver market unavailable: nobody was compared', $keep['reason']);
+        self::assertContains('Driver market unavailable: nobody was compared', $keep['notes']);
+        self::assertNotNull($hire);
+        self::assertContains('Driver market unavailable: nobody was compared', $hire['panel']['notes']);
+    }
+
+    /**
+     * @return array<string, array{0: string, 1: ?int}>
+     */
+    public static function capsByDivision(): array
+    {
+        return [
+            'a capped division' => ['Amateur', 110],
+            'Elite has no cap' => ['Elite', null],
+            'an unknown cap' => ['Pro', null],
+        ];
+    }
+
+    #[DataProvider('capsByDivision')]
+    public function testTheCurrentDriverCarriesTheCap(string $division, ?int $cap): void
+    {
+        $this->seedPromotionFixture();
+        $service = $this->engineer(recruitment: $this->recruitment(caps: ['Amateur' => 110, 'Elite' => 999]));
+
+        $panel = $service->forCockpit(self::USER, $this->cockpit([
+            'division' => $division,
+            'driver_profile' => $this->driverProfile(),
+            'driver_market' => null,
+        ]))['driver'];
+
+        self::assertNotNull($panel);
+        self::assertNotNull($panel['current']);
+        self::assertSame($cap, $panel['current']['cap']);
+    }
+
+    public function testTheCurrentDriversNameIsDecodedLikeTheMarkets(): void
+    {
+        $this->seedPromotionFixture();
+        $service = $this->engineer(recruitment: $this->recruitment());
+
+        $card = $service->forCockpit(self::USER, $this->cockpit([
+            'driver_profile' => $this->driverProfile(['driName' => 'Se&aacute;n O&#039;Neil']),
+            'driver_market' => null,
+        ]));
+
+        self::assertSame("Seán O'Neil", $card['driver']['current']['name'] ?? null);
+        self::assertSame("Keep Seán O'Neil", $card['driver']['answer'] ?? null);
+    }
+
+    public function testWithoutARecruitmentServiceThereIsNoDriverAdvice(): void
+    {
+        $this->seedPromotionFixture();
+
+        $card = $this->service->forCockpit(self::USER, $this->cockpit([
+            'driver_profile' => $this->driverProfile(),
+            'driver_market' => ['updated_at' => null, 'rows' => [$this->marketRow(1)]],
+        ]));
+
+        self::assertArrayHasKey('driver', $card);
+        self::assertNull($card['driver']);
+        self::assertNotContains('driver', array_column($card['lines'], 'key'));
+    }
+
+    public function testABrokenProfileHidesOnlyTheDriverLine(): void
+    {
+        $this->seedPromotionFixture();
+        $cockpit = $this->cockpit(['driver_market' => ['updated_at' => null, 'rows' => [$this->marketRow(1)]]]);
+        $baseline = array_column($this->service->forCockpit(self::USER, $cockpit)['lines'], 'key');
+        $service = $this->engineer(recruitment: $this->recruitment());
+
+        $log = tempnam(sys_get_temp_dir(), 'engineer-log');
+        $previous = ini_set('error_log', (string) $log);
+        try {
+            $card = $service->forCockpit(self::USER, ['driver_profile' => 'nonsense'] + $cockpit);
+        } finally {
+            ini_set('error_log', (string) $previous);
+        }
+        $logged = (string) file_get_contents((string) $log);
+        unlink((string) $log);
+
+        self::assertNull($card['driver']);
+        self::assertSame($baseline, array_column($card['lines'], 'key'));
+        self::assertNotContains('driver', $baseline);
+        self::assertStringContainsString('[Engineer] ', $logged);
+    }
+
+    public function testDriverCardShortlistsForAManagerWithNoDriver(): void
+    {
+        $service = $this->engineer(recruitment: $this->recruitment());
+
+        $card = $service->driverCard(99, [
+            'office' => $this->office(['driId' => '0', 'cash' => 3_000_000]),
+            'division' => 'Amateur',
+            'driver_market' => ['updated_at' => null, 'rows' => [$this->marketRow(1), $this->marketRow(2)]],
+        ]);
+
+        self::assertNotNull($card);
+        self::assertStringStartsWith('Sign ', $card['line']['answer']);
+        self::assertSame('driver', $card['line']['key']);
+        self::assertSame('hire', $card['panel']['verdict']);
+        self::assertNull($card['panel']['current']);
+        self::assertCount(2, $card['panel']['shortlist']);
+        self::assertNull($card['panel']['shortlist'][0]['gain']);
+        self::assertSame('Finances unknown', $card['panel']['shortlist'][0]['fits']);
+        self::assertContains('Finances unknown: only your cash balance was checked', $card['panel']['notes']);
+    }
+
+    public function testDriverCardHoldsOutADriverTheCashCannotSign(): void
+    {
+        $service = $this->engineer(recruitment: $this->recruitment());
+
+        $card = $service->driverCard(99, [
+            'office' => $this->office(['driId' => '', 'cash' => 600_000]),
+            'division' => 'Amateur',
+            'driver_market' => ['updated_at' => null, 'rows' => [$this->marketRow(1, ['FEE' => 200_000])]],
+        ]);
+
+        self::assertNotNull($card);
+        self::assertSame('No driver passes your rules', $card['line']['answer']);
+        self::assertSame([['label' => 'Switch cost over the plan', 'count' => 1]], $card['panel']['out']);
+    }
+
+    public function testDriverCardStandsWithoutTheArchiveTables(): void
+    {
+        $service = $this->engineer(recruitment: $this->recruitment());
+        foreach (['user_standings', 'user_weekend_state', 'user_economy_ledger', 'user_season_objective'] as $table) {
+            $this->db->exec('DROP TABLE ' . $table);
+        }
+
+        $log = tempnam(sys_get_temp_dir(), 'engineer-log');
+        $previous = ini_set('error_log', (string) $log);
+        try {
+            $card = $service->driverCard(99, [
+                'office' => $this->office(['driId' => '0', 'cash' => 600_000]),
+                'division' => 'Amateur',
+                'driver_market' => ['updated_at' => null, 'rows' => [
+                    $this->marketRow(1, ['FEE' => 200_000]),
+                    $this->marketRow(2),
+                ]],
+            ]);
+        } finally {
+            ini_set('error_log', (string) $previous);
+        }
+        $logged = (string) file_get_contents((string) $log);
+        unlink((string) $log);
+
+        self::assertStringContainsString('[Engineer] PDOException', $logged);
+        self::assertNotNull($card);
+        self::assertSame('Sign Driver 2', $card['line']['answer']);
+        self::assertSame([['label' => 'Switch cost over the plan', 'count' => 1]], $card['panel']['out']);
+    }
+
+    public function testDriverCardIsNullOnceTheSeasonIsOver(): void
+    {
+        $this->seedPromotionFixture();
+        $this->standing(17, 2, 120);
+        $service = $this->engineer(recruitment: $this->recruitment());
+
+        self::assertNull($service->driverCard(self::USER, [
+            'office' => ['seasonNb' => self::SEASON, 'raceNb' => 18, 'driId' => '0', 'cash' => 3_000_000],
+            'division' => 'Amateur',
+            'driver_market' => ['updated_at' => null, 'rows' => [$this->marketRow(1)]],
+        ]));
+    }
+
+    public function testSeasonOverGivesNoDriverLineOrPanel(): void
+    {
+        $this->seedPromotionFixture();
+        $this->standing(17, 2, 120);
+        $service = $this->engineer(recruitment: $this->recruitment());
+
+        $card = $service->forCockpit(self::USER, $this->cockpit([
+            'office' => ['seasonNb' => self::SEASON, 'raceNb' => 18],
+            'driver_profile' => $this->driverProfile(),
+            'driver_market' => ['updated_at' => null, 'rows' => [$this->marketRow(1)]],
+        ]));
+
+        self::assertTrue($card['objective']['over']);
+        self::assertNull($card['driver']);
+        self::assertNotContains('driver', array_column($card['lines'], 'key'));
+    }
+
+    /**
+     * @return array<string, array{0: array<string, mixed>}>
+     */
+    public static function missingContractFigures(): array
+    {
+        return [
+            'no races left' => [['racesLeft' => null]],
+            'no salary' => [['salary' => null]],
+            'no overall' => [['overall' => '-']],
+        ];
+    }
+
+    /** @param array<string, mixed> $profile */
+    #[DataProvider('missingContractFigures')]
+    public function testAContractFigureMissingFromOfficeAndProfileHidesOnlyTheDriverLine(array $profile): void
+    {
+        $this->seedPromotionFixture();
+        $cockpit = $this->cockpit(['driver_market' => null]);
+        $baseline = array_column($this->service->forCockpit(self::USER, $cockpit)['lines'], 'key');
+        $service = $this->engineer(recruitment: $this->recruitment());
+
+        $log = tempnam(sys_get_temp_dir(), 'engineer-log');
+        $previous = ini_set('error_log', (string) $log);
+        try {
+            $card = $service->forCockpit(
+                self::USER,
+                ['driver_profile' => $this->driverProfile($profile)] + $cockpit,
+            );
+        } finally {
+            ini_set('error_log', (string) $previous);
+        }
+        $logged = (string) file_get_contents((string) $log);
+        unlink((string) $log);
+
+        self::assertNull($card['driver']);
+        self::assertSame($baseline, array_column($card['lines'], 'key'));
+        self::assertStringContainsString('[Engineer] UnexpectedValueException', $logged);
+    }
+
+    public function testNoRacesLeftIsAFigureNotAGap(): void
+    {
+        $this->seedPromotionFixture();
+        $service = $this->engineer(recruitment: $this->recruitment());
+
+        $card = $service->forCockpit(self::USER, $this->cockpit([
+            'driver_profile' => $this->driverProfile(['racesLeft' => 0]),
+            'driver_market' => null,
+        ]));
+
+        $line = array_column($card['lines'], null, 'key')['driver'] ?? null;
+        self::assertNotNull($line);
+        self::assertStringStartsWith('Extend ', $line['answer']);
+        self::assertSame(0, $card['driver']['current']['races_left'] ?? null);
+    }
+
+    public function testAFractionAboveTheCapIsOverTheCap(): void
+    {
+        $this->seedPromotionFixture();
+        $service = $this->engineer(recruitment: $this->recruitment());
+
+        $card = $service->forCockpit(self::USER, $this->cockpit([
+            'driver_profile' => $this->driverProfile(['overall' => 110.4]),
+            'driver_market' => null,
+        ]));
+
+        $line = array_column($card['lines'], null, 'key')['driver'] ?? null;
+        self::assertNotNull($line);
+        self::assertSame('Keep Old Hand', $line['answer']);
+        self::assertStringStartsWith('Over the 110 cap', $line['reason']);
+        self::assertSame('110.4', $card['driver']['current']['overall'] ?? null);
+    }
+
+    public function testOnlyTheRacesFromTheNextOneOnCountTowardsTheFavourites(): void
+    {
+        $service = $this->engineer(recruitment: $this->recruitment());
+
+        $card = $service->driverCard(99, [
+            'office' => $this->office(['driId' => '0', 'cash' => 3_000_000]),
+            'division' => 'Amateur',
+            'season_calendar' => [
+                ['race' => 9, 'track_name' => 'Testring', 'track_id' => 5],
+                ['race' => 10, 'track_name' => 'Testring', 'track_id' => 6],
+                ['race' => 11, 'track_name' => 'Testring', 'track_id' => 7],
+            ],
+            'driver_market' => ['updated_at' => null, 'rows' => [$this->marketRow(1, ['FAV' => [5, 6, 7]])]],
+        ]);
+
+        self::assertNotNull($card);
+        self::assertSame(2, $card['panel']['shortlist'][0]['favourites']);
+    }
+
+    /**
+     * A retiring driver with 10 races on his contract leaves with the season: within EXTEND_AT (5) races of
+     * its end he is replaced, before that he is kept.
+     *
+     * @return array<string, array{0: int, 1: bool, 2: string}>
+     */
+    public static function seasonRacesLeft(): array
+    {
+        return [
+            'calendar, 5 from race 13 on' => [13, true, 'Driver market unavailable'],
+            'calendar, 6 from race 12 on' => [12, true, 'Keep Old Hand'],
+            'no calendar, 17 - 13 + 1 = 5' => [13, false, 'Driver market unavailable'],
+            'no calendar, 17 - 12 + 1 = 6' => [12, false, 'Keep Old Hand'],
+        ];
+    }
+
+    #[DataProvider('seasonRacesLeft')]
+    public function testARetiringDriverIsReplacedOnlyNearTheSeasonsEnd(int $raceNb, bool $calendar, string $answer): void
+    {
+        $this->seedPromotionFixture();
+        $service = $this->engineer(recruitment: $this->recruitment());
+        $rows = array_map(
+            static fn (int $race): array => ['race' => $race, 'track_name' => 'Testring'],
+            range(1, SeasonObjective::RACES),
+        );
+
+        $card = $service->forCockpit(self::USER, $this->cockpit([
+            'office' => ['seasonNb' => self::SEASON, 'raceNb' => $raceNb],
+            'season_calendar' => $calendar ? $rows : [],
+            'driver_profile' => $this->driverProfile(['retiring' => 1]),
+            'driver_market' => null,
+        ]));
+
+        $line = array_column($card['lines'], null, 'key')['driver'] ?? null;
+        self::assertNotNull($line);
+        self::assertSame($answer, $line['answer']);
+        if ($answer === 'Keep Old Hand') {
+            self::assertSame('Retires at the end of the season', $line['reason']);
+        }
+    }
+
+    public function testAnExtensionGproRefusesKeepsTheDriver(): void
+    {
+        $this->seedPromotionFixture();
+        $service = $this->engineer(recruitment: $this->recruitment());
+
+        $card = $service->forCockpit(self::USER, $this->cockpit([
+            'driver_profile' => $this->driverProfile(['racesLeft' => '3', 'errorMsgExtend' => 'Not now']),
+            'driver_market' => null,
+        ]));
+
+        $line = array_column($card['lines'], null, 'key')['driver'] ?? null;
+        self::assertNotNull($line);
+        self::assertSame('Keep Old Hand', $line['answer']);
+        self::assertSame('GPRO offers no extension now', $line['reason']);
+        self::assertNull($card['driver']['extension'] ?? null);
+    }
+
+    public function testADivisionWithNoBaselineStillAdvisesUnranked(): void
+    {
+        $this->seedPromotionFixture();
+        $service = $this->engineer(recruitment: $this->recruitment(baseline: false));
+
+        $card = $service->forCockpit(self::USER, $this->cockpit([
+            'driver_profile' => $this->driverProfile(),
+            'driver_market' => ['updated_at' => null, 'rows' => [$this->marketRow(1)]],
+        ]));
+
+        $line = array_column($card['lines'], null, 'key')['driver'] ?? null;
+        self::assertNotNull($line);
+        self::assertSame('Keep Old Hand', $line['answer']);
+        self::assertSame('No division baseline: drivers not ranked', $line['reason']);
+        self::assertNotNull($card['driver']);
+        self::assertNotNull($card['driver']['current']);
+        self::assertNull($card['driver']['current']['rating']);
+        self::assertSame([], $card['driver']['shortlist']);
+    }
+
+    public function testUnderStayOnlyTheRecommendedUpgradeComesOffWhatADriverMaySpend(): void
+    {
+        $this->seedPromotionFixture();
+        $this->seedWearTracks();
+        $this->service->pin(self::USER, self::SEASON, 'stay');
+        $service = $this->engineer(recruitment: $this->recruitment());
+
+        // One-off: $500k offer + $3.6M fee + half of $100k for his 10 races left = $4.6M. Taking both affordable
+        // upgrades' prices off the envelope left $4.51M; the card buys only the Engine, at its $300k net: $4.66M.
+        $card = $service->forCockpit(self::USER, $this->upgradeCockpit(30) + [
+            'driver_profile' => $this->driverProfile(),
+            'driver_market' => ['updated_at' => null, 'rows' => [$this->marketRow(1, ['FEE' => 3_600_000])]],
+        ]);
+
+        $affordable = array_filter($this->savedPlan()['upgrades'] ?? [], static fn (array $u): bool => $u['affordable']);
+        self::assertCount(2, $affordable, 'the fixture must leave two affordable upgrades');
+        self::assertSame('Upgrade Engine to L2', array_column($card['lines'], null, 'key')['upgrades']['answer']);
+        self::assertNotNull($card['driver']);
+        self::assertSame('Replace Old Hand with Driver 1', $card['driver']['answer']);
+        self::assertSame(['Driver 1'], array_column($card['driver']['shortlist'], 'name'));
+        self::assertSame('In the plan', $card['driver']['shortlist'][0]['fits']);
+        self::assertSame(Money::short(4_600_000), $card['driver']['shortlist'][0]['to_sign']);
+    }
+
+    public function testDriverCardIsNullWithoutARecruitmentService(): void
+    {
+        self::assertNull($this->service->driverCard(99, [
+            'office' => $this->office(['driId' => '0']),
+            'division' => 'Amateur',
+            'driver_market' => ['updated_at' => null, 'rows' => [$this->marketRow(1)]],
+        ]));
+    }
+
+    public function testTheStaleBranchCarriesNoDriverPanel(): void
+    {
+        $this->seedPromotionFixture();
+        $service = $this->engineer(recruitment: $this->recruitment());
+
+        $card = $service->forCockpit(self::USER, $this->cockpit([
+            'driver_profile' => $this->driverProfile(),
+            'driver_market' => ['updated_at' => null, 'rows' => [$this->marketRow(1)]],
+        ]), stale: true);
+
+        self::assertArrayHasKey('driver', $card);
+        self::assertNull($card['driver']);
+    }
+
+    /**
+     * @param bool $baseline false: the division has no ideal driver to rate against
+     * @param array<string, int> $caps
+     */
+    private function recruitment(bool $baseline = true, array $caps = ['Amateur' => 110]): RecruitmentService
+    {
+        $ideal = new class ($baseline) extends IdealPilotService {
+            public function __construct(private readonly bool $baseline)
+            {
+            }
+
+            public function getIdealPilot(string $division): array
+            {
+                if (!$this->baseline) {
+                    return ['count' => 0, 'stats' => []];
+                }
+
+                return ['count' => 5, 'stats' => [
+                    'Concentration' => 100, 'Talent' => 100, 'Aggressiveness' => 50, 'Experience' => 50,
+                    'Technical Insight' => 50, 'Stamina' => 50, 'Charisma' => 50, 'Motivation' => 50,
+                    'Weight (Kg)' => 90, 'Age' => 28,
+                ]];
+            }
+        };
+
+        return new RecruitmentService(
+            [
+                'CON' => 'Concentration', 'TAL' => 'Talent', 'AGG' => 'Aggressiveness', 'EXP' => 'Experience',
+                'TEI' => 'Technical Insight', 'STA' => 'Stamina', 'CHA' => 'Charisma', 'MOT' => 'Motivation',
+                'WEI' => 'Weight', 'AGE' => 'Age',
+            ],
+            $caps,
+            $ideal,
+        );
+    }
+
+    /**
+     * A market driver who matches the ideal exactly (rating 100), cheap and free to sign.
+     *
+     * @param array<string, mixed> $overrides
+     * @return array<string, mixed>
+     */
+    private function marketRow(int $id, array $overrides = []): array
+    {
+        return $overrides + [
+            'ID' => $id, 'NAME' => 'Driver ' . $id, 'OA' => 100, 'AGE' => 28, 'SAL' => 100_000, 'FEE' => 0,
+            'OFF' => 0, 'RET' => 0, 'FAV' => [],
+            'CON' => 100, 'TAL' => 100, 'AGG' => 50, 'EXP' => 50, 'TEI' => 50, 'STA' => 50, 'CHA' => 50,
+            'MOT' => 50, 'WEI' => 90,
+        ];
+    }
+
+    /**
+     * A GPRO driver profile rated 86.0 against the ideal: 50 short on two skills, two years older.
+     *
+     * @param array<string, mixed> $overrides
+     * @return array<string, mixed>
+     */
+    private function driverProfile(array $overrides = []): array
+    {
+        return $overrides + [
+            'driName' => 'Old Hand', 'overall' => 90, 'age' => 30, 'retiring' => 0, 'salary' => '100000',
+            'racesLeft' => '10', 'seventeenRaceRenewFee' => 200_000, 'seventeenRaceRenewSalary' => 110_000,
+            'errorMsgExtend' => '',
+            'concentration' => 50, 'talent' => 50, 'aggressiveness' => 50, 'experience' => 50,
+            'techInsight' => 50, 'stamina' => 50, 'charisma' => 50, 'motivation' => 50, 'weight' => 90,
+        ];
     }
 }
