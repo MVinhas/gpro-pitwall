@@ -28,7 +28,7 @@
                     {% endif %}
                     <div>
                         <dt class="t-label">Overall</dt>
-                        <dd class="mt-0.5 text-slate-900">{{ panel.current.overall }}</dd>
+                        <dd class="mt-0.5 text-slate-900">{{ panel.current.overall }}{% if panel.current.cap is not null %} · cap {{ panel.current.cap }}{% endif %}</dd>
                     </div>
                     <div>
                         <dt class="t-label">Age</dt>
@@ -67,14 +67,19 @@
                         <tbody class="divide-y divide-slate-100">
                             {% for row in panel.shortlist %}
                                 <tr>
-                                    <td class="dt-td font-medium">{{ row.name }}{% if loop.first %} <span class="ml-1 text-xs font-semibold text-emerald-700">Pick</span>{% endif %}</td>
+                                    <td class="dt-td whitespace-normal font-medium">
+                                        <span class="flex flex-wrap items-baseline gap-x-2">
+                                            <span>{{ row.name }}</span>
+                                            {% if loop.first %}<span class="text-xs font-semibold text-emerald-700">Pick</span>{% endif %}
+                                        </span>
+                                    </td>
                                     <td class="dt-td text-right">{{ row.rating }}{% if row.gain is not null %} ({{ row.gain }}){% endif %}</td>
                                     <td class="dt-td text-right">{{ row.salary }}</td>
                                     <td class="dt-td text-right hidden sm:table-cell">{{ row.to_sign }}</td>
                                     <td class="dt-td text-right hidden md:table-cell">{{ row.age }}</td>
                                     <td class="dt-td text-right hidden md:table-cell">{{ row.overall }}</td>
                                     <td class="dt-td text-right hidden md:table-cell">{{ row.favourites }}</td>
-                                    <td class="dt-td whitespace-normal">{{ row.fits }}</td>
+                                    <td class="dt-td min-w-24 whitespace-normal">{{ row.fits }}</td>
                                 </tr>
                             {% endfor %}
                         </tbody>

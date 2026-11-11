@@ -37,7 +37,7 @@ final class EngineerDriverTemplateTest extends TestCase
             'answer' => 'Replace Ada Lovelace',
             'figure' => 'save $1.2M',
             'current' => [
-                'name' => 'Ada Lovelace', 'rating' => '64.0', 'overall' => '171', 'age' => 31,
+                'name' => 'Ada Lovelace', 'rating' => '64.0', 'overall' => '171', 'cap' => 175, 'age' => 31,
                 'salary' => '$2.4M', 'races_left' => 3,
             ],
             'group_average' => '$2.2M',
@@ -135,7 +135,7 @@ final class EngineerDriverTemplateTest extends TestCase
     {
         $text = self::text($this->render(self::panel()));
 
-        foreach (['Ada Lovelace', 'Score 64.0', 'Overall 171', 'Age 31', 'Salary $2.4M · group average $2.2M',
+        foreach (['Ada Lovelace', 'Score 64.0', 'Overall 171 · cap 175', 'Age 31', 'Salary $2.4M · group average $2.2M',
             '3 races left'] as $part) {
             $this->assertStringContainsString($part, $text);
         }
@@ -146,7 +146,11 @@ final class EngineerDriverTemplateTest extends TestCase
         $panel = self::panel(['group_average' => null]);
         $panel['current']['rating'] = null;
         $panel['current']['races_left'] = 1;
+        $panel['current']['cap'] = null;
         $text = self::text($this->render($panel));
+
+        $this->assertStringContainsString('Overall 171 Age', $text);
+        $this->assertStringNotContainsString('cap', $text);
 
         $this->assertStringNotContainsString('Score 64.0', $text);
         $this->assertStringNotContainsString('group average', $text);
@@ -211,6 +215,18 @@ final class EngineerDriverTemplateTest extends TestCase
             );
         }
         $this->assertDoesNotMatchRegularExpression('#<th class="[^"]*hidden[^"]*">\s*(Driver|Score|Salary|Fits)#', $html);
+    }
+
+    public function testAtPhoneWidthTheDriverCellWrapsNotTheFitsCell(): void
+    {
+        $html = $this->render(self::panel());
+
+        $this->assertMatchesRegularExpression(
+            '#<td class="[^"]*\bwhitespace-normal\b[^"]*">\s*<span class="flex flex-wrap items-baseline gap-x-2">\s*'
+                . '<span>Grace Hopper</span>\s*<span class="[^"]*">\s*Pick\s*</span>\s*</span>\s*</td>#',
+            $html,
+        );
+        $this->assertSame(3, preg_match_all('#<td class="[^"]*\bmin-w-24\b[^"]*">\s*Fits your car#', $html));
     }
 
     public function testNothingIsColouredAmberOrRedAndNumbersAreNeverMono(): void

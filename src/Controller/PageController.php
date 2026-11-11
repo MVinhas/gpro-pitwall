@@ -425,6 +425,7 @@ class PageController
                         if (
                             $isAdmin && $activeMainTab === 'Race Engineer'
                             && (string) $request->get('fragment', '') === ''
+                            && !self::engineerStale($viewData, $this->syncStale)
                         ) {
                             $this->noDriverEngineer((int) $user['id'], $viewData);
                         }

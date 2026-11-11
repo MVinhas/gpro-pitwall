@@ -91,7 +91,8 @@ use App\Support\TrackName;
  *     reason: string,
  *     answer: string,
  *     figure: ?string,
- *     current: ?array{name: string, rating: ?string, overall: string, age: int, salary: string, races_left: int},
+ *     current: ?array{name: string, rating: ?string, overall: string, cap: ?int, age: int, salary: string,
+ *         races_left: int},
  *     group_average: ?string,
  *     extension: ?array{fee: string, salary: string, exact: bool},
  *     shortlist: list<array{
@@ -1080,7 +1081,7 @@ class RaceEngineerService
             return [
                 'advice' => $advice,
                 'line' => $line,
-                'panel' => self::driverPanel($advice, $line, $driver['overall'] ?? null),
+                'panel' => self::driverPanel($advice, $line, $driver['overall'] ?? null, $division),
             ];
         } catch (\Throwable $e) {
             error_log('[Engineer] ' . $e::class);
@@ -1146,13 +1147,14 @@ class RaceEngineerService
             throw new \UnexpectedValueException('Driver contract figures missing');
         }
         $name = $profile['driName'] ?? null;
+        $name = is_string($name) ? html_entity_decode($name, ENT_QUOTES | ENT_HTML5, 'UTF-8') : '';
         $retiring = $profile['retiring'] ?? null;
         $blocked = $profile['errorMsgExtend'] ?? null;
         $overallText = number_format(round((float) $overall, 1), 1, '.', '');
 
         return [
             'current' => [
-                'name' => is_string($name) ? $name : '',
+                'name' => $name,
                 'rating' => $rating,
                 // Up, so a fraction above the cap counts as over it.
                 'oa' => (int) ceil((float) $overall),
@@ -1237,21 +1239,26 @@ class RaceEngineerService
      * @param ?string $overall the current driver's overall as GPRO gives it
      * @return DriverPanel
      */
-    private static function driverPanel(array $advice, array $line, ?string $overall): array
+    private static function driverPanel(array $advice, array $line, ?string $overall, ?string $division): array
     {
         $current = $advice['current'];
         $extension = $advice['extension'];
         $average = $advice['group_average'];
+        $hiring = in_array($advice['verdict'], ['hire', 'replace'], true);
+        $shortlist = $hiring ? $advice['shortlist'] : [];
 
         $out = [];
-        foreach (self::OUT_LABELS as $key => $label) {
+        foreach ($hiring ? self::OUT_LABELS : [] as $key => $label) {
             if ($advice['out'][$key] > 0) {
                 $out[] = ['label' => $label, 'count' => $advice['out'][$key]];
             }
         }
         $notes = [];
-        if ($advice['shortlist'] !== []) {
+        if ($shortlist !== []) {
             $notes[] = self::OFFER_NOTE;
+        }
+        if (!$advice['market_known']) {
+            $notes[] = 'Driver market unavailable: nobody was compared';
         }
         if ($average === null) {
             $notes[] = 'Group salaries unknown: salary line not applied';
@@ -1269,6 +1276,8 @@ class RaceEngineerService
                 'name' => $current['name'],
                 'rating' => $current['rating'] === null ? null : number_format($current['rating'], 1),
                 'overall' => $overall ?? (string) $current['oa'],
+                // Elite has no cap; its configured value only keeps every Elite driver inside it.
+                'cap' => $division === 'Elite' ? null : $advice['cap'],
                 'age' => $current['age'],
                 'salary' => Money::short($current['salary']),
                 'races_left' => $current['races_left'],
@@ -1295,7 +1304,7 @@ class RaceEngineerService
                     'cuts' => 'Cuts ' . Money::short($pick['cut']) . ' from upgrades, training and testing',
                     'unknown' => 'Finances unknown',
                 },
-            ], $advice['shortlist']),
+            ], $shortlist),
             'out' => $out,
             'notes' => $notes,
         ];
