@@ -16,7 +16,7 @@
         "priceCurrency": "EUR"
     },
     "featureList": [
-        "Race sheet with overtake and defend risk suggestions",
+        "Race sheet laid out like GPRO's race form",
         "Race strategy planner",
         "Setup calculator",
         "Car wear analysis and calculator",
@@ -122,10 +122,10 @@
                     <p class="mt-2 text-slate-600">
                         The strategy screen puts the whole race form on one card: the setup for
                         Q1, Q2 and the race in the order GPRO asks for it, fuel per stint, tyres
-                        and stops, <strong>overtake and defend risks</strong>, and where to place
-                        your boost laps. Underneath, push signals say in plain words whether this
-                        is a weekend to attack: the car suits the track, the tyres suit the
-                        weather, your driver is above the group average.
+                        and stops, and <strong>where to place your boost laps</strong>. Underneath,
+                        push signals say in plain words whether this is a weekend to attack: the
+                        car suits the track, the tyres suit the weather, your driver is above the
+                        group average.
                     </p>
                     <p class="mt-3 t-caption">
                         Transparent heuristics built from the game's own rules — not a black box,
@@ -146,7 +146,7 @@
         <div class="-mx-4 px-4 overflow-x-auto snap-strip snap-x snap-mandatory flex gap-4 pb-3 touch-pan-x">
             {% for shot in [
                 { file: 'cockpit',  title: 'Race-weekend cockpit',  caption: 'PHA match, weather, sponsors, training, testing and per-part car wear — in race-prep order.' },
-                { file: 'strategy', title: 'Race sheet',            caption: 'Setup per session as GPRO lays it out, fuel, tyres, risks and boost laps — with the cheapest stop count.' },
+                { file: 'strategy', title: 'Race sheet',            caption: 'Setup per session as GPRO lays it out, fuel, tyres, clear track risk and boost laps — with the cheapest stop count.' },
                 { file: 'training', title: 'Training planner',      caption: 'Combine programs and see projected Overall Ability before you commit the cycle.' }
             ] %}
                 <figure class="snap-start shrink-0 w-[85%] sm:w-[28rem] card">
@@ -175,7 +175,7 @@
     <section class="bg-surface rounded-xl border border-slate-200 p-5 mb-12 text-center">
         <p class="t-label mb-2">What's inside</p>
         <p class="text-sm text-slate-600 leading-relaxed">
-            Overtake &amp; defend risks · Push signals ·
+            Race sheet · Push signals ·
             Race strategy planner ·
             Setup calculator ·
             Car wear analysis &amp; calculator ·

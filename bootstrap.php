@@ -462,8 +462,6 @@ $container['controller.strategy'] = new StrategyController(
     $container['service.pha_match'],
     $container['service.car_wear'],
     $container['twig'],
-    $container['service.risk_model'],
-    $container['service.ctr_model'],
 );
 
 $container['controller.auth'] = new AuthController(

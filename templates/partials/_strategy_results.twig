@@ -26,7 +26,7 @@
     {% set chosen = sr.chosen_compound ?? sr.best_compound %}
     {% set plan = sr.tyres[chosen] ?? best %}
     {% set race_wet = (sr.weather_inputs.Race.weather ?? 'Dry') == 'Wet' %}
-    {% set ra = sr.risk_advice is defined ? sr.risk_advice : null %}
+    {% set boost = sr.boost ?? null %}
     {# Runner-up must be the same tyre type as the winner: dry compares
        against dry only; Rain (wet) has no same-type rival, so no line. #}
     {# Even stints fill the tank to one level at the start and every stop, so
@@ -139,41 +139,22 @@
                         <dd class="text-xs text-slate-500 tabular-nums">your pick · {{ (plan.total_lost - best.total_lost)|round(1) }}s slower than {{ sr.best_compound }}</dd>
                     {% endif %}
                 </div>
-                {% if ra %}
-                    <div>
-                        <dt class="t-label">Overtake risk</dt>
-                        <dd class="text-base font-semibold text-slate-900 tabular-nums">{{ ra.overtake }}</dd>
-                    </div>
-                    <div>
-                        <dt class="t-label">Defend risk</dt>
-                        <dd class="text-base font-semibold text-slate-900 tabular-nums">{{ ra.defend }}</dd>
-                    </div>
-                    {% if ra.source is defined %}
-                        <p class="col-span-2 -mt-1 text-xs text-slate-500">
-                            {% if ra.source == 'learned' %}
-                                Overtake and defend are learned from {{ ra.replays }} races.
-                            {% else %}
-                                Overtake and defend are estimates while Pitwall learns ({{ ra.replays }} of {{ ra.needed }} race replays).
-                            {% endif %}
-                        </p>
-                    {% endif %}
-                {% endif %}
                 <div>
                     <dt class="t-label">Clear track risk</dt>
                     <dd class="text-base font-semibold text-slate-900 tabular-nums">{{ sr.inputs.risk ?? 0 }}</dd>
                 </div>
-                {% if ra and ra.boost is defined %}
+                {% if boost %}
                     {# Only the sets the fuel plan carries (Boost stints); suggestions
                        beyond that would under-fuel the car, so they stay a hint. #}
-                    {% set planned = ra.boost.planned|default([]) %}
-                    <div title="{{ ra.boost.note|default('') }}">
+                    {% set planned = boost.planned|default([]) %}
+                    <div title="{{ boost.note|default('') }}">
                         <dt class="t-label">Boost laps</dt>
                         {% if planned is not empty %}
                             <dd class="text-base font-semibold text-slate-900 tabular-nums">Laps {{ planned|join(', ') }}</dd>
                         {% else %}
                             <dd class="text-base font-semibold text-slate-900">Off</dd>
-                            {% if ra.boost.laps is not empty %}
-                                <dd class="text-xs text-slate-500 tabular-nums">suggested: laps {{ ra.boost.laps|join(', ') }}</dd>
+                            {% if boost.laps is not empty %}
+                                <dd class="text-xs text-slate-500 tabular-nums">suggested: laps {{ boost.laps|join(', ') }}</dd>
                             {% endif %}
                         {% endif %}
                     </div>
