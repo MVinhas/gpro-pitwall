@@ -6,6 +6,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.40] - 2026-11-11
+
+### Added
+- A learned risk model, not shown anywhere yet: from the corpus it learns how many passes an overtake risk makes,
+  how many a defend risk lets through, and how many driver mistakes both cause, from the driver's concentration,
+  experience and aggressiveness (and talent in the wet), the track, the weather, traffic and the grid slot. It
+  then picks the pair of risks with the best net seconds: the places won less the places lost, at the division's
+  price per place, less the seconds the mistakes cost.
+- It reads only what the corpus has seen: the search stays inside the risks used in that weather, and a wet
+  forecast is read as the share of wet laps wet races really had (about 13%, never a fully wet race). It needs 60
+  races and 40 replays before it speaks, and its weight against the current rule of thumb grows with the replays.
+- It refits whenever a race or a replay is added to the corpus, and falls back quietly if anything fails.
+
 ## [1.21.39] - 2026-11-11
 
 ### Added
