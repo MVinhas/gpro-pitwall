@@ -18,6 +18,7 @@ use App\Engineer\Money;
 use App\Engineer\PlaceGap;
 use App\Engineer\PrizeTable;
 use App\Engineer\RaceEngineer;
+use App\Engineer\RiskModel;
 use App\Engineer\SeasonBudget;
 use App\Engineer\SeasonObjective;
 use App\Engineer\SeasonStart;
@@ -173,6 +174,7 @@ class RaceEngineerService
         private readonly ?WeekendChoiceRepository $choices = null,
         private readonly WearAdvisorService $wearAdvisor = new WearAdvisorService(),
         private readonly ?RecruitmentService $recruitment = null,
+        private readonly ?RiskModelService $riskModels = null,
     ) {
     }
 
@@ -887,7 +889,15 @@ class RaceEngineerService
             testingOpen: (bool) ($c['testing_open'] ?? false),
             testingTrack: is_string($testingTrack) && $testingTrack !== '' ? $testingTrack : null,
             testingCost: RaceEngineer::TESTING_SESSION_COST,
-            risk: $this->risk($driver, $track, $weather, $stale),
+            risk: $this->risk(
+                $driver,
+                $track,
+                $weather,
+                $stale,
+                $season,
+                self::stringOrNull($c['division'] ?? null),
+                $plan['ctr'] ?? (int) ($c['ctr'] ?? 0),
+            ),
             boost: null,
             weatherStale: $stale,
             plan: $plan,
@@ -1868,13 +1878,22 @@ class RaceEngineerService
      * @param ?array<string, mixed> $weather
      * @return ?Risk
      */
-    private function risk(array $driver, ?array $track, ?array $weather, bool $stale): ?array
-    {
+    private function risk(
+        array $driver,
+        ?array $track,
+        ?array $weather,
+        bool $stale,
+        int $season,
+        ?string $division,
+        int $ctr,
+    ): ?array {
         if ($track === null || ($weather === null && !$stale)) {
             return null;
         }
 
-        return $this->riskAdvisor->suggest(
+        $laps = (int) ($track['laps'] ?? 0);
+
+        return $this->riskAdvisor->advise(
             $driver,
             [
                 'overtaking' => self::stringOrNull($track['overtaking'] ?? null),
@@ -1884,6 +1903,9 @@ class RaceEngineerService
             ],
             (bool) ($weather['race_start_wet'] ?? false),
             (float) ($weather['race_rain_avg'] ?? 0.0),
+            $laps > 0 ? ['division' => $division, 'laps' => $laps, 'ctr' => $ctr, 'grid' => null] : null,
+            $this->riskModels?->model($season) ?? RiskModel::fallback(),
+            $this->placeGap($season),
         );
     }
 

@@ -41,7 +41,10 @@ namespace App\Engineer;
  *     handling: ?int,
  *     acceleration: ?int
  * }
- * @phpstan-type Risk array{overtake: int, defend: int}
+ * @phpstan-type Risk array{
+ *     overtake: int, defend: int, source?: string, races?: int, replays?: int, needed?: int,
+ *     places?: float|null, mistakes?: float|null
+ * }
  * @phpstan-import-type BoostBlock from BoostPlanner
  * @phpstan-type BoostAdvice array{
  *     stints: int, litres: int, weighed: bool, most: bool, pace_known: bool, hard_to_pass: bool,

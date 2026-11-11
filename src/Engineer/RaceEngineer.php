@@ -36,9 +36,6 @@ final class RaceEngineer
     /** GPRO blocks testing above 90 %: a part let smoke from above it would cost the session. */
     private const int TESTING_WEAR_LIMIT = 90;
 
-    /** Tunable: how much a Stay weekend lowers the advisor's overtake risk. */
-    public const int STAY_OVERTAKE_STEP = 15;
-
     private const array BOOST_ORDINALS = [1 => 'Even one stint', 2 => 'A second stint', 3 => 'A third stint'];
     /** GPRO charges a flat $1M for every testing session. */
     public const int TESTING_SESSION_COST = 1_000_000;
@@ -1403,15 +1400,23 @@ final class RaceEngineer
             return self::line('risk', self::STALE, 'The advice reads the saved setup and weather', action: $strategy);
         }
 
-        $stay = self::objectiveIs($in, SeasonObjective::STAY);
-        $overtake = $stay ? max(0, $in->risk['overtake'] - self::STAY_OVERTAKE_STEP) : $in->risk['overtake'];
+        $risk = $in->risk;
+        $places = $risk['places'] ?? null;
+        $mistakes = $risk['mistakes'] ?? null;
+        if (($risk['source'] ?? 'estimate') === 'learned') {
+            $reason = 'Learned from ' . ($risk['replays'] ?? 0) . ' races'
+                . ($places !== null && $mistakes !== null
+                    ? sprintf(': expect about %+.1f places and %.1f mistakes', $places, $mistakes)
+                    : '');
+        } else {
+            $reason = 'Estimate while the engineer learns: ' . ($risk['replays'] ?? 0) . ' of '
+                . ($risk['needed'] ?? 0) . ' race replays';
+        }
 
         return self::line(
             'risk',
-            'Overtake ' . $overtake . ' · Defend ' . $in->risk['defend'],
-            $stay
-                ? 'Overtake lowered by ' . self::STAY_OVERTAKE_STEP . ' to cut the cost of mistakes'
-                : 'Set for this track and driver',
+            'Overtake ' . $risk['overtake'] . ' · Defend ' . $risk['defend'],
+            $reason,
             action: $strategy,
         );
     }
