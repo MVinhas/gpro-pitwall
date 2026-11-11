@@ -42,6 +42,10 @@ namespace App\Engineer;
  *     acceleration: ?int
  * }
  * @phpstan-type Risk array{overtake: int, defend: int}
+ * @phpstan-import-type BoostBlock from BoostPlanner
+ * @phpstan-type BoostAdvice array{
+ *     stints: int, litres: int, weighed: bool, most: bool, pace_known: bool, hard_to_pass: bool,
+ *     places: float, gain: int, cost: int, blocked: ?BoostBlock}
  */
 final readonly class EngineerInputs
 {
@@ -52,6 +56,7 @@ final readonly class EngineerInputs
      * @param ?array{name: string, score: float, cost: int, gains: array<string, float>} $trainingPick
      * @param ?TestingTarget $testingTarget
      * @param ?Risk $risk
+     * @param ?BoostAdvice $boost the boost stints advised for this race and why; null hides the line
      * @param ?Plan $plan
      * @param ?StaffStanding $staffStanding
      * @param ?CarStanding $carStanding
@@ -87,7 +92,7 @@ final readonly class EngineerInputs
         public ?string $testingTrack,
         public int $testingCost,
         public ?array $risk,
-        public ?int $boostLitres,
+        public ?array $boost,
         public bool $weatherStale,
         public ?array $plan,
         public ?array $staffStanding = null,
@@ -156,6 +161,14 @@ final readonly class EngineerInputs
     public function withSmoke(array $smoke): self
     {
         return clone($this, ['smoke' => $smoke]);
+    }
+
+    /**
+     * @param ?BoostAdvice $advice
+     */
+    public function withBoost(?array $advice): self
+    {
+        return clone($this, ['boost' => $advice]);
     }
 
     /**

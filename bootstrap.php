@@ -535,6 +535,10 @@ $container['service.race_engineer'] = new \App\Service\RaceEngineerService(
     $ctrCeiling,
     $container['service.risk_advisor'],
     $container['service.boost_fuel'],
+    new \App\Engineer\BoostPlanner(
+        $container['service.car_wear'],
+        new \App\Engineer\SeasonBudget($container['service.car_wear']),
+    ),
     $container['service.fuel_model'],
     new \App\Engineer\UpgradeRanker(
         new \App\Engineer\SeasonBudget($container['service.car_wear']),

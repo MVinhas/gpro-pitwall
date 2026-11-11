@@ -21,6 +21,7 @@ use App\Controller\SeasonController;
 use App\Controller\StrategyController;
 use App\Controller\TestingController;
 use App\Database\DatabaseSeeder;
+use App\Engineer\BoostPlanner;
 use App\Engineer\CtrCeiling;
 use App\Engineer\CtrPlanner;
 use App\Engineer\SeasonBudget;
@@ -613,6 +614,7 @@ final class ManualRefreshTest extends TestCase
                 $ctrCeiling,
                 $risk,
                 new BoostFuelService(),
+                new BoostPlanner($carWear, new SeasonBudget($carWear)),
                 $fuel,
                 new UpgradeRanker(new SeasonBudget($carWear), []),
                 new PartSwapAdvisorService(
