@@ -16,7 +16,17 @@ class DatabaseSeeder
      * calls migrate() on every request; this version lets a warm database skip
      * the entire DDL + scan + legacy-encryption pass.
      */
-    private const int SCHEMA_VERSION = 21;
+    private const int SCHEMA_VERSION = 22;
+
+    /** Race-time facts added to both race tables (see addReplayColumns()). */
+    private const array REPLAY_COLUMNS = [
+        'replay_laps' => 'INTEGER',
+        'race_mistakes' => 'INTEGER',
+        'race_mistake_ms' => 'INTEGER',
+        'traffic_ahead_laps' => 'INTEGER',
+        'traffic_behind_laps' => 'INTEGER',
+        'avg_race_pos' => 'REAL',
+    ];
 
     /**
      * @param array<string, string> $statsSchema
@@ -493,6 +503,7 @@ class DatabaseSeeder
         if (!in_array('driver_age', array_column($cols, 'name'), true)) {
             $this->db->exec('ALTER TABLE race_telemetry ADD COLUMN driver_age INTEGER');
         }
+        $this->addReplayColumns('race_telemetry');
 
         // The analytics screen always segments by level first.
         $this->db->exec(
@@ -657,6 +668,27 @@ class DatabaseSeeder
             "CREATE INDEX IF NOT EXISTS idx_user_race_history_track
              ON user_race_history (user_id, track_id)"
         );
+        $this->addReplayColumns('user_race_history');
+    }
+
+    /**
+     * Race-time facts from RaceReplay, which RaceAnalysis lacks. NULL
+     * replay_laps means the replay has not been read yet; 0 means it was read
+     * and gave nothing usable, so it is not asked for again.
+     */
+    private function addReplayColumns(string $table): void
+    {
+        $stmt = $this->db->query("PRAGMA table_info({$table})");
+        $have = $stmt === false ? [] : array_column($stmt->fetchAll(\PDO::FETCH_ASSOC), 'name');
+        if ($stmt !== false) {
+            $stmt->closeCursor();
+        }
+
+        foreach (self::REPLAY_COLUMNS as $column => $type) {
+            if (!in_array($column, $have, true)) {
+                $this->db->exec("ALTER TABLE {$table} ADD COLUMN {$column} {$type}");
+            }
+        }
     }
 
     /**

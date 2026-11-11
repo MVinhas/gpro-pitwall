@@ -6,6 +6,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.39] - 2026-11-11
+
+### Added
+- Re-sync now also reads each stored race's replay, for the race-time facts the analysis lacks: how many
+  driver mistakes the race had, the seconds they cost, and how many laps ran within a second of the car ahead
+  or behind. Only those numbers are kept, on the manager's history and the anonymous corpus; the replay itself
+  names every manager in the group and is never archived. Nothing changes on screen yet: this is the data the
+  learned overtake and defend risks will be fitted from.
+- A replay read costs one API call, shares the five-per-window backfill allowance, runs only from 60 calls
+  remaining, and is asked for only while the race's analysis is still in the archive. An answer without access
+  is recorded once and not asked for again; a failed call is retried after an hour.
+
+### Changed
+- Schema version 22: six nullable replay columns on `race_telemetry` and `user_race_history`, added by a
+  guarded migration that leaves existing rows untouched.
+
 ## [1.21.38] - 2026-11-11
 
 ### Changed

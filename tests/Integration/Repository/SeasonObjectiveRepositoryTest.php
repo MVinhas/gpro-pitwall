@@ -118,6 +118,6 @@ final class SeasonObjectiveRepositoryTest extends TestCase
                 "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'user_season_objective'"
             )->fetchColumn(),
         );
-        $this->assertSame(21, (int) $this->db->query('PRAGMA user_version')->fetchColumn());
+        $this->assertSame(22, (int) $this->db->query('PRAGMA user_version')->fetchColumn());
     }
 }

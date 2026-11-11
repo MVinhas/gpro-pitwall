@@ -313,4 +313,60 @@ final class RaceHistoryRepositoryTest extends TestCase
             $this->repo->qualifyingEnergyRows()
         );
     }
+
+    public function testRacesAwaitingReplayListsNewestFirstAndOnlyThisManagersUnfilledRaces(): void
+    {
+        $this->repo->upsert($this->row(['season' => 107, 'race' => 12]));
+        $this->repo->upsert($this->row(['season' => 107, 'race' => 13]));
+        $this->repo->upsert($this->row(['season' => 108, 'race' => 1]));
+        $this->repo->upsert($this->row(['user_id' => 2, 'season' => 108, 'race' => 2]));
+        $this->repo->setReplay(1, 107, 13, [
+            'replay_laps' => 66, 'race_mistakes' => 1, 'race_mistake_ms' => 4100,
+            'traffic_ahead_laps' => 20, 'traffic_behind_laps' => 11, 'avg_race_pos' => 4.2,
+        ]);
+
+        $this->assertSame(
+            [['season' => 108, 'race' => 1], ['season' => 107, 'race' => 12]],
+            $this->repo->racesAwaitingReplay(1, 10),
+        );
+        $this->assertSame([['season' => 108, 'race' => 1]], $this->repo->racesAwaitingReplay(1, 1));
+    }
+
+    public function testSetReplayStoresTheFactsAndNullMarksTheRaceAsCheckedWithNothingFound(): void
+    {
+        $this->repo->upsert($this->row());
+
+        $this->repo->setReplay(1, 107, 13, [
+            'replay_laps' => 66, 'race_mistakes' => 2, 'race_mistake_ms' => 9000,
+            'traffic_ahead_laps' => null, 'traffic_behind_laps' => null, 'avg_race_pos' => 3.5,
+        ]);
+        $row = $this->db->query('SELECT * FROM user_race_history')->fetch(PDO::FETCH_ASSOC);
+        $this->assertSame(66, (int) $row['replay_laps']);
+        $this->assertSame(2, (int) $row['race_mistakes']);
+        $this->assertSame(9000, (int) $row['race_mistake_ms']);
+        $this->assertNull($row['traffic_ahead_laps']);
+        $this->assertSame(3.5, (float) $row['avg_race_pos']);
+
+        $this->repo->setReplay(1, 107, 13, null);
+        $row = $this->db->query('SELECT * FROM user_race_history')->fetch(PDO::FETCH_ASSOC);
+        $this->assertSame(0, (int) $row['replay_laps']);
+        $this->assertNull($row['race_mistakes']);
+        $this->assertSame([], $this->repo->racesAwaitingReplay(1, 10));
+    }
+
+    public function testReplayFactsSurviveAReprojectionOfTheRace(): void
+    {
+        $this->repo->upsert($this->row());
+        $this->repo->setReplay(1, 107, 13, [
+            'replay_laps' => 66, 'race_mistakes' => 2, 'race_mistake_ms' => 9000,
+            'traffic_ahead_laps' => 5, 'traffic_behind_laps' => 6, 'avg_race_pos' => 3.5,
+        ]);
+
+        $this->repo->upsert($this->row(['final_pos' => 1]));
+
+        $row = $this->db->query('SELECT * FROM user_race_history')->fetch(PDO::FETCH_ASSOC);
+        $this->assertSame(1, (int) $row['final_pos']);
+        $this->assertSame(66, (int) $row['replay_laps']);
+        $this->assertSame(2, (int) $row['race_mistakes']);
+    }
 }

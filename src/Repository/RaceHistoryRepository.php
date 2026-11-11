@@ -12,6 +12,8 @@ use PDO;
  * Every read here is scoped to a user_id the caller supplies, and there is no
  * method that returns another manager's rows. Cross-manager questions belong to
  * RaceTelemetryRepository, which answers them from the anonymous corpus.
+ *
+ * @phpstan-import-type ReplayFacts from \App\Telemetry\RaceReplayMapper
  */
 class RaceHistoryRepository
 {
@@ -173,6 +175,57 @@ class RaceHistoryRepository
         }
 
         return $races;
+    }
+
+    /**
+     * Races whose replay has not been read yet, newest first. A race that was
+     * read and gave nothing is marked (replay_laps = 0) and is not listed.
+     *
+     * @return list<array{season: int, race: int}>
+     */
+    public function racesAwaitingReplay(int $userId, int $limit): array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT season, race FROM user_race_history
+             WHERE user_id = :u AND replay_laps IS NULL
+             ORDER BY season DESC, race DESC LIMIT :n'
+        );
+        $stmt->bindValue('u', $userId, PDO::PARAM_INT);
+        $stmt->bindValue('n', max(0, $limit), PDO::PARAM_INT);
+        $stmt->execute();
+
+        $races = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $races[] = ['season' => (int) $row['season'], 'race' => (int) $row['race']];
+        }
+
+        return $races;
+    }
+
+    /**
+     * Files what the replay said about one stored race. Null means the replay
+     * was read but gave nothing usable: the race is marked so it is not asked for again.
+     *
+     * @param ReplayFacts|null $facts
+     */
+    public function setReplay(int $userId, int $season, int $race, ?array $facts): void
+    {
+        $stmt = $this->pdo->prepare(
+            'UPDATE user_race_history SET
+                replay_laps = :replay_laps, race_mistakes = :race_mistakes,
+                race_mistake_ms = :race_mistake_ms, traffic_ahead_laps = :traffic_ahead_laps,
+                traffic_behind_laps = :traffic_behind_laps, avg_race_pos = :avg_race_pos
+             WHERE user_id = :u AND season = :s AND race = :r'
+        );
+        $stmt->execute([
+            'replay_laps' => $facts['replay_laps'] ?? 0,
+            'race_mistakes' => $facts['race_mistakes'] ?? null,
+            'race_mistake_ms' => $facts['race_mistake_ms'] ?? null,
+            'traffic_ahead_laps' => $facts['traffic_ahead_laps'] ?? null,
+            'traffic_behind_laps' => $facts['traffic_behind_laps'] ?? null,
+            'avg_race_pos' => $facts['avg_race_pos'] ?? null,
+            'u' => $userId, 's' => $season, 'r' => $race,
+        ]);
     }
 
     /** How many races this manager has archived. */

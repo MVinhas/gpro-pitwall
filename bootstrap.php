@@ -370,6 +370,13 @@ $container['service.gpro_sync'] = new GproSyncService(
     $container['sync.planner'],
     Env::int('SYNC_SAFETY_MARGIN', 20),
 );
+$container['service.race_replay'] = new \App\Service\RaceReplayService(
+    $container['repo.race_history'],
+    $container['repo.race_telemetry'],
+    new \App\Telemetry\RaceTelemetryMapper(),
+    new \App\Telemetry\RaceReplayMapper(),
+    $container['archive.analyses'],
+);
 $container['service.harvest'] = new \App\Service\HarvestService(
     $container['service.api_client'],
     $container['service.cache'],
@@ -383,6 +390,7 @@ $container['service.harvest'] = new \App\Service\HarvestService(
     $container['service.race_telemetry'],
     $container['service.baseline_autofill'],
     $container['repo.race_history'],
+    $container['service.race_replay'],
 );
 $container['service.auth_service']  = new \App\Service\AuthService(
     $container['service.user_repo'],

@@ -50,6 +50,7 @@ class HarvestService
         private readonly RaceTelemetryService $telemetry,
         private readonly BaselineAutoFillService $baselineAutoFill,
         private readonly RaceHistoryRepository $history,
+        private readonly RaceReplayService $replays,
     ) {
     }
 
@@ -195,6 +196,7 @@ class HarvestService
             SyncPlanner::MODE_HARVEST,
             $this->backfillPending($userId, $scope),
             $this->apiClient->backfillCount(),
+            $this->replayPending($userId),
         );
 
         return array_values(array_filter(
@@ -279,10 +281,98 @@ class HarvestService
     }
 
     /**
+     * Stored races whose replay has not been read, newest first, as 'season,race'.
+     * A race counts only while its analysis is still in the archive: the
+     * replay is asked for in the analysis's group and matched against its laps,
+     * so without it the call would buy nothing. Only the planner's per-window
+     * allowance is ever planned, so the scan stops once it has that many.
+     *
+     * @return list<string>
+     */
+    private function replayPending(int $userId): array
+    {
+        try {
+            $pending = [];
+            foreach ($this->history->racesAwaitingReplay($userId, SyncPlanner::BACKFILL_MAX_PER_WINDOW * 3) as $race) {
+                $key = $race['season'] . ',' . $race['race'];
+                if ($this->apiClient->hasHarvestFailed(Endpoint::REPLAY, 'SR=' . $key)) {
+                    continue;
+                }
+                if ($this->replays->groupFor($userId, $race['season'], $race['race']) === null) {
+                    continue;
+                }
+                $pending[] = $key;
+                if (count($pending) >= SyncPlanner::BACKFILL_MAX_PER_WINDOW) {
+                    break;
+                }
+            }
+
+            return $pending;
+        } catch (Throwable $e) {
+            error_log('[Harvest] user ' . $userId . ': replay read failed: ' . $e::class);
+
+            return [];
+        }
+    }
+
+    /**
+     * Reads one race's replay for its derived facts. It draws on the same
+     * per-window allowance as a backfilled analysis. A failed call is retried
+     * later; an answer that cannot be used is filed as read and never repeated.
+     *
+     * @return bool whether race-time facts were stored
+     */
+    private function fetchReplay(int $userId, string $params): bool
+    {
+        if (preg_match('/^SR=(\d+),(\d+)$/', $params, $m) !== 1) {
+            return false;
+        }
+        [$season, $race] = [(int) $m[1], (int) $m[2]];
+
+        try {
+            $group = $this->replays->groupFor($userId, $season, $race);
+            $payload = $this->apiClient->withFetching(
+                fn (): array => $this->apiClient->getRaceReplayFor($season, $race, $group),
+            );
+        } catch (Throwable $e) {
+            error_log('[Harvest] user ' . $userId . ': ' . Endpoint::REPLAY . ' failed: ' . $e::class);
+            $this->apiClient->markHarvestFailed(Endpoint::REPLAY, $params, self::FAILED_RETRY_SECONDS);
+
+            return false;
+        } finally {
+            $this->apiClient->addBackfill();
+        }
+
+        if ($payload === [] || ($payload['loggedOut'] ?? null) !== null) {
+            error_log(
+                '[Harvest] user ' . $userId . ': ' . Endpoint::REPLAY . ' failed: ' . UnexpectedValueException::class,
+            );
+            $this->apiClient->markHarvestFailed(Endpoint::REPLAY, $params, self::FAILED_RETRY_SECONDS);
+
+            return false;
+        }
+
+        try {
+            return $this->replays->ingest($userId, $season, $race, $payload);
+        } catch (Throwable $e) {
+            error_log('[Harvest] user ' . $userId . ': replay filing failed: ' . $e::class);
+            $this->apiClient->markHarvestFailed(Endpoint::REPLAY, $params, self::FAILED_RETRY_SECONDS);
+
+            return false;
+        }
+    }
+
+    /**
      * @return bool whether a race analysis was newly stored as telemetry
      */
     private function fetchOne(int $userId, string $endpoint, string $params): bool
     {
+        if ($endpoint === Endpoint::REPLAY) {
+            $this->fetchReplay($userId, $params);
+
+            return false;
+        }
+
         $backfill = $endpoint === Endpoint::ANALYSIS && $params !== '';
         try {
             $payload = $this->apiClient->withFetching(fn (): array => $this->fetcher->fetch($endpoint, $params));

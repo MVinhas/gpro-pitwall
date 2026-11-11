@@ -356,4 +356,55 @@ final class RaceTelemetryRepositoryTest extends TestCase
 
         $this->assertSame([], $this->repo->lapGapsByDivision());
     }
+
+    public function testSetReplayFillsTheRowTheNaturalKeyNamesAndNothingElse(): void
+    {
+        $this->repo->insertIfNew($this->row());
+        $this->repo->insertIfNew($this->row(['season' => 99, 'race' => 9, 'final_pos' => 7]));
+        $facts = [
+            'replay_laps' => 50, 'race_mistakes' => 3, 'race_mistake_ms' => 12000,
+            'traffic_ahead_laps' => 18, 'traffic_behind_laps' => 9, 'avg_race_pos' => 5.25,
+        ];
+
+        $this->assertTrue($this->repo->setReplay($this->row(), $facts));
+
+        $rows = $this->db->query('SELECT race, replay_laps, race_mistakes, traffic_ahead_laps FROM race_telemetry ORDER BY race')
+            ->fetchAll(PDO::FETCH_ASSOC);
+        $this->assertSame(50, (int) $rows[0]['replay_laps']);
+        $this->assertSame(3, (int) $rows[0]['race_mistakes']);
+        $this->assertSame(18, (int) $rows[0]['traffic_ahead_laps']);
+        $this->assertNull($rows[1]['replay_laps']);
+    }
+
+    public function testSetReplayMatchesARowWhoseQualifyingTimesAreNull(): void
+    {
+        $key = ['q1_time_ms' => null, 'q2_time_ms' => null];
+        $this->repo->insertIfNew($this->row($key));
+
+        $this->assertTrue($this->repo->setReplay($this->row($key), [
+            'replay_laps' => 40, 'race_mistakes' => 0, 'race_mistake_ms' => 0,
+            'traffic_ahead_laps' => 1, 'traffic_behind_laps' => 2, 'avg_race_pos' => 9.0,
+        ]));
+    }
+
+    public function testSetReplayReportsFalseWhenNoRowMatchesAndNullMarksCheckedWithNothing(): void
+    {
+        $this->assertFalse($this->repo->setReplay($this->row(), null));
+
+        $this->repo->insertIfNew($this->row());
+        $this->assertTrue($this->repo->setReplay($this->row(), null));
+
+        $row = $this->db->query('SELECT replay_laps, race_mistakes FROM race_telemetry')->fetch(PDO::FETCH_ASSOC);
+        $this->assertSame(0, (int) $row['replay_laps']);
+        $this->assertNull($row['race_mistakes']);
+    }
+
+    public function testReplayColumnsStayAnonymousAndAreNullUntilFilled(): void
+    {
+        $this->repo->insertIfNew($this->row());
+
+        $row = $this->db->query('SELECT replay_laps, race_mistakes, race_mistake_ms, traffic_ahead_laps, traffic_behind_laps, avg_race_pos FROM race_telemetry')
+            ->fetch(PDO::FETCH_ASSOC);
+        $this->assertSame([null, null, null, null, null, null], array_values($row));
+    }
 }
