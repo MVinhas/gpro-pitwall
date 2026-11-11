@@ -73,6 +73,10 @@ final readonly class DriverHiringAdvisor
         }
         $extension = self::extension($current, $cap, $money, $cash);
         [$verdict, $reason] = self::verdict($current, $cap, $extension, $shortlist, $seasonRacesLeft);
+        // A driver who could stay is only worth swapping for a better one; one who is leaving needs anyone.
+        if ($reason === 'better') {
+            $shortlist = array_values(array_filter($shortlist, static fn (array $pick): bool => $pick['gain'] > 0));
+        }
 
         $topOut = null;
         foreach ($out as $key => $count) {
@@ -195,7 +199,7 @@ final readonly class DriverHiringAdvisor
         while ($start < $count) {
             $top = $open[$start]['rating'];
             $end = $start + 1;
-            while ($end < $count && $top - $open[$end]['rating'] <= self::TIE_BAND) {
+            while ($end < $count && round($top - $open[$end]['rating'], 1) <= self::TIE_BAND) {
                 $end++;
             }
             $bucket = array_slice($open, $start, $end - $start);
@@ -303,7 +307,8 @@ final readonly class DriverHiringAdvisor
         $racesLeft = $current['races_left'];
         $overCap = $cap !== null && $current['oa'] > $cap;
         $ending = $racesLeft <= self::EXTEND_AT;
-        $gain = $shortlist[0]['gain'] ?? null;
+        $gains = array_filter(array_column($shortlist, 'gain'), static fn (?float $g): bool => $g !== null);
+        $gain = $gains === [] ? null : max($gains);
 
         if ($overCap && $ending) {
             return ['replace', 'leaving_cap'];

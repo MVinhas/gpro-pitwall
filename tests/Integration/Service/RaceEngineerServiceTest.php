@@ -3331,11 +3331,35 @@ final class RaceEngineerServiceTest extends TestCase
         $line = array_column($card['lines'], null, 'key')['driver'] ?? null;
         self::assertNotNull($line);
         self::assertSame('Keep Old Hand', $line['answer']);
-        self::assertStringEndsWith('; no division baseline, drivers not ranked', $line['reason']);
+        self::assertSame('No division baseline: drivers not ranked', $line['reason']);
         self::assertNotNull($card['driver']);
         self::assertNotNull($card['driver']['current']);
         self::assertNull($card['driver']['current']['rating']);
         self::assertSame([], $card['driver']['shortlist']);
+    }
+
+    public function testUnderStayOnlyTheRecommendedUpgradeComesOffWhatADriverMaySpend(): void
+    {
+        $this->seedPromotionFixture();
+        $this->seedWearTracks();
+        $this->service->pin(self::USER, self::SEASON, 'stay');
+        $service = $this->engineer(recruitment: $this->recruitment());
+
+        // One-off: $500k offer + $3.6M fee + half of $100k for his 10 races left = $4.6M. Taking both affordable
+        // upgrades' prices off the envelope left $4.51M; the card buys only the Engine, at its $300k net: $4.66M.
+        $card = $service->forCockpit(self::USER, $this->upgradeCockpit(30) + [
+            'driver_profile' => $this->driverProfile(),
+            'driver_market' => ['updated_at' => null, 'rows' => [$this->marketRow(1, ['FEE' => 3_600_000])]],
+        ]);
+
+        $affordable = array_filter($this->savedPlan()['upgrades'] ?? [], static fn (array $u): bool => $u['affordable']);
+        self::assertCount(2, $affordable, 'the fixture must leave two affordable upgrades');
+        self::assertSame('Upgrade Engine to L2', array_column($card['lines'], null, 'key')['upgrades']['answer']);
+        self::assertNotNull($card['driver']);
+        self::assertSame('Replace Old Hand with Driver 1', $card['driver']['answer']);
+        self::assertSame(['Driver 1'], array_column($card['driver']['shortlist'], 'name'));
+        self::assertSame('In the plan', $card['driver']['shortlist'][0]['fits']);
+        self::assertSame(Money::short(4_600_000), $card['driver']['shortlist'][0]['to_sign']);
     }
 
     public function testDriverCardIsNullWithoutARecruitmentService(): void

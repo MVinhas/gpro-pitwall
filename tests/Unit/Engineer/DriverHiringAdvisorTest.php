@@ -79,6 +79,17 @@ final class DriverHiringAdvisorTest extends TestCase
         self::assertSame([4, 2, 5, 1, 3], array_column(DriverHiringAdvisor::rank($c), 'id'));
     }
 
+    public function testTheTieBandIsReadOnRatingsToOneDecimal(): void
+    {
+        // 64.4 - 63.4 is 1.0000000000000071 in floats: still a tie, so the favourite tracks decide.
+        $c = DriverHiringAdvisor::candidates([
+            $this->row(['ID' => 1, 'rating' => 64.4]),
+            $this->row(['ID' => 2, 'rating' => 63.4, 'FAV' => [5]]),
+        ], [5]);
+
+        self::assertSame([2, 1], array_column(DriverHiringAdvisor::rank($c), 'id'));
+    }
+
     /** @return array{rows: list<array{balance: int}>, cushion: int, target: int, envelope: int, spare: int} */
     private function money(int $balance, int $envelope, int $spare, int $races = 10): array
     {
@@ -234,13 +245,68 @@ final class DriverHiringAdvisorTest extends TestCase
         self::assertCount(1, $close['shortlist']);
     }
 
+    public function testTheBestGainInTheShortlistDecidesNotThePicks(): void
+    {
+        $a = $this->advice($this->current(), [
+            $this->row(['ID' => 1, 'rating' => 80.0]),
+            $this->row(['ID' => 2, 'rating' => 79.2, 'FAV' => [5]]),
+        ], ['calendar' => [5]]);
+
+        self::assertSame(['replace', 'better'], [$a['verdict'], $a['reason']]);
+        self::assertSame([2, 1], array_column($a['shortlist'], 'id'));
+        self::assertSame(4.2, $a['shortlist'][0]['gain']);
+    }
+
+    /** @return list<array<string, mixed>> rated +6.0, 0.0 and -4.4 against current() */
+    private function betterSameAndWorse(): array
+    {
+        return [
+            $this->row(['ID' => 1, 'rating' => 81.0]),
+            $this->row(['ID' => 2, 'rating' => 75.0]),
+            $this->row(['ID' => 3, 'rating' => 70.6]),
+        ];
+    }
+
+    public function testABetterDriverVerdictListsOnlyBetterDrivers(): void
+    {
+        $a = $this->advice($this->current(), $this->betterSameAndWorse());
+
+        self::assertSame(['replace', 'better'], [$a['verdict'], $a['reason']]);
+        self::assertSame([1], array_column($a['shortlist'], 'id'));
+    }
+
+    public function testALeavingDriverGetsTheBestThreeBetterOrNot(): void
+    {
+        $a = $this->advice($this->current(['oa' => 111, 'races_left' => 5]), $this->betterSameAndWorse());
+
+        self::assertSame(['replace', 'leaving_cap'], [$a['verdict'], $a['reason']]);
+        self::assertSame([1, 2, 3], array_column($a['shortlist'], 'id'));
+    }
+
+    public function testABetterDriverWinsOverAnExtension(): void
+    {
+        $a = $this->advice($this->current(['races_left' => 4]), [$this->row(['rating' => 80.0])]);
+
+        self::assertSame(['replace', 'better'], [$a['verdict'], $a['reason']]);
+        self::assertFalse($a['urgent']);
+    }
+
+    public function testLeavingOverTheCapWinsOverABetterDriver(): void
+    {
+        $a = $this->advice($this->current(['oa' => 111, 'races_left' => 5]), [$this->row(['rating' => 90.0])]);
+
+        self::assertSame(['replace', 'leaving_cap'], [$a['verdict'], $a['reason']]);
+    }
+
     public function testExtendFromFiveRacesUrgentFromTwo(): void
     {
         $five = $this->advice($this->current(['races_left' => 5]), []);
+        $three = $this->advice($this->current(['races_left' => 3]), []);
         $two = $this->advice($this->current(['races_left' => 2]), []);
         $six = $this->advice($this->current(['races_left' => 6]), []);
 
         self::assertSame(['extend', false], [$five['verdict'], $five['urgent']]);
+        self::assertSame(['extend', false], [$three['verdict'], $three['urgent']]);
         self::assertSame(['extend', true], [$two['verdict'], $two['urgent']]);
         self::assertSame(['keep', false], [$six['verdict'], $six['urgent']]);
     }

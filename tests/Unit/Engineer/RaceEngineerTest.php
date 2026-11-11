@@ -2829,6 +2829,15 @@ final class RaceEngineerTest extends TestCase
         );
     }
 
+    public function testAnUrgentExtensionAtNoRacesLeftSaysTheContractHasRunOut(): void
+    {
+        $this->assertSame(
+            'Last chance: his contract has run out',
+            RaceEngineer::driverLine($this->advice(['verdict' => 'extend', 'reason' => 'contract', 'urgent' => true,
+                'extension' => $this->extension()] + $this->racesLeft(0)))['reason'],
+        );
+    }
+
     public function testAnExtensionThatDoesNotFitTheBudgetIsRed(): void
     {
         $this->assertDriverLine(
@@ -2856,7 +2865,7 @@ final class RaceEngineerTest extends TestCase
     {
         yield 'leaving_cap' => ['leaving_cap', 'Over the 160 cap: he leaves in 3 races'];
         yield 'leaving_retiring' => ['leaving_retiring', 'He retires at the end of the season'];
-        yield 'better' => ['better', "+7.4 against your division's ideal driver"];
+        yield 'better' => ['better', 'Scores 7.4 points higher than Ana Silva'];
         yield 'extension_over_budget' => ['extension_over_budget', 'His extension does not fit the plan'];
     }
 
@@ -2871,6 +2880,15 @@ final class RaceEngineerTest extends TestCase
             $text,
             'amber',
         );
+    }
+
+    public function testABetterPickUnderTheSwitchGainStillPrintsItsOwnGain(): void
+    {
+        $line = RaceEngineer::driverLine($this->advice(['verdict' => 'replace', 'reason' => 'better',
+            'shortlist' => [$this->candidate(['gain' => 4.2]), $this->candidate(['name' => 'Second', 'gain' => 5.0])]]));
+
+        $this->assertSame('Replace Ana Silva with Bo Costa', $line['answer']);
+        $this->assertSame('Scores 4.2 points higher than Ana Silva', $line['reason']);
     }
 
     public function testLeavingTheCapWithOneRaceLeftIsSingular(): void
@@ -2968,11 +2986,57 @@ final class RaceEngineerTest extends TestCase
 
     public function testNoBaselineSaysTheDriversAreNotRanked(): void
     {
-        $line = RaceEngineer::driverLine($this->advice(['ranked' => false]));
+        $this->assertDriverLine(
+            $this->advice(['ranked' => false]),
+            'Keep Ana Silva',
+            '6 races left',
+            'No division baseline: drivers not ranked',
+            'ink',
+        );
+    }
 
+    public function testAnUnknownMarketKeepSaysNobodyWasCompared(): void
+    {
+        $this->assertDriverLine(
+            $this->advice(['market_known' => false, 'ranked' => false]),
+            'Keep Ana Silva',
+            '6 races left',
+            'Driver market unavailable: nobody was compared',
+            'ink',
+        );
+    }
+
+    public function testASpecificKeepReasonKeepsItsSuffix(): void
+    {
         $this->assertSame(
-            'No clearly better driver you can afford; no division baseline, drivers not ranked',
-            $line['reason'],
+            'Over the 160 cap: cannot be extended, contract ends in 4 races; no division baseline, drivers not ranked',
+            RaceEngineer::driverLine($this->advice(['reason' => 'over_cap', 'over_cap' => true, 'ranked' => false]
+                + $this->racesLeft(4)))['reason'],
+        );
+        $this->assertSame(
+            'GPRO offers no extension now',
+            RaceEngineer::driverLine($this->advice(['reason' => 'no_extension', 'market_known' => false,
+                'ranked' => false]))['reason'],
+        );
+    }
+
+    public function testHireOrReplaceWithoutARankingSaysSoInsteadOfBlamingTheMarket(): void
+    {
+        $this->assertDriverLine(
+            $this->advice(['verdict' => 'hire', 'reason' => 'no_driver', 'current' => null, 'ranked' => false,
+                'finances_known' => false]),
+            'Sign a driver',
+            null,
+            'No division baseline: drivers not ranked',
+            'red',
+        );
+        $this->assertDriverLine(
+            $this->advice(['verdict' => 'replace', 'reason' => 'leaving_cap', 'over_cap' => true, 'ranked' => false]
+                + $this->racesLeft(3)),
+            'Replace Ana Silva',
+            null,
+            'No division baseline: drivers not ranked',
+            'amber',
         );
     }
 
@@ -2986,7 +3050,7 @@ final class RaceEngineerTest extends TestCase
             'finances_known' => false, 'extension' => $this->extension()] + $this->racesLeft(4)));
         $keep = RaceEngineer::driverLine($this->advice(['finances_known' => false]));
 
-        $this->assertSame("+7.4 against your division's ideal driver; finances unknown", $replace['reason']);
+        $this->assertSame('Scores 7.4 points higher than Ana Silva; finances unknown', $replace['reason']);
         $this->assertSame('No driver under contract; finances unknown', $hire['reason']);
         $this->assertSame('4 races left on his contract; finances unknown', $extend['reason']);
         $this->assertSame('No clearly better driver you can afford', $keep['reason']);
@@ -3025,12 +3089,29 @@ final class RaceEngineerTest extends TestCase
 
     public function testSpareIsWhatIsLeftAfterEveryAdvisedSpend(): void
     {
+        // The card buys one upgrade, the recommended one, at its net cost; the other affordable one is not bought.
         $in = $this->inputs(['plan' => $this->plan(['envelope' => 2_000_000, 'upgrades' => [
-            ['part' => 'Engine', 'from' => 4, 'to' => 5, 'price' => 600_000, 'gain' => 3.0, 'affordable' => true],
-            ['part' => 'Brakes', 'from' => 4, 'to' => 5, 'price' => 900_000, 'gain' => 2.0, 'affordable' => false],
+            ['part' => 'Engine', 'from' => 4, 'to' => 5, 'price' => 600_000, 'net_cost' => 400_000, 'gain' => 3.0,
+                'affordable' => true],
+            ['part' => 'Brakes', 'from' => 4, 'to' => 5, 'price' => 900_000, 'net_cost' => 700_000, 'gain' => 2.0,
+                'affordable' => true],
         ]])]);
 
-        self::assertSame(RaceEngineer::upgradeBudget($in) - 600_000, RaceEngineer::spare($in));
+        self::assertSame('Engine', RaceEngineer::recommendedUpgrade($in)['part'] ?? null);
+        self::assertGreaterThan(400_000, RaceEngineer::upgradeBudget($in));
+        self::assertSame(RaceEngineer::upgradeBudget($in) - 400_000, RaceEngineer::spare($in));
+    }
+
+    public function testSpareIsNothingWithoutAPlan(): void
+    {
         self::assertSame(0, RaceEngineer::spare($this->inputs()));
+    }
+
+    public function testSpareIsTheUpgradeBudgetWhenThePlanHasNoUpgrades(): void
+    {
+        $in = $this->inputs(['plan' => $this->plan(['envelope' => 2_000_000, 'upgrades' => []])]);
+
+        self::assertGreaterThan(0, RaceEngineer::upgradeBudget($in));
+        self::assertSame(RaceEngineer::upgradeBudget($in), RaceEngineer::spare($in));
     }
 }

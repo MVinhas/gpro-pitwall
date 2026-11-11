@@ -50,6 +50,7 @@ final class RaceEngineer
     private const string STAGE_TRAINING = 'training';
     private const string STAGE_TESTING = 'testing';
     private const string UPGRADES_ANCHOR = '/season#season-upgrades';
+    private const string NOT_RANKED = 'No division baseline: drivers not ranked';
     private const string SKIP_CALL = 'Your call; the money stays in the budget';
     private const string AMATEUR_TESTING = 'Testing is weak in Amateur without a technical director; it pays mainly '
         . 'the season before a promotion push';
@@ -169,11 +170,17 @@ final class RaceEngineer
         $left = $advice['current']['races_left'] ?? 0;
         $pick = $advice['shortlist'][0] ?? null;
         $figure = null;
+        $suffixed = true;
 
         if ($needsShortlist && !$advice['market_known']) {
             $answer = 'Driver market unavailable';
             $reason = 'Open Recruitment to retry';
             $tone = 'amber';
+        } elseif ($needsShortlist && !$advice['ranked']) {
+            $answer = $verdict === 'hire' ? 'Sign a driver' : 'Replace ' . $name;
+            $reason = self::NOT_RANKED;
+            $tone = $verdict === 'hire' ? 'red' : 'amber';
+            $suffixed = false;
         } elseif ($needsShortlist && $pick === null) {
             $answer = 'No driver passes your rules';
             $reason = match ($advice['top_out']) {
@@ -198,8 +205,13 @@ final class RaceEngineer
                 ],
                 'no_extension' => ['GPRO offers no extension now', 'ink'],
                 'retiring_later' => ['Retires at the end of the season', 'amber'],
-                default => ['No clearly better driver you can afford', 'ink'],
+                default => [match (true) {
+                    !$advice['market_known'] => 'Driver market unavailable: nobody was compared',
+                    !$advice['ranked'] => self::NOT_RANKED,
+                    default => 'No clearly better driver you can afford',
+                }, 'ink'],
             };
+            $suffixed = $advice['reason'] !== 'none';
         } elseif ($verdict === 'extend') {
             $answer = 'Extend ' . $name . ' by ' . DriverHiringAdvisor::CONTRACT_RACES . ' races';
             $extension = $advice['extension'];
@@ -211,7 +223,7 @@ final class RaceEngineer
                 $reason = 'Budget short: no race without a driver';
                 $tone = 'red';
             } elseif ($advice['urgent']) {
-                $reason = 'Last chance: ' . self::races($left) . ' left';
+                $reason = 'Last chance: ' . ($left > 0 ? self::races($left) . ' left' : 'his contract has run out');
                 $tone = 'red';
             } else {
                 $reason = self::races($left) . ' left on his contract';
@@ -223,17 +235,17 @@ final class RaceEngineer
             $reason = match ($advice['reason']) {
                 'leaving_cap' => 'Over the ' . ($advice['cap'] ?? 0) . ' cap: he leaves in ' . self::races($left),
                 'leaving_retiring' => 'He retires at the end of the season',
-                'better' => '+' . number_format($pick['gain'] ?? 0.0, 1) . " against your division's ideal driver",
+                'better' => 'Scores ' . number_format($pick['gain'] ?? 0.0, 1) . ' points higher than ' . $name,
                 'extension_over_budget' => 'His extension does not fit the plan',
                 default => 'No driver under contract',
             };
             $tone = 'amber';
         }
 
-        if ($advice['market_known'] && !$advice['ranked']) {
+        if ($suffixed && $advice['market_known'] && !$advice['ranked']) {
             $reason .= '; no division baseline, drivers not ranked';
         }
-        if ($verdict !== 'keep' && !$advice['finances_known']) {
+        if ($suffixed && $verdict !== 'keep' && !$advice['finances_known']) {
             $reason .= '; finances unknown';
         }
 
@@ -253,7 +265,8 @@ final class RaceEngineer
     }
 
     /**
-     * What the plan's envelope has left after everything the card advises spending on the car.
+     * What the plan's envelope has left after everything the card advises spending on the car: the card buys one
+     * upgrade, the recommended one, and the envelope already carries its net cost (see afterTheUpdate).
      */
     public static function spare(EngineerInputs $in): int
     {
@@ -261,14 +274,7 @@ final class RaceEngineer
             return 0;
         }
 
-        $advised = 0;
-        foreach ($in->plan['upgrades'] ?? [] as $upgrade) {
-            if ($upgrade['affordable']) {
-                $advised += $upgrade['price'];
-            }
-        }
-
-        return max(0, self::upgradeBudget($in) - $advised);
+        return max(0, self::upgradeBudget($in) - max(0, self::recommendedUpgrade($in)['net_cost'] ?? 0));
     }
 
     /**
