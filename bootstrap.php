@@ -469,6 +469,8 @@ $container['controller.strategy'] = new StrategyController(
     $container['service.pha_match'],
     $container['service.car_wear'],
     $container['twig'],
+    $container['service.risk_model'],
+    $container['service.ctr_model'],
 );
 
 $container['controller.auth'] = new AuthController(
@@ -563,6 +565,7 @@ $container['service.race_engineer'] = new \App\Service\RaceEngineerService(
     (float) ($container['config']['secrets']['tyre_calc']['clear_track_risk_gain_lap_fraction'] ?? 0.0),
     $container['repository.weekend_choice'],
     recruitment: $container['service.recruitment'],
+    riskModels: $container['service.risk_model'],
 );
 
 $container['controller.page'] = new PageController(

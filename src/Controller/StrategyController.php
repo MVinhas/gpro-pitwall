@@ -5,15 +5,19 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Engineer\GroupStanding;
+use App\Engineer\PlaceGap;
+use App\Engineer\RiskModel;
 use App\Http\Request;
 use App\Http\Sections;
 use App\Security\Authorize;
 use App\Service\StrategyService;
 use App\Service\SetupCalculatorService;
+use App\Service\CtrModelService;
 use App\Service\GproApiClient;
 use App\Service\GproDataMapper;
 use App\Service\RaceWeatherService;
 use App\Service\RiskAdvisorService;
+use App\Service\RiskModelService;
 use App\Service\PhaMatchService;
 use App\Service\CarWearService;
 use App\Service\WearAdvisorService;
@@ -49,6 +53,8 @@ class StrategyController
         private readonly PhaMatchService $phaMatch,
         private readonly CarWearService $carWear,
         private readonly Environment $twig,
+        private readonly ?RiskModelService $riskModels = null,
+        private readonly ?CtrModelService $ctrModel = null,
     ) {
     }
 
@@ -310,7 +316,12 @@ class StrategyController
 
             $raceIsWet = $setupWeatherInputs['Race']['weather'] === 'Wet';
 
-            $strategyResults['risk_advice'] = $this->riskAdvisor->suggest(
+            // The group feeds only power the advisory cards — never let a
+            // hiccup there fail the whole strategy calc.
+            $menu = $this->fetchQuietly(fn(): array => $this->api->getMenu());
+            $season = (int)($office['seasonNb'] ?? 0);
+
+            $strategyResults['risk_advice'] = $this->riskAdvisor->advise(
                 $driver,
                 [
                     'overtaking' => $strategyResults['overtaking'] ?? null,
@@ -320,6 +331,14 @@ class StrategyController
                 ],
                 $raceIsWet,
                 $rain['race_rain_avg'],
+                [
+                    'division' => RiskAdvisorService::divisionFromGroup((string)($menu['group'] ?? '')),
+                    'laps'     => (int)$inputs['laps'],
+                    'ctr'      => (int)$inputs['risk'],
+                    'grid'     => null,
+                ],
+                $this->riskModels?->model($season) ?? RiskModel::fallback(),
+                $this->ctrModel?->placeGap($season) ?? PlaceGap::fallback(),
             );
 
             $strategyResults['push_signals'] = $this->buildPushSignals(
@@ -329,10 +348,8 @@ class StrategyController
                 $strategyResults['supplier_info'],
                 $raceIsWet,
                 $finalRaceTemp,
-                // The group feeds only power the advisory card — never let a
-                // hiccup there fail the whole strategy calc. Degrade to no
-                // relative signals instead.
-                $this->fetchQuietly(fn(): array => $this->api->getMenu()),
+                // Degrade to no relative signals when a feed is missing.
+                $menu,
                 $this->fetchQuietly(fn(): array => $this->api->getMoneyLevels()),
                 $this->fetchQuietly(fn(): array => $this->api->getGroupStaff()),
                 $this->maxEndWearAtPushRisk(

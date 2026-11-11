@@ -1040,19 +1040,32 @@ final class RaceEngineerTest extends TestCase
         $this->assertNull($line['anchor']);
     }
 
-    public function testStayLowersOvertake(): void
+    public function testStayNoLongerLowersTheOvertakeRisk(): void
     {
         $in = $this->inputs(['objective' => $this->objective(SeasonObjective::STAY)]);
 
-        $this->assertSame('Overtake 25 · Defend 25', $this->line($in, 'risk')['answer']);
+        $this->assertSame('Overtake 40 · Defend 25', $this->line($in, 'risk')['answer']);
     }
 
-    public function testStayOvertakeNeverGoesBelowZero(): void
+    public function testAnEstimateSaysHowFarTheLearningIs(): void
     {
-        $risk = ['overtake' => 10, 'defend' => 5];
-        $in = $this->inputs(['objective' => $this->objective(SeasonObjective::STAY), 'risk' => $risk]);
+        $risk = ['overtake' => 40, 'defend' => 25, 'source' => 'estimate', 'races' => 300, 'replays' => 12,
+            'needed' => 40, 'places' => null, 'mistakes' => null];
 
-        $this->assertSame('Overtake 0 · Defend 5', $this->line($in, 'risk')['answer']);
+        $line = $this->line($this->inputs(['risk' => $risk]), 'risk');
+
+        $this->assertSame('Estimate while the engineer learns: 12 of 40 race replays', $line['reason']);
+    }
+
+    public function testLearnedRisksStateTheTradeInWords(): void
+    {
+        $risk = ['overtake' => 35, 'defend' => 30, 'source' => 'learned', 'races' => 300, 'replays' => 84,
+            'needed' => 40, 'places' => 2.44, 'mistakes' => 1.26];
+
+        $line = $this->line($this->inputs(['risk' => $risk]), 'risk');
+
+        $this->assertSame('Overtake 35 · Defend 30', $line['answer']);
+        $this->assertSame('Learned from 84 races: expect about +2.4 places and 1.3 mistakes', $line['reason']);
     }
 
     public function testRiskOmittedWithoutAdvice(): void

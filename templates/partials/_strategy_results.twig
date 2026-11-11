@@ -148,6 +148,15 @@
                         <dt class="t-label">Defend risk</dt>
                         <dd class="text-base font-semibold text-slate-900 tabular-nums">{{ ra.defend }}</dd>
                     </div>
+                    {% if ra.source is defined %}
+                        <p class="col-span-2 -mt-1 text-xs text-slate-500">
+                            {% if ra.source == 'learned' %}
+                                Overtake and defend are learned from {{ ra.replays }} races.
+                            {% else %}
+                                Overtake and defend are estimates while Pitwall learns ({{ ra.replays }} of {{ ra.needed }} race replays).
+                            {% endif %}
+                        </p>
+                    {% endif %}
                 {% endif %}
                 <div>
                     <dt class="t-label">Clear track risk</dt>

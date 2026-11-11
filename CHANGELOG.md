@@ -6,6 +6,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.41] - 2026-11-11
+
+### Changed
+- Overtake and defend risks on Strategy and the Engineer are now learned from race outcomes: the pair with the
+  best net seconds, places won against the driver mistakes the risk causes, cautious in the rain and shaped by
+  the driver's concentration, aggressiveness and experience. The learned pair is blended with the old rule of
+  thumb, by half at 60 replayed races and more with every race, never all the way.
+- Until the model has 60 races and 40 replays the figures are the rule of thumb, and the screen says so
+  ("estimates while Pitwall learns, N of 40 race replays"). Strategy shows this to everyone; the Engineer, still
+  admin-only, states the trade in words: about how many places and mistakes to expect.
+- The Engineer no longer takes a flat 15 off the overtake risk for a Stay objective: the learned trade already
+  prices the mistakes, so the cut was a second, blind penalty.
+
 ## [1.21.40] - 2026-11-11
 
 ### Added
