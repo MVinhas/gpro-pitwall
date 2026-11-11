@@ -29,6 +29,7 @@ use App\Service\GproSyncService;
 use App\Service\HarvestService;
 use App\Service\PilotCalculatorService;
 use App\Service\RaceHistoryService;
+use App\Service\RaceReplayService;
 use App\Service\RaceTelemetryService;
 use App\Sync\EndpointFetcher;
 use App\Sync\HarvestResult;
@@ -38,6 +39,7 @@ use App\Tests\Support\ArrayCache;
 use App\Tests\Support\TtlRecordingCache;
 use App\Tests\Support\ScriptedGproFetcher;
 use App\Telemetry\RaceHistoryMapper;
+use App\Telemetry\RaceReplayMapper;
 use App\Telemetry\RaceTelemetryMapper;
 use PDO;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -188,6 +190,18 @@ final class HarvestServiceTest extends TestCase
             $this->telemetry(),
             $this->autofill(),
             new RaceHistoryRepository($this->db),
+            $this->replayService(),
+        );
+    }
+
+    private function replayService(): RaceReplayService
+    {
+        return new RaceReplayService(
+            new RaceHistoryRepository($this->db),
+            new RaceTelemetryRepository($this->db),
+            new RaceTelemetryMapper(),
+            new RaceReplayMapper(),
+            new AnalysisReader($this->archive),
         );
     }
 
@@ -334,9 +348,16 @@ final class HarvestServiceTest extends TestCase
         $this->gpro->requests = [];
         $third = $this->slice($harvest);
 
-        $this->assertSame('done', $third->status);
-        $this->assertSame(0, $third->calls);
-        $this->assertSame(0, $third->projected);
+        $this->assertSame([self::REPLAY_REQUEST], $this->gpro->requests, 'the stored race still owes its replay');
+        $this->assertSame(1, $third->calls);
+        $this->settle();
+
+        $this->gpro->requests = [];
+        $fourth = $this->slice($harvest);
+
+        $this->assertSame('done', $fourth->status);
+        $this->assertSame(0, $fourth->calls);
+        $this->assertSame(0, $fourth->projected);
         $this->assertSame([], $this->gpro->requests);
         $this->assertFalse($harvest->isDue(self::USER, true));
     }
@@ -485,6 +506,8 @@ final class HarvestServiceTest extends TestCase
             );
         }
         $this->userAtANewRace();
+        // Reading race 13's replay has its own tests; here it must not take the backfill's allowance.
+        $this->db->exec('INSERT INTO user_race_history (user_id, season, race, replay_laps) VALUES (1, 107, 13, 0)');
         $scope = GproApiClient::scopeFor('tok');
         $this->archive->put(1, $scope, 'RaceAnalysis', '', 'w', 107, 13, ['racesToSelect' => $races] + $this->gpro->analysis);
         $this->archive->put(1, $scope, 'Standings', '', 'w', 107, 14, ['data' => []]);
@@ -526,9 +549,13 @@ final class HarvestServiceTest extends TestCase
         }
 
         $this->assertSame('done', $result->status);
-        $this->assertSame([3, 2, 0], $perSlice);
+        $this->assertSame([3, 2], $perSlice);
+        // Races stored by the first slice have their replay read before more analyses are backfilled.
         $this->assertSame(
-            ['RaceAnalysis?SR=107,1', 'RaceAnalysis?SR=107,2', 'RaceAnalysis?SR=107,4', 'RaceAnalysis?SR=107,5', 'RaceAnalysis?SR=107,6'],
+            [
+                'RaceAnalysis?SR=107,1', 'RaceAnalysis?SR=107,2', 'RaceAnalysis?SR=107,4',
+                'RaceReplay?season=107&race=4&group=Amateur%20-%204', 'RaceReplay?season=107&race=2&group=Amateur%20-%204',
+            ],
             $this->gpro->requests,
         );
         $this->assertSame(5, $this->client->backfillCount());
@@ -835,5 +862,114 @@ final class HarvestServiceTest extends TestCase
 
         $this->assertSame(3, $result->calls);
         $this->assertSame('RaceAnalysis?SR=107,1', $this->gpro->requests[0]);
+    }
+
+    private const string REPLAY_REQUEST = 'RaceReplay?season=107&race=13&group=Amateur%20-%204';
+
+    /**
+     * Our car (manager 111) runs 5th on every lap the scripted analysis lists,
+     * with one mistake on lap 2; the field is two other cars.
+     *
+     * @return array<string, mixed>
+     */
+    private function replayPayload(): array
+    {
+        $row = static fn (int $t, int $pos, bool $m = false): array => [
+            0 => 'M', 1 => $t, 2 => 0, 3 => 0, 4 => 0, 5 => 0, 6 => 0, 7 => 0,
+            8 => $m ? 1 : 0, 9 => 0, 10 => $pos, 11 => $m ? 4200 : 0,
+        ];
+        $laps = [];
+        for ($lap = 1; $lap <= 5; $lap++) {
+            $laps[] = ['lapNb' => $lap, 'managers' => [
+                ['900' => $row($lap * 90000, 4)],
+                ['111' => $row($lap * 90000 + 500, 5, $lap === 2)],
+                ['700' => $row($lap * 90000 + 9000, 6)],
+            ]];
+        }
+
+        return ['hasAccess' => 1, 'replayData' => $laps];
+    }
+
+    /** Re-sync clicks until the harvest has nothing left it may do. */
+    private function harvestEverything(HarvestService $harvest): void
+    {
+        for ($i = 0; $i < 6; $i++) {
+            $this->slice($harvest);
+            $this->settle();
+        }
+    }
+
+    private function replayRequests(): int
+    {
+        return count(array_filter(
+            $this->gpro->allRequests,
+            static fn (string $r): bool => str_starts_with($r, 'RaceReplay'),
+        ));
+    }
+
+    public function testAStoredRaceGetsItsReplayReadOnceAndTheRaceTimeFactsFiled(): void
+    {
+        $this->userAtANewRace();
+        $this->gpro->responses[self::REPLAY_REQUEST] = $this->replayPayload();
+        $harvest = $this->harvest();
+
+        $this->harvestEverything($harvest);
+
+        $this->assertSame(1, $this->replayRequests());
+        $history = $this->db->query('SELECT replay_laps, race_mistakes, race_mistake_ms FROM user_race_history')->fetch(PDO::FETCH_ASSOC);
+        $this->assertSame([5, 1, 4200], array_map('intval', array_values($history)));
+        $corpus = $this->db->query('SELECT replay_laps, race_mistakes FROM race_telemetry')->fetch(PDO::FETCH_ASSOC);
+        $this->assertSame([5, 1], array_map('intval', array_values($corpus)));
+        $this->assertSame(0, $this->rows("user_api_archive WHERE endpoint = 'RaceReplay'"), 'the replay itself is never archived');
+    }
+
+    public function testAnAnswerWithoutAccessIsNotAskedForAgain(): void
+    {
+        $this->userAtANewRace();
+        $this->gpro->responses[self::REPLAY_REQUEST] = ['hasAccess' => 0, 'showBuyModal' => 1, 'replayData' => []];
+        $harvest = $this->harvest();
+
+        $this->harvestEverything($harvest);
+        $this->harvestEverything($harvest);
+
+        $this->assertSame(1, $this->replayRequests());
+        $this->assertSame(0, (int) $this->db->query('SELECT replay_laps FROM user_race_history')->fetchColumn());
+    }
+
+    public function testAFailedReplayCallIsLeftAloneForAWhileAndTheRaceStaysUnread(): void
+    {
+        $this->userAtANewRace();
+        $this->gpro->failing = ['RaceReplay'];
+        $harvest = $this->harvest();
+
+        $this->harvestEverything($harvest);
+
+        $this->assertSame(1, $this->replayRequests());
+        $this->assertNull($this->db->query('SELECT replay_laps FROM user_race_history')->fetchColumn());
+    }
+
+    public function testNoReplayIsAskedForWithoutAStoredAnalysis(): void
+    {
+        $this->userAtANewRace();
+        $this->gpro->responses['RaceAnalysis'] = ['errorMsg' => 'Not available', 'data' => []];
+        $harvest = $this->harvest();
+
+        $this->harvestEverything($harvest);
+
+        $this->assertSame(0, $this->replayRequests());
+    }
+
+    public function testAReplayCountsAgainstTheBackfillAllowance(): void
+    {
+        $this->userAtANewRace();
+        $this->gpro->responses[self::REPLAY_REQUEST] = $this->replayPayload();
+        for ($i = 0; $i < 5; $i++) {
+            $this->client->addBackfill();
+        }
+        $harvest = $this->harvest();
+
+        $this->harvestEverything($harvest);
+
+        $this->assertSame(0, $this->replayRequests());
     }
 }

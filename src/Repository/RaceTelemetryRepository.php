@@ -13,6 +13,8 @@ use PDO;
  * There is no findByUser(), and there cannot be one: race_telemetry holds no
  * user column. Every read here is an aggregate over the whole dataset, sliced
  * by race characteristics (level, weather, tyre, risk…) only.
+ *
+ * @phpstan-import-type ReplayFacts from \App\Telemetry\RaceReplayMapper
  */
 class RaceTelemetryRepository
 {
@@ -41,6 +43,11 @@ class RaceTelemetryRepository
         'setup_fwing', 'setup_rwing', 'setup_engine', 'setup_brakes',
         'setup_gear', 'setup_susp',
         'race_energy_from', 'race_energy_to',
+    ];
+
+    /** The facts the natural-key unique index covers: they find the row a race maps to. */
+    private const array REPLAY_KEY = [
+        'season', 'race', 'track_id', 'group_label', 'driver_id', 'final_pos', 'q1_time_ms', 'q2_time_ms',
     ];
 
     /** Driver attributes the correlation report walks. */
@@ -87,6 +94,42 @@ class RaceTelemetryRepository
             $params[$column] = $row[$column] ?? null;
         }
 
+        $stmt->execute($params);
+
+        return $stmt->rowCount() > 0;
+    }
+
+    /**
+     * Files what the replay said about the race a telemetry row describes,
+     * found by the row's natural key (the same facts the unique index covers).
+     * Null marks the race as read with nothing usable (replay_laps = 0).
+     *
+     * @param array<string, mixed> $key a mapped telemetry row; only its natural-key columns are read
+     * @param ReplayFacts|null $facts
+     * @return bool whether a row was found
+     */
+    public function setReplay(array $key, ?array $facts): bool
+    {
+        $stmt = $this->pdo->prepare(
+            'UPDATE race_telemetry SET
+                replay_laps = :replay_laps, race_mistakes = :race_mistakes,
+                race_mistake_ms = :race_mistake_ms, traffic_ahead_laps = :traffic_ahead_laps,
+                traffic_behind_laps = :traffic_behind_laps, avg_race_pos = :avg_race_pos
+             WHERE season IS :season AND race IS :race AND track_id IS :track_id
+               AND group_label IS :group_label AND driver_id IS :driver_id
+               AND final_pos IS :final_pos AND q1_time_ms IS :q1_time_ms AND q2_time_ms IS :q2_time_ms'
+        );
+        $params = [
+            'replay_laps' => $facts['replay_laps'] ?? 0,
+            'race_mistakes' => $facts['race_mistakes'] ?? null,
+            'race_mistake_ms' => $facts['race_mistake_ms'] ?? null,
+            'traffic_ahead_laps' => $facts['traffic_ahead_laps'] ?? null,
+            'traffic_behind_laps' => $facts['traffic_behind_laps'] ?? null,
+            'avg_race_pos' => $facts['avg_race_pos'] ?? null,
+        ];
+        foreach (self::REPLAY_KEY as $column) {
+            $params[$column] = $key[$column] ?? null;
+        }
         $stmt->execute($params);
 
         return $stmt->rowCount() > 0;

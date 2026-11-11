@@ -120,12 +120,19 @@ final class SyncPlanner
         // Backfill only spends what is genuinely spare once everything above is paid for.
         $left -= count($entries);
         if ($left >= self::BACKFILL_MIN) {
+            // Replays finish races already stored, so they go before new analyses;
+            // both draw on the one per-window allowance.
             $allowance = max(0, self::BACKFILL_MAX_PER_WINDOW - $ctx->backfillDoneThisWindow);
-            $backfill = array_map(
-                static fn (string $sr): array => ['endpoint' => Endpoint::ANALYSIS, 'params' => 'SR=' . $sr],
-                array_slice($ctx->backfillPending, 0, $allowance),
+            $replays = array_map(
+                static fn (string $sr): array => ['endpoint' => Endpoint::REPLAY, 'params' => 'SR=' . $sr],
+                array_slice($ctx->replayPending, 0, $allowance),
             );
-            $entries = [...$entries, ...array_slice($backfill, 0, max(0, $left - self::PHASE2_FLOOR))];
+            $analyses = array_map(
+                static fn (string $sr): array => ['endpoint' => Endpoint::ANALYSIS, 'params' => 'SR=' . $sr],
+                array_slice($ctx->backfillPending, 0, max(0, $allowance - count($replays))),
+            );
+            $spare = max(0, $left - self::PHASE2_FLOOR);
+            $entries = [...$entries, ...array_slice([...$replays, ...$analyses], 0, $spare)];
         }
 
         return $entries;

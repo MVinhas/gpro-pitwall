@@ -74,7 +74,7 @@ final class SeasonObjectiveStayMigrationTest extends TestCase
             ['season' => 111, 'objective' => 'stay', 'set_at' => '2026-02-01 10:00:00'],
             ['season' => 112, 'objective' => 'stay', 'set_at' => '2026-03-01 10:00:00'],
         ], $rows);
-        $this->assertSame(21, (int) $this->db->query('PRAGMA user_version')->fetchColumn());
+        $this->assertSame(22, (int) $this->db->query('PRAGMA user_version')->fetchColumn());
     }
 
     public function testTheNewCheckRejectsHoldAndTheIndexSurvives(): void

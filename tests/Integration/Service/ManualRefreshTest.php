@@ -66,6 +66,7 @@ use App\Service\PhaMatchService;
 use App\Service\PilotCalculatorService;
 use App\Service\RaceEngineerService;
 use App\Service\RaceHistoryService;
+use App\Service\RaceReplayService;
 use App\Service\RaceIntelligenceService;
 use App\Service\RaceTelemetryService;
 use App\Service\RaceWeatherService;
@@ -90,6 +91,7 @@ use App\Sync\EndpointFetcher;
 use App\Sync\SyncContextFactory;
 use App\Sync\SyncPlanner;
 use App\Telemetry\RaceHistoryMapper;
+use App\Telemetry\RaceReplayMapper;
 use App\Telemetry\RaceTelemetryMapper;
 use App\Tests\Support\CountingGproFetcher;
 use App\Tests\Support\FakeSecrets;
@@ -543,6 +545,7 @@ final class ManualRefreshTest extends TestCase
             new RaceTelemetryService($telemetryRepo, new RaceTelemetryMapper()),
             new BaselineAutoFillService($telemetryRepo, new PilotRepository($db), $calculator),
             $raceHistory,
+            new RaceReplayService($raceHistory, $telemetryRepo, new RaceTelemetryMapper(), new RaceReplayMapper(), $analyses),
         );
         $idealPilot = new IdealPilotService(new PilotRepository($db), $calculator, $config['app']['stats_schema']);
         $mapper = new GproDataMapper();

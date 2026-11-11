@@ -39,6 +39,7 @@ final class SyncContextFactory
      * @param array<string, mixed>|null $previousOffice
      * @param array<string, mixed> $office
      * @param list<string> $backfillPending 'season,race' pairs still missing an analysis
+     * @param list<string> $replayPending 'season,race' pairs with a stored analysis whose replay is unread
      */
     public function build(
         int $userId,
@@ -49,6 +50,7 @@ final class SyncContextFactory
         string $mode,
         array $backfillPending = [],
         int $backfillDoneThisWindow = 0,
+        array $replayPending = [],
     ): SyncContext {
         $season = self::intOrNull($office['seasonNb'] ?? null);
         $race = self::intOrNull($office['raceNb'] ?? null);
@@ -84,6 +86,7 @@ final class SyncContextFactory
             $thisSeason,
             $backfillPending,
             $backfillDoneThisWindow,
+            $replayPending,
         );
     }
 

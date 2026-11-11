@@ -58,6 +58,7 @@ final class SyncPlannerTest extends TestCase
             array_values($c['season'] ?? self::SEASONAL),
             $c['pending'] ?? [],
             $c['done'] ?? 0,
+            $c['replay'] ?? [],
         );
     }
 
@@ -145,6 +146,14 @@ final class SyncPlannerTest extends TestCase
             'harvest new race has no phase 1' => [['mode' => SyncPlanner::MODE_HARVEST, 'race' => []], [], null, [], ['ANALYSIS', 'STANDINGS', 'ECONOMY', 'GROUP_STAFF']],
             'harvest ignores season-scoped phase 1' => [['mode' => SyncPlanner::MODE_HARVEST, 'season' => []], [], $same, [], ['SF_HISTORY[season=9]', 'CCP_HISTORY[season=9]']],
             'the shared track list is planned until the caller has a row this season' => [['season' => ['CALENDAR', 'TYRES', 'MENU', 'SF_HISTORY', 'CCP_HISTORY']], [], $same, ['TRACKS'], []],
+            'replay pending' => [['remaining' => 80, 'replay' => ['10,4']], [], $same, [], ['REPLAY[SR=10,4]']],
+            'replay gated like backfill (59 left)' => [['remaining' => 59, 'replay' => ['10,4']], [], $same, [], []],
+            'replay comes before the analysis backfill' => [['remaining' => 80, 'replay' => ['10,4'], 'pending' => ['9,3']], [], $same, [], ['REPLAY[SR=10,4]', 'ANALYSIS[SR=9,3]']],
+            'replay shares the backfill allowance (4 of 5 done)' => [['remaining' => 90, 'done' => 4, 'replay' => ['10,4', '10,3'], 'pending' => ['9,3']], [], $same, [], ['REPLAY[SR=10,4]']],
+            'replay allowance spent' => [['remaining' => 90, 'done' => 5, 'replay' => ['10,4']], [], $same, [], []],
+            'replay capped at the allowance' => [['remaining' => 100, 'replay' => ['10,1', '10,2', '10,3', '10,4', '10,5', '10,6']], [], $same, [],
+                ['REPLAY[SR=10,1]', 'REPLAY[SR=10,2]', 'REPLAY[SR=10,3]', 'REPLAY[SR=10,4]', 'REPLAY[SR=10,5]']],
+            'harvest replay' => [['mode' => SyncPlanner::MODE_HARVEST, 'remaining' => 80, 'replay' => ['10,4']], [], $same, [], ['REPLAY[SR=10,4]']],
             'harvest backfill' => [['mode' => SyncPlanner::MODE_HARVEST, 'remaining' => 80, 'pending' => ['9,3']], [], $same, [], ['ANALYSIS[SR=9,3]']],
         ];
     }

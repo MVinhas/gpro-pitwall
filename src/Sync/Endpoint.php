@@ -26,4 +26,6 @@ final class Endpoint
     public const string GROUP_STAFF = 'GROUP_STAFF';
     public const string SF_HISTORY = 'SF_HISTORY';
     public const string CCP_HISTORY = 'CCP_HISTORY';
+    /** Race-time mistakes and traffic. Read for its derived facts only; never archived. */
+    public const string REPLAY = 'REPLAY';
 }

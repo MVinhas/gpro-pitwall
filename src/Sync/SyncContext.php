@@ -12,6 +12,7 @@ final readonly class SyncContext
      * @param list<string> $archivedThisRace endpoints already archived for the office's current race
      * @param list<string> $archivedThisSeason endpoints already archived for the office's current season
      * @param list<string> $backfillPending 'season,race' pairs still missing an analysis
+     * @param list<string> $replayPending 'season,race' pairs of stored races with an unread replay, newest first
      */
     public function __construct(
         public ?array $previousOffice,
@@ -22,6 +23,7 @@ final readonly class SyncContext
         public array $archivedThisSeason,
         public array $backfillPending,
         public int $backfillDoneThisWindow = 0,
+        public array $replayPending = [],
     ) {
     }
 }

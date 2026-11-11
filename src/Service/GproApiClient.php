@@ -401,6 +401,25 @@ final class GproApiClient
         );
     }
 
+    /**
+     * Race-time lap data for every manager in a group. Never cached or
+     * archived: the payload is large, names every manager in the group, and
+     * only its derived facts are kept (RaceReplayMapper).
+     *
+     * @return array<string, mixed>
+     */
+    public function getRaceReplayFor(int $season, int $race, ?string $group = null): array
+    {
+        $query = "season={$season}&race={$race}" . ($group === null ? '' : '&group=' . rawurlencode($group));
+        $data = $this->fetch("/gb/backend/api/v2/RaceReplay?{$query}");
+        if ($data === null) {
+            return [];
+        }
+        $this->rememberApiLimit($data);
+
+        return $data;
+    }
+
     /** @return array<string, mixed> */
     public function getCalendar(bool $forceRefresh = false): array
     {

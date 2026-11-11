@@ -89,7 +89,7 @@ final class WeekendChoiceRepositoryTest extends TestCase
         $this->seeder->migrate();
 
         $this->assertSame(['testing' => 'do'], $this->repo->choices(7, 108, 9));
-        $this->assertSame(21, (int) $this->db->query('PRAGMA user_version')->fetchColumn());
+        $this->assertSame(22, (int) $this->db->query('PRAGMA user_version')->fetchColumn());
         $indexes = $this->db->query("PRAGMA index_list('user_weekend_choice')")->fetchAll(PDO::FETCH_COLUMN, 1);
         $this->assertContains('idx_user_weekend_choice', $indexes);
     }
@@ -105,7 +105,7 @@ final class WeekendChoiceRepositoryTest extends TestCase
         $this->assertContains('user_weekend_choice', $tables);
         $indexes = $this->db->query("PRAGMA index_list('user_weekend_choice')")->fetchAll(PDO::FETCH_COLUMN, 1);
         $this->assertContains('idx_user_weekend_choice', $indexes);
-        $this->assertSame(21, (int) $this->db->query('PRAGMA user_version')->fetchColumn());
+        $this->assertSame(22, (int) $this->db->query('PRAGMA user_version')->fetchColumn());
         $this->repo->save(7, 108, 9, 'testing', 'do');
         $this->assertSame(['testing' => 'do'], $this->repo->choices(7, 108, 9));
     }
