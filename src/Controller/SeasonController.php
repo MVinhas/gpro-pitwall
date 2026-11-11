@@ -44,10 +44,7 @@ final readonly class SeasonController
             'csrf_token'    => $_SESSION['csrf_token'] ?? '',
             'api_limit'     => $_SESSION['api_limit'] ?? '?',
             'api_limit_updated_at' => $_SESSION['api_limit_updated_at'] ?? null,
-            'main_sections'   => array_values(array_filter(
-                $sections,
-                static fn (string $section): bool => $section !== 'Login',
-            )),
+            'main_sections'   => $sections,
             'active_main_tab' => 'Season',
             'section_paths'   => Sections::all(),
             'active_division' => null,

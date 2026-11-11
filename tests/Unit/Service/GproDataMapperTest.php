@@ -137,4 +137,28 @@ final class GproDataMapperTest extends TestCase
 
         $this->assertArrayNotHasKey('someNewApiField', $mapped);
     }
+
+    public function testATrackInAnyOfTheThreeFavouriteSlotsIsAFavourite(): void
+    {
+        $pilot = [
+            'favTrack1' => ['name' => 'Monza', 'id' => 12],
+            'favTrack2' => ['name' => 'Spa', 'id' => '7'],
+            'favTrack3' => ['name' => 'Suzuka', 'id' => 30],
+        ];
+
+        $this->assertTrue($this->mapper->isFavouriteTrack($pilot, 12));
+        $this->assertTrue($this->mapper->isFavouriteTrack($pilot, 7), 'GPRO sends ids as strings too');
+        $this->assertTrue($this->mapper->isFavouriteTrack($pilot, 30));
+        $this->assertFalse($this->mapper->isFavouriteTrack($pilot, 13));
+    }
+
+    public function testAnUnknownTrackIdIsNeverAFavourite(): void
+    {
+        // A slot GPRO left empty reads as id 0; a track id of 0 must not match it.
+        $pilot = ['favTrack1' => ['name' => '', 'id' => 0], 'favTrack2' => null];
+
+        $this->assertFalse($this->mapper->isFavouriteTrack($pilot, 0));
+        $this->assertFalse($this->mapper->isFavouriteTrack($pilot, -1));
+        $this->assertFalse($this->mapper->isFavouriteTrack([], 12));
+    }
 }
