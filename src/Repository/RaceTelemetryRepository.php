@@ -15,6 +15,7 @@ use PDO;
  * by race characteristics (level, weather, tyre, risk…) only.
  *
  * @phpstan-import-type ReplayFacts from \App\Telemetry\RaceReplayMapper
+ * @phpstan-import-type Row from \App\Engineer\RiskModel
  */
 class RaceTelemetryRepository
 {
@@ -43,6 +44,11 @@ class RaceTelemetryRepository
         'setup_fwing', 'setup_rwing', 'setup_engine', 'setup_brakes',
         'setup_gear', 'setup_susp',
         'race_energy_from', 'race_energy_to',
+    ];
+
+    /** The overtaking rating the tracks table carries, as an ordinal; an unknown rating reads Normal. */
+    private const array OVERTAKING_RATING = [
+        'Very Easy' => 0, 'Easy' => 1, 'Normal' => 2, 'Hard' => 3, 'Very Hard' => 4,
     ];
 
     /** The facts the natural-key unique index covers: they find the row a race maps to. */
@@ -982,6 +988,95 @@ class RaceTelemetryRepository
             'laps' => (int) $row['laps_completed'],
             'stamina' => (int) $row['driver_sta'],
         ], $rows);
+    }
+
+    /**
+     * Every race the risk model can learn from: the driver, the risks used,
+     * what they produced, the track's overtaking rating, and the replay facts
+     * when they were read and carry a traffic figure. The clear track risk is
+     * the dry and wet settings blended by the share of the race run wet.
+     *
+     * @return list<Row>
+     */
+    public function riskRows(): array
+    {
+        $ratings = [];
+        foreach ($this->rows('SELECT name, overtaking FROM tracks') as $track) {
+            $ratings[(string) $track['name']] = self::OVERTAKING_RATING[(string) $track['overtaking']] ?? 2;
+        }
+
+        $rows = $this->rows(
+            'SELECT level, was_wet, wet_lap_share, laps_completed, overtake_risk, defend_risk,
+                    clear_dry_risk, clear_wet_risk, driver_con, driver_tal, driver_agg, driver_exp,
+                    start_pos, overtakes, overtakes_on_you, track_name,
+                    replay_laps, race_mistakes, race_mistake_ms, traffic_ahead_laps, traffic_behind_laps,
+                    avg_race_pos
+             FROM race_telemetry
+             WHERE laps_completed > 0
+               AND overtake_risk IS NOT NULL AND defend_risk IS NOT NULL AND clear_dry_risk IS NOT NULL
+               AND overtakes IS NOT NULL AND overtakes_on_you IS NOT NULL
+               AND driver_con IS NOT NULL AND driver_tal IS NOT NULL
+               AND driver_agg IS NOT NULL AND driver_exp IS NOT NULL
+             ORDER BY id'
+        );
+
+        $out = [];
+        foreach ($rows as $row) {
+            $wet = (float) ($row['wet_lap_share'] ?? $row['was_wet'] ?? 0);
+            $dry = (int) $row['clear_dry_risk'];
+            $wetRisk = $row['clear_wet_risk'] === null ? $dry : (int) $row['clear_wet_risk'];
+            $out[] = [
+                'level' => (string) $row['level'],
+                'wet' => $wet,
+                'laps' => (int) $row['laps_completed'],
+                'ot_risk' => (int) $row['overtake_risk'],
+                'def_risk' => (int) $row['defend_risk'],
+                'ctr' => (int) round((1 - $wet) * $dry + $wet * $wetRisk),
+                'con' => (int) $row['driver_con'],
+                'tal' => (int) $row['driver_tal'],
+                'agg' => (int) $row['driver_agg'],
+                'exp' => (int) $row['driver_exp'],
+                'track' => $ratings[TrackName::base((string) $row['track_name'])] ?? 2,
+                'grid' => $row['start_pos'] === null ? null : (int) $row['start_pos'],
+                'overtakes' => (int) $row['overtakes'],
+                'passed' => (int) $row['overtakes_on_you'],
+                'replay' => self::replayOf($row),
+            ];
+        }
+
+        return $out;
+    }
+
+    /** Races whose replay was read and gave race-time facts. */
+    public function replayCount(): int
+    {
+        $stmt = $this->pdo->query('SELECT COUNT(*) FROM race_telemetry WHERE replay_laps > 0');
+
+        return $stmt === false ? 0 : (int) $stmt->fetchColumn();
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     *
+     * @return array{laps: int, mistakes: int, mistake_ms: int, traffic_share: float, avg_pos: float}|null
+     */
+    private static function replayOf(array $row): ?array
+    {
+        $laps = (int) ($row['replay_laps'] ?? 0);
+        $needed = ['race_mistakes', 'race_mistake_ms', 'traffic_ahead_laps', 'traffic_behind_laps', 'avg_race_pos'];
+        foreach ($needed as $key) {
+            if ($laps <= 0 || $row[$key] === null) {
+                return null;
+            }
+        }
+
+        return [
+            'laps' => $laps,
+            'mistakes' => (int) $row['race_mistakes'],
+            'mistake_ms' => (int) $row['race_mistake_ms'],
+            'traffic_share' => ((int) $row['traffic_ahead_laps'] + (int) $row['traffic_behind_laps']) / (2 * $laps),
+            'avg_pos' => (float) $row['avg_race_pos'],
+        ];
     }
 
     /**
