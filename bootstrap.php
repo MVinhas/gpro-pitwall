@@ -367,10 +367,6 @@ $container['service.gpro_sync'] = new GproSyncService(
     $container['sync.planner'],
     Env::int('SYNC_SAFETY_MARGIN', 20),
 );
-$container['service.risk_model'] = new \App\Service\RiskModelService(
-    $container['repo.race_telemetry'],
-    $container['service.cache'],
-);
 $container['service.risk_curve'] = new \App\Service\RiskCurveService(
     $container['repo.race_telemetry'],
     $container['service.cache'],
