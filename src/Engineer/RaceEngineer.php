@@ -36,6 +36,17 @@ final class RaceEngineer
     /** GPRO blocks testing above 90 %: a part let smoke from above it would cost the session. */
     private const int TESTING_WEAR_LIMIT = 90;
 
+    /** What each admitted risk-curve group means for this race, as the reason names it. */
+    private const array RISK_FACTORS = [
+        'weather' => 'a wet race',
+        'hard_track' => 'a track that is hard to pass on',
+        'low_grip' => 'low grip',
+        'midfield' => 'a midfield start',
+        'aggressiveness' => "the driver's aggressiveness",
+        'experience' => "the driver's experience",
+        'concentration' => "the driver's concentration",
+    ];
+
     private const array BOOST_ORDINALS = [1 => 'Even one stint', 2 => 'A second stint', 3 => 'A third stint'];
     /** GPRO charges a flat $1M for every testing session. */
     public const int TESTING_SESSION_COST = 1_000_000;
@@ -1401,16 +1412,26 @@ final class RaceEngineer
         }
 
         $risk = $in->risk;
-        $places = $risk['places'] ?? null;
-        $mistakes = $risk['mistakes'] ?? null;
-        if (($risk['source'] ?? 'estimate') === 'learned') {
-            $reason = 'Learned from ' . ($risk['replays'] ?? 0) . ' races'
-                . ($places !== null && $mistakes !== null
-                    ? sprintf(': expect about %+.1f places and %.1f mistakes', $places, $mistakes)
-                    : '');
+        $races = $risk['races'] ?? 0;
+        $needed = $risk['needed'] ?? 0;
+        $usual = $risk['usual'] ?? null;
+        if (($risk['source'] ?? 'estimate') === 'learned' && $usual !== null) {
+            $places = $risk['places'] ?? 0.0;
+            $worth = abs($places) >= 0.05
+                ? sprintf('about %+.1f places against the usual %d/%d', $places, $usual[0], $usual[1])
+                : sprintf('as good as the usual %d/%d', $usual[0], $usual[1]);
+            $factors = array_map(
+                static fn (string $factor): string => self::RISK_FACTORS[$factor] ?? $factor,
+                $risk['factors'] ?? [],
+            );
+            $reason = 'Learned from ' . number_format($races) . ' races'
+                . ($factors === [] ? '' : ', adjusted for ' . implode(' and ', $factors))
+                . ': ' . $worth;
+        } elseif ($races < $needed) {
+            $reason = 'Estimate while the engineer learns: ' . number_format($races) . ' of '
+                . number_format($needed) . ' races';
         } else {
-            $reason = 'Estimate while the engineer learns: ' . ($risk['replays'] ?? 0) . ' of '
-                . ($risk['needed'] ?? 0) . ' race replays';
+            $reason = 'Estimate: ' . number_format($races) . ' races do not yet show what the risks do';
         }
 
         return self::line(

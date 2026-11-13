@@ -1047,25 +1047,69 @@ final class RaceEngineerTest extends TestCase
         $this->assertSame('Overtake 40 · Defend 25', $this->line($in, 'risk')['answer']);
     }
 
-    public function testAnEstimateSaysHowFarTheLearningIs(): void
+    /**
+     * @param array<string, mixed> $risk
+     */
+    private function riskReason(array $risk): string
     {
-        $risk = ['overtake' => 40, 'defend' => 25, 'source' => 'estimate', 'races' => 300, 'replays' => 12,
-            'needed' => 40, 'places' => null, 'mistakes' => null];
+        $risk += ['overtake' => 25, 'defend' => 25, 'needed' => 300, 'places' => null, 'usual' => null, 'factors' => []];
 
-        $line = $this->line($this->inputs(['risk' => $risk]), 'risk');
-
-        $this->assertSame('Estimate while the engineer learns: 12 of 40 race replays', $line['reason']);
+        return $this->line($this->inputs(['risk' => $risk]), 'risk')['reason'];
     }
 
-    public function testLearnedRisksStateTheTradeInWords(): void
+    public function testAnEstimateSaysHowFarTheLearningIs(): void
     {
-        $risk = ['overtake' => 35, 'defend' => 30, 'source' => 'learned', 'races' => 300, 'replays' => 84,
-            'needed' => 40, 'places' => 2.44, 'mistakes' => 1.26];
+        $reason = $this->riskReason(['source' => 'estimate', 'races' => 120]);
 
-        $line = $this->line($this->inputs(['risk' => $risk]), 'risk');
+        $this->assertSame('Estimate while the engineer learns: 120 of 300 races', $reason);
+    }
 
-        $this->assertSame('Overtake 35 · Defend 30', $line['answer']);
-        $this->assertSame('Learned from 84 races: expect about +2.4 places and 1.3 mistakes', $line['reason']);
+    public function testAnEstimateWithEnoughRacesSaysTheRisksShowNothingYet(): void
+    {
+        $reason = $this->riskReason(['source' => 'estimate', 'races' => 480]);
+
+        $this->assertSame('Estimate: 480 races do not yet show what the risks do', $reason);
+    }
+
+    public function testLearnedRisksSayWhatTheyAreWorthAgainstTheUsualPair(): void
+    {
+        $risk = ['overtake' => 25, 'defend' => 25, 'source' => 'learned', 'races' => 2656, 'places' => 0.88,
+            'usual' => [10, 10]];
+
+        $line = $this->line($this->inputs(['risk' => $risk + ['needed' => 300, 'factors' => []]]), 'risk');
+
+        $this->assertSame('Overtake 25 · Defend 25', $line['answer']);
+        $this->assertSame('Learned from 2,656 races: about +0.9 places against the usual 10/10', $line['reason']);
+    }
+
+    public function testLearnedRisksNameWhatAdjustedThem(): void
+    {
+        $reason = $this->riskReason(['source' => 'learned', 'races' => 2656, 'places' => 0.4, 'usual' => [10, 10],
+            'factors' => ['weather']]);
+
+        $this->assertSame(
+            'Learned from 2,656 races, adjusted for a wet race: about +0.4 places against the usual 10/10',
+            $reason,
+        );
+    }
+
+    public function testSeveralAdjustmentsAreJoinedInWords(): void
+    {
+        $reason = $this->riskReason(['source' => 'learned', 'races' => 2656, 'places' => 1.2, 'usual' => [10, 10],
+            'factors' => ['hard_track', 'aggressiveness']]);
+
+        $this->assertSame(
+            'Learned from 2,656 races, adjusted for a track that is hard to pass on and the driver\'s aggressiveness:'
+                . ' about +1.2 places against the usual 10/10',
+            $reason,
+        );
+    }
+
+    public function testLearnedRisksWorthNothingExtraSayTheyMatchTheUsualPair(): void
+    {
+        $reason = $this->riskReason(['source' => 'learned', 'races' => 2656, 'places' => 0.04, 'usual' => [10, 10]]);
+
+        $this->assertSame('Learned from 2,656 races: as good as the usual 10/10', $reason);
     }
 
     public function testRiskOmittedWithoutAdvice(): void

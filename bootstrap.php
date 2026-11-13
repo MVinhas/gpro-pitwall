@@ -367,7 +367,7 @@ $container['service.gpro_sync'] = new GproSyncService(
     $container['sync.planner'],
     Env::int('SYNC_SAFETY_MARGIN', 20),
 );
-$container['service.risk_model'] = new \App\Service\RiskModelService(
+$container['service.risk_curve'] = new \App\Service\RiskCurveService(
     $container['repo.race_telemetry'],
     $container['service.cache'],
 );
@@ -554,7 +554,7 @@ $container['service.race_engineer'] = new \App\Service\RaceEngineerService(
     (float) ($container['config']['secrets']['tyre_calc']['clear_track_risk_gain_lap_fraction'] ?? 0.0),
     $container['repository.weekend_choice'],
     recruitment: $container['service.recruitment'],
-    riskModels: $container['service.risk_model'],
+    riskCurves: $container['service.risk_curve'],
 );
 
 $container['controller.page'] = new PageController(

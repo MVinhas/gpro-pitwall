@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.44] - 2026-11-13
+
+### Changed
+- The race engineer's overtake and defend risks now come from race results: places gained against the grid
+  slot, comparing each driver with themself, with weather, track and driver effects admitted only when they
+  predict unseen races better. The advice is the lowest risk that keeps most of the gain, with what it is worth
+  against the usual pair. The fight-count and mistake models are removed.
+
 ## [1.21.43] - 2026-11-11
 
 ### Changed

@@ -18,7 +18,7 @@ use App\Engineer\Money;
 use App\Engineer\PlaceGap;
 use App\Engineer\PrizeTable;
 use App\Engineer\RaceEngineer;
-use App\Engineer\RiskModel;
+use App\Engineer\RiskCurve;
 use App\Engineer\SeasonBudget;
 use App\Engineer\SeasonObjective;
 use App\Engineer\SeasonStart;
@@ -174,7 +174,7 @@ class RaceEngineerService
         private readonly ?WeekendChoiceRepository $choices = null,
         private readonly WearAdvisorService $wearAdvisor = new WearAdvisorService(),
         private readonly ?RecruitmentService $recruitment = null,
-        private readonly ?RiskModelService $riskModels = null,
+        private readonly ?RiskCurveService $riskCurves = null,
     ) {
     }
 
@@ -895,8 +895,6 @@ class RaceEngineerService
                 $weather,
                 $stale,
                 $season,
-                self::stringOrNull($c['division'] ?? null),
-                $plan['ctr'] ?? (int) ($c['ctr'] ?? 0),
             ),
             boost: null,
             weatherStale: $stale,
@@ -1884,14 +1882,10 @@ class RaceEngineerService
         ?array $weather,
         bool $stale,
         int $season,
-        ?string $division,
-        int $ctr,
     ): ?array {
         if ($track === null || ($weather === null && !$stale)) {
             return null;
         }
-
-        $laps = (int) ($track['laps'] ?? 0);
 
         return $this->riskAdvisor->advise(
             $driver,
@@ -1903,9 +1897,8 @@ class RaceEngineerService
             ],
             (bool) ($weather['race_start_wet'] ?? false),
             (float) ($weather['race_rain_avg'] ?? 0.0),
-            $laps > 0 ? ['division' => $division, 'laps' => $laps, 'ctr' => $ctr, 'grid' => null] : null,
-            $this->riskModels?->model($season) ?? RiskModel::fallback(),
-            $this->placeGap($season),
+            null,
+            $this->riskCurves?->curve($season) ?? RiskCurve::fallback(),
         );
     }
 
