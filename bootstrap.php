@@ -371,6 +371,10 @@ $container['service.risk_model'] = new \App\Service\RiskModelService(
     $container['repo.race_telemetry'],
     $container['service.cache'],
 );
+$container['service.risk_curve'] = new \App\Service\RiskCurveService(
+    $container['repo.race_telemetry'],
+    $container['service.cache'],
+);
 $container['service.race_replay'] = new \App\Service\RaceReplayService(
     $container['repo.race_history'],
     $container['repo.race_telemetry'],
