@@ -408,10 +408,52 @@ final class RaceTelemetryRepositoryTest extends TestCase
         $this->assertSame([null, null, null, null, null, null], array_values($row));
     }
 
-    private function track(string $name, string $overtaking): void
+    private function track(string $name, string $overtaking, string $grip = 'Normal'): void
     {
-        $this->db->prepare('INSERT OR REPLACE INTO tracks (name, overtaking) VALUES (:n, :o)')
-            ->execute(['n' => $name, 'o' => $overtaking]);
+        $this->db->prepare('INSERT OR REPLACE INTO tracks (name, overtaking, grip) VALUES (:n, :o, :g)')
+            ->execute(['n' => $name, 'o' => $overtaking, 'g' => $grip]);
+    }
+
+    public function testCurveRowsCarryTheDriverTheGridTheRisksTheGainAndTheTrackRatings(): void
+    {
+        $this->track('Baku', 'Hard', 'Low');
+        $this->repo->insertIfNew($this->row(['track_name' => 'Baku (Azerbaijan)', 'was_wet' => 1]));
+
+        $rows = $this->repo->curveRows();
+
+        $this->assertCount(1, $rows);
+        $this->assertSame([
+            'driver' => 30357, 'season' => 99, 'grid' => 8, 'gained' => 3,
+            'overtake' => 40, 'defend' => 30, 'wet' => true,
+            'track' => 3, 'grip' => 1, 'agg' => 18, 'exp' => 29, 'con' => 96,
+        ], $rows[0]);
+    }
+
+    public function testCurveRowsRateAnUnknownTrackNormalForOvertakingAndGrip(): void
+    {
+        $this->repo->insertIfNew($this->row(['track_name' => 'Nowhere']));
+
+        $row = $this->repo->curveRows()[0];
+
+        $this->assertSame(2, $row['track']);
+        $this->assertSame(2, $row['grip']);
+        $this->assertFalse($row['wet']);
+    }
+
+    public function testCurveRowsSkipRacesMissingWhatTheCurveNeeds(): void
+    {
+        $this->repo->insertIfNew($this->row(['race' => 1, 'overtake_risk' => null]));
+        $this->repo->insertIfNew($this->row(['race' => 2, 'defend_risk' => null]));
+        $this->repo->insertIfNew($this->row(['race' => 3, 'driver_id' => null]));
+        $this->repo->insertIfNew($this->row(['race' => 4, 'start_pos' => null]));
+        $this->repo->insertIfNew($this->row(['race' => 5, 'positions_gained' => null]));
+        $this->repo->insertIfNew($this->row(['race' => 6, 'driver_agg' => null]));
+        $this->repo->insertIfNew($this->row(['race' => 7, 'driver_exp' => null]));
+        $this->repo->insertIfNew($this->row(['race' => 8, 'driver_con' => null]));
+        $this->repo->insertIfNew($this->row(['race' => 9, 'laps_completed' => 0]));
+        $this->repo->insertIfNew($this->row(['race' => 10]));
+
+        $this->assertCount(1, $this->repo->curveRows());
     }
 
     public function testRiskRowsCarryTheDriverTheRisksTheOutcomesAndTheTrackRating(): void

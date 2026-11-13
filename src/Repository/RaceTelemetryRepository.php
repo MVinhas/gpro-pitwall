@@ -16,6 +16,7 @@ use PDO;
  *
  * @phpstan-import-type ReplayFacts from \App\Telemetry\RaceReplayMapper
  * @phpstan-import-type Row from \App\Engineer\RiskModel
+ * @phpstan-import-type Row from \App\Engineer\RiskCurve as CurveRow
  */
 class RaceTelemetryRepository
 {
@@ -49,6 +50,11 @@ class RaceTelemetryRepository
     /** The overtaking rating the tracks table carries, as an ordinal; an unknown rating reads Normal. */
     private const array OVERTAKING_RATING = [
         'Very Easy' => 0, 'Easy' => 1, 'Normal' => 2, 'Hard' => 3, 'Very Hard' => 4,
+    ];
+
+    /** The grip rating the tracks table carries, as an ordinal; an unknown rating reads Normal. */
+    private const array GRIP_RATING = [
+        'Very Low' => 0, 'Low' => 1, 'Normal' => 2, 'High' => 3, 'Very High' => 4,
     ];
 
     /** The facts the natural-key unique index covers: they find the row a race maps to. */
@@ -988,6 +994,54 @@ class RaceTelemetryRepository
             'laps' => (int) $row['laps_completed'],
             'stamina' => (int) $row['driver_sta'],
         ], $rows);
+    }
+
+    /**
+     * Every race the risk curve can learn from: the driver and season, the grid slot,
+     * the risks used, the places gained, and the track's overtaking and grip ratings.
+     *
+     * @return list<CurveRow>
+     */
+    public function curveRows(): array
+    {
+        $tracks = [];
+        foreach ($this->rows('SELECT name, overtaking, grip FROM tracks') as $track) {
+            $tracks[(string) $track['name']] = [
+                self::OVERTAKING_RATING[(string) $track['overtaking']] ?? 2,
+                self::GRIP_RATING[(string) $track['grip']] ?? 2,
+            ];
+        }
+
+        $rows = $this->rows(
+            'SELECT driver_id, season, start_pos, positions_gained, overtake_risk, defend_risk, was_wet,
+                    driver_agg, driver_exp, driver_con, track_name
+             FROM race_telemetry
+             WHERE laps_completed > 0 AND driver_id IS NOT NULL AND start_pos IS NOT NULL
+               AND positions_gained IS NOT NULL AND overtake_risk IS NOT NULL AND defend_risk IS NOT NULL
+               AND driver_agg IS NOT NULL AND driver_exp IS NOT NULL AND driver_con IS NOT NULL
+             ORDER BY id'
+        );
+
+        $out = [];
+        foreach ($rows as $row) {
+            [$track, $grip] = $tracks[TrackName::base((string) $row['track_name'])] ?? [2, 2];
+            $out[] = [
+                'driver' => (int) $row['driver_id'],
+                'season' => (int) $row['season'],
+                'grid' => (int) $row['start_pos'],
+                'gained' => (int) $row['positions_gained'],
+                'overtake' => (int) $row['overtake_risk'],
+                'defend' => (int) $row['defend_risk'],
+                'wet' => (bool) $row['was_wet'],
+                'track' => $track,
+                'grip' => $grip,
+                'agg' => (int) $row['driver_agg'],
+                'exp' => (int) $row['driver_exp'],
+                'con' => (int) $row['driver_con'],
+            ];
+        }
+
+        return $out;
     }
 
     /**
