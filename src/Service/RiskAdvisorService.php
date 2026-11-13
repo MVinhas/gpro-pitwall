@@ -4,15 +4,14 @@ declare(strict_types=1);
 
 namespace App\Service;
 
-use App\Engineer\PlaceGap;
-use App\Engineer\RiskModel;
+use App\Engineer\RiskCurve;
 
 /**
  * Suggests overtake/defend race risks (0-100 dials) for the next race.
  *
- * advise() blends what the corpus has learned (RiskModel) into the heuristic
- * below; suggest() is the heuristic alone, which stays the fallback and the
- * anchor of the blend.
+ * advise() gives the pair the corpus has learned (RiskCurve) once the curve is
+ * trusted, and the heuristic below otherwise; the two are never blended.
+ * suggest() is the heuristic alone.
  *
  * Heuristic advisor, not a game formula. Driver skills arrive on GPRO's
  * 0-250 scale and are normalised before weighting. Inputs, per the in-game
@@ -38,8 +37,8 @@ use App\Engineer\RiskModel;
  * both), and suspension rigidity has no plausible mistake mechanism.
  *
  * @phpstan-type Advice array{
- *     overtake: int, defend: int, source: string, races: int, replays: int, needed: int,
- *     places: float|null, mistakes: float|null
+ *     overtake: int, defend: int, source: string, races: int, needed: int,
+ *     places: float|null, usual: array{int, int}|null, factors: list<string>
  * }
  */
 class RiskAdvisorService
@@ -48,6 +47,10 @@ class RiskAdvisorService
 
     private const array OVERTAKING_ORDINAL = [
         'Very Easy' => 0, 'Easy' => 1, 'Normal' => 2, 'Hard' => 3, 'Very Hard' => 4,
+    ];
+
+    private const array GRIP_ORDINAL = [
+        'Very Low' => 0, 'Low' => 1, 'Normal' => 2, 'High' => 3, 'Very High' => 4,
     ];
 
     private const array OVERTAKE_BASE = [
@@ -121,16 +124,12 @@ class RiskAdvisorService
     }
 
     /**
-     * The heuristic pair, pulled toward what the corpus says earns the most
-     * net seconds (places won against the mistakes the risk costs). The pull
-     * is the model's weight: nothing until it has replays to learn from, half
-     * at 60 replayed races, never all of it. Without a usable model, or
-     * without the race context, the answer is the heuristic flagged as an
-     * estimate, with how far the model still is from learning.
+     * The learned pair once the curve is trusted, with what it is worth against
+     * the pair managers usually run; otherwise the heuristic, flagged as an
+     * estimate with how far the curve still is from learning.
      *
      * @param array<string, mixed> $driver mapped driver attributes (0-250 scales)
      * @param array{overtaking?: ?string, grip?: ?string, tyre_wear?: ?string, distance?: float} $track
-     * @param array{division: ?string, laps: int, ctr: int, grid: ?int}|null $race
      * @return Advice
      */
     public function advise(
@@ -138,61 +137,40 @@ class RiskAdvisorService
         array $track,
         bool $raceWet,
         float $rainAvg,
-        ?array $race,
-        RiskModel $model,
-        PlaceGap $placeGap,
+        ?int $grid,
+        RiskCurve $curve,
     ): array {
-        $heuristic = $this->suggest($driver, $track, $raceWet, $rainAvg);
-        $advice = $heuristic + [
+        $advice = $this->suggest($driver, $track, $raceWet, $rainAvg) + [
             'source' => 'estimate',
-            'races' => $model->races(),
-            'replays' => $model->replayRaces(),
-            'needed' => RiskModel::MIN_REPLAY,
+            'races' => $curve->rows(),
+            'needed' => RiskCurve::MIN_ROWS,
             'places' => null,
-            'mistakes' => null,
+            'usual' => null,
+            'factors' => [],
         ];
 
-        $division = $race['division'] ?? null;
-        if ($race === null || $division === null || !in_array($division, self::LEVELS, true) || !$model->ready()) {
-            return $advice;
-        }
-
-        $situation = [
-            'level' => $division,
+        $context = [
             'wet' => $raceWet,
-            'laps' => $race['laps'],
-            'ctr' => $race['ctr'],
-            'con' => (int) ($driver['concentration'] ?? 0),
-            'tal' => (int) ($driver['talent'] ?? 0),
+            'track' => self::OVERTAKING_ORDINAL[(string) ($track['overtaking'] ?? '')] ?? 2,
+            'grip' => self::GRIP_ORDINAL[(string) ($track['grip'] ?? '')] ?? 2,
             'agg' => (int) ($driver['aggressiveness'] ?? 0),
             'exp' => (int) ($driver['experience'] ?? 0),
-            'track' => self::OVERTAKING_ORDINAL[(string) ($track['overtaking'] ?? '')] ?? 2,
-            'grid' => $race['grid'],
+            'con' => (int) ($driver['concentration'] ?? 0),
+            'grid' => $grid,
         ];
-        $learned = $model->recommend($situation, $placeGap->secondsPerPlace($division, $race['laps']));
+        $learned = $curve->recommend($context);
         if ($learned === null) {
             return $advice;
         }
 
-        $weight = $model->weight();
-        $advice['overtake'] = self::blend($learned['overtake'], $heuristic['overtake'], $weight);
-        $advice['defend'] = self::blend($learned['defend'], $heuristic['defend'], $weight);
-        $advice['source'] = 'learned';
-
-        $forecast = $model->forecast($situation, $advice['overtake'], $advice['defend']);
-        if ($forecast !== null) {
-            $advice['places'] = $forecast['places'] - $forecast['passed'];
-            $advice['mistakes'] = $forecast['mistakes'];
-        }
-
-        return $advice;
-    }
-
-    private static function blend(int $learned, int $heuristic, float $weight): int
-    {
-        $mixed = (int) (round(($weight * $learned + (1 - $weight) * $heuristic) / 5) * 5);
-
-        return max(self::MIN_RISK, min(self::MAX_RISK, $mixed));
+        return [
+            'overtake' => $learned['overtake'],
+            'defend' => $learned['defend'],
+            'places' => $learned['places'],
+            'source' => 'learned',
+            'usual' => $curve->usual(),
+            'factors' => $curve->factors($context),
+        ] + $advice;
     }
 
     /**
