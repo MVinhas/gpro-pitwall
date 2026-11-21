@@ -13,6 +13,7 @@ return [
         'Training Planner',
         'Car Wear Planner',
         'Recruitment Analyzer',
+        'Standings',
         'Race Engineer',
         'Debrief',
         'Season',

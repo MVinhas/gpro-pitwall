@@ -1,0 +1,380 @@
+{% extends "layout.twig" %}
+{% import "partials/_localtime.twig" as lt %}
+
+{% block title %}Standings — GPRO Pitwall{% endblock %}
+{% block robots %}<meta name="robots" content="noindex,nofollow">{% endblock %}
+{% block canonical_path %}/standings{% endblock %}
+
+{% macro status_badge(status) %}
+    {%- set tone = {
+        'clinched':   ['bg-emerald-100 text-emerald-800', 'Secured'],
+        'reachable':  ['bg-blue-100 text-blue-800', 'In your hands'],
+        'needs_help': ['bg-amber-100 text-amber-800', 'Needs help'],
+        'out':        ['bg-red-100 text-red-800', 'Out of reach'],
+    }[status] -%}
+    <span class="inline-flex items-center rounded-md px-1.5 py-px text-xs font-semibold {{ tone[0] }}">{{ tone[1] }}</span>
+{%- endmacro %}
+
+{% macro signed(n) %}{{ n > 0 ? '+' ~ n : n }}{% endmacro %}
+
+{% block content %}
+    {% include 'partials/_nav.twig' %}
+
+<div class="space-y-5">
+
+    <div>
+        <h1 class="t-display">Standings</h1>
+        <p class="t-caption mt-1">
+            {% if available %}
+                {{ group }} · {{ races_run }} of {{ races }} races run · {{ races_left }} left, {{ points_on_offer }} points on offer
+                {% if fetched_at %} · data from {{ lt.localtime(fetched_at) }}{% endif %}
+            {% else %}
+                Your group's season table and what it takes to win, promote or stay up.
+            {% endif %}
+        </p>
+    </div>
+
+    {% if not available %}
+        {% include 'partials/_empty.twig' with {
+            title: 'No standings yet',
+            body: 'The table appears after your first sync. Re-sync to load it.'
+        } only %}
+    {% else %}
+
+    {# ---- What it takes ---- #}
+    {% if own %}
+        <section class="card" aria-labelledby="st-lines">
+            <div class="card-hd">
+                <h2 id="st-lines" class="t-heading">What it takes</h2>
+            </div>
+            <div class="card-bd space-y-4">
+                <div class="grid gap-3 sm:grid-cols-3">
+                    <div>
+                        <p class="t-label">You</p>
+                        <p class="t-value">P{{ own.pos }} · {{ own.pts }} pts</p>
+                        <p class="t-caption">At most {{ own.max }} pts by season end</p>
+                    </div>
+                    <div>
+                        <p class="t-label">On current pace</p>
+                        <p class="t-value">P{{ own.projected_pos }} · {{ own.projected_pts }} pts</p>
+                        <p class="t-caption">{{ own.pace|number_format(1) }} pts per race so far</p>
+                    </div>
+                    <div>
+                        <p class="t-label">Form, last {{ min(3, races_run) }} races</p>
+                        <p class="t-value">{{ own.last3 }} pts</p>
+                        <p class="t-caption">Average finish {{ own.avg_pos is null ? '—' : 'P' ~ own.avg_pos }} · {{ own.wins }} wins · {{ own.podiums }} podiums</p>
+                    </div>
+                </div>
+
+                <div class="dt-scroll">
+                    <table class="dt">
+                        <thead class="bg-slate-50">
+                            <tr>
+                                <th class="dt-th">Goal</th>
+                                <th class="dt-th">Status</th>
+                                <th class="dt-th text-right">Today</th>
+                                <th class="dt-th text-right">To be sure</th>
+                                <th class="dt-th text-right hidden sm:table-cell">To beat the pace</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            {% for l in lines %}
+                                <tr>
+                                    <td class="dt-td">
+                                        <span class="font-medium">{{ l.label }}</span>
+                                        <span class="text-slate-500">· top {{ l.line_pos }}</span>
+                                    </td>
+                                    <td class="dt-td">{{ _self.status_badge(l.status) }}</td>
+                                    <td class="dt-td text-right whitespace-normal">
+                                        {% if l.margin is null %}—
+                                        {% elseif own.pos <= l.line_pos %}
+                                            Inside, {{ l.margin }} pts clear
+                                        {% else %}
+                                            {{ -l.margin }} pts behind{% if l.holder %} {{ l.holder }}{% endif %}
+                                        {% endif %}
+                                    </td>
+                                    <td class="dt-td text-right whitespace-normal">
+                                        {% if l.status == 'clinched' %}Done
+                                        {% elseif l.status == 'reachable' %}{{ l.needed }} pts · {{ l.per_race|number_format(1) }}/race
+                                        {% elseif l.status == 'needs_help' %}Rivals must drop points
+                                        {% else %}Not possible{% endif %}
+                                    </td>
+                                    <td class="dt-td text-right hidden sm:table-cell">
+                                        {% if l.status == 'out' or l.pace_needed is null %}—
+                                        {% elseif l.pace_needed > 10 %}Not on pace
+                                        {% elseif l.pace_needed == 0 %}On track
+                                        {% else %}{{ l.pace_needed|number_format(1) }}/race
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <p class="t-caption">
+                    "To be sure" holds even if every rival won every race left; a tie is never counted as safe.
+                    "To beat the pace" is what you need per race to finish ahead of whoever is projected on the line,
+                    if everyone keeps scoring as they have so far. A race is worth at most 10 points (10-8-6-5-4-3-2-1).
+                </p>
+            </div>
+        </section>
+    {% endif %}
+
+    {# ---- Direct rivals ---- #}
+    {% if rivals %}
+        <section class="card" aria-labelledby="st-rivals">
+            <div class="card-hd">
+                <h2 id="st-rivals" class="t-heading">Direct rivals</h2>
+            </div>
+            <div class="card-bd space-y-4">
+                <div class="dt-scroll">
+                    <table class="dt">
+                        <thead class="bg-slate-50">
+                            <tr>
+                                <th class="dt-th">Pos</th>
+                                <th class="dt-th">Manager</th>
+                                <th class="dt-th text-right">Pts</th>
+                                <th class="dt-th text-right">Gap</th>
+                                <th class="dt-th text-right hidden sm:table-cell">Max</th>
+                                <th class="dt-th text-right">Last {{ min(3, races_run) }}</th>
+                                <th class="dt-th text-right hidden sm:table-cell">Avg finish</th>
+                                <th class="dt-th text-right hidden md:table-cell">Wins · podiums</th>
+                                <th class="dt-th text-right">Head to head</th>
+                                <th class="dt-th text-right hidden md:table-cell">Pace finish</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            {# Your own row sits among the rivals, in table order, so you can see where you stand. #}
+                            {% set rival_rows = rivals|merge([{row: own, gap: 0, me: true}])|sort((a, b) => a.row.pos <=> b.row.pos) %}
+                            {% for r in rival_rows %}
+                                <tr class="{{ r.me|default(false) ? 'bg-blue-50 font-semibold' : '' }}">
+                                    <td class="dt-td">P{{ r.row.pos }}</td>
+                                    <td class="dt-td whitespace-normal">{{ r.row.name }}{% if r.me|default(false) %} <span class="text-slate-500">(you)</span>{% endif %}</td>
+                                    <td class="dt-td text-right">{{ r.row.pts }}</td>
+                                    {% if r.me|default(false) %}
+                                        <td class="dt-td text-right text-slate-500">—</td>
+                                    {% else %}
+                                        <td class="dt-td text-right {{ r.gap > 0 ? 'text-red-700' : 'text-emerald-700' }}">{{ _self.signed(r.gap) }}</td>
+                                    {% endif %}
+                                    <td class="dt-td text-right hidden sm:table-cell">{{ r.row.max }}</td>
+                                    <td class="dt-td text-right">{{ r.row.last3 }}</td>
+                                    <td class="dt-td text-right hidden sm:table-cell">{{ r.row.avg_pos is null ? '—' : 'P' ~ r.row.avg_pos }}</td>
+                                    <td class="dt-td text-right hidden md:table-cell">{{ r.row.wins }} · {{ r.row.podiums }}</td>
+                                    {% if r.me|default(false) %}
+                                        <td class="dt-td text-right text-slate-500">—</td>
+                                    {% else %}
+                                        <td class="dt-td text-right" title="Races both of you finished: you ahead – them ahead">{{ r.h2h_ahead }}–{{ r.h2h_behind }}</td>
+                                    {% endif %}
+                                    <td class="dt-td text-right hidden md:table-cell">P{{ r.row.projected_pos }} · {{ r.row.projected_pts }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <p class="t-caption">Managers who can still finish ahead of you, or you of them. Gap is their points minus yours; head to head counts the races you both finished.</p>
+
+            </div>
+        </section>
+    {% endif %}
+
+    {# ---- Points progression ---- #}
+    {% if races_run > 1 %}
+        {# Without JavaScript: a static chart of you and your rivals. With it, the
+           picker below appears and the chart redraws for whoever is ticked, with
+           the scale fitted to them. Every figure is also in the tables. #}
+        {% set series = (own ? [own] : [])|merge(rivals|map(r => r.row)) %}
+        {% set default_idms = series|map(s => s.idm) %}
+        {% set top = max(1, max(series|map(s => s.cumulative|last ?: 0))) %}
+        {% set w = 640 %}{% set h = 240 %}
+        {% set palette = ['#dc2626', '#d97706', '#059669', '#7c3aed', '#db2777', '#0891b2', '#65a30d', '#78716c', '#ea580c', '#4f46e5'] %}
+        {% set chart_data = rows|filter(r => r.started > 0)|map(r => {id: r.idm, name: r.name, pos: r.pos, pts: r.pts, me: r.own, c: r.cumulative, on: r.idm in default_idms}) %}
+        <section class="card" aria-labelledby="st-chart">
+            <div class="card-hd">
+                <h2 id="st-chart" class="t-heading">Points progression</h2>
+            </div>
+            <div class="card-bd space-y-3">
+                <div id="stChart" data-series="{{ chart_data|json_encode }}" data-races="{{ races }}" data-run="{{ races_run }}" class="text-slate-500">
+                    <svg viewBox="-4 -4 {{ w + 8 }} {{ h + 8 }}" class="h-56 w-full" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+                        <line x1="0" y1="{{ h }}" x2="{{ w }}" y2="{{ h }}" stroke="currentColor" stroke-opacity="0.3" vector-effect="non-scaling-stroke"/>
+                        {% for s in series %}
+                            {% set pts = [] %}
+                            {% for i, c in s.cumulative %}
+                                {% set pts = pts|merge([((i / (races - 1)) * w)|round(1) ~ ',' ~ (h - c / top * h)|round(1)]) %}
+                            {% endfor %}
+                            <polyline fill="none" stroke="{{ s.own ? '#2563eb' : palette[(loop.index0 - (own ? 1 : 0)) % palette|length] }}" stroke-width="{{ s.own ? 3 : 1.5 }}"
+                                      stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" points="{{ pts|join(' ') }}"/>
+                        {% endfor %}
+                    </svg>
+                </div>
+
+                <div id="stPicker" hidden class="space-y-2">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="t-label">Show</span>
+                        <button type="button" class="btn btn-sm btn-secondary" data-pick="rivals">You and rivals</button>
+                        <button type="button" class="btn btn-sm btn-secondary" data-pick="top">Top 8</button>
+                        <button type="button" class="btn btn-sm btn-secondary" data-pick="none">Only you</button>
+                    </div>
+                    <div id="stPickerList" class="flex flex-wrap gap-1.5"></div>
+                </div>
+
+                <p class="t-caption">Points after each race, on the whole season's {{ races }} races so the empty stretch shows what is left. Tick managers to compare; hover a line for its name.</p>
+            </div>
+        </section>
+
+        <script>
+        (() => {
+            const box = document.getElementById('stChart');
+            const picker = document.getElementById('stPicker');
+            const list = document.getElementById('stPickerList');
+            if (!box || !picker || !list) return;
+
+            const series = JSON.parse(box.dataset.series);
+            const races = Number(box.dataset.races);
+            const run = Number(box.dataset.run);
+            const ME = '#2563eb';
+            const PALETTE = {{ palette|json_encode|raw }};
+            const W = 640, H = 240, L = 34, B = 22, T = 8, R = 10;
+            const NS = 'http://www.w3.org/2000/svg';
+            const defaults = new Set(series.filter(s => s.on).map(s => s.id));
+            const picked = new Set(defaults);
+            const colour = new Map();
+
+            const el = (name, attrs, text) => {
+                const node = document.createElementNS(NS, name);
+                for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+                if (text !== undefined) node.textContent = text;
+                return node;
+            };
+
+            // Stable colours: you are always blue; others keep the colour they got when first ticked.
+            const colourOf = (s) => {
+                if (s.me) return ME;
+                if (!colour.has(s.id)) {
+                    const used = new Set(colour.values());
+                    colour.set(s.id, PALETTE.find(c => !used.has(c)) ?? PALETTE[colour.size % PALETTE.length]);
+                }
+                return colour.get(s.id);
+            };
+
+            const draw = () => {
+                const shown = series.filter(s => s.me || picked.has(s.id));
+                const maxPts = Math.max(10, ...shown.map(s => s.c[s.c.length - 1] ?? 0));
+                const top = Math.ceil(maxPts / 20) * 20;
+                const x = (i) => L + (i / (races - 1)) * (W - L - R);
+                const y = (v) => T + (1 - v / top) * (H - T - B);
+
+                const svg = el('svg', {viewBox: `0 0 ${W} ${H}`, class: 'w-full h-auto', role: 'img',
+                    'aria-label': 'Cumulative points per race for the selected managers'});
+                for (let k = 0; k <= 4; k++) {
+                    const v = (top / 4) * k;
+                    svg.append(el('line', {x1: L, x2: W - R, y1: y(v), y2: y(v), stroke: 'currentColor', 'stroke-opacity': k ? 0.12 : 0.35}));
+                    svg.append(el('text', {x: L - 6, y: y(v) + 3, 'text-anchor': 'end', 'font-size': 10, fill: 'currentColor'}, String(v)));
+                }
+                for (let i = 0; i < races; i++) {
+                    svg.append(el('text', {x: x(i), y: H - 6, 'text-anchor': 'middle', 'font-size': 10, fill: 'currentColor',
+                        'fill-opacity': i < run ? 1 : 0.45}, String(i + 1)));
+                }
+                // Draw you last so your line sits on top.
+                for (const s of [...shown].sort((a, b) => a.me - b.me)) {
+                    const points = s.c.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+                    const line = el('polyline', {points, fill: 'none', stroke: colourOf(s), 'stroke-width': s.me ? 3 : 1.75,
+                        'stroke-linejoin': 'round', 'stroke-linecap': 'round'});
+                    line.append(el('title', {}, `${s.me ? 'You' : s.name} · P${s.pos} · ${s.pts} pts`));
+                    svg.append(line);
+                    const last = s.c.length - 1;
+                    if (last >= 0) svg.append(el('circle', {cx: x(last), cy: y(s.c[last]), r: s.me ? 3.5 : 2.5, fill: colourOf(s)}));
+                }
+                box.replaceChildren(svg);
+
+                for (const chip of list.children) {
+                    const s = series.find(m => String(m.id) === chip.dataset.id);
+                    const on = s.me || picked.has(s.id);
+                    chip.querySelector('input').checked = on;
+                    chip.querySelector('[data-swatch]').style.background = on ? colourOf(s) : 'transparent';
+                }
+            };
+
+            for (const s of series) {
+                const chip = document.createElement('label');
+                chip.dataset.id = String(s.id);
+                chip.className = 'inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-slate-200 px-2 py-0.5 text-xs focus-within:ring-2 focus-within:ring-blue-500'
+                    + (s.me ? ' font-semibold' : '');
+                const input = document.createElement('input');
+                input.type = 'checkbox';
+                input.className = 'sr-only';
+                input.disabled = s.me;
+                input.addEventListener('change', () => {
+                    if (input.checked) picked.add(s.id); else { picked.delete(s.id); colour.delete(s.id); }
+                    draw();
+                });
+                const swatch = document.createElement('span');
+                swatch.dataset.swatch = '';
+                swatch.className = 'inline-block h-2.5 w-2.5 rounded-full border border-slate-300';
+                chip.append(input, swatch, document.createTextNode(`P${s.pos} ${s.me ? 'You' : s.name}`));
+                list.append(chip);
+            }
+
+            picker.addEventListener('click', (e) => {
+                const mode = e.target.closest('[data-pick]')?.dataset.pick;
+                if (!mode) return;
+                picked.clear();
+                colour.clear();
+                const ids = mode === 'rivals' ? [...defaults]
+                    : mode === 'top' ? series.filter(s => s.pos <= 8).map(s => s.id) : [];
+                ids.forEach(id => picked.add(id));
+                draw();
+            });
+
+            picker.hidden = false;
+            draw();
+        })();
+        </script>
+    {% endif %}
+
+    {# ---- Race by race ---- #}
+    <section class="card" aria-labelledby="st-table">
+        <div class="card-hd">
+            <h2 id="st-table" class="t-heading">Race by race</h2>
+        </div>
+        <div class="card-bd space-y-3">
+            <div class="dt-scroll">
+                <table class="dt">
+                    <thead class="bg-slate-50">
+                        <tr>
+                            <th class="dt-th">Pos</th>
+                            <th class="dt-th">Manager</th>
+                            <th class="dt-th text-right">Pts</th>
+                            {% for i in 1..races %}
+                                <th class="dt-th text-center {{ i > races_run ? 'text-slate-400' : '' }}">{{ i }}</th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        {% for r in rows %}
+                            {% set zone = r.zone == 'promote' ? 'border-l-4 border-l-emerald-500' : (r.zone == 'relegate' ? 'border-l-4 border-l-red-500' : 'border-l-4 border-l-transparent') %}
+                            <tr class="{{ r.own ? 'bg-blue-50 font-semibold' : '' }}">
+                                <td class="dt-td {{ zone }}">P{{ r.pos }}</td>
+                                <td class="dt-td whitespace-nowrap">{{ r.name }}</td>
+                                <td class="dt-td text-right">{{ r.pts }}</td>
+                                {% for c in r.results %}
+                                    {% if not c.run %}
+                                        <td class="dt-td text-center text-slate-300">·</td>
+                                    {% elseif c.label == '' %}
+                                        <td class="dt-td text-center text-slate-400">–</td>
+                                    {% else %}
+                                        <td class="dt-td text-center {{ c.pos == 1 ? 'text-emerald-700 font-semibold' : (c.pos is not null and c.pos <= 3 ? 'text-emerald-700' : (c.pts == 0 ? 'text-slate-500' : '')) }}"
+                                            title="{{ c.pts }} pts">{{ c.label }}</td>
+                                    {% endif %}
+                                {% endfor %}
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <p class="t-caption">Finishing position in each race; hover a cell for its points. A green edge marks the promotion zone, red the relegation zone; – means no result, · a race still to run.</p>
+        </div>
+    </section>
+
+    {% endif %}
+</div>
+{% endblock %}

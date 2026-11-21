@@ -27,8 +27,8 @@ return function (Router $router): void {
     $router->add('GET', '/', 'controller.page', 'index');
 
     foreach (App\Http\Sections::all() as $sectionPath) {
-        // The Debrief and Season have their own controllers, registered below.
-        if (!in_array($sectionPath, ['/debrief', '/season'], true)) {
+        // The Debrief, Season and Standings have their own controllers, registered below.
+        if (!in_array($sectionPath, ['/debrief', '/season', '/standings'], true)) {
             $router->add('GET', $sectionPath, 'controller.page', 'index');
         }
     }
@@ -50,6 +50,9 @@ return function (Router $router): void {
     $router->add('GET', '/debrief', 'controller.debrief', 'index');
     $router->add('GET', '/debrief/track', 'controller.debrief', 'track');
     $router->add('GET', '/debrief/insights', 'controller.debrief', 'insights');
+
+    // ========== STANDINGS ==========
+    $router->add('GET', '/standings', 'controller.standings', 'index');
 
     // ========== SEASON ==========
     $router->add('GET', '/season', 'controller.season', 'index');
