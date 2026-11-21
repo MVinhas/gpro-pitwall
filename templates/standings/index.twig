@@ -97,12 +97,20 @@
                                         {% if l.status == 'clinched' %}Done
                                         {% elseif l.status == 'reachable' %}{{ l.needed }} pts · {{ l.per_race|number_format(1) }}/race
                                         {% elseif l.status == 'needs_help' and l.condition %}
+                                            {# One short line each: you, then the rivals who must stay behind. #}
                                             {% set c = l.condition %}
                                             {% set each = c.threats|map(t => t.name ~ ' scores ' ~ t.at_most ~ ' pts or less') %}
-                                            {% if c.need == 0 %}Win every race left
-                                            {% elseif c.need == c.threats|length %}Only if you win every race left and {{ each|join(', ', ' and ') }}
-                                            {% else %}Only if you win every race left and at least {{ c.need }} of these happen: {{ each|join('; ') }}
-                                            {% endif %}
+                                            {% set full = c.need == 0 ? 'Win every race left'
+                                                : 'Only if you win every race left and ' ~ (c.need == c.threats|length ? each|join(', ', ' and ') : 'at least ' ~ c.need ~ ' of these happen: ' ~ each|join('; ')) %}
+                                            <span class="inline-block text-left leading-snug" title="{{ full }}">
+                                                <span class="block">You: win all {{ races_left }}</span>
+                                                {% if c.need > 0 %}
+                                                    {% if c.need < c.threats|length %}<span class="block text-slate-500">At least {{ c.need }} of:</span>{% endif %}
+                                                    {% for t in c.threats %}
+                                                        <span class="block">{{ t.name }}: {{ t.at_most }} pts at most</span>
+                                                    {% endfor %}
+                                                {% endif %}
+                                            </span>
                                         {% else %}Rivals must drop points{% endif %}
                                     </td>
                                     <td class="dt-td text-right hidden sm:table-cell">
