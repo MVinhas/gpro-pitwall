@@ -6,6 +6,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.45] - 2026-11-21
+
+### Fixed
+- A race on a track Pitwall has no data for (Hanoi, new in season 113) no longer gets false advice. The race
+  engineer said "Nothing to swap" on a car with parts at 97 % and dropped its CTR, risk and boost lines without
+  a word; it now says it has no wear figures for the track, names the most worn parts, and says why Step 3 has
+  no race settings. The testing check reads the car's own wear, so parts above 90 % still block the session,
+  and the Cockpit shows a caution notice in place of the hidden wear card.
+
 ## [1.21.44] - 2026-11-13
 
 ### Changed
