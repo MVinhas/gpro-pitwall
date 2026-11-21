@@ -18,6 +18,7 @@ use App\Support\RaceSettings;
 use App\Support\RaceWindow;
 use App\Support\RecruitmentQuery;
 use App\Support\SyncState;
+use App\Support\TrackName;
 use App\Service\IdealPilotService;
 use App\Service\InsightService;
 use App\Service\NoBaselineException;
@@ -842,6 +843,9 @@ class PageController
                     // adds up to more than the manager can pay.
                     $viewData['cockpit_cash'] = $cash;
                 }
+            } else {
+                $missing = (string) ($wear['track'] ?? '');
+                $viewData['cockpit_unknown_track'] = $missing === '' ? TrackName::base($trackName) : $missing;
             }
 
             if ($isEngineerRequest) {

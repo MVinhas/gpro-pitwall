@@ -497,6 +497,56 @@ final class RaceEngineerServiceTest extends TestCase
         self::assertNotContains('boost', $keys);
     }
 
+    /**
+     * @param array<string, mixed> $overrides
+     * @return array<string, array<string, mixed>>
+     */
+    private function linesOnAnUnknownTrack(array $overrides = []): array
+    {
+        $lines = $this->service->forCockpit(self::USER, $this->cockpit($overrides + [
+            'track_name' => 'Hanoi (Vietnam)',
+            'wear' => ['error' => 'Track not found: Hanoi'],
+            'wear_advice' => null,
+            'car' => ['usaChassis' => 97, 'usaFWing' => 94, 'usaGear' => 94, 'usaEngine' => 77],
+            'season_calendar' => [['race' => 9, 'track_name' => 'Testring'], ['race' => 10, 'track_name' => 'Hanoi']],
+        ]))['lines'];
+
+        return array_column($lines, null, 'key');
+    }
+
+    public function testATrackWithNoRowAndNoWearSaysSoInsteadOfNothingToSwap(): void
+    {
+        $this->seedPromotionFixture();
+
+        $lines = $this->linesOnAnUnknownTrack();
+
+        self::assertSame('No wear figures for Hanoi', $lines['parts']['answer']);
+        self::assertSame(
+            'Check the swaps yourself; most worn: Chassis 97 %, Front Wing 94 %, Gearbox 94 %',
+            $lines['parts']['reason'],
+        );
+        self::assertSame('No race settings for Hanoi', $lines['ctr']['answer']);
+        self::assertArrayNotHasKey('risk', $lines);
+        self::assertArrayNotHasKey('boost', $lines);
+    }
+
+    public function testWithoutTheTracksWearTheTestingGateReadsTheCarsWear(): void
+    {
+        $this->seedPromotionFixture();
+
+        $testing = $this->linesOnAnUnknownTrack([
+            'testing_open' => true,
+            'testing_track' => 'Kyalami',
+            'testing_targets' => [[
+                'offset' => 3, 'season' => 'current', 'race' => 13, 'track_id' => 1, 'track_name' => 'Testring',
+                'power' => 1, 'handling' => 1, 'acceleration' => 1,
+            ]],
+        ])['testing'];
+
+        self::assertSame('Testing blocked', $testing['answer']);
+        self::assertStringStartsWith('Chassis at 97 %, Front Wing at 94 %, Gearbox at 94 %', $testing['reason']);
+    }
+
     public function testPushAdviceFollowsTheNextRacesRound(): void
     {
         $this->seedPromotionFixture();

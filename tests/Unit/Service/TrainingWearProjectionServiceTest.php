@@ -233,6 +233,7 @@ final class TrainingWearProjectionServiceTest extends TestCase
         );
 
         $this->assertArrayHasKey('error', $result);
+        $this->assertSame('Nowhere', $result['track']);
     }
 
     public function testAnUnknownTestingTrackIsReportedAsAnErrorRatherThanGuessed(): void
@@ -247,6 +248,7 @@ final class TrainingWearProjectionServiceTest extends TestCase
         );
 
         $this->assertArrayHasKey('error', $result);
+        $this->assertSame('Nowhere', $result['track']);
     }
 
     /**

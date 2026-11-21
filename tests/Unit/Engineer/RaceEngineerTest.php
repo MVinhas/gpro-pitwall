@@ -3274,4 +3274,58 @@ final class RaceEngineerTest extends TestCase
         self::assertGreaterThan(0, RaceEngineer::upgradeBudget($in));
         self::assertSame(RaceEngineer::upgradeBudget($in), RaceEngineer::spare($in));
     }
+
+    /**
+     * @param array<string, mixed> $o
+     */
+    private function onUnknownTrack(array $o = []): EngineerInputs
+    {
+        return $this->inputs($o + [
+            'unknownTrack' => 'Hanoi',
+            'carWear' => ['Engine' => 77, 'Chassis' => 97, 'Front Wing' => 94, 'Sidepods' => 92, 'Gearbox' => 94],
+            'ctrCeiling' => null,
+            'risk' => null,
+            'boost' => null,
+        ]);
+    }
+
+    public function testOnAnUnknownTrackThePartsLineSaysTheWearIsUnknownAndNamesTheMostWornParts(): void
+    {
+        $parts = $this->line($this->onUnknownTrack(), 'parts');
+
+        self::assertSame('No wear figures for Hanoi', $parts['answer']);
+        self::assertSame('Check the swaps yourself; most worn: Chassis 97 %, Front Wing 94 %, Gearbox 94 %', $parts['reason']);
+        self::assertSame('amber', $parts['tone']);
+        self::assertNull($parts['anchor']);
+    }
+
+    public function testOnAnUnknownTrackWithoutCarWearThePartsLineStillSaysCheckTheSwaps(): void
+    {
+        $parts = $this->line($this->onUnknownTrack(['carWear' => []]), 'parts');
+
+        self::assertSame('Check the swaps yourself', $parts['reason']);
+    }
+
+    public function testOnAnUnknownTrackAnUpdatedCarKeepsTheUpdatedLine(): void
+    {
+        $known = $this->line($this->inputs(['carUpdated' => true]), 'parts');
+        $unknown = $this->line($this->onUnknownTrack(['carUpdated' => true]), 'parts');
+
+        self::assertSame($known['answer'], $unknown['answer']);
+    }
+
+    public function testOnAnUnknownTrackTheRaceStepSaysWhyItHasNoSettings(): void
+    {
+        $in = $this->onUnknownTrack();
+        $ctr = $this->line($in, 'ctr');
+
+        self::assertSame('No race settings for Hanoi', $ctr['answer']);
+        self::assertSame("CTR, risks and boost need the track's figures", $ctr['reason']);
+        self::assertSame('amber', $ctr['tone']);
+        self::assertNull($ctr['action']);
+        self::assertSame(['ctr'], array_values(array_intersect(
+            array_column(RaceEngineer::brief($in), 'key'),
+            ['ctr', 'risk', 'boost'],
+        )));
+    }
 }

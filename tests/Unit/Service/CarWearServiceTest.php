@@ -131,6 +131,7 @@ final class CarWearServiceTest extends TestCase
         );
 
         $this->assertArrayHasKey('error', $result);
+        $this->assertSame('Unknown', $result['track']);
     }
 
     public function testTestingWearRatesScaleFullRaceBaseByLapsDriverAndTestingFactor(): void
@@ -171,12 +172,13 @@ final class CarWearServiceTest extends TestCase
         $db->exec("CREATE TABLE tracks (id INTEGER PRIMARY KEY, name TEXT, laps INTEGER)");
 
         $result = $this->service($db)->testingWearRates(
-            ['id' => 0, 'name' => 'Nowhere'],
+            ['id' => 0, 'name' => 'Nowhere (Atlantis)'],
             [],
             [],
         );
 
         $this->assertArrayHasKey('error', $result);
+        $this->assertSame('Nowhere', $result['track']);
     }
 
     public function testRaceWearIsTheUnroundedIncrementProjectEndWearAdds(): void

@@ -44,7 +44,7 @@ final readonly class TrainingWearProjectionService
 
         $rates = $this->wear->testingWearRates($testingTrackData, $carData, $driver);
         if (isset($rates['error'])) {
-            return ['error' => $rates['error']];
+            return ['error' => $rates['error'], 'track' => $rates['track']];
         }
 
         $trainingWear = [];
@@ -60,7 +60,7 @@ final readonly class TrainingWearProjectionService
         // race increment itself doesn't depend on start wear anyway.
         $race = $this->wear->calculateWear($trackData, $carData, $driver, $risk);
         if (isset($race['error'])) {
-            return ['error' => $race['error']];
+            return ['error' => $race['error'], 'track' => $race['track']];
         }
 
         $parts = [];
