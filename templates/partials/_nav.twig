@@ -26,7 +26,7 @@
    no reordering of the sections themselves. #}
 {% macro group_of(section, division_tabs) %}
 {%- if section in division_tabs or section in ['Race Engineer', 'Debrief', 'Season'] -%}admin
-{%- elseif section in ['Training Planner', 'Recruitment Analyzer', 'Car Wear Planner', 'Standings'] -%}team
+{%- elseif section in ['Training Planner', 'Recruitment Analyzer', 'Car Wear Planner'] -%}team
 {%- else -%}race
 {%- endif -%}
 {% endmacro %}
