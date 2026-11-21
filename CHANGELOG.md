@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.46] - 2026-11-21
+
+### Added
+- Hanoi, new in season 113, has best-guess track figures built from the other tracks, so every screen advises for
+  it: car wear, strategy, testing and the race engineer's CTR, risk and boost. Each screen that reads an estimated
+  track says at the top that the track is new and its figures are best guesses until its races tune them.
+
 ## [1.21.45] - 2026-11-21
 
 ### Fixed
