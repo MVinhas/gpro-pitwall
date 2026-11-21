@@ -78,7 +78,7 @@
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
-                            {% for l in lines %}
+                            {% for l in lines|filter(l => l.status != 'out') %}
                                 <tr>
                                     <td class="dt-td">
                                         <span class="font-medium">{{ l.label }}</span>
@@ -96,8 +96,14 @@
                                     <td class="dt-td text-right whitespace-normal">
                                         {% if l.status == 'clinched' %}Done
                                         {% elseif l.status == 'reachable' %}{{ l.needed }} pts · {{ l.per_race|number_format(1) }}/race
-                                        {% elseif l.status == 'needs_help' %}Rivals must drop points
-                                        {% else %}Not possible{% endif %}
+                                        {% elseif l.status == 'needs_help' and l.condition %}
+                                            {% set c = l.condition %}
+                                            {% set each = c.threats|map(t => t.name ~ ' scores ' ~ t.at_most ~ ' pts or less') %}
+                                            {% if c.need == 0 %}Win every race left
+                                            {% elseif c.need == c.threats|length %}Only if you win every race left and {{ each|join(', ', ' and ') }}
+                                            {% else %}Only if you win every race left and at least {{ c.need }} of these happen: {{ each|join('; ') }}
+                                            {% endif %}
+                                        {% else %}Rivals must drop points{% endif %}
                                     </td>
                                     <td class="dt-td text-right hidden sm:table-cell">
                                         {% if l.status == 'out' or l.pace_needed is null %}—
@@ -111,8 +117,14 @@
                         </tbody>
                     </table>
                 </div>
+                {% set gone = lines|filter(l => l.status == 'out')|map(l => l.label) %}
+                {% if gone %}
+                    <p class="text-sm text-slate-600">No longer possible: {{ gone|join(', ') }}.</p>
+                {% endif %}
                 <p class="t-caption">
                     "To be sure" holds even if every rival won every race left; a tie is never counted as safe.
+                    When it is no longer in your hands alone, it shows what the others must do while you win every race left
+                    (they can then score at most 8 a race, for second place).
                     "To beat the pace" is what you need per race to finish ahead of whoever is projected on the line,
                     if everyone keeps scoring as they have so far. A race is worth at most 10 points (10-8-6-5-4-3-2-1).
                 </p>

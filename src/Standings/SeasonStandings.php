@@ -50,7 +50,12 @@ use App\Engineer\SeasonObjective;
  *     margin: ?int,
  *     holder: ?string,
  *     projected_in: bool,
- *     pace_needed: ?float
+ *     pace_needed: ?float,
+ *     condition: ?Condition
+ * }
+ * @phpstan-type Condition array{
+ *     need: int,
+ *     threats: list<array{name: string, at_most: int}>
  * }
  * @phpstan-type Rival array{
  *     row: Row,
@@ -63,6 +68,8 @@ final class SeasonStandings
 {
     public const int MAX_RIVALS = 8;
     public const int FORM_RACES = 3;
+    /** The most a rival can score in a race the manager wins: second place. */
+    public const int SECOND_PLACE_POINTS = 8;
 
     public const string ZONE_PROMOTE = 'promote';
     public const string ZONE_RELEGATE = 'relegate';
@@ -386,7 +393,33 @@ final class SeasonStandings
             'holder' => $holder === null || $holder['own'] ? null : $holder['name'],
             'projected_in' => $own['projected_pos'] <= $linePos,
             'pace_needed' => $paceNeeded,
+            'condition' => $status === self::NEEDS_HELP ? self::condition($others, $own, $linePos, $racesLeft) : null,
         ];
+    }
+
+    /**
+     * What else must happen for a line that is no longer in the manager's hands
+     * alone, assuming they win every race left (so a rival scores at most second
+     * place each time). Threats are the rivals who could still reach the
+     * manager's maximum that way; `need` of them must score at most `at_most`
+     * points (one short of a tie, which countback could lose). `need` 0 means
+     * winning every race left is enough.
+     *
+     * @param list<Row> $others
+     * @param Row $own
+     * @return Condition
+     */
+    private static function condition(array $others, array $own, int $linePos, int $racesLeft): array
+    {
+        $threats = [];
+        foreach ($others as $row) {
+            if ($row['pts'] + self::SECOND_PLACE_POINTS * $racesLeft >= $own['max']) {
+                $threats[] = ['name' => $row['name'], 'at_most' => max(0, $own['max'] - 1 - $row['pts'])];
+            }
+        }
+        usort($threats, static fn (array $a, array $b): int => $a['at_most'] <=> $b['at_most']);
+
+        return ['need' => max(0, count($threats) - ($linePos - 1)), 'threats' => $threats];
     }
 
     /**
