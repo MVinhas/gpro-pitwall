@@ -51,11 +51,29 @@ use App\Engineer\SeasonObjective;
  *     holder: ?string,
  *     projected_in: bool,
  *     pace_needed: ?float,
- *     condition: ?Condition
+ *     condition: ?Condition,
+ *     scenarios: list<Scenario>,
+ *     ways: list<Way>,
+ *     pace_target: ?int,
+ *     pace_points: ?int,
+ *     pace_rival: ?string
+ * }
+ * @phpstan-type Way array{
+ *     best: int,
+ *     best_count: int,
+ *     other: ?int,
+ *     other_count: int,
+ *     total: int
  * }
  * @phpstan-type Condition array{
  *     need: int,
  *     threats: list<array{name: string, at_most: int}>
+ * }
+ * @phpstan-type Scenario array{
+ *     finish: int,
+ *     total: int,
+ *     need: int,
+ *     threats: list<array{name: string, at_most: int, finish: ?int}>
  * }
  * @phpstan-type Rival array{
  *     row: Row,
@@ -70,6 +88,12 @@ final class SeasonStandings
     public const int FORM_RACES = 3;
     /** The most a rival can score in a race the manager wins: second place. */
     public const int SECOND_PLACE_POINTS = 8;
+    /** GPRO race points by finishing position; nothing outside the top 8. */
+    public const array RACE_POINTS = [1 => 10, 2 => 8, 3 => 6, 4 => 5, 5 => 4, 6 => 3, 7 => 2, 8 => 1];
+    public const int MAX_SCENARIOS = 3;
+    public const int MAX_WAYS = 3;
+    /** A finish outside the points, for "ways" like "4 wins and 2 non-scoring races". */
+    public const int NO_POINTS = 9;
 
     public const string ZONE_PROMOTE = 'promote';
     public const string ZONE_RELEGATE = 'relegate';
@@ -403,10 +427,13 @@ final class SeasonStandings
         $margin = $reference === null ? null : $own['pts'] - $reference['pts'];
         $holder = self::rowAt($rows, $linePos);
 
-        // The pace that would beat the manager projected to finish on the line.
-        $projected = array_column($others, 'projected_pts');
-        rsort($projected);
-        $target = $projected[$linePos - 1] ?? null;
+        // The pace that would beat the manager projected to finish on the line:
+        // the $linePos-th best of the others on current pace, the one to stay ahead of.
+        $byPace = $others;
+        usort($byPace, static fn (array $a, array $b): int => [$b['projected_pts'], $a['pos']]
+            <=> [$a['projected_pts'], $b['pos']]);
+        $paceRival = $byPace[$linePos - 1] ?? null;
+        $target = $paceRival === null ? null : $paceRival['projected_pts'];
         $paceNeeded = $target === null || $racesLeft === 0
             ? null
             : round(max(0, $target - $own['pts'] + 1) / $racesLeft, 1);
@@ -423,6 +450,11 @@ final class SeasonStandings
             'projected_in' => $own['projected_pos'] <= $linePos,
             'pace_needed' => $paceNeeded,
             'condition' => $status === self::NEEDS_HELP ? self::condition($others, $own, $linePos, $racesLeft) : null,
+            'scenarios' => $status === self::NEEDS_HELP ? self::scenarios($others, $own, $linePos, $racesLeft) : [],
+            'ways' => $status === self::REACHABLE ? self::ways($needed, $racesLeft) : [],
+            'pace_target' => $target,
+            'pace_points' => $target === null ? null : max(0, $target - $own['pts'] + 1),
+            'pace_rival' => $paceRival === null ? null : $paceRival['name'],
         ];
     }
 
@@ -449,6 +481,114 @@ final class SeasonStandings
         usort($threats, static fn (array $a, array $b): int => $a['at_most'] <=> $b['at_most']);
 
         return ['need' => max(0, count($threats) - ($linePos - 1)), 'threats' => $threats];
+    }
+
+    /**
+     * "If you finish X every race left": the first few finishes that still keep
+     * the line open, each with the manager's total and, for every rival who could
+     * otherwise reach it, the most they may score (and roughly where that means
+     * finishing each race). A rival can win a race only when the manager does
+     * not, so their cap is second place in the win-them-all scenario and a win
+     * otherwise. Rivals already sure to finish ahead use up the places the line
+     * allows; a finish is left out when too few can still be held behind.
+     *
+     * @param list<Row> $others
+     * @param Row $own
+     * @return list<Scenario>
+     */
+    private static function scenarios(array $others, array $own, int $linePos, int $racesLeft): array
+    {
+        if ($racesLeft === 0) {
+            return [];
+        }
+
+        $scenarios = [];
+        foreach (self::RACE_POINTS as $finish => $points) {
+            $total = $own['pts'] + $points * $racesLeft;
+            $cap = ($finish === 1 ? self::SECOND_PLACE_POINTS : self::RACE_POINTS[1]) * $racesLeft;
+            $threats = [];
+            $ahead = 0;
+            foreach ($others as $row) {
+                if ($row['pts'] + $cap < $total) {
+                    continue;
+                }
+                $atMost = $total - 1 - $row['pts'];
+                if ($atMost < 0) {
+                    $ahead++;
+                    continue;
+                }
+                $threats[] = [
+                    'name' => $row['name'],
+                    'at_most' => $atMost,
+                    'finish' => self::finishFor($atMost, $racesLeft),
+                ];
+            }
+            $need = count($threats) + $ahead - ($linePos - 1);
+            if ($ahead >= $linePos || $need > count($threats)) {
+                continue;
+            }
+            usort($threats, static fn (array $a, array $b): int => $a['at_most'] <=> $b['at_most']);
+            $scenarios[] = ['finish' => $finish, 'total' => $total, 'need' => max(0, $need), 'threats' => $threats];
+            if (count($scenarios) === self::MAX_SCENARIOS) {
+                break;
+            }
+        }
+
+        return $scenarios;
+    }
+
+    /**
+     * Ways to score at least $needed over $races, the way TV puts it: one finish
+     * repeated, or two finishes mixed ("one 2nd and five 3rds"). For each pair
+     * of finishes only the mix with the fewest better results is kept; the
+     * closest to $needed come first, then the ones needing fewer better results.
+     *
+     * @return list<Way>
+     */
+    public static function ways(int $needed, int $races): array
+    {
+        if ($races === 0 || $needed <= 0) {
+            return [];
+        }
+
+        $points = static fn (int $finish): int => self::RACE_POINTS[$finish] ?? 0;
+        $ways = [];
+        foreach (array_keys(self::RACE_POINTS) as $best) {
+            if ($points($best) * $races >= $needed) {
+                $ways[] = ['best' => $best, 'best_count' => $races, 'other' => null, 'other_count' => 0,
+                    'total' => $points($best) * $races];
+            }
+            for ($other = $best + 1; $other <= self::NO_POINTS; $other++) {
+                for ($count = 1; $count < $races; $count++) {
+                    $total = $count * $points($best) + ($races - $count) * $points($other);
+                    if ($total >= $needed) {
+                        $ways[] = ['best' => $best, 'best_count' => $count, 'other' => $other,
+                            'other_count' => $races - $count, 'total' => $total];
+                        break;
+                    }
+                }
+            }
+        }
+
+        usort($ways, static fn (array $a, array $b): int => [$a['total'], $a['best_count'], -$a['best']]
+            <=> [$b['total'], $b['best_count'], -$b['best']]);
+
+        return array_slice($ways, 0, self::MAX_WAYS);
+    }
+
+    /**
+     * The best finish a rival can repeat every race and still score no more
+     * than $points over $races; null when even eighth would be too much.
+     */
+    private static function finishFor(int $points, int $races): ?int
+    {
+        foreach (self::RACE_POINTS as $finish => $value) {
+            if ($value * $races <= $points) {
+                return $finish;
+            }
+        }
+
+        return null;
     }
 
     /**

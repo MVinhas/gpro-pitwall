@@ -38,22 +38,77 @@
                                     </td>
                                     <td class="dt-td text-right whitespace-normal">
                                         {% if l.status == 'clinched' %}Done
-                                        {% elseif l.status == 'reachable' %}{{ l.needed }} pts · {{ l.per_race|number_format(1) }}/race
-                                        {% elseif l.status == 'needs_help' and l.condition %}
-                                            {# One short line each: you, then the rivals who must stay behind. #}
-                                            {% set c = l.condition %}
-                                            {% set each = c.threats|map(t => t.name ~ ' scores ' ~ t.at_most ~ ' pts or less') %}
-                                            {% set full = c.need == 0 ? 'Win every race left'
-                                                : 'Only if you win every race left and ' ~ (c.need == c.threats|length ? each|join(', ', ' and ') : 'at least ' ~ c.need ~ ' of these happen: ' ~ each|join('; ')) %}
-                                            <span class="inline-block text-left leading-snug" title="{{ full }}">
-                                                <span class="block">You: win all {{ races_left }}</span>
-                                                {% if c.need > 0 %}
-                                                    {% if c.need < c.threats|length %}<span class="block text-slate-500">At least {{ c.need }} of:</span>{% endif %}
-                                                    {% for t in c.threats %}
-                                                        <span class="block">{{ t.name }}: {{ t.at_most }} pts at most</span>
-                                                    {% endfor %}
+                                        {% elseif l.status == 'reachable' %}
+                                            {{ l.needed }} pts · {{ l.per_race|number_format(1) }}/race
+                                            {% if l.ways %}
+                                                {% set pop = 'way-' ~ l.key %}
+                                                <button type="button" popovertarget="{{ pop }}" class="block w-full text-right text-xs font-medium text-blue-600 hover:underline">More</button>
+                                                <div id="{{ pop }}" popover class="m-auto w-[min(26rem,calc(100vw-2rem))] max-h-[calc(100vh-2rem)] overflow-y-auto rounded-xl border border-slate-200 bg-surface p-4 text-left text-sm whitespace-normal shadow-xl backdrop:bg-slate-900/30">
+                                                    <div class="mb-3 flex items-start justify-between gap-3">
+                                                        <p class="t-section">{{ l.label }}: {{ l.needed }} {{ l.needed == 1 ? 'pt' : 'pts' }} in {{ races_left }} races</p>
+                                                        <button type="button" popovertarget="{{ pop }}" popovertargetaction="hide" class="text-slate-400 hover:text-slate-700" aria-label="Close">✕</button>
+                                                    </div>
+                                                    <p class="text-slate-600">That many makes it certain, whatever the others do. For example:</p>
+                                                    <ul class="mt-1 space-y-0.5">
+                                                        {% for w in l.ways %}
+                                                            <li>
+                                                                <span class="font-medium">{{ m.finish_times(w.best, w.best_count) }}{% if w.other %} and {{ m.finish_times(w.other, w.other_count) }}{% endif %}</span>
+                                                                <span class="text-slate-500">→ {{ w.total }} pts</span>
+                                                            </li>
+                                                        {% endfor %}
+                                                    </ul>
+                                                    {% if l.pace_points is not null and l.pace_rival %}
+                                                        <p class="mt-3 text-slate-600">
+                                                            If everyone keeps their pace, the one to stay ahead of is {{ l.pace_rival }}, heading for {{ l.pace_target }} pts:
+                                                            {% if l.pace_points == 0 %}
+                                                                you are already clear of that.
+                                                            {% else %}
+                                                                about <span class="font-medium">{{ l.pace_points }} {{ l.pace_points == 1 ? 'pt' : 'pts' }}</span> would do.
+                                                            {% endif %}
+                                                        </p>
+                                                    {% endif %}
+                                                    <p class="t-caption mt-3">Any mix that adds up works; these are the closest. A race pays 10-8-6-5-4-3-2-1.</p>
+                                                </div>
+                                            {% endif %}
+                                        {% elseif l.status == 'needs_help' and l.scenarios %}
+                                            {# TV-style: "if you finish X every race, they must finish Y or worse".
+                                               The row shows the first way only; "More" opens every one in a popover. #}
+                                            {% set first = l.scenarios|first %}
+                                            {% set pop = 'sc-' ~ l.key %}
+                                            <span class="inline-block text-left leading-snug">
+                                                <span class="block font-medium">
+                                                    {{ m.scenario_title(first, races_left) }}{% if first.need == 0 %}: that's enough{% endif %}
+                                                </span>
+                                                {% if first.need > 0 %}
+                                                    {% set t = first.threats|first %}
+                                                    <span class="block text-slate-600">{{ m.threat(t) }}{% if first.threats|length > 1 %} <span class="text-slate-400">+{{ first.threats|length - 1 }}</span>{% endif %}</span>
+                                                {% endif %}
+                                                {% if l.scenarios|length > 1 or first.threats|length > 1 %}
+                                                    <button type="button" popovertarget="{{ pop }}" class="mt-0.5 text-xs font-medium text-blue-600 hover:underline">More</button>
                                                 {% endif %}
                                             </span>
+                                            <div id="{{ pop }}" popover class="m-auto w-[min(26rem,calc(100vw-2rem))] max-h-[calc(100vh-2rem)] overflow-y-auto rounded-xl border border-slate-200 bg-surface p-4 text-left text-sm whitespace-normal shadow-xl backdrop:bg-slate-900/30">
+                                                <div class="mb-3 flex items-start justify-between gap-3">
+                                                    <p class="t-section">{{ l.label }}: how it can still happen</p>
+                                                    <button type="button" popovertarget="{{ pop }}" popovertargetaction="hide" class="text-slate-400 hover:text-slate-700" aria-label="Close">✕</button>
+                                                </div>
+                                                <div class="space-y-3">
+                                                    {% for sc in l.scenarios %}
+                                                        <div>
+                                                            <p class="font-medium">{{ m.scenario_title(sc, races_left) }} <span class="font-normal text-slate-500">→ {{ sc.total }} pts</span></p>
+                                                            {% if sc.need == 0 %}
+                                                                <p class="text-slate-600">That's enough, whatever the others do.</p>
+                                                            {% else %}
+                                                                {% if sc.need < sc.threats|length %}<p class="text-slate-500">At least {{ sc.need }} of these:</p>{% endif %}
+                                                                <ul class="text-slate-600">
+                                                                    {% for t in sc.threats %}<li>{{ m.threat(t) }}</li>{% endfor %}
+                                                                </ul>
+                                                            {% endif %}
+                                                        </div>
+                                                    {% endfor %}
+                                                </div>
+                                                <p class="t-caption mt-3">Same place every race left. A rival's finish is an average; the points in brackets are what counts. When you win, a rival scores at most 8 a race.</p>
+                                            </div>
                                         {% else %}Rivals must drop points{% endif %}
                                     </td>
                                     <td class="dt-td text-right hidden sm:table-cell">
@@ -66,6 +121,38 @@
                                 </tr>
     {% endfor %}
 {% endmacro %}
+
+{# "Win all 6" / "2nd in all 6". #}
+{% macro scenario_title(sc, races_left) %}
+    {%- import _self as m -%}
+    {{- sc.finish == 1 ? 'Win all ' ~ races_left : m.ordinal(sc.finish) ~ ' in all ' ~ races_left -}}
+{% endmacro %}
+
+{# One rival's limit in a scenario: "Jacques: 5th or worse (≤ 25)". #}
+{% macro threat(t) %}
+    {%- import _self as m -%}
+    {%- if t.finish is null -%}
+        {{ t.name }}: {{ t.at_most == 0 ? 'no more points' : t.at_most ~ (t.at_most == 1 ? ' pt' : ' pts') ~ ' at most' }}
+    {%- else -%}
+        {{ t.name }}: {{ m.ordinal(t.finish) }} or worse <span class="text-slate-400">(≤ {{ t.at_most }})</span>
+    {%- endif -%}
+{% endmacro %}
+
+{# "one 2nd", "five 3rds", "two races out of the points". #}
+{% macro finish_times(finish, count) %}
+    {%- import _self as m -%}
+    {%- set words = {1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven', 8: 'eight', 9: 'nine', 10: 'ten'} -%}
+    {%- set n = words[count] ?? count -%}
+    {%- if finish > 8 -%}
+        {{ n }} {{ count == 1 ? 'race' : 'races' }} out of the points
+    {%- elseif finish == 1 -%}
+        {{ n }} {{ count == 1 ? 'win' : 'wins' }}
+    {%- else -%}
+        {{ n }} {{ m.ordinal(finish) }}{{ count == 1 ? '' : 's' }}
+    {%- endif -%}
+{% endmacro %}
+
+{% macro ordinal(n) %}{{ n }}{{ n % 100 in [11, 12, 13] ? 'th' : ({1: 'st', 2: 'nd', 3: 'rd'}[n % 10] ?? 'th') }}{% endmacro %}
 
 {# The open/closed arrow on a collapsible card's header. #}
 {% macro chevron() %}<svg class="size-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>{% endmacro %}
@@ -144,8 +231,9 @@
                 {% endif %}
                 <p class="t-caption">
                     "To be sure" holds even if every rival won every race left; a tie is never counted as safe.
-                    When it is no longer in your hands alone, it shows what the others must do while you win every race left
-                    (they can then score at most 8 a race, for second place).
+                    When it is no longer in your hands alone, it shows a few ways it can still happen: if you finish the same
+                    place every race left, how far back each rival must finish (on average; the points in brackets are what
+                    counts). When you win every race, a rival can score at most 8 a race, for second place.
                     "To beat the pace" is what you need per race to finish ahead of whoever is projected on the line,
                     if everyone keeps scoring as they have so far. A race is worth at most 10 points (10-8-6-5-4-3-2-1).
                 </p>

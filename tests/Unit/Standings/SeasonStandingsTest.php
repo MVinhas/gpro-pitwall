@@ -110,6 +110,42 @@ final class SeasonStandingsTest extends TestCase
         self::assertTrue($promote['projected_in']);
     }
 
+    public function testWaysAreTheClosestMixesOfTwoFinishes(): void
+    {
+        $ways = SeasonStandings::ways(37, 6);
+
+        self::assertCount(SeasonStandings::MAX_WAYS, $ways);
+        // One 2nd and five 3rds: 8 + 30 = 38, the closest to 37.
+        self::assertSame(['best' => 2, 'best_count' => 1, 'other' => 3, 'other_count' => 5, 'total' => 38], $ways[0]);
+        foreach ($ways as $way) {
+            self::assertGreaterThanOrEqual(37, $way['total']);
+            self::assertSame(6, $way['best_count'] + $way['other_count']);
+        }
+        // A single repeated finish has no second part; a race outside the points is finish 9.
+        self::assertSame(['best' => 1, 'best_count' => 6, 'other' => null, 'other_count' => 0, 'total' => 60], SeasonStandings::ways(60, 6)[0]);
+        self::assertSame(SeasonStandings::NO_POINTS, SeasonStandings::ways(1, 6)[0]['other']);
+        self::assertSame([], SeasonStandings::ways(0, 6));
+        self::assertSame([], SeasonStandings::ways(10, 0));
+    }
+
+    public function testReachableLineNamesTheRivalToStayAheadOfOnPace(): void
+    {
+        $finishes = array_fill(0, 11, 1);
+        $view = SeasonStandings::build(self::payload([
+            self::manager(1, 'Leader', 1, $finishes, SeasonObjective::GREEN),
+            self::manager(2, 'Me', 2, array_fill(0, 11, 2), SeasonObjective::GREEN),
+            self::manager(3, 'Third', 3, array_fill(0, 11, 3)),
+        ]), 2);
+
+        $promote = self::line($view, 'promote');
+        // Top 2 means beating the second best of the others on pace: Third, 66 + 6 × 6 = 102.
+        self::assertSame('Third', $promote['pace_rival']);
+        self::assertSame(102, $promote['pace_target']);
+        self::assertSame(15, $promote['pace_points'], '88 now, 103 beats 102');
+        self::assertNotSame([], $promote['ways']);
+        self::assertSame([], self::line($view, 'win')['ways'], 'Only goals in your hands get ways');
+    }
+
     public function testClinchedAndOut(): void
     {
         // 16 races run, one left (10 on offer). Me 128, third 16 (max 26): promotion is secured.
@@ -138,6 +174,42 @@ final class SeasonStandingsTest extends TestCase
         self::assertSame(-4, $win['margin']);
         // If I win the last race I reach 136; the leader can still score 8 (138), so must score 5 or less.
         self::assertSame(['need' => 1, 'threats' => [['name' => 'Leader', 'at_most' => 5]]], $win['condition']);
+    }
+
+    public function testScenariosSayHowFarBackRivalsMustFinish(): void
+    {
+        // 11 run, 6 left. Leader 99, me 65 (Jacques and Rossi on the real table).
+        $view = SeasonStandings::build(self::payload([
+            self::manager(1, 'Leader', 1, [1, 2, 4, 1, 1, 1, 2, 1, 1, 2, 1]),
+            self::manager(2, 'Me', 2, [2, 4, 6, 3, 3, 3, 3, 4, 2, 5, 2]),
+            self::manager(3, 'Far', 3, array_fill(0, 11, 9)),
+        ]), 2);
+
+        $scenarios = self::line($view, 'win')['scenarios'];
+        // Win all 6: 125, and the leader (cap 8 a race) may score 25, about fifth each race.
+        self::assertSame(1, $scenarios[0]['finish']);
+        self::assertSame(125, $scenarios[0]['total']);
+        self::assertSame(1, $scenarios[0]['need']);
+        self::assertSame([['name' => 'Leader', 'at_most' => 25, 'finish' => 5]], $scenarios[0]['threats']);
+        // Second every race: 113; the leader may score 13, about seventh. Far (0, cap 60) is no threat.
+        self::assertSame(2, $scenarios[1]['finish']);
+        self::assertSame([['name' => 'Leader', 'at_most' => 13, 'finish' => 7]], $scenarios[1]['threats']);
+        // Third: 101 leaves the leader 1 point, which no repeated finish delivers.
+        self::assertSame(null, $scenarios[2]['threats'][0]['finish']);
+        self::assertCount(SeasonStandings::MAX_SCENARIOS, $scenarios);
+    }
+
+    public function testScenarioLeftOutWhenTheRivalIsAlreadySureToFinishAhead(): void
+    {
+        // 16 run, 1 left. Leader 100, me 92: only winning (102) keeps the title open.
+        $view = SeasonStandings::build(self::payload([
+            self::manager(1, 'Leader', 1, array_merge(array_fill(0, 10, 1), array_fill(0, 6, 9))),
+            self::manager(2, 'Me', 2, array_merge(array_fill(0, 9, 1), [7], array_fill(0, 6, 9))),
+        ]), 2);
+
+        $scenarios = self::line($view, 'win')['scenarios'];
+        self::assertSame([1], array_column($scenarios, 'finish'), 'Second (100) cannot beat 100');
+        self::assertSame(1, $scenarios[0]['threats'][0]['at_most']);
     }
 
     public function testWinningEveryRaceLeftCanBeEnoughWhenRivalsCannotAlsoWin(): void
