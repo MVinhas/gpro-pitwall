@@ -54,6 +54,8 @@
             </div>
         {% endif %}
 
+        {% include 'partials/_estimated_track.twig' with {names: [next_track_name|default(null)]} only %}
+
         {% if cockpit_unknown_track is defined %}
             <div class="notice notice-warn">
                 <p class="font-bold">No wear figures for {{ cockpit_unknown_track }}.</p>

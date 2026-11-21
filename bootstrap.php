@@ -275,6 +275,9 @@ $container['twig']->addFunction(new \Twig\TwigFunction(
     },
 ));
 
+// A new GPRO track's row is a best guess until its races tune it: every screen that reads one says so at the top.
+$container['twig']->addGlobal('estimated_tracks', $container['repo.track']->estimatedNames());
+
 // can_submit is "signed in" by definition (see Access tiers). Only one
 // controller ever passed it, which is why the Re-sync button vanished from
 // every other page. As a global it holds everywhere; a controller that passes

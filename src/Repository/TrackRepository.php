@@ -45,4 +45,16 @@ class TrackRepository
         /** @var array<string, mixed>|false $row */
         return $row === false ? null : $row;
     }
+
+    /**
+     * Tracks whose row is a best guess: new GPRO tracks not yet tuned from their races.
+     *
+     * @return list<string>
+     */
+    public function estimatedNames(): array
+    {
+        $stmt = $this->db->query('SELECT name FROM tracks WHERE estimated = 1 ORDER BY name');
+
+        return $stmt === false ? [] : array_values(array_map('strval', $stmt->fetchAll(PDO::FETCH_COLUMN)));
+    }
 }

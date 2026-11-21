@@ -50,6 +50,8 @@
 
     <div class="space-y-6" data-result-state="results">
 
+        {% include 'partials/_estimated_track.twig' with {names: [sr.track]} only %}
+
         {# RACE SHEET — the values the manager types into GPRO, in GPRO's own form
            order: setup, fuel, tyres, risks, boost laps. Start risk and pit-on-problem
            are deliberately left out: they don't work well in the game (Micael).

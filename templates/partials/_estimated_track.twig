@@ -1,0 +1,9 @@
+{# Disclaimer for a new GPRO track whose row is a best guess. `names`: the tracks this screen reads; the first
+   estimated one is named, once. `extra_class`: spacing where the parent isn't a space-y stack. #}
+{# A race name can carry its country ("Hanoi (Vietnam)"); the tracks table holds the bare name. #}
+{% set estimated = names|filter(n => n and ((n|split(' (')|first) in estimated_tracks|default([])))|first %}
+{% if estimated %}
+    <div class="notice notice-warn {{ extra_class|default('') }}">
+        <p><span class="font-bold">{{ estimated }} is a new track.</span> Its figures are best guesses from the other tracks until its races tune them.</p>
+    </div>
+{% endif %}

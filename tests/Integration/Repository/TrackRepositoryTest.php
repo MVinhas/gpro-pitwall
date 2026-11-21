@@ -25,7 +25,8 @@ final class TrackRepositoryTest extends TestCase
                 name TEXT UNIQUE NOT NULL,
                 lap_length REAL,
                 boost_dry REAL,
-                boost_wet REAL
+                boost_wet REAL,
+                estimated INTEGER NOT NULL DEFAULT 0
             )
         ");
 
@@ -70,5 +71,21 @@ final class TrackRepositoryTest extends TestCase
         $this->assertNotNull($row);
         $this->assertSame('Valencia', $row['name']);
         $this->assertSame('Valencia', $this->repo->findByName('Valencia')['name'] ?? null);
+    }
+
+    public function testEstimatedNamesListsOnlyFlaggedTracks(): void
+    {
+        $this->seedTrack('Known', 5.0, 0.12, 0.12);
+        $this->seedTrack('Hanoi', 5.6, 0.12, 0.12);
+        $this->db->exec("UPDATE tracks SET estimated = 1 WHERE name = 'Hanoi'");
+
+        $this->assertSame(['Hanoi'], $this->repo->estimatedNames());
+    }
+
+    public function testEstimatedNamesIsEmptyWithoutAFlaggedTrack(): void
+    {
+        $this->seedTrack('Known', 5.0, 0.12, 0.12);
+
+        $this->assertSame([], $this->repo->estimatedNames());
     }
 }

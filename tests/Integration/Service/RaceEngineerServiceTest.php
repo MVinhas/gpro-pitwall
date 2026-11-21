@@ -504,11 +504,11 @@ final class RaceEngineerServiceTest extends TestCase
     private function linesOnAnUnknownTrack(array $overrides = []): array
     {
         $lines = $this->service->forCockpit(self::USER, $this->cockpit($overrides + [
-            'track_name' => 'Hanoi (Vietnam)',
-            'wear' => ['error' => 'Track not found: Hanoi'],
+            'track_name' => 'Newring (Nowhere)',
+            'wear' => ['error' => 'Track not found: Newring'],
             'wear_advice' => null,
             'car' => ['usaChassis' => 97, 'usaFWing' => 94, 'usaGear' => 94, 'usaEngine' => 77],
-            'season_calendar' => [['race' => 9, 'track_name' => 'Testring'], ['race' => 10, 'track_name' => 'Hanoi']],
+            'season_calendar' => [['race' => 9, 'track_name' => 'Testring'], ['race' => 10, 'track_name' => 'Newring']],
         ]))['lines'];
 
         return array_column($lines, null, 'key');
@@ -520,12 +520,12 @@ final class RaceEngineerServiceTest extends TestCase
 
         $lines = $this->linesOnAnUnknownTrack();
 
-        self::assertSame('No wear figures for Hanoi', $lines['parts']['answer']);
+        self::assertSame('No wear figures for Newring', $lines['parts']['answer']);
         self::assertSame(
             'Check the swaps yourself; most worn: Chassis 97 %, Front Wing 94 %, Gearbox 94 %',
             $lines['parts']['reason'],
         );
-        self::assertSame('No race settings for Hanoi', $lines['ctr']['answer']);
+        self::assertSame('No race settings for Newring', $lines['ctr']['answer']);
         self::assertArrayNotHasKey('risk', $lines);
         self::assertArrayNotHasKey('boost', $lines);
     }
