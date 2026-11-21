@@ -174,6 +174,25 @@ final class SeasonStandingsTest extends TestCase
         self::assertSame(3, self::line($view, 'win')['condition']['need']);
     }
 
+    public function testPositionsRunFromBestReachableToFirstSecured(): void
+    {
+        // 16 run, 10 on offer. Me 60 (max 70). Leader 100 is beyond reach; B 65 and C 55 are in play;
+        // D 20 (max 30) can no longer catch me, so P4 is already mine.
+        $view = SeasonStandings::build(self::payload([
+            self::manager(1, 'Leader', 1, array_merge(array_fill(0, 10, 1), array_fill(0, 6, 9))),
+            self::manager(2, 'B', 2, array_merge(array_fill(0, 6, 1), [4], array_fill(0, 9, 9))),
+            self::manager(3, 'Me', 3, array_merge(array_fill(0, 6, 1), array_fill(0, 10, 9))),
+            self::manager(4, 'C', 4, array_merge(array_fill(0, 5, 1), [4], array_fill(0, 10, 9))),
+            self::manager(5, 'D', 5, array_merge(array_fill(0, 2, 1), array_fill(0, 14, 9))),
+        ]), 3);
+
+        self::assertSame([2, 3, 4], array_column($view['positions'], 'line_pos'));
+        self::assertSame('P2 or better', $view['positions'][0]['label']);
+        self::assertSame(SeasonStandings::CLINCHED, $view['positions'][2]['status']);
+        self::assertSame(SeasonStandings::REACHABLE, $view['positions'][1]['status'], 'C (max 65): 6 to be sure');
+        self::assertSame(6, $view['positions'][1]['needed']);
+    }
+
     public function testRookieGroupHasNoRelegationLineButOthersDo(): void
     {
         $rows = [

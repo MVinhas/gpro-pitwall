@@ -15,76 +15,19 @@
     <span class="inline-flex items-center rounded-md px-1.5 py-px text-xs font-semibold {{ tone[0] }}">{{ tone[1] }}</span>
 {%- endmacro %}
 
-{% macro signed(n) %}{{ n > 0 ? '+' ~ n : n }}{% endmacro %}
-
-{% block content %}
-    {% include 'partials/_nav.twig' %}
-
-<div class="space-y-5">
-
-    <div>
-        <h1 class="t-display">Standings</h1>
-        <p class="t-caption mt-1">
-            {% if available %}
-                {{ group }} · {{ races_run }} of {{ races }} races run · {{ races_left }} left, {{ points_on_offer }} points on offer
-                {% if fetched_at %} · data from {{ lt.localtime(fetched_at) }}{% endif %}
-            {% else %}
-                Your group's season table and what it takes to win, promote or stay up.
-            {% endif %}
-        </p>
-    </div>
-
-    {% if not available %}
-        {% include 'partials/_empty.twig' with {
-            title: 'No standings yet',
-            body: 'The table appears after your first sync. Re-sync to load it.'
-        } only %}
-    {% else %}
-
-    {# ---- What it takes ---- #}
-    {% if own %}
-        <section class="card" aria-labelledby="st-lines">
-            <div class="card-hd">
-                <h2 id="st-lines" class="t-heading">What it takes</h2>
-            </div>
-            <div class="card-bd space-y-4">
-                <div class="grid gap-3 sm:grid-cols-3">
-                    <div>
-                        <p class="t-label">You</p>
-                        <p class="t-value">P{{ own.pos }} · {{ own.pts }} pts</p>
-                        <p class="t-caption">At most {{ own.max }} pts by season end</p>
-                    </div>
-                    <div>
-                        <p class="t-label">On current pace</p>
-                        <p class="t-value">P{{ own.projected_pos }} · {{ own.projected_pts }} pts</p>
-                        <p class="t-caption">{{ own.pace|number_format(1) }} pts per race so far</p>
-                    </div>
-                    <div>
-                        <p class="t-label">Form, last {{ min(3, races_run) }} races</p>
-                        <p class="t-value">{{ own.last3 }} pts</p>
-                        <p class="t-caption">Average finish {{ own.avg_pos is null ? '—' : 'P' ~ own.avg_pos }} · {{ own.wins }} wins · {{ own.podiums }} podiums</p>
-                    </div>
-                </div>
-
-                <div class="dt-scroll">
-                    <table class="dt">
-                        <thead class="bg-slate-50">
-                            <tr>
-                                <th class="dt-th">Goal</th>
-                                <th class="dt-th">Status</th>
-                                <th class="dt-th text-right">Today</th>
-                                <th class="dt-th text-right">To be sure</th>
-                                <th class="dt-th text-right hidden sm:table-cell">To beat the pace</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-100">
-                            {% for l in lines|filter(l => l.status != 'out') %}
+{# One goal per row: status, today's margin, what makes it certain, the pace to beat.
+   `zones` maps 'p' ~ line position to 'promote' or 'relegate', drawn as the same
+   coloured edge as Race by race (string keys: Twig's merge renumbers integer ones). #}
+{% macro goal_rows(goals, own, races_left, zones) %}
+    {% import _self as m %}
+    {% for l in goals %}
+        {% set zone = zones['p' ~ l.line_pos] ?? '' %}
                                 <tr>
-                                    <td class="dt-td">
+                                    <td class="dt-td border-l-4 {{ zone == 'promote' ? 'border-l-emerald-500' : (zone == 'relegate' ? 'border-l-red-500' : 'border-l-transparent') }}">
                                         <span class="font-medium">{{ l.label }}</span>
-                                        <span class="text-slate-500">· top {{ l.line_pos }}</span>
+                                        {% if not (l.key starts with 'pos') %}<span class="text-slate-500">· top {{ l.line_pos }}</span>{% endif %}
                                     </td>
-                                    <td class="dt-td">{{ _self.status_badge(l.status) }}</td>
+                                    <td class="dt-td">{{ m.status_badge(l.status) }}</td>
                                     <td class="dt-td text-right whitespace-normal">
                                         {% if l.margin is null %}—
                                         {% elseif own.pos <= l.line_pos %}
@@ -121,7 +64,77 @@
                                         {% endif %}
                                     </td>
                                 </tr>
-                            {% endfor %}
+    {% endfor %}
+{% endmacro %}
+
+{# The open/closed arrow on a collapsible card's header. #}
+{% macro chevron() %}<svg class="size-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>{% endmacro %}
+
+{% macro signed(n) %}{{ n > 0 ? '+' ~ n : n }}{% endmacro %}
+
+{% block content %}
+    {% include 'partials/_nav.twig' %}
+
+<div class="space-y-5">
+
+    <div>
+        <h1 class="t-display">Standings</h1>
+        <p class="t-caption mt-1">
+            {% if available %}
+                {{ group }} · {{ races_run }} of {{ races }} races run · {{ races_left }} left, {{ points_on_offer }} points on offer
+                {% if fetched_at %} · data from {{ lt.localtime(fetched_at) }}{% endif %}
+            {% else %}
+                Your group's season table and what it takes to win, promote or stay up.
+            {% endif %}
+        </p>
+    </div>
+
+    {% if not available %}
+        {% include 'partials/_empty.twig' with {
+            title: 'No standings yet',
+            body: 'The table appears after your first sync. Re-sync to load it.'
+        } only %}
+    {% else %}
+
+    {# ---- What it takes ---- #}
+    {% if own %}
+        <details class="card group" open aria-labelledby="st-lines">
+            <summary class="card-hd flex cursor-pointer list-none items-center justify-between gap-3">
+                <h2 id="st-lines" class="t-heading">What it takes</h2>
+                {{ _self.chevron() }}
+            </summary>
+            <div class="card-bd space-y-4">
+                <div class="grid gap-3 sm:grid-cols-3">
+                    <div>
+                        <p class="t-label">You</p>
+                        <p class="t-value">P{{ own.pos }} · {{ own.pts }} pts</p>
+                        <p class="t-caption">At most {{ own.max }} pts by season end</p>
+                    </div>
+                    <div>
+                        <p class="t-label">On current pace</p>
+                        <p class="t-value">P{{ own.projected_pos }} · {{ own.projected_pts }} pts</p>
+                        <p class="t-caption">{{ own.pace|number_format(1) }} pts per race so far</p>
+                    </div>
+                    <div>
+                        <p class="t-label">Form, last {{ min(3, races_run) }} races</p>
+                        <p class="t-value">{{ own.last3 }} pts</p>
+                        <p class="t-caption">Average finish {{ own.avg_pos is null ? '—' : 'P' ~ own.avg_pos }} · {{ own.wins }} wins · {{ own.podiums }} podiums</p>
+                    </div>
+                </div>
+
+                <div class="dt-scroll">
+                    <table class="dt">
+                        <thead class="bg-slate-50">
+                            <tr>
+                                <th class="dt-th">Goal</th>
+                                <th class="dt-th">Status</th>
+                                <th class="dt-th text-right">Today</th>
+                                <th class="dt-th text-right">To be sure</th>
+                                <th class="dt-th text-right hidden sm:table-cell">To beat the pace</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            {{ _self.goal_rows(lines|filter(l => l.status != 'out'), own, races_left, {}) }}
                         </tbody>
                     </table>
                 </div>
@@ -137,15 +150,17 @@
                     if everyone keeps scoring as they have so far. A race is worth at most 10 points (10-8-6-5-4-3-2-1).
                 </p>
             </div>
-        </section>
+        </details>
+
     {% endif %}
 
     {# ---- Direct rivals ---- #}
     {% if rivals %}
-        <section class="card" aria-labelledby="st-rivals">
-            <div class="card-hd">
+        <details class="card group" open aria-labelledby="st-rivals">
+            <summary class="card-hd flex cursor-pointer list-none items-center justify-between gap-3">
                 <h2 id="st-rivals" class="t-heading">Direct rivals</h2>
-            </div>
+                {{ _self.chevron() }}
+            </summary>
             <div class="card-bd space-y-4">
                 <div class="dt-scroll">
                     <table class="dt">
@@ -194,7 +209,7 @@
                 <p class="t-caption">Managers who can still finish ahead of you, or you of them. Gap is their points minus yours; head to head counts the races you both finished.</p>
 
             </div>
-        </section>
+        </details>
     {% endif %}
 
     {# ---- Points progression ---- #}
@@ -208,10 +223,11 @@
         {% set w = 640 %}{% set h = 240 %}
         {% set palette = ['#dc2626', '#d97706', '#059669', '#7c3aed', '#db2777', '#0891b2', '#65a30d', '#78716c', '#ea580c', '#4f46e5'] %}
         {% set chart_data = rows|filter(r => r.started > 0)|map(r => {id: r.idm, name: r.name, pos: r.pos, pts: r.pts, me: r.own, c: r.cumulative, on: r.idm in default_idms}) %}
-        <section class="card" aria-labelledby="st-chart">
-            <div class="card-hd">
+        <details class="card group" open aria-labelledby="st-chart">
+            <summary class="card-hd flex cursor-pointer list-none items-center justify-between gap-3">
                 <h2 id="st-chart" class="t-heading">Points progression</h2>
-            </div>
+                {{ _self.chevron() }}
+            </summary>
             <div class="card-bd space-y-3">
                 <div id="stChart" data-series="{{ chart_data|json_encode }}" data-races="{{ races }}" data-run="{{ races_run }}" class="text-slate-500">
                     <svg viewBox="-4 -4 {{ w + 8 }} {{ h + 8 }}" class="h-56 w-full" preserveAspectRatio="none" aria-hidden="true" focusable="false">
@@ -239,7 +255,7 @@
 
                 <p class="t-caption">Points after each race, on the whole season's {{ races }} races so the empty stretch shows what is left. Tick managers to compare; hover a line for its name.</p>
             </div>
-        </section>
+        </details>
 
         <script>
         (() => {
@@ -351,11 +367,59 @@
         </script>
     {% endif %}
 
-    {# ---- Race by race ---- #}
-    <section class="card" aria-labelledby="st-table">
-        <div class="card-hd">
-            <h2 id="st-table" class="t-heading">Race by race</h2>
-        </div>
+    {# ---- Every possible finish (closed by default: the detail behind What it takes) ---- #}
+    {% if own and positions %}
+        {% set promote = lines|filter(l => l.key == 'promote')|first %}
+        {% set stay = lines|filter(l => l.key == 'stay')|first %}
+        {% set zones = {} %}
+        {% for l in positions %}
+            {% if promote and l.line_pos <= promote.line_pos %}
+                {% set zones = zones|merge({('p' ~ l.line_pos): 'promote'}) %}
+            {% elseif stay and l.line_pos > stay.line_pos %}
+                {% set zones = zones|merge({('p' ~ l.line_pos): 'relegate'}) %}
+            {% endif %}
+        {% endfor %}
+        <details class="card group" aria-labelledby="st-positions">
+            <summary class="card-hd flex cursor-pointer list-none items-center justify-between gap-3">
+                <span>
+                    <span id="st-positions" class="t-heading">Every possible finish</span>
+                    <span class="t-caption block">
+                        Anywhere from P{{ positions|first.line_pos }} to P{{ positions|last.line_pos }}{% if positions|last.status == 'clinched' %}, which is already yours{% endif %}
+                    </span>
+                </span>
+                {{ _self.chevron() }}
+            </summary>
+            <div class="card-bd space-y-3">
+                <div class="dt-scroll">
+                    <table class="dt">
+                        <thead class="bg-slate-50">
+                            <tr>
+                                <th class="dt-th">Finish</th>
+                                <th class="dt-th">Status</th>
+                                <th class="dt-th text-right">Today</th>
+                                <th class="dt-th text-right">To be sure</th>
+                                <th class="dt-th text-right hidden sm:table-cell">To beat the pace</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            {{ _self.goal_rows(positions, own, races_left, zones) }}
+                        </tbody>
+                    </table>
+                </div>
+                <p class="t-caption">One row per finish still open, with the same rules as What it takes. A green edge marks a promotion finish, red a relegation one; positions you can no longer reach are left out.</p>
+            </div>
+        </details>
+    {% endif %}
+
+    {# ---- Race by race (closed by default: the full table is long) ---- #}
+    <details class="card group" aria-labelledby="st-table">
+        <summary class="card-hd flex cursor-pointer list-none items-center justify-between gap-3">
+            <span>
+                <span id="st-table" class="t-heading">Race by race</span>
+                <span class="t-caption block">Every manager's finish in each of the {{ races_run }} races run</span>
+            </span>
+            {{ _self.chevron() }}
+        </summary>
         <div class="card-bd space-y-3">
             <div class="dt-scroll">
                 <table class="dt">
@@ -393,7 +457,7 @@
             </div>
             <p class="t-caption">Finishing position in each race; hover a cell for its points. A green edge marks the promotion zone, red the relegation zone; – means no result, · a race still to run.</p>
         </div>
-    </section>
+    </details>
 
     {% endif %}
 </div>

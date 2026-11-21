@@ -91,6 +91,7 @@ final class SeasonStandings
      *     rows: list<Row>,
      *     own: ?Row,
      *     lines: list<Line>,
+     *     positions: list<Line>,
      *     rivals: list<Rival>
      * }
      */
@@ -128,6 +129,7 @@ final class SeasonStandings
             'rows' => $rows,
             'own' => $own,
             'lines' => $own === null ? [] : self::lines($rows, $own, $racesLeft),
+            'positions' => $own === null ? [] : self::positions($rows, $own, $racesLeft),
             'rivals' => $own === null ? [] : self::rivals($rows, $own),
         ];
     }
@@ -314,6 +316,33 @@ final class SeasonStandings
             $rows,
             array_keys($rows),
         );
+    }
+
+    /**
+     * Every finish still open: one "P{n} or better" line from the best place the
+     * manager can still reach down to the first one already secured (the worst
+     * they can do from here, even scoring nothing more).
+     *
+     * @param list<Row> $rows
+     * @param Row $own
+     * @return list<Line>
+     */
+    private static function positions(array $rows, array $own, int $racesLeft): array
+    {
+        $positions = [];
+        for ($pos = 1, $count = count($rows); $pos <= $count; $pos++) {
+            $label = $pos === 1 ? 'P1' : 'P' . $pos . ' or better';
+            $line = self::line('pos' . $pos, $label, $pos, $rows, $own, $racesLeft);
+            if ($line['status'] === self::OUT) {
+                continue;
+            }
+            $positions[] = $line;
+            if ($line['status'] === self::CLINCHED) {
+                break;
+            }
+        }
+
+        return $positions;
     }
 
     /**
