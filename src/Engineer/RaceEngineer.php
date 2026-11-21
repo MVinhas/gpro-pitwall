@@ -418,7 +418,12 @@ final class RaceEngineer
     {
         $plan = $in->plan;
         if ($plan === null && $in->ctrCeiling === null) {
-            return null;
+            return $in->unknownTrack === null ? null : self::line(
+                'ctr',
+                'No race settings for ' . $in->unknownTrack,
+                "CTR, risks and boost need the track's figures",
+                tone: 'amber',
+            );
         }
 
         $stuck = self::stuckCtrReason($in);
@@ -471,6 +476,30 @@ final class RaceEngineer
             action: $target === $in->currentCtr
                 ? null
                 : ['label' => 'Use ' . $target, 'href' => '/engineer?cockpit_risk=' . $target],
+        );
+    }
+
+    /**
+     * Without the track's wear figures no part's race can be projected, so "nothing to swap" would be a guess:
+     * the line says so and names the parts nearest the limit now.
+     *
+     * @return Line
+     */
+    private static function unknownTrackParts(EngineerInputs $in, string $track): array
+    {
+        $wear = $in->carWear;
+        arsort($wear);
+        $worst = array_map(
+            static fn (string $part, float|int $percent): string => $part . ' ' . $percent . ' %',
+            array_keys(array_slice($wear, 0, 3, true)),
+            array_slice($wear, 0, 3, true),
+        );
+
+        return self::line(
+            'parts',
+            'No wear figures for ' . $track,
+            'Check the swaps yourself' . ($worst === [] ? '' : '; most worn: ' . implode(', ', $worst)),
+            tone: 'amber',
         );
     }
 
@@ -582,6 +611,9 @@ final class RaceEngineer
     {
         if ($in->carUpdated) {
             return self::updatedParts($in);
+        }
+        if ($in->unknownTrack !== null) {
+            return self::unknownTrackParts($in, $in->unknownTrack);
         }
 
         $plan = $in->plan;

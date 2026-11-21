@@ -79,6 +79,8 @@ final readonly class EngineerInputs
      * @param array<string, SmokeQuote> $smoke when each forced or stuck part reaches 100 % this race, and what
      *                                         its smoke costs against what fitting it a race later saves
      * @param ?DriverAdvice $driverAdvice
+     * @param ?string $unknownTrack the next race's track when Pitwall has no row and so no wear for it
+     * @param array<string, float|int> $carWear part label => wear % now, read from the car without the track
      */
     public function __construct(
         public array $objective,
@@ -121,6 +123,8 @@ final readonly class EngineerInputs
         public ?string $testingSkip = null,
         public array $smoke = [],
         public ?array $driverAdvice = null,
+        public ?string $unknownTrack = null,
+        public array $carWear = [],
     ) {
     }
 

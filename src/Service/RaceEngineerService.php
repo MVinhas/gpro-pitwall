@@ -388,7 +388,7 @@ class RaceEngineerService
             $inputs->division,
             $ctx['objective']['objective'] ?? SeasonObjective::STAY,
             $locked,
-            array_map(static fn (array $part): float => (float) $part['start'], $this->wearParts($c) ?? []),
+            $this->carWear($c),
             // A spent car update replaces nothing, whatever the Cockpit's swap advice says.
             $locked ? [] : array_column(
                 $plan === null ? $inputs->wearAdvice['swap'] ?? [] : $plan['rows'][0]['replaced'],
@@ -855,7 +855,8 @@ class RaceEngineerService
         $forced = array_column($wearAdvice['swap'] ?? [], 'part');
         $weather = self::arrOrNull($c['weather'] ?? null);
         $stale = (bool) ($c['setup_stale'] ?? false);
-        $track = (string) ($c['track_name'] ?? '') === '' ? null : $this->tracks->findByName((string) $c['track_name']);
+        $trackName = (string) ($c['track_name'] ?? '');
+        $track = $trackName === '' ? null : $this->tracks->findByName($trackName);
         $office = self::arr($c['office'] ?? null);
 
         $ceiling = $parts === null
@@ -918,6 +919,8 @@ class RaceEngineerService
             testingChoice: $choices['testing'] ?? null,
             season: $season,
             race: $raceNb,
+            unknownTrack: $parts === null && $track === null && $trackName !== '' ? TrackName::base($trackName) : null,
+            carWear: $this->carWear($c),
         );
     }
 
@@ -1347,6 +1350,30 @@ class RaceEngineerService
         $parts = $wear['parts'];
 
         return $parts;
+    }
+
+    /**
+     * Each part's wear now: the projection's start, or the car's own figures when the track has no wear to project.
+     *
+     * @param array<string, mixed> $c
+     * @return array<string, float|int>
+     */
+    private function carWear(array $c): array
+    {
+        $parts = $this->wearParts($c);
+        if ($parts !== null) {
+            return array_map(static fn (array $part): float|int => $part['start'], $parts);
+        }
+
+        $car = self::arr($c['car'] ?? null);
+        $wear = [];
+        foreach (CarWearService::PARTS_MAP as $label => $map) {
+            if (is_numeric($car[$map['wear']] ?? null)) {
+                $wear[$label] = (int) $car[$map['wear']];
+            }
+        }
+
+        return $wear;
     }
 
     /**

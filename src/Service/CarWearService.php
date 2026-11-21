@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Service;
 
+use App\Support\TrackName;
 use PDO;
 
 class CarWearService
@@ -167,7 +168,10 @@ class CarWearService
         $trackDb = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$trackDb) {
-            return ['error' => "Track not found: " . ($trackData['name'] ?? $trackId)];
+            return [
+                'error' => "Track not found: " . ($trackData['name'] ?? $trackId),
+                'track' => TrackName::base((string) ($trackData['name'] ?? '')),
+            ];
         }
 
         $laps = (int) ($trackData['laps'] ?? $trackDb['laps']);
@@ -234,7 +238,10 @@ class CarWearService
         $trackDb = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$trackDb) {
-            return ['error' => "Track not found: " . ($trackData['name'] ?? '')];
+            return [
+                'error' => "Track not found: " . ($trackData['name'] ?? ''),
+                'track' => TrackName::base((string) ($trackData['name'] ?? '')),
+            ];
         }
 
         $raceLaps = max(1, (int) ($trackDb['laps'] ?? 1));

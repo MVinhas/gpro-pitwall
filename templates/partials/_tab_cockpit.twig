@@ -54,6 +54,13 @@
             </div>
         {% endif %}
 
+        {% if cockpit_unknown_track is defined %}
+            <div class="notice notice-warn">
+                <p class="font-bold">No wear figures for {{ cockpit_unknown_track }}.</p>
+                <p>Pitwall has no data for this track yet, so the car wear card is hidden: check your parts' wear in GPRO before you race.</p>
+            </div>
+        {% endif %}
+
         {# Two subject groups, one order on every viewport: the car first, then the
            rest of the weekend. Each group is one list of rows — a card per row
            would be chrome around a single line. The car column is wider: it
