@@ -16,7 +16,7 @@ class DatabaseSeeder
      * calls migrate() on every request; this version lets a warm database skip
      * the entire DDL + scan + legacy-encryption pass.
      */
-    private const int SCHEMA_VERSION = 22;
+    private const int SCHEMA_VERSION = 23;
 
     /** Race-time facts added to both race tables (see addReplayColumns()). */
     private const array REPLAY_COLUMNS = [
@@ -145,14 +145,14 @@ class DatabaseSeeder
                 fuel_consumption, tyre_wear, wing_split, fuel_per_lap, fuel_per_lap_wet, tyre_wear_factor,
                 wear_chassis, wear_engine, wear_fwing, wear_rwing, wear_underbody, wear_sidepod,
                 wear_cooling, wear_gearbox, wear_brakes, wear_suspension, wear_electronics,
-                boost_dry, boost_wet, overtaking, grip
+                boost_dry, boost_wet, overtaking, grip, estimated
             ) VALUES (
                 :id, :name, :lap_length, :laps, :distance, :avg_speed, :corners, :pit_time,
                 :base_wings, :base_engine, :base_brakes, :base_gear, :base_suspension,
                 :fuel_consumption, :tyre_wear, :wing_split, :fuel_per_lap, :fuel_per_lap_wet, :tyre_wear_factor,
                 :wear_chassis, :wear_engine, :wear_fwing, :wear_rwing, :wear_underbody, :wear_sidepod,
                 :wear_cooling, :wear_gearbox, :wear_brakes, :wear_suspension, :wear_electronics,
-                :boost_dry, :boost_wet, :overtaking, :grip
+                :boost_dry, :boost_wet, :overtaking, :grip, :estimated
             )
         ");
 
@@ -205,6 +205,7 @@ class DatabaseSeeder
 
                 ':overtaking' => trim($row[2] ?? ''),
                 ':grip' => trim($row[16] ?? ''),
+                ':estimated' => strtolower(trim($row[13] ?? '')) === 'estimate' ? 1 : 0,
             ]);
             $count++;
         }
@@ -1239,7 +1240,14 @@ class DatabaseSeeder
         $cols = $stmt === false ? [] : $stmt->fetchAll(PDO::FETCH_ASSOC);
         $existing = array_column($cols, 'name');
 
-        $added = ['boost_dry' => 'REAL', 'boost_wet' => 'REAL', 'overtaking' => 'TEXT', 'grip' => 'TEXT'];
+        $added = [
+            'boost_dry' => 'REAL',
+            'boost_wet' => 'REAL',
+            'overtaking' => 'TEXT',
+            'grip' => 'TEXT',
+            // A new GPRO track's row is a best guess until its races tune it; screens say so.
+            'estimated' => 'INTEGER NOT NULL DEFAULT 0',
+        ];
         foreach ($added as $col => $type) {
             if (!in_array($col, $existing, true)) {
                 $this->db->exec("ALTER TABLE tracks ADD COLUMN {$col} {$type}");

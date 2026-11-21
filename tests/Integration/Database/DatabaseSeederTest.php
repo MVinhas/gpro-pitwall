@@ -88,6 +88,32 @@ final class DatabaseSeederTest extends TestCase
         $this->assertSame('Very Low', $track['grip']);
     }
 
+    public function testSeedTracksFromCsvFlagsOnlyEstimateNotes(): void
+    {
+        $db = new PDO('sqlite::memory:');
+        $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $seeder = $this->makeSeeder($db);
+        $seeder->migrate();
+
+        $rows = [];
+        foreach (['Known' => '', 'Noted' => 'wet tyres only', 'Newring' => ' Estimate '] as $name => $note) {
+            $row = array_fill(0, 45, '0');
+            $row[0] = $name;
+            $row[13] = $note;
+            $rows[] = implode(';', $row);
+        }
+        $csv = tempnam(sys_get_temp_dir(), 'tracks');
+        file_put_contents($csv, "Track List\nName;Downforce\n" . implode("\n", $rows) . "\n");
+
+        $seeder->seedTracksFromCsv($csv);
+        unlink($csv);
+
+        $flags = $db->query(
+            "SELECT name, estimated FROM tracks WHERE name IN ('Known', 'Noted', 'Newring') ORDER BY name"
+        )->fetchAll(PDO::FETCH_KEY_PAIR);
+        $this->assertSame(['Known' => 0, 'Newring' => 1, 'Noted' => 0], $flags);
+    }
+
     public function testSeedTracksFromMissingCsvIsANoOp(): void
     {
         $db = new PDO('sqlite::memory:');
@@ -390,7 +416,7 @@ final class DatabaseSeederTest extends TestCase
         $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         $this->makeSeeder($db)->migrate();
 
-        $late = ['boost_dry', 'boost_wet', 'overtaking', 'grip'];
+        $late = ['boost_dry', 'boost_wet', 'overtaking', 'grip', 'estimated'];
         foreach ($late as $column) {
             $db->exec("ALTER TABLE tracks DROP COLUMN {$column}");
         }

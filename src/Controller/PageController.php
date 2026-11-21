@@ -587,6 +587,7 @@ class PageController
             );
             $viewData['cockpit_setup_stale'] = $setupStale;
             $viewData['cockpit_data_loaded'] = true;
+            $viewData['next_track_name'] = $trackName;
 
             if ($isCockpit) {
                 $viewData['pha'] = $this->phaMatch->evaluate(

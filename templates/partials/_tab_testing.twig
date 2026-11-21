@@ -7,6 +7,8 @@
 {% elseif testing_results %}
     {% set r = testing_results %}
 
+    {% include 'partials/_estimated_track.twig' with {names: [r.track.name], extra_class: 'mb-6'} only %}
+
     {# Two flowing columns (single grid, no shared row heights, so cards stack
        flush): left = track facts + per-priority gains, right = points
        distribution + ideal setup. Stacked in that order on mobile. #}

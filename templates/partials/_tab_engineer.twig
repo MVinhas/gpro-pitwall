@@ -17,6 +17,7 @@
             <p class="mt-1">The other screens are unaffected.</p>
         </div>
     {% else %}
+        {% include 'partials/_estimated_track.twig' with {names: [next_track_name|default(null)]} only %}
         {% include 'partials/_engineer_card.twig' %}
         {% if engineer.tyres %}{% include 'partials/_engineer_tyres.twig' %}{% endif %}
         {% if engineer.driver %}{% include 'partials/_engineer_driver.twig' with {panel: engineer.driver} %}{% endif %}
