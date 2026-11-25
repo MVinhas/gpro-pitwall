@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Telemetry;
 
+use App\Support\RacePoints;
+
 /**
  * Turns one RaceAnalysis payload into the manager's OWN detailed race record.
  *
@@ -22,12 +24,6 @@ namespace App\Telemetry;
 final class RaceHistoryMapper
 {
     use PayloadReader;
-
-    /** GPRO points per finishing position (1st..10th); 0 outside the top 10. */
-    private const array POINTS_TABLE = [
-        1 => 25, 2 => 18, 3 => 15, 4 => 12, 5 => 10,
-        6 => 8, 7 => 6, 8 => 4, 9 => 2, 10 => 1,
-    ];
 
     /** Lap weather strings GPRO uses for a wet track. */
     private const array WET_WEATHER = ['Rain', 'Heavy Rain', 'Light Rain'];
@@ -116,9 +112,7 @@ final class RaceHistoryMapper
             'laps_completed' => $result['laps_completed'],
             'grid_pos'       => $result['start_pos'],
             'final_pos'      => $result['final_pos'],
-            'points'         => $result['final_pos'] === null
-                ? null
-                : (self::POINTS_TABLE[$result['final_pos']] ?? 0),
+            'points'         => RacePoints::forFinish($result['final_pos']),
             'positions_gained' => ($result['start_pos'] === null || $result['final_pos'] === null)
                 ? null
                 : $result['start_pos'] - $result['final_pos'],

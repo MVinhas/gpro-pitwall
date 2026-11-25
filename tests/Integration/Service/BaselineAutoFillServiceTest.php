@@ -69,7 +69,7 @@ final class BaselineAutoFillServiceTest extends TestCase
         $this->corpus->insertIfNew(array_merge([
             'season' => 107, 'race' => 13, 'level' => 'Rookie',
             'group_label' => 'Rookie - 31', 'track_id' => 17, 'track_name' => 'Hockenheim',
-            'final_pos' => 2, 'start_pos' => 3, 'points' => 18,
+            'final_pos' => 2, 'start_pos' => 3, 'points' => 8,
             'q1_pos' => 2, 'q2_pos' => 2, 'q1_time_ms' => 74839, 'q2_time_ms' => 76612,
             'positions_gained' => 1, 'dnf' => 0, 'laps_completed' => 67,
             'driver_id' => 3000, 'driver_oa' => 80,

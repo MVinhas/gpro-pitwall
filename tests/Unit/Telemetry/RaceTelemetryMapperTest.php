@@ -119,7 +119,13 @@ final class RaceTelemetryMapperTest extends TestCase
             ['idx' => 0, 'pos' => 5],
             ['idx' => 1, 'pos' => 2],
         ]]);
-        $this->assertSame(18, $mapper->map($podium)['points']);
+        $this->assertSame(8, $mapper->map($podium)['points']);
+
+        $ninth = $this->payload(['laps' => [
+            ['idx' => 0, 'pos' => 12],
+            ['idx' => 1, 'pos' => 9],
+        ]]);
+        $this->assertSame(0, $mapper->map($ninth)['points']);
 
         $outOfPoints = $this->payload(['laps' => [
             ['idx' => 0, 'pos' => 15],

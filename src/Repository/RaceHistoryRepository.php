@@ -46,13 +46,14 @@ class RaceHistoryRepository
      * points for the result, a heavier weight on grid-to-flag places gained
      * because that is the part the manager actually drove, a bonus for the
      * podium steps, and a flat penalty for a DNF so a retirement can never
-     * outrank a finish.
+     * outrank a finish. Points weigh 5 on GPRO's 10-point scale, so a win's
+     * result is worth 50, as it was when the points were wrongly F1's 25 × 2.
      *
      * Exposed as a constant so the UI can explain the same formula it sorts by.
      */
     public const string IMPRESSIVENESS_SQL = "
         CASE WHEN dnf = 1 THEN -20 ELSE
-            (COALESCE(points, 0) * 2)
+            (COALESCE(points, 0) * 5)
             + (COALESCE(positions_gained, 0) * 4)
             + (CASE
                  WHEN final_pos = 1 THEN 20

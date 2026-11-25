@@ -89,7 +89,7 @@ final class SeasonServiceTest extends TestCase
             'track_id' => 17, 'track_name' => 'Testring', 'group_label' => 'Amateur - 4', 'level' => 'Amateur',
             'laps_total' => 60, 'laps_completed' => 60, 'dnf' => 0, 'was_wet' => 0,
             'dry_laps' => 60, 'rain_laps' => 0, 'mist_laps' => 0, 'fuel_per_km' => 2.0,
-            'final_pos' => 5, 'points' => 12,
+            'final_pos' => 5, 'points' => 4,
             'clear_dry_risk' => 20,
             'parts_json' => json_encode([
                 ['key' => 'engine', 'label' => 'Engine', 'level' => 5, 'wear_start' => 0, 'wear_end' => 22, 'wear_gain' => 22],
@@ -596,7 +596,7 @@ final class SeasonServiceTest extends TestCase
 
     public function testResultsCarryTheChampionshipAfterEachRaceFromTheNextRow(): void
     {
-        $this->race(1, ['final_pos' => 3, 'points' => 15]);
+        $this->race(1, ['final_pos' => 3, 'points' => 6]);
         $this->race(2, ['final_pos' => null, 'points' => null, 'dnf' => 1]);
         $this->standingsRow(1, 9, 0);
         $this->standingsRow(2, 6, 15);
@@ -822,7 +822,7 @@ final class SeasonServiceTest extends TestCase
     public function testOtherUsersRowsNeverLeakIn(): void
     {
         $this->race(1);
-        $this->race(1, ['final_pos' => 1, 'points' => 25], user: 2);
+        $this->race(1, ['final_pos' => 1, 'points' => 10], user: 2);
         $this->weekend(1, user: 2);
         $this->weekend(2, ['facilities_json' => json_encode(['windtunnel' => 9])], user: 2);
         $this->standingsRow(2, 1, 99, user: 2);
@@ -833,7 +833,7 @@ final class SeasonServiceTest extends TestCase
         $this->assertSame(107, $view['season']);
         $this->assertCount(1, $view['results']);
         $this->assertSame(5, $view['results'][0]['final_pos']);
-        $this->assertSame(12, $view['results'][0]['points']);
+        $this->assertSame(4, $view['results'][0]['points']);
         $this->assertNull($view['results'][0]['champ_pos']);
         $this->assertNull($view['results'][0]['champ_pts']);
         $this->assertSame([], $view['money']['cash']);

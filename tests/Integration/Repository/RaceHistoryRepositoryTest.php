@@ -44,7 +44,7 @@ final class RaceHistoryRepositoryTest extends TestCase
             'track_id' => 17, 'track_name' => 'Hockenheim', 'group_label' => 'Amateur - 4',
             'level' => 'Amateur',
             'laps_total' => 67, 'laps_completed' => 67, 'grid_pos' => 8,
-            'final_pos' => 3, 'points' => 15, 'positions_gained' => 5, 'dnf' => 0,
+            'final_pos' => 3, 'points' => 6, 'positions_gained' => 5, 'dnf' => 0,
             'best_lap_ms' => 73264, 'best_pit_ms' => 20558,
             'q1_pos' => 9, 'q2_pos' => 8, 'q1_time_ms' => 74839, 'q2_time_ms' => 76612,
             'pit_stops' => 2, 'start_fuel' => 100, 'finish_fuel' => 6,
@@ -155,21 +155,23 @@ final class RaceHistoryRepositoryTest extends TestCase
 
     public function testImpressivenessRanksAClimbAboveAQuietWin(): void
     {
-        // P1 from pole: 25 points, no places gained, win bonus  => 50 + 0 + 20.
+        // P1 from pole: 10 points, no places gained, win bonus  => 50 + 0 + 20.
         $this->repo->insertIfNew($this->row([
             'race' => 1, 'grid_pos' => 1, 'final_pos' => 1,
-            'points' => 25, 'positions_gained' => 0,
+            'points' => 10, 'positions_gained' => 0,
         ]));
-        // P2 from 18th: 18 points, 16 places gained, podium bonus => 36 + 64 + 10.
+        // P2 from 18th: 8 points, 16 places gained, podium bonus => 40 + 64 + 10.
         $this->repo->insertIfNew($this->row([
             'race' => 2, 'grid_pos' => 18, 'final_pos' => 2,
-            'points' => 18, 'positions_gained' => 16,
+            'points' => 8, 'positions_gained' => 16,
         ]));
 
         $rows = $this->repo->search(1, [], 'impressive');
 
         $this->assertSame(2, (int) $rows[0]['race']);
+        $this->assertSame(114, (int) $rows[0]['score']);
         $this->assertSame(1, (int) $rows[1]['race']);
+        $this->assertSame(70, (int) $rows[1]['score']);
     }
 
     public function testARetirementNeverOutranksAFinish(): void
@@ -219,8 +221,8 @@ final class RaceHistoryRepositoryTest extends TestCase
 
     public function testSummaryDescribesTheSameSliceTheListShows(): void
     {
-        $this->repo->insertIfNew($this->row(['race' => 1, 'final_pos' => 1, 'points' => 25, 'q2_pos' => 1]));
-        $this->repo->insertIfNew($this->row(['race' => 2, 'final_pos' => 3, 'points' => 15]));
+        $this->repo->insertIfNew($this->row(['race' => 1, 'final_pos' => 1, 'points' => 10, 'q2_pos' => 1]));
+        $this->repo->insertIfNew($this->row(['race' => 2, 'final_pos' => 3, 'points' => 6]));
         $this->repo->insertIfNew($this->row(['race' => 3, 'final_pos' => null, 'points' => 0, 'dnf' => 1]));
 
         $all = $this->repo->summary(1);
@@ -229,7 +231,7 @@ final class RaceHistoryRepositoryTest extends TestCase
         $this->assertSame(2, (int) $all['podiums']);
         $this->assertSame(1, (int) $all['poles']);
         $this->assertSame(1, (int) $all['dnfs']);
-        $this->assertSame(40, (int) $all['points']);
+        $this->assertSame(16, (int) $all['points']);
 
         $filtered = $this->repo->summary(1, ['finish_max' => 1]);
         $this->assertSame(1, (int) $filtered['races']);

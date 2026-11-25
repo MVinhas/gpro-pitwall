@@ -42,7 +42,7 @@ final class RaceTelemetryRepositoryTest extends TestCase
         return array_merge([
             'season' => 99, 'race' => 8, 'level' => 'Rookie',
             'group_label' => 'Rookie - 31', 'track_id' => 58, 'track_name' => 'Baku',
-            'final_pos' => 5, 'start_pos' => 8, 'points' => 10,
+            'final_pos' => 5, 'start_pos' => 8, 'points' => 4,
             'q1_pos' => 7, 'q2_pos' => 6, 'q1_time_ms' => 119502, 'q2_time_ms' => 122455,
             'positions_gained' => 3, 'dnf' => 0, 'laps_completed' => 51,
             'driver_id' => 30357, 'driver_oa' => 80, 'driver_con' => 96,
