@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.47] - 2026-11-25
+
+### Changed
+- Hanoi's track figures are refitted from all 93 managers' races there: per-part wear (brakes and suspension wear
+  far less than estimated, chassis and underbody more), fuel (about 0.06 L/km more, some 18 L a race) and the
+  base setup (engine +58, brakes +86, gearbox +130, suspension -123). The track is no longer marked as new.
+
 ## [1.21.46] - 2026-11-21
 
 ### Added
