@@ -44,7 +44,10 @@ final readonly class StandingsController
             'csrf_token'    => $_SESSION['csrf_token'] ?? '',
             'api_limit'     => $_SESSION['api_limit'] ?? '?',
             'api_limit_updated_at' => $_SESSION['api_limit_updated_at'] ?? null,
-            'main_sections'   => $app['main_sections'] ?? [],
+            'main_sections'   => Sections::visible(
+                is_array($app['main_sections'] ?? null) ? array_values($app['main_sections']) : [],
+                !empty($user['is_admin']),
+            ),
             'active_main_tab' => 'Standings',
             'section_paths'   => Sections::all(),
             'active_division' => null,
