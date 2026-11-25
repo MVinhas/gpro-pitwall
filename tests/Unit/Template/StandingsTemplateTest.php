@@ -107,6 +107,21 @@ final class StandingsTemplateTest extends TestCase
         self::assertDoesNotMatchRegularExpression("/'#[0-9a-f]{6}'/i", $chart, 'no hex colour in the chart script');
     }
 
+    public function testCardsUseTheSharedAccordionOpenOnlyWhenTheyNeedAttention(): void
+    {
+        $html = $this->render(SeasonStandings::build(self::payload(), 2));
+
+        // A goal is still in play, so What it takes opens; the rest stay closed with a verdict.
+        self::assertMatchesRegularExpression('/<details id="standings-goals" data-acc\s+open/', $html);
+        foreach (['standings-rivals', 'standings-chart', 'standings-finishes', 'standings-races'] as $id) {
+            $closed = '/<details id="' . $id . '" data-acc\s+class=/';
+            self::assertMatchesRegularExpression($closed, $html, "{$id} starts closed");
+        }
+        self::assertSame(5, substr_count($html, 'group-open/acc:hidden'), 'every card carries a verdict');
+        self::assertStringContainsString('3 of 17 races run · you P2', $html);
+        self::assertStringNotContainsString('<details class="card group"', $html, 'no hand-rolled cards left');
+    }
+
     public function testTheManagersOwnTableShowsGoalsAndChart(): void
     {
         $html = $this->render(SeasonStandings::build(self::payload(), 2));

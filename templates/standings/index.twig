@@ -154,9 +154,6 @@
 
 {% macro ordinal(n) %}{{ n }}{{ n % 100 in [11, 12, 13] ? 'th' : ({1: 'st', 2: 'nd', 3: 'rd'}[n % 10] ?? 'th') }}{% endmacro %}
 
-{# The open/closed arrow on a collapsible card's header. #}
-{% macro chevron() %}<svg class="size-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>{% endmacro %}
-
 {% macro signed(n) %}{{ n > 0 ? '+' ~ n : n }}{% endmacro %}
 
 {% block content %}
@@ -196,12 +193,14 @@
         </div>
     {% endif %}
     {% if own %}
-        <details class="card group" open aria-labelledby="st-lines">
-            <summary class="card-hd flex cursor-pointer list-none items-center justify-between gap-3">
-                <h2 id="st-lines" class="t-heading">What it takes</h2>
-                {{ _self.chevron() }}
-            </summary>
-            <div class="card-bd space-y-4">
+        {# Open only while a goal is still in play; the verdict names the one that matters most. #}
+        {% set open_goals = lines|filter(l => l.status in ['reachable', 'needs_help']) %}
+        {% set headline = (lines|filter(l => l.key != 'win' and l.status != 'out'))|first ?: (lines|filter(l => l.status != 'out'))|first %}
+        {% embed 'partials/_acc.twig' with { id: 'standings-goals', title: 'What it takes', open_default: open_goals|length > 0 } %}
+            {% block verdict %}<span class="block text-xs text-slate-600 tabular-nums group-open/acc:hidden">{% if headline %}{{ headline.label }}: {{ headline.status == 'clinched' ? 'secured' : (headline.status == 'reachable' ? headline.needed ~ ' pts to be sure' : 'needs others') }}{% else %}Nothing left to play for{% endif %}</span>{% endblock %}
+            {% block body %}
+            {% import 'standings/index.twig' as m %}
+
                 <div class="grid gap-3 sm:grid-cols-3">
                     <div>
                         <p class="t-label">You</p>
@@ -232,7 +231,7 @@
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
-                            {{ _self.goal_rows(lines|filter(l => l.status != 'out'), own, races_left, {}) }}
+                            {{ m.goal_rows(lines|filter(l => l.status != 'out'), own, races_left, {}) }}
                         </tbody>
                     </table>
                 </div>
@@ -248,19 +247,20 @@
                     "To beat the pace" is what you need per race to finish ahead of whoever is projected on the line,
                     if everyone keeps scoring as they have so far. A race is worth at most 10 points (10-8-6-5-4-3-2-1).
                 </p>
-            </div>
-        </details>
+            {% endblock %}
+        {# Open only while a goal is still in play; the verdict names the one that matters most. #}
+        {% endembed %}
 
     {% endif %}
 
     {# ---- Direct rivals ---- #}
     {% if rivals %}
-        <details class="card group" open aria-labelledby="st-rivals">
-            <summary class="card-hd flex cursor-pointer list-none items-center justify-between gap-3">
-                <h2 id="st-rivals" class="t-heading">Direct rivals</h2>
-                {{ _self.chevron() }}
-            </summary>
-            <div class="card-bd space-y-4">
+        {% set nearest = (rivals|sort((a, b) => [a.gap|abs, a.row.pos] <=> [b.gap|abs, b.row.pos]))|first %}
+        {% embed 'partials/_acc.twig' with { id: 'standings-rivals', title: 'Direct rivals' } %}
+            {% block verdict %}<span class="block text-xs text-slate-600 tabular-nums group-open/acc:hidden">{{ rivals|length }} in play · closest {{ nearest.row.name }}, {{ nearest.gap > 0 ? '+' ~ nearest.gap : nearest.gap }}</span>{% endblock %}
+            {% block body %}
+            {% import 'standings/index.twig' as m %}
+
                 <div class="dt-scroll">
                     <table class="dt">
                         <thead class="bg-slate-50">
@@ -288,7 +288,7 @@
                                     {% if r.me|default(false) %}
                                         <td class="dt-td text-right text-slate-500">—</td>
                                     {% else %}
-                                        <td class="dt-td text-right">{{ _self.signed(r.gap) }}</td>
+                                        <td class="dt-td text-right">{{ m.signed(r.gap) }}</td>
                                     {% endif %}
                                     <td class="dt-td text-right hidden sm:table-cell">{{ r.row.max }}</td>
                                     <td class="dt-td text-right">{{ r.row.last3 }}</td>
@@ -307,8 +307,8 @@
                 </div>
                 <p class="t-caption">Managers who can still finish ahead of you, or you of them. Gap is their points minus yours; head to head counts the races you both finished.</p>
 
-            </div>
-        </details>
+            {% endblock %}
+        {% endembed %}
     {% endif %}
 
     {# ---- Points progression ---- #}
@@ -327,12 +327,11 @@
         {% set top = max([1]|merge(series|map(s => s.cumulative|last ?: 0))) %}
         {% set w = 640 %}{% set h = 240 %}
         {% set chart_data = rows|filter(r => r.started > 0)|map(r => {id: r.idm, name: r.name, pos: r.pos, pts: r.pts, me: r.own, c: r.cumulative, on: r.idm in default_idms}) %}
-        <details class="card group" open aria-labelledby="st-chart">
-            <summary class="card-hd flex cursor-pointer list-none items-center justify-between gap-3">
-                <h2 id="st-chart" class="t-heading">Points progression</h2>
-                {{ _self.chevron() }}
-            </summary>
-            <div class="card-bd space-y-3">
+        {% embed 'partials/_acc.twig' with { id: 'standings-chart', title: 'Points progression' } %}
+            {% block verdict %}<span class="block text-xs text-slate-600 tabular-nums group-open/acc:hidden">You {{ own.pts }} pts · {{ own.pace|number_format(1) }} a race</span>{% endblock %}
+            {% block body %}
+            {% import 'standings/index.twig' as m %}
+
                 <div id="stChart" data-series="{{ chart_data|json_encode }}" data-races="{{ races }}" data-run="{{ races_run }}" class="text-slate-500">
                     <svg viewBox="-4 -4 {{ w + 8 }} {{ h + 8 }}" class="h-56 w-full" preserveAspectRatio="none" aria-hidden="true" focusable="false">
                         <line x1="0" y1="{{ h }}" x2="{{ w }}" y2="{{ h }}" stroke="currentColor" stroke-opacity="0.3" vector-effect="non-scaling-stroke"/>
@@ -359,8 +358,8 @@
                 </div>
 
                 <p class="t-caption">Points after each race, on the whole season's {{ races }} races so the empty stretch shows what is left. Tick managers to compare; hover a line for its name.</p>
-            </div>
-        </details>
+            {% endblock %}
+        {% endembed %}
 
         <script>
         (() => {
@@ -501,17 +500,11 @@
                 {% set zones = zones|merge({('p' ~ l.line_pos): 'relegate'}) %}
             {% endif %}
         {% endfor %}
-        <details class="card group" aria-labelledby="st-positions">
-            <summary class="card-hd flex cursor-pointer list-none items-center justify-between gap-3">
-                <span>
-                    <span id="st-positions" class="t-heading">Every possible finish</span>
-                    <span class="t-caption block">
-                        Anywhere from P{{ positions|first.line_pos }} to P{{ positions|last.line_pos }}{% if positions|last.status == 'clinched' %}, which is already yours{% endif %}
-                    </span>
-                </span>
-                {{ _self.chevron() }}
-            </summary>
-            <div class="card-bd space-y-3">
+        {% embed 'partials/_acc.twig' with { id: 'standings-finishes', title: 'Every possible finish' } %}
+            {% block verdict %}<span class="block text-xs text-slate-600 tabular-nums group-open/acc:hidden">P{{ positions|first.line_pos }} to P{{ positions|last.line_pos }} possible{% if positions|last.status == 'clinched' %}, P{{ positions|last.line_pos }} already yours{% endif %}</span>{% endblock %}
+            {% block body %}
+            {% import 'standings/index.twig' as m %}
+
                 <div class="dt-scroll">
                     <table class="dt">
                         <thead class="bg-slate-50">
@@ -524,25 +517,21 @@
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
-                            {{ _self.goal_rows(positions, own, races_left, zones) }}
+                            {{ m.goal_rows(positions, own, races_left, zones) }}
                         </tbody>
                     </table>
                 </div>
                 <p class="t-caption">One row per finish still open, with the same rules as What it takes. A green edge marks a promotion finish, red a relegation one; positions you can no longer reach are left out.</p>
-            </div>
-        </details>
+            {% endblock %}
+        {% endembed %}
     {% endif %}
 
     {# ---- Race by race (closed by default: the full table is long) ---- #}
-    <details class="card group" aria-labelledby="st-table">
-        <summary class="card-hd flex cursor-pointer list-none items-center justify-between gap-3">
-            <span>
-                <span id="st-table" class="t-heading">Race by race</span>
-                <span class="t-caption block">Every manager's finish in each of the {{ races_run }} races run</span>
-            </span>
-            {{ _self.chevron() }}
-        </summary>
-        <div class="card-bd space-y-3">
+    {% embed 'partials/_acc.twig' with { id: 'standings-races', title: 'Race by race' } %}
+        {% block verdict %}<span class="block text-xs text-slate-600 tabular-nums group-open/acc:hidden">{{ races_run }} of {{ races }} races run{% if own %} · you P{{ own.pos }}{% endif %}</span>{% endblock %}
+        {% block body %}
+        {% import 'standings/index.twig' as m %}
+
             <div class="dt-scroll">
                 <table class="dt">
                     <thead class="bg-slate-50">
@@ -578,8 +567,8 @@
                 </table>
             </div>
             <p class="t-caption">Finishing position in each race; hover a cell for its points. A green edge marks the promotion zone, red the relegation zone; – means no result, · a race still to run.</p>
-        </div>
-    </details>
+        {% endblock %}
+    {% endembed %}
 
     {% endif %}
 </div>
