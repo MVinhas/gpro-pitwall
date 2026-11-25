@@ -32,9 +32,26 @@ final readonly class StandingsService
         $menu = $this->usable($this->archive->latest($userId, 'Menu', '', $tokenScope), 'Menu') ?? [];
         $idm = is_numeric($menu['IDM'] ?? null) ? (int) $menu['IDM'] : null;
 
-        return SeasonStandings::build($payload, $idm) + [
+        $view = SeasonStandings::build($payload, $idm);
+        $season = $this->latestSeason($userId, 'Standings');
+        $officeSeason = $this->latestSeason($userId, 'office');
+
+        return $view + [
             'fetched_at' => $this->archive->latestFetchedAt($userId, 'Standings', '', $tokenScope),
+            'season' => $season,
+            // Until the first sync of a new season the archive still holds the old
+            // one's final table: say so rather than present it as this season's.
+            'final_table' => $view['races_run'] >= $view['races']
+                || ($season !== null && $officeSeason !== null && $season < $officeSeason),
         ];
+    }
+
+    /** The newest season an endpoint's archived rows are stamped with. */
+    private function latestSeason(int $userId, string $endpoint): ?int
+    {
+        $races = $this->archive->stampedRaces($userId, $endpoint);
+
+        return $races === [] ? null : max(array_column($races, 'season'));
     }
 
     /**

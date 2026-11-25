@@ -73,6 +73,16 @@ final class StandingsTemplateTest extends TestCase
         self::assertStringNotContainsString('id="stChart"', $html);
     }
 
+    public function testTheFinalTableOfASeasonSaysSo(): void
+    {
+        $view = SeasonStandings::build(self::payload(), 2);
+
+        self::assertStringNotContainsString('data-standings-final', $this->render($view));
+        $html = $this->render(['final_table' => true, 'season' => 113] + $view);
+        self::assertStringContainsString('data-standings-final', $html);
+        self::assertStringContainsString('final table of Season 113', $html);
+    }
+
     public function testTheManagersOwnTableShowsGoalsAndChart(): void
     {
         $html = $this->render(SeasonStandings::build(self::payload(), 2));

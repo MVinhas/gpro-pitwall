@@ -27,9 +27,9 @@ final class Sections
      */
     private const array PATHS = [
         'Cockpit'              => '/cockpit',
-        'Standings'            => '/standings',
         'Race Strategy'        => '/strategy',
         'Testing'              => '/testing',
+        'Standings'            => '/standings',
         'Training Planner'     => '/training',
         'Car Wear Planner'     => '/car-wear',
         'Recruitment Analyzer' => '/recruitment',

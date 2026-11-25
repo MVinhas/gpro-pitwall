@@ -8,9 +8,9 @@ return [
 
     'main_sections' => [
         'Cockpit',
-        'Standings',
         'Race Strategy',
         'Testing',
+        'Standings',
         'Training Planner',
         'Car Wear Planner',
         'Recruitment Analyzer',

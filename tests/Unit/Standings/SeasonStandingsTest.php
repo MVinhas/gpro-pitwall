@@ -68,6 +68,7 @@ final class SeasonStandingsTest extends TestCase
         self::assertSame(3, $view['races_run']);
         self::assertSame(14, $view['races_left']);
         self::assertSame(140, $view['points_on_offer']);
+        self::assertSame(SeasonObjective::POINTS_PER_RACE, $view['points_per_race']);
         self::assertSame(30 + 140, $view['own']['max']);
         self::assertSame(2, $view['rows'][1]['started']);
     }
