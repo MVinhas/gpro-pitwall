@@ -51,7 +51,6 @@ use App\Engineer\SeasonObjective;
  *     holder: ?string,
  *     projected_in: bool,
  *     pace_needed: ?float,
- *     condition: ?Condition,
  *     scenarios: list<Scenario>,
  *     ways: list<Way>,
  *     pace_target: ?int,
@@ -64,10 +63,6 @@ use App\Engineer\SeasonObjective;
  *     other: ?int,
  *     other_count: int,
  *     total: int
- * }
- * @phpstan-type Condition array{
- *     need: int,
- *     threats: list<array{name: string, at_most: int}>
  * }
  * @phpstan-type Scenario array{
  *     finish: int,
@@ -449,38 +444,12 @@ final class SeasonStandings
             'holder' => $holder === null || $holder['own'] ? null : $holder['name'],
             'projected_in' => $own['projected_pos'] <= $linePos,
             'pace_needed' => $paceNeeded,
-            'condition' => $status === self::NEEDS_HELP ? self::condition($others, $own, $linePos, $racesLeft) : null,
             'scenarios' => $status === self::NEEDS_HELP ? self::scenarios($others, $own, $linePos, $racesLeft) : [],
             'ways' => $status === self::REACHABLE ? self::ways($needed, $racesLeft) : [],
             'pace_target' => $target,
             'pace_points' => $target === null ? null : max(0, $target - $own['pts'] + 1),
             'pace_rival' => $paceRival === null ? null : $paceRival['name'],
         ];
-    }
-
-    /**
-     * What else must happen for a line that is no longer in the manager's hands
-     * alone, assuming they win every race left (so a rival scores at most second
-     * place each time). Threats are the rivals who could still reach the
-     * manager's maximum that way; `need` of them must score at most `at_most`
-     * points (one short of a tie, which countback could lose). `need` 0 means
-     * winning every race left is enough.
-     *
-     * @param list<Row> $others
-     * @param Row $own
-     * @return Condition
-     */
-    private static function condition(array $others, array $own, int $linePos, int $racesLeft): array
-    {
-        $threats = [];
-        foreach ($others as $row) {
-            if ($row['pts'] + self::SECOND_PLACE_POINTS * $racesLeft >= $own['max']) {
-                $threats[] = ['name' => $row['name'], 'at_most' => max(0, $own['max'] - 1 - $row['pts'])];
-            }
-        }
-        usort($threats, static fn (array $a, array $b): int => $a['at_most'] <=> $b['at_most']);
-
-        return ['need' => max(0, count($threats) - ($linePos - 1)), 'threats' => $threats];
     }
 
     /**

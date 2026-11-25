@@ -122,7 +122,10 @@ final class SeasonStandingsTest extends TestCase
             self::assertSame(6, $way['best_count'] + $way['other_count']);
         }
         // A single repeated finish has no second part; a race outside the points is finish 9.
-        self::assertSame(['best' => 1, 'best_count' => 6, 'other' => null, 'other_count' => 0, 'total' => 60], SeasonStandings::ways(60, 6)[0]);
+        self::assertSame(
+            ['best' => 1, 'best_count' => 6, 'other' => null, 'other_count' => 0, 'total' => 60],
+            SeasonStandings::ways(60, 6)[0],
+        );
         self::assertSame(SeasonStandings::NO_POINTS, SeasonStandings::ways(1, 6)[0]['other']);
         self::assertSame([], SeasonStandings::ways(0, 6));
         self::assertSame([], SeasonStandings::ways(10, 0));
@@ -173,7 +176,10 @@ final class SeasonStandingsTest extends TestCase
         self::assertNull($win['needed']);
         self::assertSame(-4, $win['margin']);
         // If I win the last race I reach 136; the leader can still score 8 (138), so must score 5 or less.
-        self::assertSame(['need' => 1, 'threats' => [['name' => 'Leader', 'at_most' => 5]]], $win['condition']);
+        $winAll = $win['scenarios'][0];
+        self::assertSame(1, $winAll['finish']);
+        self::assertSame(1, $winAll['need']);
+        self::assertSame([['name' => 'Leader', 'at_most' => 5, 'finish' => 4]], $winAll['threats']);
     }
 
     public function testScenariosSayHowFarBackRivalsMustFinish(): void
@@ -223,10 +229,12 @@ final class SeasonStandingsTest extends TestCase
 
         $win = self::line($view, 'win');
         self::assertSame(SeasonStandings::NEEDS_HELP, $win['status']);
-        self::assertSame(['need' => 0, 'threats' => []], $win['condition']);
+        self::assertSame(1, $win['scenarios'][0]['finish']);
+        self::assertSame(0, $win['scenarios'][0]['need']);
+        self::assertSame([], $win['scenarios'][0]['threats']);
     }
 
-    public function testConditionCountsHowManyThreatsMustFallBehind(): void
+    public function testScenarioCountsHowManyThreatsMustFallBehind(): void
     {
         // 15 run, 2 left, top 2 promoted. Three on 100, me on 90 (max 110): each could reach 116.
         // One of them may still finish ahead of me, so two must score 9 or less.
@@ -240,10 +248,12 @@ final class SeasonStandingsTest extends TestCase
 
         $promote = self::line($view, 'promote');
         self::assertSame(SeasonStandings::NEEDS_HELP, $promote['status']);
-        self::assertSame(2, $promote['condition']['need']);
-        self::assertSame([9, 9, 9], array_column($promote['condition']['threats'], 'at_most'));
+        $winAll = $promote['scenarios'][0];
+        self::assertSame(1, $winAll['finish']);
+        self::assertSame(2, $winAll['need']);
+        self::assertSame([9, 9, 9], array_column($winAll['threats'], 'at_most'));
         // To win the group, all three must stay behind.
-        self::assertSame(3, self::line($view, 'win')['condition']['need']);
+        self::assertSame(3, self::line($view, 'win')['scenarios'][0]['need']);
     }
 
     public function testPositionsRunFromBestReachableToFirstSecured(): void
