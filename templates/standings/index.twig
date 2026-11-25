@@ -8,7 +8,7 @@
 {% macro status_badge(status) %}
     {%- set tone = {
         'clinched':   ['bg-emerald-100 text-emerald-800', 'Secured'],
-        'reachable':  ['bg-blue-100 text-blue-800', 'In your hands'],
+        'reachable':  ['bg-slate-100 text-slate-700', 'In your hands'],
         'needs_help': ['bg-amber-100 text-amber-800', 'Needs help'],
         'out':        ['bg-red-100 text-red-800', 'Out of reach'],
     }[status] -%}
@@ -43,7 +43,7 @@
                                             {% if l.ways %}
                                                 {% set pop = 'way-' ~ l.key %}
                                                 <button type="button" popovertarget="{{ pop }}" class="block w-full text-right text-xs font-medium text-blue-600 hover:underline">More</button>
-                                                <div id="{{ pop }}" popover class="m-auto w-[min(26rem,calc(100vw-2rem))] max-h-[calc(100vh-2rem)] overflow-y-auto rounded-xl border border-slate-200 bg-surface p-4 text-left text-sm whitespace-normal shadow-xl backdrop:bg-slate-900/30">
+                                                <div id="{{ pop }}" popover class="m-auto w-[min(26rem,calc(100vw-2rem))] max-h-[calc(100vh-2rem)] overflow-y-auto rounded-xl border border-slate-200 bg-surface p-4 text-left text-sm whitespace-normal shadow-xl backdrop:bg-scrim">
                                                     <div class="mb-3 flex items-start justify-between gap-3">
                                                         <p class="t-section">{{ l.label }}: {{ l.needed }} {{ l.needed == 1 ? 'pt' : 'pts' }} in {{ races_left }} races</p>
                                                         <button type="button" popovertarget="{{ pop }}" popovertargetaction="hide" class="text-slate-400 hover:text-slate-700" aria-label="Close">✕</button>
@@ -87,7 +87,7 @@
                                                     <button type="button" popovertarget="{{ pop }}" class="mt-0.5 text-xs font-medium text-blue-600 hover:underline">More</button>
                                                 {% endif %}
                                             </span>
-                                            <div id="{{ pop }}" popover class="m-auto w-[min(26rem,calc(100vw-2rem))] max-h-[calc(100vh-2rem)] overflow-y-auto rounded-xl border border-slate-200 bg-surface p-4 text-left text-sm whitespace-normal shadow-xl backdrop:bg-slate-900/30">
+                                            <div id="{{ pop }}" popover class="m-auto w-[min(26rem,calc(100vw-2rem))] max-h-[calc(100vh-2rem)] overflow-y-auto rounded-xl border border-slate-200 bg-surface p-4 text-left text-sm whitespace-normal shadow-xl backdrop:bg-scrim">
                                                 <div class="mb-3 flex items-start justify-between gap-3">
                                                     <p class="t-section">{{ l.label }}: how it can still happen</p>
                                                     <button type="button" popovertarget="{{ pop }}" popovertargetaction="hide" class="text-slate-400 hover:text-slate-700" aria-label="Close">✕</button>
@@ -288,7 +288,7 @@
                                     {% if r.me|default(false) %}
                                         <td class="dt-td text-right text-slate-500">—</td>
                                     {% else %}
-                                        <td class="dt-td text-right {{ r.gap > 0 ? 'text-red-700' : 'text-emerald-700' }}">{{ _self.signed(r.gap) }}</td>
+                                        <td class="dt-td text-right">{{ _self.signed(r.gap) }}</td>
                                     {% endif %}
                                     <td class="dt-td text-right hidden sm:table-cell">{{ r.row.max }}</td>
                                     <td class="dt-td text-right">{{ r.row.last3 }}</td>
@@ -546,7 +546,7 @@
                                     {% elseif c.label == '' %}
                                         <td class="dt-td text-center text-slate-400">–</td>
                                     {% else %}
-                                        <td class="dt-td text-center {{ c.pos == 1 ? 'text-emerald-700 font-semibold' : (c.pos is not null and c.pos <= 3 ? 'text-emerald-700' : (c.pts == 0 ? 'text-slate-500' : '')) }}"
+                                        <td class="dt-td text-center {{ c.pos == 1 ? 'text-emerald-700 font-semibold' : (c.pts == 0 ? 'text-slate-500' : '') }}"
                                             title="{{ c.pts }} pts">{{ c.label }}</td>
                                     {% endif %}
                                 {% endfor %}

@@ -83,6 +83,19 @@ final class StandingsTemplateTest extends TestCase
         self::assertStringContainsString('final table of Season 113', $html);
     }
 
+    public function testColourMarksStateOnly(): void
+    {
+        // Blue is interactive or selected, emerald best, amber caution, red fails; the rest is ink.
+        // Manager 2 can secure promotion alone (135 of the 140 points left), so the row shows that badge.
+        $html = $this->render(SeasonStandings::build(self::payload(), 2));
+
+        self::assertStringContainsString('bg-slate-100 text-slate-700">In your hands', $html);
+        self::assertStringNotContainsString('bg-blue-100', $html, 'a status badge must not read as clickable');
+        self::assertStringNotContainsString('text-red-700', $html, 'a signed gap needs no colour');
+        self::assertStringContainsString('backdrop:bg-scrim', $html);
+        self::assertStringNotContainsString('backdrop:bg-slate', $html);
+    }
+
     public function testTheManagersOwnTableShowsGoalsAndChart(): void
     {
         $html = $this->render(SeasonStandings::build(self::payload(), 2));
