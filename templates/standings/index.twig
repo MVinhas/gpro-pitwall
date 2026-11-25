@@ -317,11 +317,15 @@
         {# Without JavaScript: a static chart of you and your rivals. With it, the
            picker below appears and the chart redraws for whoever is ticked, with
            the scale fitted to them. Every figure is also in the tables. #}
-        {% set series = (own ? [own] : [])|merge(rivals|map(r => r.row)) %}
+        {# Colours come from the chart-* theme tokens (assets/css/app.css), as full class
+           names so Tailwind finds them. Five rival slots, never cycled: the chart starts
+           on the five rivals closest in points. #}
+        {% set strokes = ['stroke-chart-1', 'stroke-chart-2', 'stroke-chart-3', 'stroke-chart-4', 'stroke-chart-5'] %}
+        {% set closest = rivals|sort((a, b) => [a.gap|abs, a.row.pos] <=> [b.gap|abs, b.row.pos])|slice(0, strokes|length)|map(r => r.row) %}
+        {% set series = [own]|merge(closest|sort((a, b) => a.pos <=> b.pos)) %}
         {% set default_idms = series|map(s => s.idm) %}
         {% set top = max([1]|merge(series|map(s => s.cumulative|last ?: 0))) %}
         {% set w = 640 %}{% set h = 240 %}
-        {% set palette = ['#dc2626', '#d97706', '#059669', '#7c3aed', '#db2777', '#0891b2', '#65a30d', '#78716c', '#ea580c', '#4f46e5'] %}
         {% set chart_data = rows|filter(r => r.started > 0)|map(r => {id: r.idm, name: r.name, pos: r.pos, pts: r.pts, me: r.own, c: r.cumulative, on: r.idm in default_idms}) %}
         <details class="card group" open aria-labelledby="st-chart">
             <summary class="card-hd flex cursor-pointer list-none items-center justify-between gap-3">
@@ -337,7 +341,7 @@
                             {% for i, c in s.cumulative %}
                                 {% set pts = pts|merge([((i / (races - 1)) * w)|round(1) ~ ',' ~ (h - c / top * h)|round(1)]) %}
                             {% endfor %}
-                            <polyline fill="none" stroke="{{ s.own ? '#2563eb' : palette[(loop.index0 - (own ? 1 : 0)) % palette|length] }}" stroke-width="{{ s.own ? 3 : 1.5 }}"
+                            <polyline fill="none" class="{{ s.own ? 'stroke-chart-you' : strokes[loop.index0 - 1] }}" stroke-width="{{ s.own ? 3 : 1.5 }}"
                                       stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" points="{{ pts|join(' ') }}"/>
                         {% endfor %}
                     </svg>
@@ -347,10 +351,11 @@
                     <div class="flex flex-wrap items-center gap-2">
                         <span class="t-label">Show</span>
                         <button type="button" class="btn btn-sm btn-secondary" data-pick="rivals">You and rivals</button>
-                        <button type="button" class="btn btn-sm btn-secondary" data-pick="top">Top 8</button>
+                        <button type="button" class="btn btn-sm btn-secondary" data-pick="top">Top 5</button>
                         <button type="button" class="btn btn-sm btn-secondary" data-pick="none">Only you</button>
                     </div>
                     <div id="stPickerList" class="flex flex-wrap gap-1.5"></div>
+                    <p id="stPickerFull" hidden class="t-caption">Up to {{ strokes|length }} rivals at a time, so every line keeps its own colour. Untick one to pick another.</p>
                 </div>
 
                 <p class="t-caption">Points after each race, on the whole season's {{ races }} races so the empty stretch shows what is left. Tick managers to compare; hover a line for its name.</p>
@@ -367,11 +372,20 @@
             const series = JSON.parse(box.dataset.series);
             const races = Number(box.dataset.races);
             const run = Number(box.dataset.run);
-            const ME = '#2563eb';
-            const PALETTE = {{ palette|json_encode|raw }};
+            const full = document.getElementById('stPickerFull');
+            // Theme-token classes (chart-* in app.css), spelled out in full for Tailwind.
+            const ME = {stroke: 'stroke-chart-you', fill: 'fill-chart-you', bg: 'bg-chart-you'};
+            const SLOTS = [
+                {stroke: 'stroke-chart-1', fill: 'fill-chart-1', bg: 'bg-chart-1'},
+                {stroke: 'stroke-chart-2', fill: 'fill-chart-2', bg: 'bg-chart-2'},
+                {stroke: 'stroke-chart-3', fill: 'fill-chart-3', bg: 'bg-chart-3'},
+                {stroke: 'stroke-chart-4', fill: 'fill-chart-4', bg: 'bg-chart-4'},
+                {stroke: 'stroke-chart-5', fill: 'fill-chart-5', bg: 'bg-chart-5'},
+            ];
             const W = 640, H = 240, L = 34, B = 22, T = 8, R = 10;
             const NS = 'http://www.w3.org/2000/svg';
-            const defaults = new Set(series.filter(s => s.on).map(s => s.id));
+            // You are always drawn and never take a rival slot.
+            const defaults = new Set(series.filter(s => s.on && !s.me).map(s => s.id));
             const picked = new Set(defaults);
             const colour = new Map();
 
@@ -382,15 +396,17 @@
                 return node;
             };
 
-            // Stable colours: you are always blue; others keep the colour they got when first ticked.
+            // Colour follows the manager: you are always blue; a rival keeps the slot it got
+            // when ticked, and a slot is never shared, so at most SLOTS.length rivals show.
             const colourOf = (s) => {
                 if (s.me) return ME;
                 if (!colour.has(s.id)) {
                     const used = new Set(colour.values());
-                    colour.set(s.id, PALETTE.find(c => !used.has(c)) ?? PALETTE[colour.size % PALETTE.length]);
+                    colour.set(s.id, SLOTS.find(c => !used.has(c)));
                 }
                 return colour.get(s.id);
             };
+            const canPick = () => picked.size < SLOTS.length;
 
             const draw = () => {
                 const shown = series.filter(s => s.me || picked.has(s.id));
@@ -413,23 +429,28 @@
                 // Draw you last so your line sits on top.
                 for (const s of [...shown].sort((a, b) => a.me - b.me)) {
                     const points = s.c.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
-                    const line = el('polyline', {points, fill: 'none', stroke: colourOf(s), 'stroke-width': s.me ? 3 : 1.75,
+                    const line = el('polyline', {points, fill: 'none', class: colourOf(s).stroke, 'stroke-width': s.me ? 3 : 1.75,
                         'stroke-linejoin': 'round', 'stroke-linecap': 'round'});
                     line.append(el('title', {}, `${s.me ? 'You' : s.name} · P${s.pos} · ${s.pts} pts`));
                     svg.append(line);
                     const last = s.c.length - 1;
-                    if (last >= 0) svg.append(el('circle', {cx: x(last), cy: y(s.c[last]), r: s.me ? 3.5 : 2.5, fill: colourOf(s)}));
+                    if (last >= 0) svg.append(el('circle', {cx: x(last), cy: y(s.c[last]), r: s.me ? 3.5 : 2.5, class: colourOf(s).fill}));
                 }
                 box.replaceChildren(svg);
 
                 for (const chip of list.children) {
                     const s = series.find(m => String(m.id) === chip.dataset.id);
                     const on = s.me || picked.has(s.id);
-                    chip.querySelector('input').checked = on;
-                    chip.querySelector('[data-swatch]').style.background = on ? colourOf(s) : 'transparent';
+                    const input = chip.querySelector('input');
+                    input.checked = on;
+                    input.disabled = s.me || (!on && !canPick());
+                    chip.classList.toggle('opacity-50', input.disabled && !s.me);
+                    chip.querySelector('[data-swatch]').className = SWATCH + (on ? ' ' + colourOf(s).bg : '');
                 }
+                if (full) full.hidden = canPick();
             };
 
+            const SWATCH = 'inline-block h-2.5 w-2.5 rounded-full border border-slate-300';
             for (const s of series) {
                 const chip = document.createElement('label');
                 chip.dataset.id = String(s.id);
@@ -440,12 +461,13 @@
                 input.className = 'sr-only';
                 input.disabled = s.me;
                 input.addEventListener('change', () => {
-                    if (input.checked) picked.add(s.id); else { picked.delete(s.id); colour.delete(s.id); }
+                    if (input.checked && canPick()) picked.add(s.id);
+                    else { picked.delete(s.id); colour.delete(s.id); }
                     draw();
                 });
                 const swatch = document.createElement('span');
                 swatch.dataset.swatch = '';
-                swatch.className = 'inline-block h-2.5 w-2.5 rounded-full border border-slate-300';
+                swatch.className = SWATCH;
                 chip.append(input, swatch, document.createTextNode(`P${s.pos} ${s.me ? 'You' : s.name}`));
                 list.append(chip);
             }
@@ -456,7 +478,7 @@
                 picked.clear();
                 colour.clear();
                 const ids = mode === 'rivals' ? [...defaults]
-                    : mode === 'top' ? series.filter(s => s.pos <= 8).map(s => s.id) : [];
+                    : mode === 'top' ? series.filter(s => !s.me).slice(0, SLOTS.length).map(s => s.id) : [];
                 ids.forEach(id => picked.add(id));
                 draw();
             });

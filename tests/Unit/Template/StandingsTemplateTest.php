@@ -96,6 +96,17 @@ final class StandingsTemplateTest extends TestCase
         self::assertStringNotContainsString('backdrop:bg-slate', $html);
     }
 
+    public function testTheChartTakesItsColoursFromThemeTokens(): void
+    {
+        $html = $this->render(SeasonStandings::build(self::payload(), 2));
+        $chart = substr($html, (int) strpos($html, 'id="stChart"'));
+
+        self::assertStringContainsString('stroke-chart-you', $chart);
+        self::assertStringContainsString('stroke-chart-1', $chart);
+        self::assertDoesNotMatchRegularExpression('/(stroke|fill)="#[0-9a-f]{3,6}"/i', $chart);
+        self::assertDoesNotMatchRegularExpression("/'#[0-9a-f]{6}'/i", $chart, 'no hex colour in the chart script');
+    }
+
     public function testTheManagersOwnTableShowsGoalsAndChart(): void
     {
         $html = $this->render(SeasonStandings::build(self::payload(), 2));
