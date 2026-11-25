@@ -1,7 +1,7 @@
 {
     "name": "mvinhas/gpro-pitwall",
     "description": "Race-weekend cockpit for GPRO managers — strategy, wear, training, recruitment.",
-    "version": "1.21.47",
+    "version": "1.21.48",
     "homepage": "https://gpro-pitwall.com",
     "type": "project",
     "license": "proprietary",
@@ -20,7 +20,7 @@
         "ext-pdo": "*",
         "ext-sqlite3": "*",
         "phpmailer/phpmailer": "^7.1",
-        "twig/twig": "^3.27"
+        "twig/twig": "^3.31.1"
     },
     "require-dev": {
         "phpstan/phpstan": "^2.2",

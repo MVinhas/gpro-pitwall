@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.48] - 2026-11-25
+
+### Security
+- **Security:** Twig 3.31.1 (from 3.27.1), for the eight advisories published on 23 and 24 November 2026, among
+  them missing autoescaping for a variable named like a macro import alias (CVE-2026-133771) and several sandbox
+  allow-list bypasses. Ships together with 1.21.47, which never deployed: its CI stopped at the dependency audit.
+
 ## [1.21.47] - 2026-11-25
 
 ### Changed
