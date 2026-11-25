@@ -16,7 +16,7 @@ class DatabaseSeeder
      * calls migrate() on every request; this version lets a warm database skip
      * the entire DDL + scan + legacy-encryption pass.
      */
-    private const int SCHEMA_VERSION = 23;
+    private const int SCHEMA_VERSION = 24;
 
     /** Race-time facts added to both race tables (see addReplayColumns()). */
     private const array REPLAY_COLUMNS = [
