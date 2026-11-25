@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Telemetry;
 
+use App\Support\RacePoints;
+
 /**
  * Turns a raw GPRO RaceAnalysis payload (plus the already-cached TD profile)
  * into a flat, anonymous telemetry row.
@@ -18,12 +20,6 @@ namespace App\Telemetry;
 final class RaceTelemetryMapper
 {
     use PayloadReader;
-
-    /** GPRO points per finishing position (1st..10th); 0 outside the top 10. */
-    private const array POINTS_TABLE = [
-        1 => 25, 2 => 18, 3 => 15, 4 => 12, 5 => 10,
-        6 => 8, 7 => 6, 8 => 4, 9 => 2, 10 => 1,
-    ];
 
     /** Lap weather strings GPRO uses for a wet track. */
     private const array WET_WEATHER = ['Rain', 'Heavy Rain', 'Light Rain'];
@@ -74,9 +70,7 @@ final class RaceTelemetryMapper
 
             'final_pos'        => $result['final_pos'],
             'start_pos'        => $result['start_pos'],
-            'points'           => $result['final_pos'] === null
-                ? null
-                : (self::POINTS_TABLE[$result['final_pos']] ?? 0),
+            'points'           => RacePoints::forFinish($result['final_pos']),
             'q1_pos'           => $this->int($analysis['q1Pos'] ?? null),
             'q2_pos'           => $this->int($analysis['q2Pos'] ?? null),
             'q1_time_ms'       => $this->lapTimeMs($this->str($analysis['q1Time'] ?? null)),

@@ -116,7 +116,7 @@ final class RaceHistoryMapperTest extends TestCase
         $this->assertSame(8, $row['grid_pos']);
         $this->assertSame(3, $row['final_pos']);
         $this->assertSame(5, $row['positions_gained']);
-        $this->assertSame(15, $row['points']);
+        $this->assertSame(6, $row['points']);
         $this->assertSame(0, $row['dnf']);
         $this->assertSame(20, $row['laps_completed']);
     }

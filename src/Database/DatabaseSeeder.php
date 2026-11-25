@@ -6,6 +6,7 @@ namespace App\Database;
 
 use PDO;
 use App\Security\ApiTokenCrypto;
+use App\Support\RacePoints;
 
 class DatabaseSeeder
 {
@@ -16,7 +17,7 @@ class DatabaseSeeder
      * calls migrate() on every request; this version lets a warm database skip
      * the entire DDL + scan + legacy-encryption pass.
      */
-    private const int SCHEMA_VERSION = 24;
+    private const int SCHEMA_VERSION = 25;
 
     /** Race-time facts added to both race tables (see addReplayColumns()). */
     private const array REPLAY_COLUMNS = [
@@ -78,6 +79,7 @@ class DatabaseSeeder
         $this->createRaceTelemetryTable();
         $this->repairPhantomTdFlags();
         $this->createUserRaceHistoryTable();
+        $this->recomputeRacePoints();
         $this->createUserApiArchiveTable();
         $this->createProjectionTables();
         $this->createSeasonObjectiveTable();
@@ -528,6 +530,26 @@ class DatabaseSeeder
             'UPDATE race_telemetry SET has_td = 0
              WHERE has_td = 1 AND (td_overall IS NULL OR td_overall = 0)'
         );
+    }
+
+    /**
+     * Rows stored before 1.21.49 carry F1's 25-18-15… points. Rewrites both
+     * tables on GPRO's scale from the stored finish; a row with no finish keeps
+     * NULL. Idempotent: the result depends only on final_pos.
+     */
+    private function recomputeRacePoints(): void
+    {
+        foreach (['race_telemetry', 'user_race_history'] as $table) {
+            $update = $this->db->prepare(
+                "UPDATE {$table} SET points = :points WHERE final_pos = :finish"
+            );
+            foreach (RacePoints::TABLE as $finish => $points) {
+                $update->execute([':points' => $points, ':finish' => $finish]);
+            }
+            $this->db->prepare(
+                "UPDATE {$table} SET points = 0 WHERE final_pos > :last"
+            )->execute([':last' => array_key_last(RacePoints::TABLE)]);
+        }
     }
 
     /**

@@ -424,18 +424,7 @@ class RaceTelemetryRepository
      * so a manager comparing their own row against the field is reading one
      * scale, not two.
      */
-    public const string IMPRESSIVENESS_SQL = "
-        CASE WHEN dnf = 1 THEN -20 ELSE
-            (COALESCE(points, 0) * 2)
-            + (COALESCE(positions_gained, 0) * 4)
-            + (CASE
-                 WHEN final_pos = 1 THEN 20
-                 WHEN final_pos <= 3 THEN 10
-                 WHEN final_pos <= 6 THEN 5
-                 ELSE 0
-               END)
-        END
-    ";
+    public const string IMPRESSIVENESS_SQL = RaceHistoryRepository::IMPRESSIVENESS_SQL;
 
     /** Sort keys accepted by browse(), mapped to ORDER BY clauses. */
     private const array SORTS = [

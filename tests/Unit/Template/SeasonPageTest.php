@@ -89,7 +89,7 @@ final class SeasonPageTest extends TestCase
     {
         $text = $this->text([
             'results' => [
-                ['race' => 1, 'track_name' => 'Testring', 'final_pos' => 5, 'points' => 12, 'dnf' => false, 'champ_pos' => 6, 'champ_pts' => 12],
+                ['race' => 1, 'track_name' => 'Testring', 'final_pos' => 5, 'points' => 4, 'dnf' => false, 'champ_pos' => 6, 'champ_pts' => 12],
                 ['race' => 2, 'track_name' => 'Ovalton', 'final_pos' => null, 'points' => null, 'dnf' => true, 'champ_pos' => null, 'champ_pts' => null],
             ],
             'results_line' => '0,0 240,40',

@@ -50,7 +50,7 @@ final class DebriefServiceTest extends TestCase
         $this->corpus->insertIfNew(array_merge([
             'season' => 107, 'race' => 13, 'level' => 'Amateur',
             'group_label' => 'Amateur - 4', 'track_id' => 17, 'track_name' => 'Hockenheim',
-            'final_pos' => 5, 'start_pos' => 8, 'points' => 10,
+            'final_pos' => 5, 'start_pos' => 8, 'points' => 4,
             'q1_pos' => 7, 'q2_pos' => 6, 'q1_time_ms' => 74839, 'q2_time_ms' => 76612,
             'positions_gained' => 3, 'dnf' => 0, 'laps_completed' => 67,
             'driver_id' => 3000, 'driver_oa' => 140,
@@ -75,7 +75,7 @@ final class DebriefServiceTest extends TestCase
             'user_id' => 1, 'season' => 107, 'race' => 13,
             'track_id' => 17, 'track_name' => 'Hockenheim',
             'level' => 'Amateur', 'group_label' => 'Amateur - 4',
-            'grid_pos' => 8, 'final_pos' => 3, 'points' => 15,
+            'grid_pos' => 8, 'final_pos' => 3, 'points' => 6,
             'positions_gained' => 5, 'dnf' => 0, 'pit_stops' => 2,
             'race_tyre' => 'Hard', 'tyre_supplier' => 'Pipirelli', 'was_wet' => 0,
         ], $overrides));

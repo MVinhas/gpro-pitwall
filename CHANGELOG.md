@@ -6,6 +6,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release is published as an annotated git tag of the same name.
 
+## [1.21.49] - 2026-11-25
+
+### Fixed
+- Race points follow GPRO's scale, 10-8-6-5-4-3-2-1 for the top 8 (Rules 1.5), instead of Formula 1's
+  25-18-15-12-10-8-6-4-2-1 down to 10th. Both the personal race archive and the shared race corpus stored the
+  wrong figure, so the Debrief's points totals and averages were inflated and 9th and 10th scored points they
+  never earned. A migration recalculates every stored race from its finishing position (#173, spotted by
+  allibragi in #171).
+- The Debrief's "Most impressive" score weighs points ×5 on the new scale (was ×2 on the old one), so a win's
+  result still counts 50 and the ranking keeps its balance between result and places gained.
+
 ## [1.21.48] - 2026-11-25
 
 ### Security
