@@ -184,6 +184,12 @@
     {% else %}
 
     {# ---- What it takes ---- #}
+    {% if not own %}
+        {# No archived Menu, or its IDM is not in this table: the maths needs to know which row is yours. #}
+        <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800" data-standings-no-own>
+            We couldn't find you in this table, so the goals, rivals and chart are hidden. Re-sync to refresh it.
+        </div>
+    {% endif %}
     {% if own %}
         <details class="card group" open aria-labelledby="st-lines">
             <summary class="card-hd flex cursor-pointer list-none items-center justify-between gap-3">
@@ -301,13 +307,14 @@
     {% endif %}
 
     {# ---- Points progression ---- #}
-    {% if races_run > 1 %}
+    {# The chart is drawn around the manager's own line: without it there is nothing to anchor. #}
+    {% if races_run > 1 and own %}
         {# Without JavaScript: a static chart of you and your rivals. With it, the
            picker below appears and the chart redraws for whoever is ticked, with
            the scale fitted to them. Every figure is also in the tables. #}
         {% set series = (own ? [own] : [])|merge(rivals|map(r => r.row)) %}
         {% set default_idms = series|map(s => s.idm) %}
-        {% set top = max(1, max(series|map(s => s.cumulative|last ?: 0))) %}
+        {% set top = max([1]|merge(series|map(s => s.cumulative|last ?: 0))) %}
         {% set w = 640 %}{% set h = 240 %}
         {% set palette = ['#dc2626', '#d97706', '#059669', '#7c3aed', '#db2777', '#0891b2', '#65a30d', '#78716c', '#ea580c', '#4f46e5'] %}
         {% set chart_data = rows|filter(r => r.started > 0)|map(r => {id: r.idm, name: r.name, pos: r.pos, pts: r.pts, me: r.own, c: r.cumulative, on: r.idm in default_idms}) %}
