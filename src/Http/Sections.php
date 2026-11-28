@@ -29,6 +29,7 @@ final class Sections
         'Cockpit'              => '/cockpit',
         'Race Strategy'        => '/strategy',
         'Testing'              => '/testing',
+        'Standings'            => '/standings',
         'Training Planner'     => '/training',
         'Car Wear Planner'     => '/car-wear',
         'Recruitment Analyzer' => '/recruitment',
@@ -53,6 +54,31 @@ final class Sections
     ];
 
     /** Resolve a display spelling or alias to its canonical section name. */
+    /** Screens only an admin's navigation offers. */
+    public const array ADMIN_SECTIONS = [
+        'Race Engineer', 'Debrief', 'Season', 'Division Baseline', 'Division Differences',
+    ];
+
+    /**
+     * The screens a user's navigation offers: every one for an admin, the
+     * non-admin ones otherwise. One filter for every controller that renders
+     * the nav, so a screen never shows a regular user tabs they cannot open.
+     *
+     * @param list<string> $sections
+     * @return list<string>
+     */
+    public static function visible(array $sections, bool $isAdmin): array
+    {
+        if ($isAdmin) {
+            return $sections;
+        }
+
+        return array_values(array_filter(
+            $sections,
+            static fn (string $section): bool => !in_array($section, self::ADMIN_SECTIONS, true),
+        ));
+    }
+
     public static function canonical(string $section): string
     {
         return self::ALIASES[$section] ?? $section;

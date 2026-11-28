@@ -58,10 +58,6 @@ class PageController
         'division_tab', 'track', 'page', 'sort', 'order',
     ];
 
-    private const array ADMIN_SECTIONS = [
-        'Race Engineer', 'Debrief', 'Season', 'Division Baseline', 'Division Differences',
-    ];
-
     /** Screens built from the manager's own synced payloads, with nothing to show without them. */
     private const array TEAM_SECTIONS = [
         'Cockpit', 'Race Engineer', 'Race Strategy', 'Testing', 'Car Wear Planner',
@@ -258,7 +254,7 @@ class PageController
 
         $divisions    = $this->config['app']['divisions'];
         $tracks       = $this->config['app']['tracks'];
-        $mainSections = self::visibleSections($this->config['app']['main_sections'], $isAdmin);
+        $mainSections = Sections::visible($this->config['app']['main_sections'], $isAdmin);
 
         $defaultTab = 'Cockpit';
         if (!in_array($defaultTab, $mainSections, true)) {
@@ -1075,24 +1071,6 @@ class PageController
         return is_string($activeTrack) && in_array($activeTrack, $trackNames, true)
             ? $activeTrack
             : $defaultTrack;
-    }
-
-    /**
-     * The screens this user's navigation offers.
-     *
-     * @param list<string> $sections
-     * @return list<string>
-     */
-    private static function visibleSections(array $sections, bool $isAdmin): array
-    {
-        if ($isAdmin) {
-            return $sections;
-        }
-
-        return array_values(array_filter(
-            $sections,
-            static fn (string $section): bool => !in_array($section, self::ADMIN_SECTIONS, true),
-        ));
     }
 
     /**

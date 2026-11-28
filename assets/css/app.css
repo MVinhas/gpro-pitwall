@@ -120,6 +120,18 @@
     --color-skeleton-sheen: light-dark(oklch(.984 .003 247.858), #3a4a5c);
     /* Modal backdrop. Light side = the old bg-slate-900/40 verbatim. */
     --color-scrim: light-dark(oklch(.208 .042 265.755 / .4), rgb(0 0 0 / .55));
+    /* Line-chart series (Standings points progression): identity only, never state.
+       The manager's own line is the blue; rivals take slots 1-5 in this fixed order
+       and are capped there, never cycled. Green and red are left out because they
+       carry state here. Validated as one set for colour-blind and normal separation
+       on both surfaces; three light slots sit under 3:1, so the chart ships with a
+       named legend and the tables beside it. */
+    --color-chart-you: light-dark(#2a78d6, #3987e5);
+    --color-chart-1:   light-dark(#eb6834, #d95926);
+    --color-chart-2:   light-dark(#1baf7a, #199e70);
+    --color-chart-3:   light-dark(#eda100, #c98500);
+    --color-chart-4:   light-dark(#e87ba4, #d55181);
+    --color-chart-5:   light-dark(#6250d6, #9085e9);
 }
 
 /* Theme selection: System (default) follows the OS live via color-scheme;

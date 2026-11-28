@@ -40,3 +40,4 @@ gpro_pilots.sqlite
 /bin/.tailwindcss*
 
 .claude/
+.vscode

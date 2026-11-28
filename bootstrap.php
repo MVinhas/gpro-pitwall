@@ -717,6 +717,14 @@ $container['controller.engineer'] = new \App\Controller\EngineerController(
     $container['service.authorize'],
 );
 
+$container['service.standings'] = new \App\Service\StandingsService($container['repo.api_archive']);
+$container['controller.standings'] = new \App\Controller\StandingsController(
+    $container['service.standings'],
+    $container['service.authorize'],
+    $container['twig'],
+    $container['config'],
+);
+
 $container['controller.season'] = new \App\Controller\SeasonController(
     $container['service.season'],
     $container['service.authorize'],

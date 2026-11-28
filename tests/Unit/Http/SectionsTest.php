@@ -25,6 +25,21 @@ final class SectionsTest extends TestCase
         }
     }
 
+    public function testOnlyAnAdminSeesTheAdminSections(): void
+    {
+        $sections = ['Cockpit', 'Race Engineer', 'Standings', 'Debrief', 'Season', 'Division Baseline'];
+
+        $this->assertSame($sections, Sections::visible($sections, true));
+        $this->assertSame(['Cockpit', 'Standings'], Sections::visible($sections, false));
+    }
+
+    public function testEveryAdminSectionIsARealSection(): void
+    {
+        foreach (Sections::ADMIN_SECTIONS as $section) {
+            $this->assertNotNull(Sections::pathFor($section), "admin section '{$section}' has no path");
+        }
+    }
+
     public function testRaceEngineerHasItsOwnPath(): void
     {
         $this->assertSame('/engineer', Sections::pathFor('Race Engineer'));
