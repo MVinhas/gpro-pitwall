@@ -68,7 +68,6 @@ final class SeasonStandingsTest extends TestCase
         self::assertSame(3, $view['races_run']);
         self::assertSame(14, $view['races_left']);
         self::assertSame(140, $view['points_on_offer']);
-        self::assertSame(SeasonObjective::POINTS_PER_RACE, $view['points_per_race']);
         self::assertSame(30 + 140, $view['own']['max']);
         self::assertSame(2, $view['rows'][1]['started']);
     }
@@ -150,6 +149,17 @@ final class SeasonStandingsTest extends TestCase
         self::assertSame([], self::line($view, 'win')['ways'], 'Only goals in your hands get ways');
     }
 
+    public function testPaceStatusComparesTheAverageNeededWithTheManagersOwn(): void
+    {
+        self::assertSame(SeasonStandings::PACE_SAFE, SeasonStandings::paceStatus(0.0, 5.9));
+        self::assertSame(SeasonStandings::PACE_ON_TRACK, SeasonStandings::paceStatus(4.0, 5.9));
+        self::assertSame(SeasonStandings::PACE_ON_TRACK, SeasonStandings::paceStatus(5.9, 5.9));
+        self::assertSame(SeasonStandings::PACE_BEHIND, SeasonStandings::paceStatus(7.5, 5.9));
+        self::assertSame(SeasonStandings::PACE_BEHIND, SeasonStandings::paceStatus(10.0, 5.9), 'a win pays 10');
+        self::assertSame(SeasonStandings::PACE_OUT, SeasonStandings::paceStatus(10.1, 5.9));
+        self::assertNull(SeasonStandings::paceStatus(null, 5.9));
+    }
+
     public function testClinchedAndOut(): void
     {
         // 16 races run, one left (10 on offer). Me 128, third 16 (max 26): promotion is secured.
@@ -160,6 +170,7 @@ final class SeasonStandingsTest extends TestCase
         ]), 2);
 
         self::assertSame(SeasonStandings::CLINCHED, self::line($view, 'promote')['status']);
+        self::assertNull(self::line($view, 'promote')['pace_status'], 'a secured goal has no pace to report');
         // The leader has 160 and my maximum is 138: the title is gone.
         self::assertSame(SeasonStandings::OUT, self::line($view, 'win')['status']);
     }

@@ -55,7 +55,8 @@ use App\Engineer\SeasonObjective;
  *     ways: list<Way>,
  *     pace_target: ?int,
  *     pace_points: ?int,
- *     pace_rival: ?string
+ *     pace_rival: ?string,
+ *     pace_status: ?string
  * }
  * @phpstan-type Way array{
  *     best: int,
@@ -98,6 +99,15 @@ final class SeasonStandings
     public const string NEEDS_HELP = 'needs_help';
     public const string OUT = 'out';
 
+    /** On current pace (everyone keeps their average): ahead even scoring nothing more. */
+    public const string PACE_SAFE = 'safe';
+    /** On current pace: the average needed is within the manager's own. */
+    public const string PACE_ON_TRACK = 'on_track';
+    /** On current pace: more than the manager's average, but a race can still pay it. */
+    public const string PACE_BEHIND = 'behind';
+    /** On current pace: more per race than a race pays. */
+    public const string PACE_OUT = 'out';
+
     /**
      * @param array<string, mixed> $payload a raw GPRO Standings payload
      * @return array{
@@ -107,7 +117,6 @@ final class SeasonStandings
      *     races_run: int,
      *     races_left: int,
      *     points_on_offer: int,
-     *     points_per_race: int,
      *     rows: list<Row>,
      *     own: ?Row,
      *     lines: list<Line>,
@@ -146,7 +155,6 @@ final class SeasonStandings
             'races_run' => $racesRun,
             'races_left' => $racesLeft,
             'points_on_offer' => $onOffer,
-            'points_per_race' => SeasonObjective::POINTS_PER_RACE,
             'rows' => $rows,
             'own' => $own,
             'lines' => $own === null ? [] : self::lines($rows, $own, $racesLeft),
@@ -450,6 +458,8 @@ final class SeasonStandings
             'ways' => $status === self::REACHABLE ? self::ways($needed, $racesLeft) : [],
             'pace_target' => $target,
             'pace_points' => $target === null ? null : max(0, $target - $own['pts'] + 1),
+            // A secured line holds whatever the pace does, so it has none to report.
+            'pace_status' => $status === self::CLINCHED ? null : self::paceStatus($paceNeeded, $own['pace']),
             'pace_rival' => $paceRival === null ? null : $paceRival['name'],
         ];
     }
@@ -506,6 +516,21 @@ final class SeasonStandings
         }
 
         return $scenarios;
+    }
+
+    /**
+     * How the average the line needs compares with the manager's own so far.
+     * Null when there is nothing to compare (no rival on the line, no race left).
+     */
+    public static function paceStatus(?float $needed, float $ownPace): ?string
+    {
+        return match (true) {
+            $needed === null => null,
+            $needed <= 0.0 => self::PACE_SAFE,
+            $needed > SeasonObjective::POINTS_PER_RACE => self::PACE_OUT,
+            $needed <= $ownPace => self::PACE_ON_TRACK,
+            default => self::PACE_BEHIND,
+        };
     }
 
     /**

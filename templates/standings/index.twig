@@ -112,10 +112,13 @@
                                         {% else %}Rivals must drop points{% endif %}
                                     </td>
                                     <td class="dt-td text-right hidden sm:table-cell">
-                                        {% if l.status == 'out' or l.pace_needed is null %}—
-                                        {% elseif l.pace_needed > points_per_race %}Not on pace
-                                        {% elseif l.pace_needed == 0 %}On track
-                                        {% else %}{{ l.pace_needed|number_format(1) }}/race
+                                        {# Classified in SeasonStandings::paceStatus(): a macro cannot see the page's variables. #}
+                                        {% if l.status == 'out' or l.pace_status is null %}—
+                                        {% elseif l.pace_status == 'safe' %}<span class="font-medium">Safe on pace</span>
+                                        {% elseif l.pace_status == 'out' %}<span class="font-medium">Out of reach</span>
+                                        {% else %}
+                                            <span class="font-medium">{{ l.pace_status == 'on_track' ? 'On track' : 'Behind pace' }}</span>
+                                            <span class="block text-xs text-slate-500 tabular-nums">needs {{ l.pace_needed|number_format(1) }}, you avg {{ own.pace|number_format(1) }}</span>
                                         {% endif %}
                                     </td>
                                 </tr>
@@ -227,7 +230,7 @@
                                 <th class="dt-th">Status</th>
                                 <th class="dt-th text-right">Today</th>
                                 <th class="dt-th text-right">To be sure</th>
-                                <th class="dt-th text-right hidden sm:table-cell">To beat the pace</th>
+                                <th class="dt-th text-right hidden sm:table-cell">On current pace</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
@@ -244,8 +247,10 @@
                     When it is no longer in your hands alone, it shows a few ways it can still happen: if you finish the same
                     place every race left, how far back each rival must finish (on average; the points in brackets are what
                     counts). When you win every race, a rival can score at most 8 a race, for second place.
-                    "To beat the pace" is what you need per race to finish ahead of whoever is projected on the line,
-                    if everyone keeps scoring as they have so far. A race is worth at most 10 points (10-8-6-5-4-3-2-1).
+                    "On current pace" assumes everyone keeps scoring as they have so far, and compares the average you need
+                    to stay ahead of the rival projected on that line with your own: safe (ahead even scoring nothing more),
+                    on track, behind, or out of reach. A secured goal needs no pace, so it shows none.
+                    A race is worth at most 10 points (10-8-6-5-4-3-2-1).
                 </p>
             {% endblock %}
         {# Open only while a goal is still in play; the verdict names the one that matters most. #}
@@ -513,7 +518,7 @@
                                 <th class="dt-th">Status</th>
                                 <th class="dt-th text-right">Today</th>
                                 <th class="dt-th text-right">To be sure</th>
-                                <th class="dt-th text-right hidden sm:table-cell">To beat the pace</th>
+                                <th class="dt-th text-right hidden sm:table-cell">On current pace</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">

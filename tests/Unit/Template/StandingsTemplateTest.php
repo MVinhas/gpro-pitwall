@@ -122,6 +122,22 @@ final class StandingsTemplateTest extends TestCase
         self::assertStringNotContainsString('<details class="card group"', $html, 'no hand-rolled cards left');
     }
 
+    public function testThePaceColumnComparesWithTheManagersAverage(): void
+    {
+        // Manager 2 averages 8; the P2 line needs less, so it reads On track, never "Not on pace".
+        $view = SeasonStandings::build(self::payload(), 2);
+        $p2 = array_values(array_filter($view['positions'], static fn (array $l): bool => $l['line_pos'] === 2))[0];
+        self::assertSame(SeasonStandings::PACE_ON_TRACK, $p2['pace_status']);
+
+        $html = $this->render($view);
+
+        self::assertStringContainsString('On current pace</th>', $html);
+        self::assertStringContainsString('On track</span>', $html);
+        self::assertStringContainsString('you avg 8.0', $html);
+        self::assertStringNotContainsString('Not on pace', $html);
+        self::assertStringNotContainsString('Out of reach on pace', $html);
+    }
+
     public function testTheManagersOwnTableShowsGoalsAndChart(): void
     {
         $html = $this->render(SeasonStandings::build(self::payload(), 2));
